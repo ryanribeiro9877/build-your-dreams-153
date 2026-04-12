@@ -875,6 +875,8 @@ function ThinkingBubble({ agent }: { agent: string }) {
 
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
+  const navigate = useNavigate();
+  const { user, userRoles, signOut } = useAuth();
   const [activeDept, setActiveDept]     = useState("assistente");
   const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]         = useState("");
