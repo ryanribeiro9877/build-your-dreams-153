@@ -932,16 +932,21 @@ export default function JurisCloudOS() {
           </nav>
 
           <div className="jc-agents-section">
-            <div className="jc-section-label">Agentes Ativos</div>
-            {AGENTS.slice(0, 5).map(agent => (
+            <div className="jc-section-label">Agentes do {activeDeptData?.label || "Departamento"} ({getAgentsForDepartment(activeDept).length})</div>
+            {getAgentsForDepartment(activeDept).slice(0, 8).map(agent => (
               <div className="jc-agent-item" key={agent.id}>
-                <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
+                <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25`, fontSize: 14 }}>
                   {agent.avatar}
                 </div>
                 <div className="jc-agent-name">{agent.name}</div>
                 <div className={`jc-agent-dot ${agent.status}`} />
               </div>
             ))}
+            {getAgentsForDepartment(activeDept).length > 8 && (
+              <div style={{ fontSize: 10, color: "var(--text3)", padding: "4px 8px", textAlign: "center" }}>
+                +{getAgentsForDepartment(activeDept).length - 8} agentes
+              </div>
+            )}
           </div>
         </aside>
 
