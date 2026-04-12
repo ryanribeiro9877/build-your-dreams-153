@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 
 /* ─────────────────────────────────────────────────────────────
@@ -921,6 +922,7 @@ function ThinkingBubble({ agent }: { agent: string }) {
 export default function JurisCloudOS() {
   const navigate = useNavigate();
   const { user, userRoles, signOut } = useAuth();
+  const { canAccessDepartment, canAccessAdmin, canAccessClients, canEdit, isReadOnly, roleLabel } = usePermissions();
   const [activeDept, setActiveDept]     = useState("assistente");
   const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]         = useState("");
@@ -1011,7 +1013,7 @@ export default function JurisCloudOS() {
 
           <nav className="jc-nav">
             <div className="jc-section-label">Departamentos</div>
-            {DEPARTMENTS.map(dept => (
+            {DEPARTMENTS.filter(dept => canAccessDepartment(dept.id)).map(dept => (
               <div
                 key={dept.id}
                 className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
@@ -1026,13 +1028,21 @@ export default function JurisCloudOS() {
             ))}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
-              <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
-              <span className="jc-nav-label">Clientes</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/admin")}>
-              <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
-              <span className="jc-nav-label">Administração</span>
+            {canAccessClients && (
+              <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
+                <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
+                <span className="jc-nav-label">Clientes</span>
+              </div>
+            )}
+            {canAccessAdmin && (
+              <div className="jc-nav-item" onClick={() => navigate("/admin")}>
+                <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
+                <span className="jc-nav-label">Administração</span>
+              </div>
+            )}
+            <div className="jc-nav-item" onClick={() => navigate("/perfil")}>
+              <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
+              <span className="jc-nav-label">Meu Perfil</span>
             </div>
             <div className="jc-nav-item" onClick={() => signOut()}>
               <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
@@ -1127,7 +1137,10 @@ export default function JurisCloudOS() {
                 ↑
               </button>
             </div>
-            <div className="jc-input-hint">Enter para enviar · Shift+Enter para nova linha · Use / para comandos rápidos</div>
+            <div className="jc-input-hint">
+              {isReadOnly && <span style={{ color: "#f59e0b", marginRight: 8 }}>🔒 Modo leitura ({roleLabel})</span>}
+              Enter para enviar · Shift+Enter para nova linha · Use / para comandos rápidos
+            </div>
           </div>
         </main>
 
