@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
 const ROLES = [
   { value: "admin", label: "Administrador", icon: "👑" },
@@ -19,7 +22,7 @@ const ROLES = [
 
 export default function Auth() {
   const { user, loading, signUp, signIn } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -33,123 +36,144 @@ export default function Auth() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (isLogin) {
+      if (mode === "login") {
         const { error } = await signIn(email, password);
         if (error) { toast.error(error.message); return; }
         toast.success("Login realizado com sucesso!");
-      } else {
+      } else if (mode === "signup") {
         const { error } = await signUp(email, password, displayName);
         if (error) { toast.error(error.message); return; }
-        toast.success("Conta criada! Você já pode usar o sistema.");
-        // Note: role assignment will be done by admin after signup
+        toast.success("Conta criada! Verifique seu email para confirmar.");
+      } else if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) { toast.error(error.message); return; }
+        toast.success("Email de recuperação enviado! Verifique sua caixa de entrada.");
+        setMode("login");
       }
     } finally {
       setSubmitting(false);
     }
   };
 
+  const inputCss: React.CSSProperties = {
+    width: "100%", padding: "10px 14px", borderRadius: 8,
+    background: "rgba(22,22,31,0.8)", border: "1px solid rgba(37,37,52,0.8)", color: "#eeeef5",
+    fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
+    backdropFilter: "blur(8px)",
+  };
+
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "linear-gradient(135deg, #09090f 0%, #111118 50%, #09090f 100%)",
-      fontFamily: "'DM Sans', sans-serif",
+      background: "#09090f", fontFamily: "'DM Sans', sans-serif",
+      position: "relative", overflow: "hidden",
     }}>
+      {/* 3D Background */}
+      <Suspense fallback={null}>
+        <AgentScene3D />
+      </Suspense>
+
+      {/* Gradient overlays */}
       <div style={{
-        width: "100%", maxWidth: 420, padding: 32, borderRadius: 16,
-        background: "#111118", border: "1px solid #252534",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+        position: "absolute", inset: 0, zIndex: 1,
+        background: "radial-gradient(ellipse at center, transparent 30%, #09090f 75%)",
+        pointerEvents: "none",
+      }} />
+
+      {/* Card */}
+      <div style={{
+        position: "relative", zIndex: 10,
+        width: "100%", maxWidth: 420, padding: 32, borderRadius: 20,
+        background: "rgba(17,17,24,0.85)", border: "1px solid rgba(201,168,76,0.15)",
+        boxShadow: "0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,168,76,0.08)",
+        backdropFilter: "blur(20px)",
       }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
-            width: 48, height: 48, borderRadius: 12, margin: "0 auto 12px",
+            width: 52, height: 52, borderRadius: 14, margin: "0 auto 12px",
             background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 24, fontWeight: 700, color: "#0a0a12",
+            fontSize: 26, fontWeight: 700, color: "#0a0a12",
             fontFamily: "'Cormorant Garamond', serif",
-            boxShadow: "0 0 24px rgba(201,168,76,0.35)",
+            boxShadow: "0 0 32px rgba(201,168,76,0.4), 0 0 8px rgba(201,168,76,0.6)",
           }}>A</div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 600, color: "#eeeef5" }}>Agent Jus IA</div>
-          <div style={{ fontSize: 10, color: "#5a5a72", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 4 }}>Sistema Operacional Jurídico</div>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#eeeef5" }}>
+            Agent Jus IA
+          </div>
+          <div style={{ fontSize: 10, color: "#5a5a72", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 4 }}>
+            Orquestração Inteligente Jurídica
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", marginBottom: 24, borderRadius: 8, overflow: "hidden", border: "1px solid #252534" }}>
-          <button onClick={() => setIsLogin(true)} style={{
-            flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-            background: isLogin ? "rgba(201,168,76,0.1)" : "#16161f",
-            color: isLogin ? "#c9a84c" : "#5a5a72",
-            borderBottom: isLogin ? "2px solid #c9a84c" : "2px solid transparent",
-            fontFamily: "'DM Sans', sans-serif",
-          }}>Entrar</button>
-          <button onClick={() => setIsLogin(false)} style={{
-            flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-            background: !isLogin ? "rgba(201,168,76,0.1)" : "#16161f",
-            color: !isLogin ? "#c9a84c" : "#5a5a72",
-            borderBottom: !isLogin ? "2px solid #c9a84c" : "2px solid transparent",
-            fontFamily: "'DM Sans', sans-serif",
-          }}>Criar Conta</button>
-        </div>
+        {/* Tabs (only login/signup) */}
+        {mode !== "forgot" && (
+          <div style={{ display: "flex", marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(37,37,52,0.6)" }}>
+            {(["login", "signup"] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)} style={{
+                flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
+                background: mode === m ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
+                color: mode === m ? "#c9a84c" : "#5a5a72",
+                borderBottom: mode === m ? "2px solid #c9a84c" : "2px solid transparent",
+                fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+              }}>{m === "login" ? "Entrar" : "Criar Conta"}</button>
+            ))}
+          </div>
+        )}
+
+        {mode === "forgot" && (
+          <div style={{ marginBottom: 20 }}>
+            <button onClick={() => setMode("login")} style={{
+              background: "none", border: "none", color: "#5a5a72", cursor: "pointer",
+              fontSize: 12, fontFamily: "'DM Sans', sans-serif", padding: 0,
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              ← Voltar ao login
+            </button>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#eeeef5", marginTop: 12 }}>
+              Recuperar senha
+            </div>
+            <div style={{ fontSize: 12, color: "#5a5a72", marginTop: 4 }}>
+              Enviaremos um link de recuperação para seu email.
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
-          {!isLogin && (
+          {mode === "signup" && (
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nome completo</label>
-              <input
-                type="text" required value={displayName} onChange={e => setDisplayName(e.target.value)}
-                placeholder="Dr. João Silva"
-                style={{
-                  width: "100%", padding: "10px 14px", borderRadius: 8,
-                  background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-                  fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-                }}
-              />
+              <input type="text" required value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Dr. João Silva" style={inputCss} />
             </div>
           )}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Email</label>
-            <input
-              type="email" required value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="usuario@escritorio.com"
-              style={{
-                width: "100%", padding: "10px 14px", borderRadius: 8,
-                background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-                fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Senha</label>
-            <input
-              type="password" required value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              minLength={6}
-              style={{
-                width: "100%", padding: "10px 14px", borderRadius: 8,
-                background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-                fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-              }}
-            />
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@escritorio.com" style={inputCss} />
           </div>
 
-          {!isLogin && (
+          {mode !== "forgot" && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Senha</label>
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} style={inputCss} />
+            </div>
+          )}
+
+          {mode === "signup" && (
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Função no escritório</label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {ROLES.map(role => (
-                  <button
-                    key={role.value} type="button"
-                    onClick={() => setSelectedRole(role.value)}
-                    style={{
-                      padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-                      border: selectedRole === role.value ? "1px solid #c9a84c" : "1px solid #252534",
-                      background: selectedRole === role.value ? "rgba(201,168,76,0.1)" : "#16161f",
-                      color: selectedRole === role.value ? "#c9a84c" : "#9898b0",
-                      fontSize: 11, fontFamily: "'DM Sans', sans-serif",
-                      display: "flex", alignItems: "center", gap: 6,
-                      transition: "all 0.2s",
-                    }}
-                  >
+                  <button key={role.value} type="button" onClick={() => setSelectedRole(role.value)} style={{
+                    padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                    border: selectedRole === role.value ? "1px solid #c9a84c" : "1px solid rgba(37,37,52,0.6)",
+                    background: selectedRole === role.value ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
+                    color: selectedRole === role.value ? "#c9a84c" : "#9898b0",
+                    fontSize: 11, fontFamily: "'DM Sans', sans-serif",
+                    display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s",
+                    backdropFilter: "blur(4px)",
+                  }}>
                     <span>{role.icon}</span>
                     <span>{role.label}</span>
                   </button>
@@ -158,32 +182,47 @@ export default function Auth() {
             </div>
           )}
 
-          <button
-            type="submit" disabled={submitting}
-            style={{
-              width: "100%", padding: "12px 0", borderRadius: 8, border: "none", cursor: "pointer",
-              background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
-              color: "#0a0a12", fontSize: 14, fontWeight: 600,
-              fontFamily: "'DM Sans', sans-serif",
-              opacity: submitting ? 0.7 : 1,
-              boxShadow: "0 4px 20px rgba(201,168,76,0.3)",
-              transition: "opacity 0.2s",
-            }}
-          >
-            {submitting ? "Aguarde..." : isLogin ? "Entrar no Sistema" : "Criar Conta"}
+          <button type="submit" disabled={submitting} style={{
+            width: "100%", padding: "12px 0", borderRadius: 10, border: "none", cursor: "pointer",
+            background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
+            color: "#0a0a12", fontSize: 14, fontWeight: 600,
+            fontFamily: "'DM Sans', sans-serif",
+            opacity: submitting ? 0.7 : 1,
+            boxShadow: "0 4px 24px rgba(201,168,76,0.35)",
+            transition: "all 0.3s",
+          }}>
+            {submitting ? "Aguarde..." : mode === "login" ? "Entrar no Sistema" : mode === "signup" ? "Criar Conta" : "Enviar Link de Recuperação"}
           </button>
         </form>
 
-        {/* Test accounts info */}
-        <div style={{ marginTop: 20, padding: 12, borderRadius: 8, background: "#16161f", border: "1px solid #252534" }}>
-          <div style={{ fontSize: 10, color: "#c9a84c", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-            🧪 Contas para teste
+        {/* Forgot password link */}
+        {mode === "login" && (
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <button onClick={() => setMode("forgot")} style={{
+              background: "none", border: "none", color: "#5a5a72", cursor: "pointer",
+              fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+              transition: "color 0.2s",
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#c9a84c")}
+              onMouseLeave={e => (e.currentTarget.style.color = "#5a5a72")}
+            >
+              Esqueceu sua senha?
+            </button>
           </div>
-          <div style={{ fontSize: 10, color: "#5a5a72", lineHeight: 1.6 }}>
-            Crie contas com diferentes funções para testar as permissões do sistema. 
-            O admin pode atribuir papéis via painel de administração.
-          </div>
+        )}
+
+        {/* Animated status bar */}
+        <div style={{
+          marginTop: 20, height: 2, borderRadius: 1, overflow: "hidden",
+          background: "rgba(37,37,52,0.4)",
+        }}>
+          <div style={{
+            height: "100%", width: "30%", borderRadius: 1,
+            background: "linear-gradient(90deg, transparent, #c9a84c, transparent)",
+            animation: "shimmer 2s ease-in-out infinite",
+          }} />
         </div>
+        <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }`}</style>
       </div>
     </div>
   );
