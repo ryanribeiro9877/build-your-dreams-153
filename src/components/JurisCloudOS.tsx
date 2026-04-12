@@ -1013,7 +1013,7 @@ export default function JurisCloudOS() {
 
           <nav className="jc-nav">
             <div className="jc-section-label">Departamentos</div>
-            {DEPARTMENTS.map(dept => (
+            {DEPARTMENTS.filter(dept => canAccessDepartment(dept.id)).map(dept => (
               <div
                 key={dept.id}
                 className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
@@ -1028,13 +1028,21 @@ export default function JurisCloudOS() {
             ))}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
-              <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
-              <span className="jc-nav-label">Clientes</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/admin")}>
-              <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
-              <span className="jc-nav-label">Administração</span>
+            {canAccessClients && (
+              <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
+                <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
+                <span className="jc-nav-label">Clientes</span>
+              </div>
+            )}
+            {canAccessAdmin && (
+              <div className="jc-nav-item" onClick={() => navigate("/admin")}>
+                <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
+                <span className="jc-nav-label">Administração</span>
+              </div>
+            )}
+            <div className="jc-nav-item" onClick={() => navigate("/perfil")}>
+              <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
+              <span className="jc-nav-label">Meu Perfil</span>
             </div>
             <div className="jc-nav-item" onClick={() => signOut()}>
               <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
