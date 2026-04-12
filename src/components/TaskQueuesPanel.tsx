@@ -37,9 +37,11 @@ const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "auto" as 
 
 export default function TaskQueuesPanel() {
   const { user } = useAuth();
-  const { canEdit } = usePermissions();
+  const { canEdit, canDelete } = usePermissions();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Filters
   const [searchText, setSearchText] = useState("");
@@ -103,10 +105,22 @@ export default function TaskQueuesPanel() {
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    setDeletingId(taskId);
+    const { error } = await supabase.from("agent_tasks").delete().eq("id", taskId);
+    if (error) {
+      toast.error("Erro ao excluir tarefa");
+    } else {
+      toast.success("Tarefa excluída!");
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    }
+    setDeletingId(null);
+    setConfirmDeleteId(null);
+  };
+
   const handleCreateTask = async () => {
     if (!user || !newTitle.trim()) return;
     setCreating(true);
-    // Get first agent for assignment
     const { data: agentData } = await supabase.from("agents").select("id").limit(1);
     const agentId = agentData?.[0]?.id;
     if (!agentId) { toast.error("Nenhum agente disponível"); setCreating(false); return; }
@@ -127,7 +141,6 @@ export default function TaskQueuesPanel() {
       toast.success("Tarefa criada!");
       setNewTitle(""); setNewClient(""); setNewPriority("medium"); setNewCategory("confeccao");
       setShowCreate(false);
-      // Don't fetchTasks — realtime will handle the insert
     }
   };
 
@@ -185,8 +198,7 @@ export default function TaskQueuesPanel() {
               style={{
                 width: "100%", padding: "8px 0", borderRadius: 8, border: "1px dashed var(--border2)",
                 background: "transparent", color: "var(--gold)", cursor: "pointer",
-                fontSize: 11, fontFamily: "var(--font-body)",
-                transition: "all 0.2s",
+                fontSize: 11, fontFamily: "var(--font-body)", transition: "all 0.2s",
               }}
             >
               + Nova Tarefa
@@ -283,9 +295,10 @@ export default function TaskQueuesPanel() {
                             opacity: dragSnapshot.isDragging ? 0.9 : 1,
                             boxShadow: dragSnapshot.isDragging ? "0 8px 24px rgba(0,0,0,0.3)" : "none",
                             transition: dragSnapshot.isDragging ? "none" : "background-color 0.2s",
+                            position: "relative",
                           }}
                         >
-                          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text1)", marginBottom: 4, lineHeight: 1.3 }}>
+                          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text1)", marginBottom: 4, lineHeight: 1.3, paddingRight: canDelete ? 20 : 0 }}>
                             {item.title}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -305,6 +318,55 @@ export default function TaskQueuesPanel() {
                               fontFamily: "var(--font-mono)"
                             }}>{item.status}</span>
                           </div>
+
+                          {/* Delete button */}
+                          {canDelete && (
+                            confirmDeleteId === item.id ? (
+                              <div style={{
+                                position: "absolute", top: 0, right: 0, bottom: 0, left: 0,
+                                background: "rgba(10,10,18,0.92)", borderRadius: "0 8px 8px 0",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                                zIndex: 10,
+                              }}>
+                                <span style={{ fontSize: 10, color: "#ef4444" }}>Excluir?</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
+                                  disabled={deletingId === item.id}
+                                  style={{
+                                    padding: "4px 10px", borderRadius: 4, border: "none",
+                                    background: "#ef4444", color: "#fff", cursor: "pointer",
+                                    fontSize: 10, fontWeight: 600, opacity: deletingId === item.id ? 0.5 : 1,
+                                  }}
+                                >
+                                  {deletingId === item.id ? "..." : "Sim"}
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                  style={{
+                                    padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)",
+                                    background: "transparent", color: "var(--text3)", cursor: "pointer", fontSize: 10,
+                                  }}
+                                >
+                                  Não
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(item.id); }}
+                                title="Excluir tarefa"
+                                style={{
+                                  position: "absolute", top: 8, right: 8,
+                                  background: "transparent", border: "none", cursor: "pointer",
+                                  color: "var(--text3)", fontSize: 12, padding: "2px 4px", borderRadius: 4,
+                                  opacity: 0.5, transition: "opacity 0.2s",
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                              >
+                                🗑️
+                              </button>
+                            )
+                          )}
                         </div>
                       )}
                     </Draggable>
