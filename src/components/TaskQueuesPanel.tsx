@@ -127,7 +127,7 @@ export default function TaskQueuesPanel() {
       toast.success("Tarefa criada!");
       setNewTitle(""); setNewClient(""); setNewPriority("medium"); setNewCategory("confeccao");
       setShowCreate(false);
-      fetchTasks();
+      // Don't fetchTasks — realtime will handle the insert
     }
   };
 
