@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 // ── DATA ────────────────────────────────────────────────────
 const DEPARTMENTS = [
   { id: "assistente",    label: "Meu Assistente",          icon: "◈",  color: "#c9a84c", badge: 8  },
+  { id: "diretoria",     label: "Diretoria / CEO",         icon: "👑", color: "#c9a84c", badge: 0  },
   { id: "recepcao",      label: "Recepção",                icon: "🏢", color: "#3b82f6", badge: 6  },
   { id: "marketing",     label: "Marketing",               icon: "📢", color: "#f59e0b", badge: 5  },
   { id: "civel",         label: "Contencioso Cível",       icon: "⚖️", color: "#8b5cf6", badge: 12 },
