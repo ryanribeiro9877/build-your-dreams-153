@@ -1079,7 +1079,7 @@ export default function JurisCloudOS() {
                 </div>
                 {AGENTS.map(agent => {
                   const load = getAgentLoad(agent);
-                  const roleLabels: Record<AgentRole, string> = { orchestrator: "🎯 Orquestrador", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor" };
+                  const roleLabels: Record<AgentRole, string> = { director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
                   return (
                     <div key={agent.id} style={{
                       background: "var(--bg3)", border: "1px solid var(--border)",
