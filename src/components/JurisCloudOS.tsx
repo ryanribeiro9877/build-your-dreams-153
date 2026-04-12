@@ -1161,57 +1161,7 @@ export default function JurisCloudOS() {
           </div>
           <div className="jc-right-body">
             {rightTab === "filas" && (
-              <>
-                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                  {TASK_QUEUES.reduce((s, q) => s + q.items.length, 0)} tarefas em fila
-                </div>
-                {TASK_QUEUES.map(queue => (
-                  <div key={queue.id} style={{ marginBottom: 14 }}>
-                    <div style={{
-                      fontSize: 11, fontWeight: 600, color: queue.color, marginBottom: 6,
-                      display: "flex", alignItems: "center", justifyContent: "space-between"
-                    }}>
-                      <span>{queue.label}</span>
-                      <span style={{
-                        fontSize: 9, padding: "2px 8px", borderRadius: 10,
-                        background: `${queue.color}18`, color: queue.color,
-                        border: `1px solid ${queue.color}30`, fontFamily: "var(--font-mono)"
-                      }}>{queue.items.length}</span>
-                    </div>
-                    {queue.items.map(item => {
-                      const prioColors: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280" };
-                      const prioLabels: Record<string, string> = { critical: "CRÍTICO", high: "ALTA", medium: "MÉDIA", low: "BAIXA" };
-                      return (
-                        <div key={item.id} style={{
-                          background: "var(--bg3)", border: "1px solid var(--border)",
-                          borderLeft: `3px solid ${prioColors[item.priority]}`,
-                          borderRadius: "0 8px 8px 0", padding: "10px 12px", marginBottom: 6,
-                          transition: "background-color var(--theme-transition)"
-                        }}>
-                          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text1)", marginBottom: 4, lineHeight: 1.3 }}>
-                            {item.title}
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, color: "var(--text3)" }}>👤 {item.client}</span>
-                            <span style={{ fontSize: 7, padding: "1px 5px", borderRadius: 3, background: `${prioColors[item.priority]}18`, color: prioColors[item.priority], fontWeight: 600, textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
-                              {prioLabels[item.priority]}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 8, color: "var(--text3)" }}>🤖 {item.agent}</span>
-                            <span style={{
-                              fontSize: 8, padding: "2px 6px", borderRadius: 4,
-                              background: item.status === "pronto" ? "rgba(45,212,160,0.15)" : item.status.includes("andamento") ? "rgba(59,130,246,0.15)" : "var(--badge-bg)",
-                              color: item.status === "pronto" ? "var(--teal)" : item.status.includes("andamento") ? "#3b82f6" : "var(--text3)",
-                              fontFamily: "var(--font-mono)"
-                            }}>{item.status}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </>
+              <TaskQueuesPanel />
             )}
 
             {rightTab === "processos" && (
