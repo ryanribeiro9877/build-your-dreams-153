@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 
 /* ─────────────────────────────────────────────────────────────
    JURISCLOUD OS  –  Sistema Operacional Empresarial Conversacional
-   Paste this entire file into Lovable as a single component.
-   Uses only Tailwind + Google Fonts (loaded via style tag).
 ───────────────────────────────────────────────────────────── */
 
 // ── DATA ────────────────────────────────────────────────────
@@ -89,19 +87,19 @@ const QUICK_COMMANDS = [
   "Relatório do dia",
 ];
 
+type Theme = "dark" | "light";
+
 // ── STYLE INJECTION ──────────────────────────────────────────
-const GlobalStyles = () => (
+const GlobalStyles = ({ theme }: { theme: Theme }) => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --bg:       #09090f;
-      --bg2:      #111118;
-      --bg3:      #16161f;
-      --bg4:      #1d1d28;
-      --border:   #252534;
-      --border2:  #2e2e42;
+      --font-disp: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
       --gold:     #c9a84c;
       --gold2:    #e8c96a;
       --blue:     #4f8ef7;
@@ -109,13 +107,44 @@ const GlobalStyles = () => (
       --purple:   #a78bfa;
       --red:      #ef4444;
       --amber:    #f59e0b;
+    }
+
+    /* DARK THEME */
+    [data-theme="dark"] {
+      --bg:       #09090f;
+      --bg2:      #111118;
+      --bg3:      #16161f;
+      --bg4:      #1d1d28;
+      --border:   #252534;
+      --border2:  #2e2e42;
       --text1:    #eeeef5;
       --text2:    #9898b0;
       --text3:    #5a5a72;
-      --font-disp: 'Cormorant Garamond', Georgia, serif;
-      --font-body: 'DM Sans', sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --logo-text: #0a0a12;
+      --user-bubble-bg: rgba(201,168,76,0.08);
+      --user-bubble-border: rgba(201,168,76,0.2);
+      --scrollbar-thumb: var(--border2);
+      --badge-bg: rgba(255,255,255,0.07);
     }
+
+    /* LIGHT THEME */
+    [data-theme="light"] {
+      --bg:       #f5f5f7;
+      --bg2:      #ffffff;
+      --bg3:      #f0f0f4;
+      --bg4:      #e8e8ee;
+      --border:   #d8d8e0;
+      --border2:  #c8c8d4;
+      --text1:    #1a1a2e;
+      --text2:    #5a5a72;
+      --text3:    #8888a0;
+      --logo-text: #0a0a12;
+      --user-bubble-bg: rgba(201,168,76,0.06);
+      --user-bubble-border: rgba(201,168,76,0.25);
+      --scrollbar-thumb: var(--border2);
+      --badge-bg: rgba(0,0,0,0.06);
+    }
+
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
 
     .jc-root { display: flex; height: 100vh; overflow: hidden; background: var(--bg); }
@@ -127,6 +156,7 @@ const GlobalStyles = () => (
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
       overflow: hidden;
+      transition: transform 0.3s ease, opacity 0.3s ease;
     }
     .jc-logo {
       padding: 20px 20px 16px;
@@ -138,11 +168,11 @@ const GlobalStyles = () => (
       background: linear-gradient(135deg, var(--gold), var(--gold2));
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 700; color: #0a0a12;
+      font-size: 16px; font-weight: 700; color: var(--logo-text);
       font-family: var(--font-disp);
       box-shadow: 0 0 16px rgba(201,168,76,0.35);
     }
-    .jc-logo-text { font-family: var(--font-disp); font-size: 18px; font-weight: 600; letter-spacing: 0.02em; }
+    .jc-logo-text { font-family: var(--font-disp); font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--text1); }
     .jc-logo-sub  { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
 
     .jc-search {
@@ -162,7 +192,7 @@ const GlobalStyles = () => (
 
     .jc-nav { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
     .jc-nav::-webkit-scrollbar { width: 4px; }
-    .jc-nav::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+    .jc-nav::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
 
     .jc-section-label {
       font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -180,7 +210,7 @@ const GlobalStyles = () => (
     .jc-nav-label { font-size: 13px; font-weight: 400; color: var(--text1); flex: 1; }
     .jc-nav-badge {
       font-size: 10px; font-family: var(--font-mono);
-      background: rgba(255,255,255,0.07); border-radius: 10px;
+      background: var(--badge-bg); border-radius: 10px;
       padding: 1px 7px; color: var(--text2); min-width: 22px; text-align: center;
     }
     .jc-nav-badge.alert { background: rgba(239,68,68,0.18); color: #ff8080; }
@@ -212,7 +242,7 @@ const GlobalStyles = () => (
     }
 
     /* ── MAIN ── */
-    .jc-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .jc-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
     /* TOPBAR */
     .jc-topbar {
@@ -244,9 +274,20 @@ const GlobalStyles = () => (
       width: 26px; height: 26px; border-radius: 50%;
       background: linear-gradient(135deg, var(--gold), var(--gold2));
       display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: #0a0a12; font-family: var(--font-disp);
+      font-size: 11px; font-weight: 700; color: var(--logo-text); font-family: var(--font-disp);
     }
     .jc-user-name { font-size: 12px; color: var(--text1); }
+
+    /* THEME TOGGLE */
+    .jc-theme-toggle {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      background: var(--bg3); border: 1px solid var(--border);
+      cursor: pointer; font-size: 14px;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .jc-theme-toggle:hover { border-color: var(--border2); }
 
     /* MESSAGES */
     .jc-messages {
@@ -279,7 +320,7 @@ const GlobalStyles = () => (
       font-size: 13.5px; line-height: 1.65; color: var(--text1);
     }
     .jc-msg-wrap.user .jc-msg-bubble {
-      background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.2);
+      background: var(--user-bubble-bg); border-color: var(--user-bubble-border);
     }
     .jc-msg-meta {
       font-size: 10px; color: var(--text3); margin-bottom: 4px;
@@ -324,7 +365,7 @@ const GlobalStyles = () => (
     }
     .jc-process-row:hover { border-color: var(--border2); background: var(--bg3); transform: translateX(2px); }
     .jc-process-id { font-family: var(--font-mono); font-size: 10px; color: var(--text3); min-width: 72px; }
-    .jc-process-client { font-size: 12.5px; font-weight: 500; flex: 1; }
+    .jc-process-client { font-size: 12.5px; font-weight: 500; flex: 1; color: var(--text1); }
     .jc-process-area { font-size: 10px; padding: 2px 8px; border-radius: 5px; }
     .jc-process-prazo { font-family: var(--font-mono); font-size: 10px; }
     .jc-process-badge {
@@ -445,8 +486,83 @@ const GlobalStyles = () => (
     .jc-alert-text { font-size: 11.5px; color: var(--text1); line-height: 1.4; flex: 1; }
     .jc-alert-time { font-size: 9px; color: var(--text3); font-family: var(--font-mono); white-space: nowrap; }
 
+    /* MOBILE OVERLAY */
+    .jc-sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 40;
+      background: rgba(0,0,0,0.5);
+    }
+    .jc-sidebar-overlay.visible { display: block; }
+
+    /* HAMBURGER */
+    .jc-hamburger {
+      display: none;
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; color: var(--text1); padding: 4px;
+      line-height: 1;
+    }
+
+    /* MOBILE RIGHT PANEL TOGGLE */
+    .jc-right-toggle {
+      display: none;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 10px; cursor: pointer;
+      font-size: 11px; color: var(--text2);
+      transition: all 0.15s;
+    }
+    .jc-right-toggle:hover { border-color: var(--border2); color: var(--text1); }
+
     /* SCROLLBAR global tweak */
     * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .jc-right-panel { display: none; }
+      .jc-right-panel.mobile-visible {
+        display: flex;
+        position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
+        width: 300px;
+        box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+      }
+      .jc-right-toggle { display: block; }
+    }
+
+    @media (max-width: 768px) {
+      .jc-sidebar {
+        position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+      }
+      .jc-sidebar.mobile-open { transform: translateX(0); }
+      .jc-sidebar-overlay.visible { display: block; }
+      .jc-hamburger { display: block; }
+
+      .jc-topbar { padding: 0 12px; gap: 8px; }
+      .jc-alert-chip { display: none; }
+      .jc-dept-title { font-size: 16px; }
+      .jc-dept-sub { font-size: 9px; }
+
+      .jc-msg-wrap { padding: 8px 12px; }
+      .jc-msg-bubble { max-width: 85%; font-size: 13px; }
+      .jc-card-grid { grid-template-columns: 1fr 1fr; }
+
+      .jc-input-area { padding: 8px 12px 12px; }
+      .jc-commands { gap: 4px; }
+      .jc-cmd { font-size: 10px; padding: 3px 8px; }
+
+      .jc-process-row { flex-wrap: wrap; gap: 6px; padding: 10px; }
+      .jc-process-id { min-width: auto; }
+      .jc-process-value { min-width: auto; }
+    }
+
+    @media (max-width: 480px) {
+      .jc-card-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .jc-kpi { padding: 8px; }
+      .jc-kpi-value { font-size: 20px; }
+      .jc-card-briefing { padding: 14px; }
+      .jc-card-briefing-title { font-size: 18px; }
+      .jc-user-chip { display: none; }
+    }
   `}</style>
 );
 
@@ -458,7 +574,7 @@ function BriefingCard({ card }: { card: any }) {
       <div className="jc-card-briefing-title">{card.title}</div>
       <div className="jc-card-briefing-sub">{card.summary}</div>
       <div className="jc-card-grid">
-        {card.items.map((item, i) => (
+        {card.items.map((item: any, i: number) => (
           <div className="jc-kpi" key={i} style={{ borderLeftColor: item.accent, borderLeftWidth: 2 }}>
             <div className="jc-kpi-icon" style={{ color: item.accent }}>{item.icon}</div>
             <div className="jc-kpi-value" style={{ color: item.accent }}>{item.value}</div>
@@ -471,10 +587,10 @@ function BriefingCard({ card }: { card: any }) {
 }
 
 function ProcessListCard({ processes }: { processes: any[] }) {
-  const areaColors = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdência": "#f59e0b", "Contratos": "#4f8ef7" };
+  const areaColors: Record<string, string> = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdência": "#f59e0b", "Contratos": "#4f8ef7" };
   return (
     <div className="jc-card-processes">
-      {processes.map(p => (
+      {processes.map((p: any) => (
         <div className="jc-process-row" key={p.id}>
           <div className="jc-process-id">#{p.id}</div>
           <div className="jc-process-client">{p.client}</div>
@@ -483,7 +599,7 @@ function ProcessListCard({ processes }: { processes: any[] }) {
             color: areaColors[p.area] || "#4f8ef7",
             border: `1px solid ${areaColors[p.area] || "#4f8ef7"}30`
           }}>{p.area}</div>
-          <div className="jc-process-prazo" style={{ color: p.prazo === "HOJE" ? "#ff8080" : "#9898b0" }}>
+          <div className="jc-process-prazo" style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text2)" }}>
             {p.prazo === "HOJE" ? "⚠ HOJE" : `⏱ ${p.prazo}`}
           </div>
           <div className={`jc-process-badge ${p.status}`}>{p.status}</div>
@@ -495,7 +611,7 @@ function ProcessListCard({ processes }: { processes: any[] }) {
 }
 
 function MessageBubble({ msg }: { msg: any }) {
-  const agentColors = {
+  const agentColors: Record<string, string> = {
     "Meu Assistente": "#c9a84c", "Pesquisador Jurídico": "#2dd4a0",
     "Redator Processual": "#a78bfa", "Controlador de Prazos": "#ef4444",
     "Gerador de Relatórios": "#34d399",
@@ -507,7 +623,7 @@ function MessageBubble({ msg }: { msg: any }) {
     <div className={`jc-msg-wrap ${isUser ? "user" : ""}`}>
       {!isUser && (
         <div className="jc-msg-avatar" style={{ background: `${color}20`, color, border: `1px solid ${color}30`, fontSize: 11 }}>
-          {msg.agent ? msg.agent.split(" ").map(w => w[0]).join("").slice(0, 2) : "AI"}
+          {msg.agent ? msg.agent.split(" ").map((w: string) => w[0]).join("").slice(0, 2) : "AI"}
         </div>
       )}
       {isUser && (
@@ -541,7 +657,7 @@ function ThinkingBubble({ agent }: { agent: string }) {
   return (
     <div className="jc-msg-wrap">
       <div className="jc-msg-avatar" style={{ background: "rgba(201,168,76,0.1)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.2)", fontSize: 11 }}>
-        {agent.split(" ").map(w => w[0]).join("").slice(0, 2)}
+        {agent.split(" ").map((w: string) => w[0]).join("").slice(0, 2)}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="jc-msg-meta"><span className="agent-tag">{agent}</span><span>agora</span></div>
@@ -561,10 +677,24 @@ export default function JurisCloudOS() {
   const [thinking, setThinking]         = useState(false);
   const [rightTab, setRightTab]         = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const messagesEndRef = useRef(null);
-  const textareaRef    = useRef(null);
+  const [theme, setTheme]               = useState<Theme>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("jc-theme") as Theme) || "dark";
+    }
+    return "dark";
+  });
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef    = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
+
+  useEffect(() => {
+    localStorage.setItem("jc-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
   const handleSend = (text?: string) => {
     const val = (text || inputVal).trim();
@@ -597,15 +727,21 @@ export default function JurisCloudOS() {
   };
 
   const activeDeptData = DEPARTMENTS.find(d => d.id === activeDept);
-  const areaColors = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdenciário": "#f59e0b", "Contratos": "#4f8ef7" };
+  const areaColors: Record<string, string> = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdenciário": "#f59e0b", "Contratos": "#4f8ef7" };
 
   return (
-    <>
-      <GlobalStyles />
+    <div data-theme={theme}>
+      <GlobalStyles theme={theme} />
       <div className="jc-root">
 
+        {/* MOBILE SIDEBAR OVERLAY */}
+        <div
+          className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`}
+          onClick={() => setSidebarOpen(false)}
+        />
+
         {/* ── SIDEBAR ── */}
-        <aside className="jc-sidebar">
+        <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
           <div className="jc-logo">
             <div className="jc-logo-mark">J</div>
             <div>
@@ -629,7 +765,7 @@ export default function JurisCloudOS() {
               <div
                 key={dept.id}
                 className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
-                onClick={() => setActiveDept(dept.id)}
+                onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}
               >
                 <span className="jc-nav-icon" style={{ color: dept.color }}>{dept.icon}</span>
                 <span className="jc-nav-label">{dept.label}</span>
@@ -659,7 +795,8 @@ export default function JurisCloudOS() {
 
           {/* TOPBAR */}
           <header className="jc-topbar">
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <button className="jc-hamburger" onClick={() => setSidebarOpen(true)}>☰</button>
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
               <div className="jc-dept-title" style={{ color: activeDeptData?.color }}>
                 {activeDeptData?.icon} {activeDeptData?.label}
               </div>
@@ -672,6 +809,12 @@ export default function JurisCloudOS() {
                 <span>{a.text.slice(0, 28)}...</span>
               </div>
             ))}
+            <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema">
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+            <button className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
+              {rightPanelOpen ? "✕ Fechar" : "📋 Operações"}
+            </button>
             <div className="jc-user-chip">
               <div className="jc-user-avatar">J</div>
               <div className="jc-user-name">Dr. JurisCloud</div>
@@ -715,9 +858,9 @@ export default function JurisCloudOS() {
         </main>
 
         {/* ── RIGHT PANEL ── */}
-        <aside className="jc-right-panel">
-          <div className="jc-right-header">
-            Central de Operações
+        <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""}`}>
+          <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Central de Operações</span>
           </div>
           <div className="jc-right-tabs">
             {["processos", "alertas", "agentes"].map(tab => (
@@ -804,7 +947,14 @@ export default function JurisCloudOS() {
           </div>
         </aside>
 
+        {/* RIGHT PANEL OVERLAY (mobile) */}
+        {rightPanelOpen && (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }}
+            onClick={() => setRightPanelOpen(false)}
+          />
+        )}
       </div>
-    </>
+    </div>
   );
 }
