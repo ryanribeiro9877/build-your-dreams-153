@@ -1167,6 +1167,14 @@ export default function JurisCloudOS() {
                             <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                               {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
                             </div>
+                            {agent.reportsTo !== undefined && (() => {
+                              const superior = AGENTS.find(a => a.id === agent.reportsTo);
+                              return superior ? (
+                                <div style={{ fontSize: 8, color: "var(--text3)", marginTop: 1 }}>
+                                  ↳ reporta a: {superior.name}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                           <div className={`jc-agent-dot ${agent.status}`} />
                         </div>
