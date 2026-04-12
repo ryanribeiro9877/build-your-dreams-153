@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ─────────────────────────────────────────────────────────────
-   JURISCLOUD OS  –  Sistema Operacional Empresarial Conversacional
+   AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
 ───────────────────────────────────────────────────────────── */
 
 // ── DATA ────────────────────────────────────────────────────
@@ -18,16 +18,54 @@ const DEPARTMENTS = [
   { id: "diretoria",   label: "Diretoria",        icon: "◉",  color: "#c9a84c", badge: 0  },
 ];
 
-const AGENTS = [
-  { id: 1, name: "Recepção Inteligente",  status: "active",  avatar: "RI", color: "#4f8ef7" },
-  { id: 2, name: "Pesquisador Jurídico",  status: "active",  avatar: "PJ", color: "#2dd4a0" },
-  { id: 3, name: "Redator Processual",    status: "idle",    avatar: "RP", color: "#a78bfa" },
-  { id: 4, name: "Analista de Contratos", status: "active",  avatar: "AC", color: "#f59e0b" },
-  { id: 5, name: "Controlador de Prazos", status: "alert",   avatar: "CP", color: "#ef4444" },
-  { id: 6, name: "Gerador de Relatórios", status: "idle",    avatar: "GR", color: "#34d399" },
-  { id: 7, name: "Gestor de Clientes",    status: "active",  avatar: "GC", color: "#60a5fa" },
-  { id: 8, name: "Supervisor Contencioso",status: "active",  avatar: "SC", color: "#c9a84c" },
+type AgentRole = "orchestrator" | "specialist" | "reviewer" | "executor";
+type AgentPermission = "read" | "write" | "approve" | "execute" | "admin";
+
+interface Agent {
+  id: number;
+  name: string;
+  status: "active" | "idle" | "alert";
+  avatar: string;
+  color: string;
+  role: AgentRole;
+  permissions: AgentPermission[];
+  department: string[];
+  canOrchestrate: boolean;
+  maxConcurrentTasks: number;
+  currentTasks: number;
+}
+
+const AGENTS: Agent[] = [
+  { id: 1, name: "Recepção Inteligente",  status: "active",  avatar: "RI", color: "#4f8ef7", role: "executor",     permissions: ["read", "write"],                    department: ["recepcao"],                       canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 3 },
+  { id: 2, name: "Pesquisador Jurídico",  status: "active",  avatar: "PJ", color: "#2dd4a0", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["bancario", "civel", "previdencia"], canOrchestrate: false, maxConcurrentTasks: 5,  currentTasks: 4 },
+  { id: 3, name: "Redator Processual",    status: "idle",    avatar: "RP", color: "#a78bfa", role: "executor",     permissions: ["read", "write", "execute"],          department: ["bancario", "civel"],               canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
+  { id: 4, name: "Analista de Contratos", status: "active",  avatar: "AC", color: "#f59e0b", role: "reviewer",     permissions: ["read", "write", "approve"],          department: ["financeiro", "civel"],             canOrchestrate: false, maxConcurrentTasks: 4,  currentTasks: 2 },
+  { id: 5, name: "Controlador de Prazos", status: "alert",   avatar: "CP", color: "#ef4444", role: "specialist",   permissions: ["read", "execute"],                   department: ["*"],                               canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 15 },
+  { id: 6, name: "Gerador de Relatórios", status: "idle",    avatar: "GR", color: "#34d399", role: "executor",     permissions: ["read", "write"],                    department: ["diretoria", "financeiro"],         canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
+  { id: 7, name: "Gestor de Clientes",    status: "active",  avatar: "GC", color: "#60a5fa", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["recepcao", "familia"],             canOrchestrate: false, maxConcurrentTasks: 8,  currentTasks: 5 },
+  { id: 8, name: "Supervisor Contencioso",status: "active",  avatar: "SC", color: "#c9a84c", role: "orchestrator", permissions: ["read", "write", "approve", "admin"], department: ["*"],                               canOrchestrate: true,  maxConcurrentTasks: 15, currentTasks: 8 },
 ];
+
+// ── ORCHESTRATION ENGINE ────────────────────────────────────
+function getAgentsForDepartment(deptId: string): Agent[] {
+  return AGENTS.filter(a => a.department.includes("*") || a.department.includes(deptId));
+}
+
+function getAgentLoad(agent: Agent): number {
+  return Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
+}
+
+function canAgentPerform(agent: Agent, permission: AgentPermission): boolean {
+  return agent.permissions.includes(permission) || agent.permissions.includes("admin");
+}
+
+function getOrchestrators(): Agent[] {
+  return AGENTS.filter(a => a.canOrchestrate && a.status !== "idle");
+}
+
+function getAvailableAgents(): Agent[] {
+  return AGENTS.filter(a => a.currentTasks < a.maxConcurrentTasks);
+}
 
 const PROCESSES = [
   { id: "0023847", client: "Marcos Vinícius S.",  area: "Bancário",  status: "urgente",   prazo: "HOJE",    tribunal: "TJBA", value: "R$ 48.200" },
@@ -49,7 +87,7 @@ const INITIAL_MESSAGES = [
     content: null,
     card: {
       type: "briefing",
-      title: "Bom dia, Dr. JurisCloud ✦",
+      title: "Bom dia, Dr. Agent Jus IA ✦",
       summary: "Aqui está sua visão operacional de hoje",
       items: [
         { icon: "⚠", label: "Prazos críticos",      value: "3", accent: "#ef4444" },
@@ -107,6 +145,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --purple:   #a78bfa;
       --red:      #ef4444;
       --amber:    #f59e0b;
+      --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* DARK THEME */
@@ -143,6 +182,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --user-bubble-border: rgba(201,168,76,0.25);
       --scrollbar-thumb: var(--border2);
       --badge-bg: rgba(0,0,0,0.06);
+    }
+
+    /* SMOOTH THEME TRANSITIONS */
+    body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
+    .jc-input-area, .jc-msg-bubble, .jc-card-briefing, .jc-kpi,
+    .jc-case-card, .jc-alert-item, .jc-nav-item, .jc-search,
+    .jc-input-row, .jc-cmd, .jc-user-chip, .jc-theme-toggle,
+    .jc-agent-item, .jc-process-row, .jc-right-tab, .jc-agents-section {
+      transition: background-color var(--theme-transition),
+                  border-color var(--theme-transition),
+                  color var(--theme-transition),
+                  box-shadow var(--theme-transition);
     }
 
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
@@ -743,10 +794,10 @@ export default function JurisCloudOS() {
         {/* ── SIDEBAR ── */}
         <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
           <div className="jc-logo">
-            <div className="jc-logo-mark">J</div>
+            <div className="jc-logo-mark">A</div>
             <div>
-              <div className="jc-logo-text">JurisCloud</div>
-              <div className="jc-logo-sub">OAB/BA 12.345</div>
+              <div className="jc-logo-text">Agent Jus IA</div>
+              <div className="jc-logo-sub">Sistema Inteligente · OAB/BA 12.345</div>
             </div>
           </div>
 
@@ -816,8 +867,8 @@ export default function JurisCloudOS() {
               {rightPanelOpen ? "✕ Fechar" : "📋 Operações"}
             </button>
             <div className="jc-user-chip">
-              <div className="jc-user-avatar">J</div>
-              <div className="jc-user-name">Dr. JurisCloud</div>
+              <div className="jc-user-avatar">A</div>
+              <div className="jc-user-name">Dr. Agent Jus</div>
             </div>
           </header>
 
@@ -916,32 +967,63 @@ export default function JurisCloudOS() {
 
             {rightTab === "agentes" && (
               <>
-                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                  {AGENTS.filter(a => a.status === "active").length} agentes ativos
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
+                  Orquestração · {AGENTS.filter(a => a.status === "active").length} ativos / {AGENTS.length} total
                 </div>
-                {AGENTS.map(agent => (
-                  <div key={agent.id} style={{
-                    background: "var(--bg3)", border: "1px solid var(--border)",
-                    borderRadius: 10, padding: "12px", marginBottom: 8,
-                    display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-                    transition: "border-color 0.2s"
-                  }}>
-                    <div className="jc-agent-avatar" style={{
-                      width: 36, height: 36, borderRadius: 9,
-                      background: `${agent.color}18`, color: agent.color,
-                      border: `1px solid ${agent.color}25`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)"
-                    }}>{agent.avatar}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2 }}>{agent.name}</div>
-                      <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        {agent.status === "active" ? "● Em operação" : agent.status === "alert" ? "⚠ Atenção" : "○ Ocioso"}
+                <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 12, padding: "6px 8px", background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                  🎯 Orquestradores: {getOrchestrators().length} · Disponíveis: {getAvailableAgents().length}
+                </div>
+                {AGENTS.map(agent => {
+                  const load = getAgentLoad(agent);
+                  const roleLabels: Record<AgentRole, string> = { orchestrator: "🎯 Orquestrador", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor" };
+                  return (
+                    <div key={agent.id} style={{
+                      background: "var(--bg3)", border: "1px solid var(--border)",
+                      borderRadius: 10, padding: "12px", marginBottom: 8,
+                      cursor: "pointer", transition: "border-color 0.2s, background-color var(--theme-transition)"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                        <div className="jc-agent-avatar" style={{
+                          width: 36, height: 36, borderRadius: 9,
+                          background: `${agent.color}18`, color: agent.color,
+                          border: `1px solid ${agent.color}25`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)"
+                        }}>{agent.avatar}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2 }}>{agent.name}</div>
+                          <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
+                          </div>
+                        </div>
+                        <div className={`jc-agent-dot ${agent.status}`} />
+                      </div>
+                      {/* Load bar */}
+                      <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
+                        <div style={{
+                          width: `${load}%`, height: "100%", borderRadius: 4,
+                          background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)",
+                          transition: "width 0.5s ease"
+                        }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: 9, color: "var(--text3)" }}>
+                          Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks} tarefas
+                        </div>
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {agent.permissions.map(p => (
+                            <span key={p} style={{
+                              fontSize: 8, padding: "1px 5px", borderRadius: 3,
+                              background: p === "admin" ? "rgba(201,168,76,0.15)" : p === "approve" ? "rgba(45,212,160,0.15)" : "var(--badge-bg)",
+                              color: p === "admin" ? "var(--gold)" : p === "approve" ? "var(--teal)" : "var(--text3)",
+                              textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--font-mono)"
+                            }}>{p}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <div className={`jc-agent-dot ${agent.status}`} />
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
