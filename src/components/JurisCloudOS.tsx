@@ -980,6 +980,20 @@ export default function JurisCloudOS() {
                 )}
               </div>
             ))}
+
+            <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
+            <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
+              <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
+              <span className="jc-nav-label">Clientes</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => navigate("/admin")}>
+              <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
+              <span className="jc-nav-label">Administração</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => signOut()}>
+              <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
+              <span className="jc-nav-label">Sair</span>
+            </div>
           </nav>
 
           <div className="jc-agents-section">
