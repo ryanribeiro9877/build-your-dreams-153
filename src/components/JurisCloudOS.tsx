@@ -1137,7 +1137,10 @@ export default function JurisCloudOS() {
                 ↑
               </button>
             </div>
-            <div className="jc-input-hint">Enter para enviar · Shift+Enter para nova linha · Use / para comandos rápidos</div>
+            <div className="jc-input-hint">
+              {isReadOnly && <span style={{ color: "#f59e0b", marginRight: 8 }}>🔒 Modo leitura ({roleLabel})</span>}
+              Enter para enviar · Shift+Enter para nova linha · Use / para comandos rápidos
+            </div>
           </div>
         </main>
 
