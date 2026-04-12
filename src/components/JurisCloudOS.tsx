@@ -794,10 +794,10 @@ export default function JurisCloudOS() {
         {/* ── SIDEBAR ── */}
         <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
           <div className="jc-logo">
-            <div className="jc-logo-mark">J</div>
+            <div className="jc-logo-mark">A</div>
             <div>
-              <div className="jc-logo-text">JurisCloud</div>
-              <div className="jc-logo-sub">OAB/BA 12.345</div>
+              <div className="jc-logo-text">Agent Jus IA</div>
+              <div className="jc-logo-sub">Sistema Inteligente · OAB/BA 12.345</div>
             </div>
           </div>
 
@@ -867,8 +867,8 @@ export default function JurisCloudOS() {
               {rightPanelOpen ? "✕ Fechar" : "📋 Operações"}
             </button>
             <div className="jc-user-chip">
-              <div className="jc-user-avatar">J</div>
-              <div className="jc-user-name">Dr. JurisCloud</div>
+              <div className="jc-user-avatar">A</div>
+              <div className="jc-user-name">Dr. Agent Jus</div>
             </div>
           </header>
 
@@ -967,32 +967,63 @@ export default function JurisCloudOS() {
 
             {rightTab === "agentes" && (
               <>
-                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                  {AGENTS.filter(a => a.status === "active").length} agentes ativos
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
+                  Orquestração · {AGENTS.filter(a => a.status === "active").length} ativos / {AGENTS.length} total
                 </div>
-                {AGENTS.map(agent => (
-                  <div key={agent.id} style={{
-                    background: "var(--bg3)", border: "1px solid var(--border)",
-                    borderRadius: 10, padding: "12px", marginBottom: 8,
-                    display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-                    transition: "border-color 0.2s"
-                  }}>
-                    <div className="jc-agent-avatar" style={{
-                      width: 36, height: 36, borderRadius: 9,
-                      background: `${agent.color}18`, color: agent.color,
-                      border: `1px solid ${agent.color}25`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)"
-                    }}>{agent.avatar}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2 }}>{agent.name}</div>
-                      <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        {agent.status === "active" ? "● Em operação" : agent.status === "alert" ? "⚠ Atenção" : "○ Ocioso"}
+                <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 12, padding: "6px 8px", background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                  🎯 Orquestradores: {getOrchestrators().length} · Disponíveis: {getAvailableAgents().length}
+                </div>
+                {AGENTS.map(agent => {
+                  const load = getAgentLoad(agent);
+                  const roleLabels: Record<AgentRole, string> = { orchestrator: "🎯 Orquestrador", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor" };
+                  return (
+                    <div key={agent.id} style={{
+                      background: "var(--bg3)", border: "1px solid var(--border)",
+                      borderRadius: 10, padding: "12px", marginBottom: 8,
+                      cursor: "pointer", transition: "border-color 0.2s, background-color var(--theme-transition)"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                        <div className="jc-agent-avatar" style={{
+                          width: 36, height: 36, borderRadius: 9,
+                          background: `${agent.color}18`, color: agent.color,
+                          border: `1px solid ${agent.color}25`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)"
+                        }}>{agent.avatar}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2 }}>{agent.name}</div>
+                          <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
+                          </div>
+                        </div>
+                        <div className={`jc-agent-dot ${agent.status}`} />
+                      </div>
+                      {/* Load bar */}
+                      <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
+                        <div style={{
+                          width: `${load}%`, height: "100%", borderRadius: 4,
+                          background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)",
+                          transition: "width 0.5s ease"
+                        }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: 9, color: "var(--text3)" }}>
+                          Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks} tarefas
+                        </div>
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {agent.permissions.map(p => (
+                            <span key={p} style={{
+                              fontSize: 8, padding: "1px 5px", borderRadius: 3,
+                              background: p === "admin" ? "rgba(201,168,76,0.15)" : p === "approve" ? "rgba(45,212,160,0.15)" : "var(--badge-bg)",
+                              color: p === "admin" ? "var(--gold)" : p === "approve" ? "var(--teal)" : "var(--text3)",
+                              textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--font-mono)"
+                            }}>{p}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <div className={`jc-agent-dot ${agent.status}`} />
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
