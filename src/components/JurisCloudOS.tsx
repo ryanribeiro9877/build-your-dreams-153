@@ -1123,8 +1123,8 @@ export default function JurisCloudOS() {
             {rightTab === "agentes" && (() => {
               const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(activeDept);
               const capacity = getTotalCapacity();
-              const roleLabels: Record<AgentRole, string> = { director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
-              const roleCounts = (["director","orchestrator","manager","specialist","reviewer","executor","monitor"] as AgentRole[]).map(r => ({ role: r, label: roleLabels[r], count: getAgentsByRole(r).length }));
+              const roleLabels: Record<AgentRole, string> = { ceo: "👑 CEO", director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
+              const roleCounts = (["ceo","director","orchestrator","manager","specialist","reviewer","executor","monitor"] as AgentRole[]).map(r => ({ role: r, label: roleLabels[r], count: getAgentsByRole(r).length }));
               return (
                 <>
                   <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
