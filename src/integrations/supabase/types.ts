@@ -280,6 +280,110 @@ export type Database = {
           },
         ]
       }
+      client_documents: {
+        Row: {
+          client_id: string
+          created_at: string
+          document_name: string
+          document_type: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          document_name: string
+          document_type?: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          document_name?: string
+          document_type?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: string | null
+          city: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          full_name: string
+          id: string
+          notes: string | null
+          phone: string | null
+          responsible_lawyer_id: string | null
+          rg: string | null
+          state: string | null
+          status: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          full_name: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: string | null
+          state?: string | null
+          status?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: string | null
+          state?: string | null
+          status?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           color: string
@@ -363,12 +467,72 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          department: string | null
+          display_name: string | null
+          id: string
+          job_title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          display_name?: string | null
+          id?: string
+          job_title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          display_name?: string | null
+          id?: string
+          job_title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       agent_role:
@@ -380,6 +544,18 @@ export type Database = {
         | "executor"
         | "monitor"
       agent_status: "active" | "idle" | "alert" | "offline"
+      app_role:
+        | "admin"
+        | "director"
+        | "manager"
+        | "lawyer"
+        | "receptionist"
+        | "intern"
+        | "financial"
+        | "marketing"
+        | "protocol"
+        | "calculator"
+        | "compliance"
       permission_type:
         | "read"
         | "write"
@@ -540,6 +716,19 @@ export const Constants = {
         "monitor",
       ],
       agent_status: ["active", "idle", "alert", "offline"],
+      app_role: [
+        "admin",
+        "director",
+        "manager",
+        "lawyer",
+        "receptionist",
+        "intern",
+        "financial",
+        "marketing",
+        "protocol",
+        "calculator",
+        "compliance",
+      ],
       permission_type: [
         "read",
         "write",

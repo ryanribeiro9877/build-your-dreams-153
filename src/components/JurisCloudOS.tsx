@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─────────────────────────────────────────────────────────────
    AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
@@ -872,6 +875,8 @@ function ThinkingBubble({ agent }: { agent: string }) {
 
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
+  const navigate = useNavigate();
+  const { user, userRoles, signOut } = useAuth();
   const [activeDept, setActiveDept]     = useState("assistente");
   const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]         = useState("");
@@ -975,6 +980,20 @@ export default function JurisCloudOS() {
                 )}
               </div>
             ))}
+
+            <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
+            <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
+              <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
+              <span className="jc-nav-label">Clientes</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => navigate("/admin")}>
+              <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
+              <span className="jc-nav-label">Administração</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => signOut()}>
+              <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
+              <span className="jc-nav-label">Sair</span>
+            </div>
           </nav>
 
           <div className="jc-agents-section">
@@ -1021,9 +1040,14 @@ export default function JurisCloudOS() {
             <button className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
               {rightPanelOpen ? "✕ Fechar" : "📋 Operações"}
             </button>
-            <div className="jc-user-chip">
-              <div className="jc-user-avatar">A</div>
-              <div className="jc-user-name">Dr. Agent Jus</div>
+            <div className="jc-user-chip" onClick={() => signOut()} style={{ cursor: "pointer" }} title="Clique para sair">
+              <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
+              <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
+              {userRoles.length > 0 && (
+                <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(201,168,76,0.15)", color: "#c9a84c", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                  {userRoles[0]}
+                </span>
+              )}
             </div>
           </header>
 
