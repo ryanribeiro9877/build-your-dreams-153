@@ -1069,67 +1069,87 @@ export default function JurisCloudOS() {
               </>
             )}
 
-            {rightTab === "agentes" && (
-              <>
-                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
-                  Orquestração · {AGENTS.filter(a => a.status === "active").length} ativos / {AGENTS.length} total
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 12, padding: "6px 8px", background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                  🎯 Orquestradores: {getOrchestrators().length} · Disponíveis: {getAvailableAgents().length}
-                </div>
-                {AGENTS.map(agent => {
-                  const load = getAgentLoad(agent);
-                  const roleLabels: Record<AgentRole, string> = { director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
-                  return (
-                    <div key={agent.id} style={{
-                      background: "var(--bg3)", border: "1px solid var(--border)",
-                      borderRadius: 10, padding: "12px", marginBottom: 8,
-                      cursor: "pointer", transition: "border-color 0.2s, background-color var(--theme-transition)"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                        <div className="jc-agent-avatar" style={{
-                          width: 36, height: 36, borderRadius: 9,
-                          background: `${agent.color}18`, color: agent.color,
-                          border: `1px solid ${agent.color}25`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)"
-                        }}>{agent.avatar}</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2 }}>{agent.name}</div>
-                          <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                            {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
+            {rightTab === "agentes" && (() => {
+              const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(activeDept);
+              const capacity = getTotalCapacity();
+              const roleLabels: Record<AgentRole, string> = { director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
+              const roleCounts = (["director","orchestrator","manager","specialist","reviewer","executor","monitor"] as AgentRole[]).map(r => ({ role: r, label: roleLabels[r], count: getAgentsByRole(r).length }));
+              return (
+                <>
+                  <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
+                    {AGENTS.length} agentes total · {AGENTS.filter(a => a.status === "active").length} ativos
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 8, padding: "8px", background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                    <div style={{ marginBottom: 4 }}>📊 Capacidade Global: {capacity.used}/{capacity.total} tarefas ({capacity.percentage}%)</div>
+                    <div style={{ background: "var(--bg)", borderRadius: 4, height: 6, overflow: "hidden", marginBottom: 6 }}>
+                      <div style={{ width: `${capacity.percentage}%`, height: "100%", borderRadius: 4, background: capacity.percentage > 80 ? "var(--red)" : capacity.percentage > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {roleCounts.map(r => (
+                        <span key={r.role} style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: "var(--badge-bg)", color: "var(--text2)" }}>
+                          {r.label}: {r.count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--gold)", marginBottom: 8 }}>
+                    {activeDept === "assistente" ? "Todos os departamentos" : `${activeDeptData?.icon} ${activeDeptData?.label}`} · {deptAgents.length} agentes
+                  </div>
+                  {deptAgents.map(agent => {
+                    const load = getAgentLoad(agent);
+                    return (
+                      <div key={agent.id} style={{
+                        background: "var(--bg3)", border: "1px solid var(--border)",
+                        borderRadius: 10, padding: "12px", marginBottom: 8,
+                        cursor: "pointer", transition: "border-color 0.2s, background-color var(--theme-transition)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 9,
+                            background: `${agent.color}18`, color: agent.color,
+                            border: `1px solid ${agent.color}25`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 16, flexShrink: 0
+                          }}>{agent.avatar}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.name}</div>
+                            <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                              {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
+                            </div>
+                          </div>
+                          <div className={`jc-agent-dot ${agent.status}`} />
+                        </div>
+                        <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
+                          <div style={{
+                            width: `${load}%`, height: "100%", borderRadius: 4,
+                            background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)",
+                            transition: "width 0.5s ease"
+                          }} />
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ fontSize: 9, color: "var(--text3)" }}>
+                            Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks}
+                          </div>
+                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {agent.permissions.slice(0, 4).map(p => (
+                              <span key={p} style={{
+                                fontSize: 7, padding: "1px 4px", borderRadius: 3,
+                                background: p === "admin" ? "rgba(201,168,76,0.15)" : p === "approve" ? "rgba(45,212,160,0.15)" : "var(--badge-bg)",
+                                color: p === "admin" ? "var(--gold)" : p === "approve" ? "var(--teal)" : "var(--text3)",
+                                textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--font-mono)"
+                              }}>{p}</span>
+                            ))}
+                            {agent.permissions.length > 4 && (
+                              <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3, background: "var(--badge-bg)", color: "var(--text3)", fontFamily: "var(--font-mono)" }}>+{agent.permissions.length - 4}</span>
+                            )}
                           </div>
                         </div>
-                        <div className={`jc-agent-dot ${agent.status}`} />
                       </div>
-                      {/* Load bar */}
-                      <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
-                        <div style={{
-                          width: `${load}%`, height: "100%", borderRadius: 4,
-                          background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)",
-                          transition: "width 0.5s ease"
-                        }} />
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontSize: 9, color: "var(--text3)" }}>
-                          Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks} tarefas
-                        </div>
-                        <div style={{ display: "flex", gap: 3 }}>
-                          {agent.permissions.map(p => (
-                            <span key={p} style={{
-                              fontSize: 8, padding: "1px 5px", borderRadius: 3,
-                              background: p === "admin" ? "rgba(201,168,76,0.15)" : p === "approve" ? "rgba(45,212,160,0.15)" : "var(--badge-bg)",
-                              color: p === "admin" ? "var(--gold)" : p === "approve" ? "var(--teal)" : "var(--text3)",
-                              textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--font-mono)"
-                            }}>{p}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
-            )}
+                    );
+                  })}
+                </>
+              );
+            })()}
           </div>
         </aside>
 
