@@ -152,7 +152,9 @@ export type Database = {
       agent_tasks: {
         Row: {
           agent_id: string
+          agent_name: string | null
           assigned_by: string | null
+          client_name: string | null
           completed_at: string | null
           created_at: string
           description: string | null
@@ -162,6 +164,7 @@ export type Database = {
           process_id: string | null
           reviewed_by: string | null
           status: Database["public"]["Enums"]["task_status"]
+          task_category: string
           task_type: string
           title: string
           updated_at: string
@@ -169,7 +172,9 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          agent_name?: string | null
           assigned_by?: string | null
+          client_name?: string | null
           completed_at?: string | null
           created_at?: string
           description?: string | null
@@ -179,6 +184,7 @@ export type Database = {
           process_id?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          task_category?: string
           task_type?: string
           title: string
           updated_at?: string
@@ -186,7 +192,9 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          agent_name?: string | null
           assigned_by?: string | null
+          client_name?: string | null
           completed_at?: string | null
           created_at?: string
           description?: string | null
@@ -196,6 +204,7 @@ export type Database = {
           process_id?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          task_category?: string
           task_type?: string
           title?: string
           updated_at?: string
