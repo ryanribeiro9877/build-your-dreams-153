@@ -282,6 +282,37 @@ const INITIAL_MESSAGES = [
   },
 ];
 
+const TASK_QUEUES = [
+  { id: "confeccao", label: "📝 Confecção de Peças", color: "#8b5cf6", items: [
+    { id: "t1", title: "Petição inicial – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Redator de Petições", status: "em andamento" },
+    { id: "t2", title: "Contestação – Caso #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Redator Trabalhista", status: "aguardando" },
+    { id: "t3", title: "Recurso de apelação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Agente Recursal", status: "em andamento" },
+    { id: "t4", title: "Razões finais – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Petições", status: "aguardando" },
+  ]},
+  { id: "protocolar", label: "📋 A Protocolar", color: "#6366f1", items: [
+    { id: "t5", title: "Protocolar inicial #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Uploader de Sistema", status: "pronto" },
+    { id: "t6", title: "Protocolar contestação #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Coletor de Documentos Proto.", status: "aguardando docs" },
+    { id: "t7", title: "Protocolar recurso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Verificador de Envio", status: "verificando" },
+  ]},
+  { id: "revisao", label: "🔍 Em Revisão", color: "#f59e0b", items: [
+    { id: "t8", title: "Revisar cálculos – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Revisor de Cálculos 1", status: "revisão 1/3" },
+    { id: "t9", title: "Revisar petição – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Analista de Contratos", status: "aprovação pendente" },
+  ]},
+  { id: "comunicacao", label: "💬 Comunicação ao Cliente", color: "#06b6d4", items: [
+    { id: "t10", title: "Informar andamento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Simplificador Jurídico", status: "redigindo" },
+    { id: "t11", title: "Confirmar audiência – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Agente de Envio via Recepção", status: "aguardando aprovação" },
+    { id: "t12", title: "Enviar resultado – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Respostas ao Cliente", status: "redigindo" },
+  ]},
+  { id: "audiencias_fila", label: "🏛️ Preparação de Audiências", color: "#14b8a6", items: [
+    { id: "t13", title: "Preparar docs – Audiência 15/04", client: "Marcos V.", priority: "critical" as const, agent: "Preparador Audiência Trab.", status: "em andamento" },
+    { id: "t14", title: "Lembrete 3 dias – Audiência 17/04", client: "Ana Paula F.", priority: "high" as const, agent: "Lembrete 3 Dias", status: "agendado" },
+  ]},
+  { id: "monitoramento_fila", label: "🔍 Monitoramento de Resultados", color: "#f97316", items: [
+    { id: "t15", title: "Verificar deferimento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Analisador Deferimento", status: "consultando" },
+    { id: "t16", title: "Verificar movimentação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Scanner de Movimentações", status: "monitorando" },
+  ]},
+];
+
 const QUICK_COMMANDS = [
   "Gerar petição inicial",
   "Ver prazos fatais",
