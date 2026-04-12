@@ -6,20 +6,23 @@ import { useState, useEffect, useRef } from "react";
 
 // ── DATA ────────────────────────────────────────────────────
 const DEPARTMENTS = [
-  { id: "assistente",  label: "Meu Assistente",  icon: "◈",  color: "#c9a84c", badge: 8  },
-  { id: "recepcao",    label: "Recepção",         icon: "⌀",  color: "#4f8ef7", badge: 3  },
-  { id: "bancario",    label: "Bancário",         icon: "⬡",  color: "#2dd4a0", badge: 12 },
-  { id: "civel",       label: "Cível",            icon: "⬠",  color: "#a78bfa", badge: 5  },
-  { id: "previdencia", label: "Previdenciário",   icon: "⬟",  color: "#f59e0b", badge: 7  },
-  { id: "familia",     label: "Família",          icon: "⬢",  color: "#f472b6", badge: 2  },
-  { id: "financeiro",  label: "Financeiro",       icon: "⬣",  color: "#34d399", badge: 4  },
-  { id: "protocolo",   label: "Protocolo",        icon: "⎔",  color: "#60a5fa", badge: 9  },
-  { id: "calculos",    label: "Cálculos",         icon: "⬭",  color: "#fb923c", badge: 1  },
-  { id: "diretoria",   label: "Diretoria",        icon: "◉",  color: "#c9a84c", badge: 0  },
+  { id: "assistente",    label: "Meu Assistente",          icon: "◈",  color: "#c9a84c", badge: 8  },
+  { id: "recepcao",      label: "Recepção",                icon: "🏢", color: "#3b82f6", badge: 6  },
+  { id: "marketing",     label: "Marketing",               icon: "📢", color: "#f59e0b", badge: 5  },
+  { id: "civel",         label: "Contencioso Cível",       icon: "⚖️", color: "#8b5cf6", badge: 12 },
+  { id: "trabalhista",   label: "Contencioso Trabalhista", icon: "👷", color: "#ef4444", badge: 7  },
+  { id: "tributario",    label: "Contencioso Tributário",  icon: "💰", color: "#10b981", badge: 4  },
+  { id: "protocolo",     label: "Protocolo",               icon: "📋", color: "#6366f1", badge: 9  },
+  { id: "calculos",      label: "Cálculos Jurídicos",     icon: "🔢", color: "#ec4899", badge: 3  },
+  { id: "audiencias",    label: "Audiências",              icon: "🏛️", color: "#14b8a6", badge: 11 },
+  { id: "monitoramento", label: "Monitoramento Processual",icon: "🔍", color: "#f97316", badge: 15 },
+  { id: "cobrancas",     label: "Cobranças",               icon: "💳", color: "#84cc16", badge: 2  },
+  { id: "compliance",    label: "Compliance",              icon: "🛡️", color: "#0ea5e9", badge: 1  },
+  { id: "familia",       label: "Família e Sucessões",     icon: "👨‍👩‍👧‍👦", color: "#a855f7", badge: 3  },
 ];
 
-type AgentRole = "orchestrator" | "specialist" | "reviewer" | "executor";
-type AgentPermission = "read" | "write" | "approve" | "execute" | "admin";
+type AgentRole = "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
+type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
 
 interface Agent {
   id: number;
@@ -33,17 +36,108 @@ interface Agent {
   canOrchestrate: boolean;
   maxConcurrentTasks: number;
   currentTasks: number;
+  description?: string;
+  maxProcessesMonitored?: number;
 }
 
 const AGENTS: Agent[] = [
-  { id: 1, name: "Recepção Inteligente",  status: "active",  avatar: "RI", color: "#4f8ef7", role: "executor",     permissions: ["read", "write"],                    department: ["recepcao"],                       canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 3 },
-  { id: 2, name: "Pesquisador Jurídico",  status: "active",  avatar: "PJ", color: "#2dd4a0", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["bancario", "civel", "previdencia"], canOrchestrate: false, maxConcurrentTasks: 5,  currentTasks: 4 },
-  { id: 3, name: "Redator Processual",    status: "idle",    avatar: "RP", color: "#a78bfa", role: "executor",     permissions: ["read", "write", "execute"],          department: ["bancario", "civel"],               canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
-  { id: 4, name: "Analista de Contratos", status: "active",  avatar: "AC", color: "#f59e0b", role: "reviewer",     permissions: ["read", "write", "approve"],          department: ["financeiro", "civel"],             canOrchestrate: false, maxConcurrentTasks: 4,  currentTasks: 2 },
-  { id: 5, name: "Controlador de Prazos", status: "alert",   avatar: "CP", color: "#ef4444", role: "specialist",   permissions: ["read", "execute"],                   department: ["*"],                               canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 15 },
-  { id: 6, name: "Gerador de Relatórios", status: "idle",    avatar: "GR", color: "#34d399", role: "executor",     permissions: ["read", "write"],                    department: ["diretoria", "financeiro"],         canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
-  { id: 7, name: "Gestor de Clientes",    status: "active",  avatar: "GC", color: "#60a5fa", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["recepcao", "familia"],             canOrchestrate: false, maxConcurrentTasks: 8,  currentTasks: 5 },
-  { id: 8, name: "Supervisor Contencioso",status: "active",  avatar: "SC", color: "#c9a84c", role: "orchestrator", permissions: ["read", "write", "approve", "admin"], department: ["*"],                               canOrchestrate: true,  maxConcurrentTasks: 15, currentTasks: 8 },
+  // ── RECEPÇÃO (8 agentes) ──
+  { id: 1, name: "Diretor de Recepção", status: "active", avatar: "👔", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, description: "Orquestra toda a operação de recepção" },
+  { id: 2, name: "Gerente de Atendimento", status: "active", avatar: "📞", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4 },
+  { id: 3, name: "Agente Agendador", status: "active", avatar: "📅", color: "#60a5fa", role: "executor", permissions: ["read","write","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7 },
+  { id: 4, name: "Confirmação de Audiências", status: "active", avatar: "✅", color: "#60a5fa", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao","audiencias"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12 },
+  { id: 5, name: "Coletor de Documentos", status: "active", avatar: "📄", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 6, name: "Atendente WhatsApp", status: "active", avatar: "💬", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao","marketing"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 15 },
+  { id: 7, name: "Monitor de Novos Clientes", status: "active", avatar: "🔔", color: "#3b82f6", role: "monitor", permissions: ["read","monitor","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 8 },
+  { id: 8, name: "Agente de Triagem", status: "active", avatar: "🔀", color: "#3b82f6", role: "specialist", permissions: ["read","write","execute"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 4 },
+
+  // ── MARKETING (11 agentes) ──
+  { id: 9, name: "Diretor de Marketing", status: "active", avatar: "🎯", color: "#f59e0b", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 10, name: "Gerente de Campanhas", status: "active", avatar: "📊", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6 },
+  { id: 11, name: "Monitor de Resultados", status: "active", avatar: "📈", color: "#fbbf24", role: "monitor", permissions: ["read","monitor","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 10 },
+  { id: 12, name: "Especialista Copywriting", status: "active", avatar: "✍️", color: "#fbbf24", role: "specialist", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5 },
+  { id: 13, name: "Especialista Copyright", status: "active", avatar: "©️", color: "#fcd34d", role: "specialist", permissions: ["read","write","approve"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3 },
+  { id: 14, name: "Criador Imagem Estática", status: "active", avatar: "🖼️", color: "#fcd34d", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 7 },
+  { id: 15, name: "Criador Vídeo/Animação", status: "active", avatar: "🎬", color: "#f59e0b", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 16, name: "Especialista Tráfego Pago", status: "active", avatar: "💰", color: "#f59e0b", role: "specialist", permissions: ["read","write","execute","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 6 },
+  { id: 17, name: "Analista de Concorrência", status: "active", avatar: "🔎", color: "#fbbf24", role: "specialist", permissions: ["read","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+  { id: 18, name: "Analista de Mercado", status: "active", avatar: "🌍", color: "#fbbf24", role: "specialist", permissions: ["read","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+  { id: 19, name: "Automação de Marketing", status: "active", avatar: "⚙️", color: "#fcd34d", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 12, currentTasks: 8 },
+
+  // ── CONTENCIOSO CÍVEL (8 agentes) ──
+  { id: 20, name: "Supervisor Cível", status: "active", avatar: "⚖️", color: "#8b5cf6", role: "orchestrator", permissions: ["read","write","approve","admin","petition"], department: ["civel"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6 },
+  { id: 21, name: "Pesquisador Jurisprudencial", status: "active", avatar: "📚", color: "#8b5cf6", role: "specialist", permissions: ["read","write","execute"], department: ["civel","trabalhista","tributario"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5 },
+  { id: 22, name: "Redator de Petições", status: "active", avatar: "📝", color: "#a78bfa", role: "executor", permissions: ["read","write","execute","petition"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 23, name: "Analista de Contratos", status: "active", avatar: "🔍", color: "#a78bfa", role: "reviewer", permissions: ["read","write","approve"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 4 },
+  { id: 24, name: "Monitor de Prazos Cível", status: "alert", avatar: "⏰", color: "#c4b5fd", role: "monitor", permissions: ["read","monitor"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, maxProcessesMonitored: 50 },
+  { id: 25, name: "Estrategista Processual", status: "active", avatar: "🧠", color: "#8b5cf6", role: "specialist", permissions: ["read","write","approve"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 26, name: "Agente Recursal", status: "active", avatar: "📑", color: "#a78bfa", role: "specialist", permissions: ["read","write","execute","petition"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+  { id: 27, name: "Comunicador Interdepartamental", status: "active", avatar: "🔗", color: "#c4b5fd", role: "executor", permissions: ["read","write","execute"], department: ["civel","*"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8 },
+
+  // ── CONTENCIOSO TRABALHISTA (6 agentes) ──
+  { id: 28, name: "Supervisor Trabalhista", status: "active", avatar: "👷", color: "#ef4444", role: "orchestrator", permissions: ["read","write","approve","admin"], department: ["trabalhista"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 29, name: "Pesquisador Trabalhista", status: "active", avatar: "📚", color: "#ef4444", role: "specialist", permissions: ["read","write","execute"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4 },
+  { id: 30, name: "Redator Trabalhista", status: "active", avatar: "📝", color: "#f87171", role: "executor", permissions: ["read","write","petition"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 31, name: "Analista de Verbas", status: "active", avatar: "💵", color: "#f87171", role: "specialist", permissions: ["read","write","calculate"], department: ["trabalhista","calculos"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5 },
+  { id: 32, name: "Monitor Prazos Trabalhista", status: "alert", avatar: "⏰", color: "#fca5a5", role: "monitor", permissions: ["read","monitor"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, maxProcessesMonitored: 50 },
+  { id: 33, name: "Preparador Audiência Trab.", status: "active", avatar: "🏛️", color: "#fca5a5", role: "executor", permissions: ["read","write","schedule"], department: ["trabalhista","audiencias"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4 },
+
+  // ── CONTENCIOSO TRIBUTÁRIO (6 agentes) ──
+  { id: 34, name: "Supervisor Tributário", status: "active", avatar: "💰", color: "#10b981", role: "orchestrator", permissions: ["read","write","approve","admin"], department: ["tributario"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4 },
+  { id: 35, name: "Pesquisador Tributário", status: "active", avatar: "📚", color: "#10b981", role: "specialist", permissions: ["read","write","execute"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 3 },
+  { id: 36, name: "Redator Tributário", status: "active", avatar: "📝", color: "#34d399", role: "executor", permissions: ["read","write","petition"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+  { id: 37, name: "Analista Fiscal", status: "active", avatar: "📊", color: "#34d399", role: "specialist", permissions: ["read","write","calculate"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3 },
+  { id: 38, name: "Monitor Tributário", status: "active", avatar: "⏰", color: "#6ee7b7", role: "monitor", permissions: ["read","monitor"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 25, maxProcessesMonitored: 50 },
+  { id: 39, name: "Planejador Tributário", status: "active", avatar: "🧠", color: "#6ee7b7", role: "specialist", permissions: ["read","write","approve"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+
+  // ── PROTOCOLO (6 agentes) ──
+  { id: 40, name: "Gerente de Protocolo", status: "active", avatar: "📋", color: "#6366f1", role: "manager", permissions: ["read","write","approve","protocol"], department: ["protocolo"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6 },
+  { id: 41, name: "Coletor de Documentos Proto.", status: "active", avatar: "📎", color: "#6366f1", role: "executor", permissions: ["read","write","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 10 },
+  { id: 42, name: "Uploader de Sistema", status: "active", avatar: "⬆️", color: "#818cf8", role: "executor", permissions: ["read","write","execute","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 7 },
+  { id: 43, name: "Verificador de Envio", status: "active", avatar: "✔️", color: "#818cf8", role: "reviewer", permissions: ["read","approve","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 9 },
+  { id: 44, name: "Consultor de Datas", status: "active", avatar: "📅", color: "#a5b4fc", role: "specialist", permissions: ["read","write","schedule"], department: ["protocolo","audiencias"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 45, name: "Confirmador de Protocolo", status: "active", avatar: "✅", color: "#a5b4fc", role: "reviewer", permissions: ["read","approve","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8 },
+
+  // ── CÁLCULOS JURÍDICOS (5 agentes) ── cadeia de 4 revisores
+  { id: 46, name: "Gerente de Cálculos", status: "active", avatar: "🔢", color: "#ec4899", role: "manager", permissions: ["read","write","approve","admin","calculate","review_calculation"], department: ["calculos"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5 },
+  { id: 47, name: "Calculista Principal", status: "active", avatar: "🧮", color: "#ec4899", role: "executor", permissions: ["read","write","execute","calculate"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 48, name: "Revisor de Cálculos 1", status: "active", avatar: "🔍", color: "#f472b6", role: "reviewer", permissions: ["read","review_calculation"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 49, name: "Revisor de Cálculos 2", status: "active", avatar: "🔎", color: "#f472b6", role: "reviewer", permissions: ["read","review_calculation"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+  { id: 50, name: "Revisor de Cálculos 3", status: "active", avatar: "🧐", color: "#f9a8d4", role: "reviewer", permissions: ["read","review_calculation","approve"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+
+  // ── AUDIÊNCIAS (6 agentes) ── lembretes escalonados
+  { id: 51, name: "Gerente de Audiências", status: "active", avatar: "🏛️", color: "#14b8a6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["audiencias"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6 },
+  { id: 52, name: "Lembrete 7 Dias", status: "active", avatar: "📢", color: "#14b8a6", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 15 },
+  { id: 53, name: "Lembrete 3 Dias", status: "active", avatar: "📣", color: "#2dd4bf", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 18 },
+  { id: 54, name: "Lembrete 2 Dias", status: "active", avatar: "🔔", color: "#2dd4bf", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 20 },
+  { id: 55, name: "Lembrete Dia D", status: "alert", avatar: "🚨", color: "#5eead4", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 22 },
+  { id: 56, name: "Agente Pós-Audiência", status: "active", avatar: "📋", color: "#5eead4", role: "specialist", permissions: ["read","write","execute"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5 },
+
+  // ── MONITORAMENTO PROCESSUAL (5 agentes) ── cada um monitora até 50 processos
+  { id: 57, name: "Gerente de Monitoramento", status: "active", avatar: "🔍", color: "#f97316", role: "manager", permissions: ["read","write","approve","monitor"], department: ["monitoramento"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7 },
+  { id: 58, name: "Scanner de Movimentações", status: "active", avatar: "📡", color: "#f97316", role: "executor", permissions: ["read","monitor"], department: ["monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 40, maxProcessesMonitored: 50 },
+  { id: 59, name: "Analisador Deferimento", status: "active", avatar: "✅", color: "#fb923c", role: "specialist", permissions: ["read","monitor","execute"], department: ["monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, maxProcessesMonitored: 50 },
+  { id: 60, name: "Preparador Razões/Contrarrazões", status: "active", avatar: "⚔️", color: "#fb923c", role: "executor", permissions: ["read","write","execute","petition"], department: ["monitoramento","civel"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6 },
+  { id: 61, name: "Gerador de Relatórios", status: "idle", avatar: "📊", color: "#fdba74", role: "executor", permissions: ["read","write"], department: ["monitoramento","assistente"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4 },
+
+  // ── COBRANÇAS (4 agentes) ──
+  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve","admin"], department: ["cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4 },
+  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6 },
+  { id: 64, name: "Negociador de Honorários", status: "active", avatar: "🤝", color: "#a3e635", role: "executor", permissions: ["read","write","contact_client"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8 },
+  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2 },
+
+  // ── COMPLIANCE (4 agentes) ──
+  { id: 66, name: "Gerente de Compliance", status: "active", avatar: "🛡️", color: "#0ea5e9", role: "manager", permissions: ["read","write","approve","admin"], department: ["compliance"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3 },
+  { id: 67, name: "Auditor Interno", status: "active", avatar: "🔬", color: "#0ea5e9", role: "reviewer", permissions: ["read","approve"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 68, name: "Agente LGPD", status: "active", avatar: "🔒", color: "#38bdf8", role: "specialist", permissions: ["read","write","approve"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4 },
+  { id: 69, name: "Monitor Regulatório", status: "active", avatar: "📜", color: "#38bdf8", role: "monitor", permissions: ["read","monitor"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7 },
+
+  // ── FAMÍLIA E SUCESSÕES (5 agentes) ──
+  { id: 70, name: "Supervisor Família", status: "active", avatar: "👨‍👩‍👧‍👦", color: "#a855f7", role: "orchestrator", permissions: ["read","write","approve","admin"], department: ["familia"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5 },
+  { id: 71, name: "Pesquisador Família", status: "active", avatar: "📚", color: "#a855f7", role: "specialist", permissions: ["read","write","execute"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4 },
+  { id: 72, name: "Redator Família", status: "active", avatar: "📝", color: "#c084fc", role: "executor", permissions: ["read","write","petition"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
+  { id: 73, name: "Mediador Familiar", status: "active", avatar: "🤝", color: "#c084fc", role: "specialist", permissions: ["read","write","contact_client"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2 },
+  { id: 74, name: "Especialista Inventários", status: "active", avatar: "📜", color: "#d8b4fe", role: "specialist", permissions: ["read","write","calculate"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3 },
 ];
 
 // ── ORCHESTRATION ENGINE ────────────────────────────────────
@@ -65,6 +159,16 @@ function getOrchestrators(): Agent[] {
 
 function getAvailableAgents(): Agent[] {
   return AGENTS.filter(a => a.currentTasks < a.maxConcurrentTasks);
+}
+
+function getAgentsByRole(role: AgentRole): Agent[] {
+  return AGENTS.filter(a => a.role === role);
+}
+
+function getTotalCapacity(): { used: number; total: number; percentage: number } {
+  const used = AGENTS.reduce((s, a) => s + a.currentTasks, 0);
+  const total = AGENTS.reduce((s, a) => s + a.maxConcurrentTasks, 0);
+  return { used, total, percentage: Math.round((used / total) * 100) };
 }
 
 const PROCESSES = [
