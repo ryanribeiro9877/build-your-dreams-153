@@ -452,7 +452,7 @@ const GlobalStyles = () => (
 
 // ── SUB-COMPONENTS ───────────────────────────────────────────
 
-function BriefingCard({ card }) {
+function BriefingCard({ card }: { card: any }) {
   return (
     <div className="jc-card-briefing">
       <div className="jc-card-briefing-title">{card.title}</div>
@@ -470,7 +470,7 @@ function BriefingCard({ card }) {
   );
 }
 
-function ProcessListCard({ processes }) {
+function ProcessListCard({ processes }: { processes: any[] }) {
   const areaColors = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdência": "#f59e0b", "Contratos": "#4f8ef7" };
   return (
     <div className="jc-card-processes">
@@ -494,7 +494,7 @@ function ProcessListCard({ processes }) {
   );
 }
 
-function MessageBubble({ msg }) {
+function MessageBubble({ msg }: { msg: any }) {
   const agentColors = {
     "Meu Assistente": "#c9a84c", "Pesquisador Jurídico": "#2dd4a0",
     "Redator Processual": "#a78bfa", "Controlador de Prazos": "#ef4444",
@@ -537,7 +537,7 @@ function MessageBubble({ msg }) {
   );
 }
 
-function ThinkingBubble({ agent }) {
+function ThinkingBubble({ agent }: { agent: string }) {
   return (
     <div className="jc-msg-wrap">
       <div className="jc-msg-avatar" style={{ background: "rgba(201,168,76,0.1)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.2)", fontSize: 11 }}>
