@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ─────────────────────────────────────────────────────────────
-   JURISCLOUD OS  –  Sistema Operacional Empresarial Conversacional
+   AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
 ───────────────────────────────────────────────────────────── */
 
 // ── DATA ────────────────────────────────────────────────────
@@ -18,16 +18,54 @@ const DEPARTMENTS = [
   { id: "diretoria",   label: "Diretoria",        icon: "◉",  color: "#c9a84c", badge: 0  },
 ];
 
-const AGENTS = [
-  { id: 1, name: "Recepção Inteligente",  status: "active",  avatar: "RI", color: "#4f8ef7" },
-  { id: 2, name: "Pesquisador Jurídico",  status: "active",  avatar: "PJ", color: "#2dd4a0" },
-  { id: 3, name: "Redator Processual",    status: "idle",    avatar: "RP", color: "#a78bfa" },
-  { id: 4, name: "Analista de Contratos", status: "active",  avatar: "AC", color: "#f59e0b" },
-  { id: 5, name: "Controlador de Prazos", status: "alert",   avatar: "CP", color: "#ef4444" },
-  { id: 6, name: "Gerador de Relatórios", status: "idle",    avatar: "GR", color: "#34d399" },
-  { id: 7, name: "Gestor de Clientes",    status: "active",  avatar: "GC", color: "#60a5fa" },
-  { id: 8, name: "Supervisor Contencioso",status: "active",  avatar: "SC", color: "#c9a84c" },
+type AgentRole = "orchestrator" | "specialist" | "reviewer" | "executor";
+type AgentPermission = "read" | "write" | "approve" | "execute" | "admin";
+
+interface Agent {
+  id: number;
+  name: string;
+  status: "active" | "idle" | "alert";
+  avatar: string;
+  color: string;
+  role: AgentRole;
+  permissions: AgentPermission[];
+  department: string[];
+  canOrchestrate: boolean;
+  maxConcurrentTasks: number;
+  currentTasks: number;
+}
+
+const AGENTS: Agent[] = [
+  { id: 1, name: "Recepção Inteligente",  status: "active",  avatar: "RI", color: "#4f8ef7", role: "executor",     permissions: ["read", "write"],                    department: ["recepcao"],                       canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 3 },
+  { id: 2, name: "Pesquisador Jurídico",  status: "active",  avatar: "PJ", color: "#2dd4a0", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["bancario", "civel", "previdencia"], canOrchestrate: false, maxConcurrentTasks: 5,  currentTasks: 4 },
+  { id: 3, name: "Redator Processual",    status: "idle",    avatar: "RP", color: "#a78bfa", role: "executor",     permissions: ["read", "write", "execute"],          department: ["bancario", "civel"],               canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
+  { id: 4, name: "Analista de Contratos", status: "active",  avatar: "AC", color: "#f59e0b", role: "reviewer",     permissions: ["read", "write", "approve"],          department: ["financeiro", "civel"],             canOrchestrate: false, maxConcurrentTasks: 4,  currentTasks: 2 },
+  { id: 5, name: "Controlador de Prazos", status: "alert",   avatar: "CP", color: "#ef4444", role: "specialist",   permissions: ["read", "execute"],                   department: ["*"],                               canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 15 },
+  { id: 6, name: "Gerador de Relatórios", status: "idle",    avatar: "GR", color: "#34d399", role: "executor",     permissions: ["read", "write"],                    department: ["diretoria", "financeiro"],         canOrchestrate: false, maxConcurrentTasks: 3,  currentTasks: 0 },
+  { id: 7, name: "Gestor de Clientes",    status: "active",  avatar: "GC", color: "#60a5fa", role: "specialist",   permissions: ["read", "write", "execute"],          department: ["recepcao", "familia"],             canOrchestrate: false, maxConcurrentTasks: 8,  currentTasks: 5 },
+  { id: 8, name: "Supervisor Contencioso",status: "active",  avatar: "SC", color: "#c9a84c", role: "orchestrator", permissions: ["read", "write", "approve", "admin"], department: ["*"],                               canOrchestrate: true,  maxConcurrentTasks: 15, currentTasks: 8 },
 ];
+
+// ── ORCHESTRATION ENGINE ────────────────────────────────────
+function getAgentsForDepartment(deptId: string): Agent[] {
+  return AGENTS.filter(a => a.department.includes("*") || a.department.includes(deptId));
+}
+
+function getAgentLoad(agent: Agent): number {
+  return Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
+}
+
+function canAgentPerform(agent: Agent, permission: AgentPermission): boolean {
+  return agent.permissions.includes(permission) || agent.permissions.includes("admin");
+}
+
+function getOrchestrators(): Agent[] {
+  return AGENTS.filter(a => a.canOrchestrate && a.status !== "idle");
+}
+
+function getAvailableAgents(): Agent[] {
+  return AGENTS.filter(a => a.currentTasks < a.maxConcurrentTasks);
+}
 
 const PROCESSES = [
   { id: "0023847", client: "Marcos Vinícius S.",  area: "Bancário",  status: "urgente",   prazo: "HOJE",    tribunal: "TJBA", value: "R$ 48.200" },
@@ -49,7 +87,7 @@ const INITIAL_MESSAGES = [
     content: null,
     card: {
       type: "briefing",
-      title: "Bom dia, Dr. JurisCloud ✦",
+      title: "Bom dia, Dr. Agent Jus IA ✦",
       summary: "Aqui está sua visão operacional de hoje",
       items: [
         { icon: "⚠", label: "Prazos críticos",      value: "3", accent: "#ef4444" },
@@ -107,6 +145,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --purple:   #a78bfa;
       --red:      #ef4444;
       --amber:    #f59e0b;
+      --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* DARK THEME */
@@ -143,6 +182,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --user-bubble-border: rgba(201,168,76,0.25);
       --scrollbar-thumb: var(--border2);
       --badge-bg: rgba(0,0,0,0.06);
+    }
+
+    /* SMOOTH THEME TRANSITIONS */
+    body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
+    .jc-input-area, .jc-msg-bubble, .jc-card-briefing, .jc-kpi,
+    .jc-case-card, .jc-alert-item, .jc-nav-item, .jc-search,
+    .jc-input-row, .jc-cmd, .jc-user-chip, .jc-theme-toggle,
+    .jc-agent-item, .jc-process-row, .jc-right-tab, .jc-agents-section {
+      transition: background-color var(--theme-transition),
+                  border-color var(--theme-transition),
+                  color var(--theme-transition),
+                  box-shadow var(--theme-transition);
     }
 
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
