@@ -1137,9 +1137,9 @@ export default function JurisCloudOS() {
             <span>Central de Operações</span>
           </div>
           <div className="jc-right-tabs">
-            {["processos", "alertas", "agentes"].map(tab => (
+            {["filas", "processos", "alertas", "agentes"].map(tab => (
               <div key={tab} className={`jc-right-tab ${rightTab === tab ? "active" : ""}`} onClick={() => setRightTab(tab)}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === "filas" ? "Filas" : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </div>
             ))}
           </div>
