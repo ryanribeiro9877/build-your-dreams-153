@@ -187,6 +187,19 @@ const AGENTS: Agent[] = [
   { id: 72, name: "Redator Família", status: "active", avatar: "📝", color: "#c084fc", role: "executor", permissions: ["read","write","petition"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 70 },
   { id: 73, name: "Mediador Familiar", status: "active", avatar: "🤝", color: "#c084fc", role: "specialist", permissions: ["read","write","contact_client"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2, reportsTo: 70 },
   { id: 74, name: "Especialista Inventários", status: "active", avatar: "📜", color: "#d8b4fe", role: "specialist", permissions: ["read","write","calculate"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 70 },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── CONSULTA PROCESSUAL & COMUNICAÇÃO AO CLIENTE (8 agentes)
+  // ── Time que consulta processos e gera respostas fáceis para clientes leigos via recepção
+  // ══════════════════════════════════════════════════════════════
+  { id: 115, name: "Diretor de Comunicação ao Cliente", status: "active", avatar: "📨", color: "#06b6d4", role: "director", permissions: ["read","write","approve","admin","contact_client"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0, description: "Dirige o time que traduz linguagem jurídica em linguagem acessível ao cliente" },
+  { id: 75, name: "Gerente de Consulta Processual", status: "active", avatar: "🔎", color: "#06b6d4", role: "manager", permissions: ["read","write","approve","contact_client"], department: ["recepcao","monitoramento"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 115, description: "Gerencia o fluxo de consulta de processos e geração de respostas simplificadas" },
+  { id: 76, name: "Consultor de Andamento", status: "active", avatar: "📋", color: "#22d3ee", role: "specialist", permissions: ["read","monitor","execute"], department: ["recepcao","monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, maxProcessesMonitored: 50, reportsTo: 75, description: "Consulta o andamento processual nos tribunais e extrai informações relevantes" },
+  { id: 77, name: "Simplificador Jurídico", status: "active", avatar: "💡", color: "#22d3ee", role: "specialist", permissions: ["read","write","execute"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 75, description: "Traduz decisões judiciais e termos jurídicos em linguagem simples e acessível" },
+  { id: 78, name: "Redator de Respostas ao Cliente", status: "active", avatar: "✏️", color: "#67e8f9", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 75, description: "Redige mensagens claras e humanizadas para enviar ao cliente via recepção" },
+  { id: 79, name: "Revisor de Comunicação", status: "active", avatar: "✅", color: "#67e8f9", role: "reviewer", permissions: ["read","approve","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 75, description: "Revisa respostas antes do envio ao cliente para garantir precisão e clareza" },
+  { id: 80, name: "Agente de Envio via Recepção", status: "active", avatar: "📤", color: "#06b6d4", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 14, reportsTo: 75, description: "Envia a resposta final ao cliente via WhatsApp/email pela recepção" },
+  { id: 81, name: "Monitor de Satisfação", status: "active", avatar: "⭐", color: "#a5f3fc", role: "monitor", permissions: ["read","monitor","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 10, reportsTo: 115, description: "Monitora se o cliente entendeu a resposta e se precisa de esclarecimentos adicionais" },
 ];
 
 // ── ORCHESTRATION ENGINE ────────────────────────────────────
@@ -267,6 +280,37 @@ const INITIAL_MESSAGES = [
     },
     timestamp: "08:03",
   },
+];
+
+const TASK_QUEUES = [
+  { id: "confeccao", label: "📝 Confecção de Peças", color: "#8b5cf6", items: [
+    { id: "t1", title: "Petição inicial – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Redator de Petições", status: "em andamento" },
+    { id: "t2", title: "Contestação – Caso #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Redator Trabalhista", status: "aguardando" },
+    { id: "t3", title: "Recurso de apelação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Agente Recursal", status: "em andamento" },
+    { id: "t4", title: "Razões finais – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Petições", status: "aguardando" },
+  ]},
+  { id: "protocolar", label: "📋 A Protocolar", color: "#6366f1", items: [
+    { id: "t5", title: "Protocolar inicial #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Uploader de Sistema", status: "pronto" },
+    { id: "t6", title: "Protocolar contestação #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Coletor de Documentos Proto.", status: "aguardando docs" },
+    { id: "t7", title: "Protocolar recurso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Verificador de Envio", status: "verificando" },
+  ]},
+  { id: "revisao", label: "🔍 Em Revisão", color: "#f59e0b", items: [
+    { id: "t8", title: "Revisar cálculos – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Revisor de Cálculos 1", status: "revisão 1/3" },
+    { id: "t9", title: "Revisar petição – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Analista de Contratos", status: "aprovação pendente" },
+  ]},
+  { id: "comunicacao", label: "💬 Comunicação ao Cliente", color: "#06b6d4", items: [
+    { id: "t10", title: "Informar andamento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Simplificador Jurídico", status: "redigindo" },
+    { id: "t11", title: "Confirmar audiência – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Agente de Envio via Recepção", status: "aguardando aprovação" },
+    { id: "t12", title: "Enviar resultado – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Respostas ao Cliente", status: "redigindo" },
+  ]},
+  { id: "audiencias_fila", label: "🏛️ Preparação de Audiências", color: "#14b8a6", items: [
+    { id: "t13", title: "Preparar docs – Audiência 15/04", client: "Marcos V.", priority: "critical" as const, agent: "Preparador Audiência Trab.", status: "em andamento" },
+    { id: "t14", title: "Lembrete 3 dias – Audiência 17/04", client: "Ana Paula F.", priority: "high" as const, agent: "Lembrete 3 Dias", status: "agendado" },
+  ]},
+  { id: "monitoramento_fila", label: "🔍 Monitoramento de Resultados", color: "#f97316", items: [
+    { id: "t15", title: "Verificar deferimento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Analisador Deferimento", status: "consultando" },
+    { id: "t16", title: "Verificar movimentação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Scanner de Movimentações", status: "monitorando" },
+  ]},
 ];
 
 const QUICK_COMMANDS = [
@@ -1093,13 +1137,67 @@ export default function JurisCloudOS() {
             <span>Central de Operações</span>
           </div>
           <div className="jc-right-tabs">
-            {["processos", "alertas", "agentes"].map(tab => (
+            {["filas", "processos", "alertas", "agentes"].map(tab => (
               <div key={tab} className={`jc-right-tab ${rightTab === tab ? "active" : ""}`} onClick={() => setRightTab(tab)}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === "filas" ? "Filas" : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </div>
             ))}
           </div>
           <div className="jc-right-body">
+            {rightTab === "filas" && (
+              <>
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                  {TASK_QUEUES.reduce((s, q) => s + q.items.length, 0)} tarefas em fila
+                </div>
+                {TASK_QUEUES.map(queue => (
+                  <div key={queue.id} style={{ marginBottom: 14 }}>
+                    <div style={{
+                      fontSize: 11, fontWeight: 600, color: queue.color, marginBottom: 6,
+                      display: "flex", alignItems: "center", justifyContent: "space-between"
+                    }}>
+                      <span>{queue.label}</span>
+                      <span style={{
+                        fontSize: 9, padding: "2px 8px", borderRadius: 10,
+                        background: `${queue.color}18`, color: queue.color,
+                        border: `1px solid ${queue.color}30`, fontFamily: "var(--font-mono)"
+                      }}>{queue.items.length}</span>
+                    </div>
+                    {queue.items.map(item => {
+                      const prioColors: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280" };
+                      const prioLabels: Record<string, string> = { critical: "CRÍTICO", high: "ALTA", medium: "MÉDIA", low: "BAIXA" };
+                      return (
+                        <div key={item.id} style={{
+                          background: "var(--bg3)", border: "1px solid var(--border)",
+                          borderLeft: `3px solid ${prioColors[item.priority]}`,
+                          borderRadius: "0 8px 8px 0", padding: "10px 12px", marginBottom: 6,
+                          transition: "background-color var(--theme-transition)"
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text1)", marginBottom: 4, lineHeight: 1.3 }}>
+                            {item.title}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 9, color: "var(--text3)" }}>👤 {item.client}</span>
+                            <span style={{ fontSize: 7, padding: "1px 5px", borderRadius: 3, background: `${prioColors[item.priority]}18`, color: prioColors[item.priority], fontWeight: 600, textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                              {prioLabels[item.priority]}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 8, color: "var(--text3)" }}>🤖 {item.agent}</span>
+                            <span style={{
+                              fontSize: 8, padding: "2px 6px", borderRadius: 4,
+                              background: item.status === "pronto" ? "rgba(45,212,160,0.15)" : item.status.includes("andamento") ? "rgba(59,130,246,0.15)" : "var(--badge-bg)",
+                              color: item.status === "pronto" ? "var(--teal)" : item.status.includes("andamento") ? "#3b82f6" : "var(--text3)",
+                              fontFamily: "var(--font-mono)"
+                            }}>{item.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </>
+            )}
+
             {rightTab === "processos" && (
               <>
                 <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
