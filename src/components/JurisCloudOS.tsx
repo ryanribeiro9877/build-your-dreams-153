@@ -556,7 +556,7 @@ function ThinkingBubble({ agent }) {
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
   const [activeDept, setActiveDept]     = useState("assistente");
-  const [messages, setMessages]         = useState(INITIAL_MESSAGES);
+  const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]         = useState("");
   const [thinking, setThinking]         = useState(false);
   const [rightTab, setRightTab]         = useState("processos");
@@ -566,7 +566,7 @@ export default function JurisCloudOS() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
 
-  const handleSend = (text) => {
+  const handleSend = (text?: string) => {
     const val = (text || inputVal).trim();
     if (!val) return;
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
@@ -592,7 +592,7 @@ export default function JurisCloudOS() {
     }, 1800 + Math.random() * 600);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
