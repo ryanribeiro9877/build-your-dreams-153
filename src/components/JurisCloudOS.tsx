@@ -5,6 +5,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
+import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import WelcomeScreen from "@/components/WelcomeScreen";
 
 /* ─────────────────────────────────────────────────────────────
@@ -986,6 +987,7 @@ export default function JurisCloudOS() {
   const { user, userRoles, signOut } = useAuth();
   const { canAccessDepartment, canAccessAdmin, canAccessClients, canEdit, isReadOnly, roleLabel } = usePermissions();
   useRealtimeNotifications();
+  useBottleneckDetection();
   const [showWelcome, setShowWelcome]   = useState(true);
   const [activeDept, setActiveDept]     = useState("assistente");
   const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
@@ -1107,6 +1109,10 @@ export default function JurisCloudOS() {
             <div className="jc-nav-item" onClick={() => navigate("/dashboard")}>
               <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>📊</span>
               <span className="jc-nav-label">Dashboard</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => navigate("/organograma")}>
+              <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>🏗️</span>
+              <span className="jc-nav-label">Organograma</span>
             </div>
             <div className="jc-nav-item" onClick={() => navigate("/perfil")}>
               <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
