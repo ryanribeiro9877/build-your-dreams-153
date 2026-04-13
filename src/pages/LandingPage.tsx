@@ -63,6 +63,58 @@ const STATS_BANNER = [
   { value: "0", label: "Prazos Perdidos" },
 ];
 
+const PLANOS = [
+  {
+    name: "Starter",
+    price: "297",
+    desc: "Para escritórios em crescimento",
+    highlight: false,
+    features: [
+      "Até 5 usuários",
+      "10 agentes de IA",
+      "3 departamentos",
+      "500 processos",
+      "Suporte por email",
+      "Dashboard básico",
+    ],
+    cta: "Começar Grátis",
+  },
+  {
+    name: "Professional",
+    price: "697",
+    desc: "O mais escolhido — para escritórios que querem escalar",
+    highlight: true,
+    features: [
+      "Até 25 usuários",
+      "45 agentes de IA",
+      "8 departamentos",
+      "Processos ilimitados",
+      "Suporte prioritário 24/7",
+      "Dashboard avançado + KPIs",
+      "Marketing jurídico integrado",
+      "Orquestração inteligente",
+    ],
+    cta: "Escolher Professional",
+  },
+  {
+    name: "Enterprise",
+    price: "Sob consulta",
+    desc: "Para bancas de grande porte",
+    highlight: false,
+    features: [
+      "Usuários ilimitados",
+      "91+ agentes de IA",
+      "13 departamentos completos",
+      "Processos ilimitados",
+      "Gerente de conta dedicado",
+      "API + integrações customizadas",
+      "SLA garantido 99.9%",
+      "Treinamento presencial",
+    ],
+    cta: "Falar com Consultor",
+  },
+];
+
 function AnimatedCounter({ value, duration = 2000 }: { value: string; duration?: number }) {
   const [display, setDisplay] = useState("0");
   const ref = useRef<HTMLDivElement>(null);
@@ -97,6 +149,7 @@ function AnimatedCounter({ value, duration = 2000 }: { value: string; duration?:
 export default function LandingPage() {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
+  const [mobileMenu, setMobileMenu] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -105,258 +158,191 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#05050a", color: "#f0ead6", fontFamily: "'Inter', sans-serif", overflowX: "hidden" }}>
+    <div className="lp-root">
 
       {/* ═══════ NAVBAR ═══════ */}
-      <nav style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-        background: scrollY > 50 ? "rgba(5,5,10,0.92)" : "transparent",
-        backdropFilter: scrollY > 50 ? "blur(24px)" : "none",
-        borderBottom: scrollY > 50 ? "1px solid rgba(201,168,76,0.12)" : "none",
-        transition: "all 0.4s", padding: "14px 40px",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: "linear-gradient(135deg, #c9a84c, #a8872e)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 900, color: "#05050a",
-          }}>⚖️</div>
-          <span style={{ fontSize: 22, fontWeight: 800, color: "#c9a84c", letterSpacing: "-0.02em" }}>Agent Jus IA</span>
+      <nav className={`lp-nav ${scrollY > 50 ? "lp-nav--scrolled" : ""}`}>
+        <div className="lp-nav__brand">
+          <div className="lp-nav__logo">⚖️</div>
+          <span className="lp-nav__name">Agent Jus IA</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          <a href="#pilares" style={{ color: "#94a3b8", fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s" }}
-            onMouseOver={e => (e.currentTarget.style.color = "#c9a84c")} onMouseOut={e => (e.currentTarget.style.color = "#94a3b8")}>
-            Soluções
-          </a>
-          <a href="#como-funciona" style={{ color: "#94a3b8", fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s" }}
-            onMouseOver={e => (e.currentTarget.style.color = "#c9a84c")} onMouseOut={e => (e.currentTarget.style.color = "#94a3b8")}>
-            Como Funciona
-          </a>
-          <a href="#depoimentos" style={{ color: "#94a3b8", fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s" }}
-            onMouseOver={e => (e.currentTarget.style.color = "#c9a84c")} onMouseOut={e => (e.currentTarget.style.color = "#94a3b8")}>
-            Depoimentos
-          </a>
-          <button onClick={() => navigate("/auth")} style={{
-            background: "linear-gradient(135deg, #c9a84c, #a8872e)",
-            border: "none", color: "#05050a", borderRadius: 10,
-            padding: "11px 28px", cursor: "pointer", fontSize: 14, fontWeight: 700,
-            boxShadow: "0 4px 20px rgba(201,168,76,0.25)",
-            transition: "transform 0.2s, box-shadow 0.2s",
-          }}
-          onMouseOver={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(201,168,76,0.4)"; }}
-          onMouseOut={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(201,168,76,0.25)"; }}
-          >🔐 Acessar Sistema</button>
+        {/* Desktop links */}
+        <div className="lp-nav__links">
+          <a href="#pilares">Soluções</a>
+          <a href="#como-funciona">Como Funciona</a>
+          <a href="#planos">Planos</a>
+          <a href="#depoimentos">Depoimentos</a>
+          <button className="lp-btn-gold lp-btn-sm" onClick={() => navigate("/auth")}>🔐 Acessar Sistema</button>
         </div>
+
+        {/* Mobile hamburger */}
+        <button className="lp-hamburger" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Menu">
+          <span /><span /><span />
+        </button>
       </nav>
 
+      {/* Mobile menu overlay */}
+      {mobileMenu && (
+        <div className="lp-mobile-menu" onClick={() => setMobileMenu(false)}>
+          <div className="lp-mobile-menu__inner" onClick={e => e.stopPropagation()}>
+            <a href="#pilares" onClick={() => setMobileMenu(false)}>Soluções</a>
+            <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Como Funciona</a>
+            <a href="#planos" onClick={() => setMobileMenu(false)}>Planos</a>
+            <a href="#depoimentos" onClick={() => setMobileMenu(false)}>Depoimentos</a>
+            <button className="lp-btn-gold" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>🔐 Acessar Sistema</button>
+          </div>
+        </div>
+      )}
+
       {/* ═══════ HERO ═══════ */}
-      <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        {/* 3D Background */}
-        <div style={{ position: "absolute", inset: 0, opacity: 0.6 }}>
+      <section className="lp-hero">
+        <div className="lp-hero__3d">
           <Suspense fallback={null}><AgentScene3D /></Suspense>
         </div>
-        {/* Gradient overlays */}
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 40%, transparent 20%, #05050a 75%)" }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(5,5,10,0.3) 0%, transparent 30%, transparent 70%, #05050a 100%)" }} />
-        {/* Scan line effect */}
-        <div style={{
-          position: "absolute", inset: 0, opacity: 0.03,
-          background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(201,168,76,0.5) 2px, rgba(201,168,76,0.5) 4px)",
-          pointerEvents: "none",
-        }} />
+        <div className="lp-hero__overlay1" />
+        <div className="lp-hero__overlay2" />
+        <div className="lp-hero__scanlines" />
 
-        <div style={{ position: "relative", zIndex: 10, textAlign: "center", maxWidth: 900, padding: "0 24px" }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 24,
-            padding: "8px 24px", borderRadius: 50, fontSize: 13, fontWeight: 600,
-            background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)", color: "#c9a84c",
-            animation: "pulse 3s infinite",
-          }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 12px #22c55e" }} />
+        <div className="lp-hero__content">
+          <div className="lp-badge-pulse">
+            <span className="lp-badge-dot" />
             SISTEMA OPERACIONAL JURÍDICO ATIVO
           </div>
 
-          <h1 style={{ fontSize: "clamp(40px, 7vw, 72px)", fontWeight: 900, lineHeight: 1.05, margin: "0 0 24px", letterSpacing: "-0.03em" }}>
-            <span style={{ color: "#f0ead6" }}>Seu escritório com um</span><br />
-            <span style={{
-              background: "linear-gradient(135deg, #c9a84c 0%, #e8d48b 30%, #c9a84c 60%, #ffd700 100%)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-              filter: "drop-shadow(0 0 30px rgba(201,168,76,0.3))",
-            }}>exército de IA</span>
+          <h1 className="lp-hero__h1">
+            <span>Seu escritório com um</span><br />
+            <span className="lp-gold-text">exército de IA</span>
           </h1>
 
-          <p style={{ fontSize: 20, color: "#b8bcc8", maxWidth: 650, margin: "0 auto 40px", lineHeight: 1.7, fontWeight: 400 }}>
-            <strong style={{ color: "#f0ead6" }}>Marketing</strong> que atrai clientes.{" "}
-            <strong style={{ color: "#f0ead6" }}>Gestão</strong> de milhares de processos.{" "}
-            <strong style={{ color: "#f0ead6" }}>91+ agentes de IA</strong> trabalhando para seu time.{" "}
-            <strong style={{ color: "#c9a84c" }}>Triplique seu faturamento.</strong>
+          <p className="lp-hero__sub">
+            <strong>Marketing</strong> que atrai clientes.{" "}
+            <strong>Gestão</strong> de milhares de processos.{" "}
+            <strong>91+ agentes de IA</strong> trabalhando para seu time.{" "}
+            <strong className="lp-gold-text">Triplique seu faturamento.</strong>
           </p>
 
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={() => navigate("/auth")} style={{
-              background: "linear-gradient(135deg, #c9a84c, #b8942e)",
-              color: "#05050a", border: "none", borderRadius: 14,
-              padding: "18px 48px", fontSize: 17, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 8px 40px rgba(201,168,76,0.35)",
-              transition: "all 0.3s", letterSpacing: "-0.01em",
-            }}
-            onMouseOver={e => { e.currentTarget.style.transform = "translateY(-3px) scale(1.02)"; e.currentTarget.style.boxShadow = "0 14px 50px rgba(201,168,76,0.5)"; }}
-            onMouseOut={e => { e.currentTarget.style.transform = "translateY(0) scale(1)"; e.currentTarget.style.boxShadow = "0 8px 40px rgba(201,168,76,0.35)"; }}
-            >🚀 Começar Agora — Grátis</button>
-
-            <button onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })} style={{
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)",
-              color: "#f0ead6", borderRadius: 14, padding: "18px 36px",
-              fontSize: 17, fontWeight: 600, cursor: "pointer", transition: "all 0.3s",
-            }}
-            onMouseOver={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.borderColor = "rgba(201,168,76,0.3)"; }}
-            onMouseOut={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; }}
-            >Descubra o Poder ↓</button>
+          <div className="lp-hero__btns">
+            <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>🚀 Começar Agora — Grátis</button>
+            <button className="lp-btn-ghost lp-btn-lg" onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })}>Descubra o Poder ↓</button>
           </div>
 
-          {/* Mouse scroll indicator */}
-          <div style={{ marginTop: 60, opacity: 0.4 }}>
-            <div style={{
-              width: 24, height: 40, border: "2px solid rgba(201,168,76,0.4)", borderRadius: 12,
-              margin: "0 auto", position: "relative",
-            }}>
-              <div style={{
-                width: 4, height: 8, background: "#c9a84c", borderRadius: 2,
-                position: "absolute", left: "50%", top: 8, transform: "translateX(-50%)",
-                animation: "bounce 2s infinite",
-              }} />
-            </div>
+          <div className="lp-scroll-indicator">
+            <div className="lp-scroll-mouse"><div className="lp-scroll-dot" /></div>
           </div>
         </div>
       </section>
 
       {/* ═══════ STATS TICKER ═══════ */}
-      <section style={{
-        padding: "50px 24px",
-        background: "linear-gradient(180deg, rgba(201,168,76,0.04) 0%, rgba(201,168,76,0.01) 100%)",
-        borderTop: "1px solid rgba(201,168,76,0.1)", borderBottom: "1px solid rgba(201,168,76,0.1)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "center", gap: 48, flexWrap: "wrap", maxWidth: 1000, margin: "0 auto" }}>
+      <section className="lp-stats">
+        <div className="lp-stats__grid">
           {STATS_BANNER.map((s) => (
-            <div key={s.label} style={{ textAlign: "center", minWidth: 100 }}>
-              <div style={{ fontSize: 44, fontWeight: 900, color: "#c9a84c", lineHeight: 1 }}>
-                <AnimatedCounter value={s.value} />
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 }}>{s.label}</div>
+            <div key={s.label} className="lp-stats__item">
+              <div className="lp-stats__value"><AnimatedCounter value={s.value} /></div>
+              <div className="lp-stats__label">{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ═══════ 3 PILARES ═══════ */}
-      <section id="pilares" style={{ padding: "120px 24px", maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 80 }}>
-          <div style={{
-            display: "inline-block", padding: "6px 20px", borderRadius: 50, fontSize: 12,
-            background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.15)", color: "#c9a84c",
-            fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 20,
-          }}>OS 3 PILARES</div>
-          <h2 style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 900, margin: 0, lineHeight: 1.1 }}>
-            <span style={{ color: "#f0ead6" }}>Tudo que seu escritório precisa</span><br />
-            <span style={{ color: "#c9a84c" }}>em uma plataforma</span>
-          </h2>
-        </div>
+      <section id="pilares" className="lp-section">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <div className="lp-tag">OS 3 PILARES</div>
+            <h2 className="lp-section-title">
+              <span>Tudo que seu escritório precisa</span><br />
+              <span className="lp-gold-text">em uma plataforma</span>
+            </h2>
+          </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
-          {PILARES.map((p, i) => (
-            <div key={p.tag} style={{
-              display: "grid", gridTemplateColumns: i % 2 === 0 ? "1fr 1fr" : "1fr 1fr",
-              gap: 48, alignItems: "center", padding: "48px 40px",
-              background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 24, transition: "all 0.4s", position: "relative", overflow: "hidden",
-            }}
-            onMouseOver={e => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.2)"; e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
-            onMouseOut={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; e.currentTarget.style.background = "rgba(255,255,255,0.015)"; }}
-            >
-              {/* Glow effect */}
-              <div style={{
-                position: "absolute", width: 300, height: 300, borderRadius: "50%",
-                background: p.glow, filter: "blur(120px)", opacity: 0.15,
-                top: i === 0 ? "-50%" : i === 1 ? "50%" : "0%",
-                right: i % 2 === 0 ? "-10%" : undefined,
-                left: i % 2 !== 0 ? "-10%" : undefined,
-                pointerEvents: "none",
-              }} />
-
-              <div style={{ order: i % 2 === 0 ? 0 : 1, position: "relative", zIndex: 1 }}>
-                <div style={{
-                  display: "inline-block", padding: "5px 14px", borderRadius: 6,
-                  background: p.gradient, fontSize: 10, fontWeight: 800,
-                  color: "#fff", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 16,
-                }}>{p.tag}</div>
-                <h3 style={{ fontSize: 30, fontWeight: 800, color: "#f0ead6", margin: "0 0 16px", lineHeight: 1.2 }}>{p.title}</h3>
-                <p style={{ fontSize: 16, color: "#94a3b8", lineHeight: 1.8, margin: "0 0 28px" }}>{p.desc}</p>
-                <div style={{ display: "flex", gap: 24 }}>
-                  {p.stats.map(s => (
-                    <div key={s.label} style={{ padding: "12px 20px", background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 28, fontWeight: 900, color: "#c9a84c" }}>{s.value}</div>
-                      <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</div>
-                    </div>
-                  ))}
+          <div className="lp-pilares">
+            {PILARES.map((p, i) => (
+              <div key={p.tag} className={`lp-pilar ${i % 2 !== 0 ? "lp-pilar--reverse" : ""}`}>
+                <div className="lp-pilar__glow" style={{ background: p.glow }} />
+                <div className="lp-pilar__text">
+                  <div className="lp-pilar__tag" style={{ background: p.gradient }}>{p.tag}</div>
+                  <h3 className="lp-pilar__title">{p.title}</h3>
+                  <p className="lp-pilar__desc">{p.desc}</p>
+                  <div className="lp-pilar__stats">
+                    {p.stats.map(s => (
+                      <div key={s.label} className="lp-pilar__stat">
+                        <div className="lp-pilar__stat-value">{s.value}</div>
+                        <div className="lp-pilar__stat-label">{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="lp-pilar__icon">
+                  <div className="lp-pilar__orb" style={{ background: `radial-gradient(circle, ${p.glow} 0%, transparent 70%)` }}>
+                    {p.icon}
+                  </div>
                 </div>
               </div>
-
-              <div style={{ order: i % 2 === 0 ? 1 : 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
-                <div style={{
-                  width: 220, height: 220, borderRadius: "50%",
-                  background: `radial-gradient(circle, ${p.glow} 0%, transparent 70%)`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 90, filter: "drop-shadow(0 0 40px " + p.glow + ")",
-                }}>{p.icon}</div>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
       {/* ═══════ COMO FUNCIONA ═══════ */}
-      <section id="como-funciona" style={{ padding: "120px 24px", background: "rgba(201,168,76,0.015)" }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 80 }}>
-            <div style={{
-              display: "inline-block", padding: "6px 20px", borderRadius: 50, fontSize: 12,
-              background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.15)", color: "#c9a84c",
-              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 20,
-            }}>PASSO A PASSO</div>
-            <h2 style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 900, margin: 0, color: "#f0ead6" }}>
-              Simples de começar,<br /><span style={{ color: "#c9a84c" }}>impossível de largar</span>
+      <section id="como-funciona" className="lp-section lp-section--alt">
+        <div className="lp-container lp-container--narrow">
+          <div className="lp-section-header">
+            <div className="lp-tag">PASSO A PASSO</div>
+            <h2 className="lp-section-title">
+              Simples de começar,<br /><span className="lp-gold-text">impossível de largar</span>
             </h2>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 24 }}>
-            {COMO_FUNCIONA.map((s, i) => (
-              <div key={s.step} style={{
-                padding: 32, borderRadius: 20,
-                background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-                textAlign: "center", transition: "all 0.3s", position: "relative",
-              }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.25)"; e.currentTarget.style.transform = "translateY(-4px)"; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; e.currentTarget.style.transform = "translateY(0)"; }}
-              >
-                <div style={{
-                  width: 60, height: 60, borderRadius: 16, margin: "0 auto 20px",
-                  background: "linear-gradient(135deg, #c9a84c, #a8872e)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 28, boxShadow: "0 8px 24px rgba(201,168,76,0.2)",
-                }}>{s.icon}</div>
-                <div style={{ fontSize: 11, color: "#c9a84c", fontWeight: 800, letterSpacing: "0.15em", marginBottom: 8 }}>PASSO {s.step}</div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#f0ead6", margin: "0 0 10px" }}>{s.title}</h3>
-                <p style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.7, margin: 0 }}>{s.desc}</p>
-                {i < COMO_FUNCIONA.length - 1 && (
-                  <div style={{
-                    position: "absolute", right: -16, top: "50%", transform: "translateY(-50%)",
-                    color: "#c9a84c", fontSize: 20, opacity: 0.3,
-                    display: "none", // Hidden on mobile, would need media query
-                  }}>→</div>
-                )}
+          <div className="lp-steps">
+            {COMO_FUNCIONA.map((s) => (
+              <div key={s.step} className="lp-step">
+                <div className="lp-step__icon">{s.icon}</div>
+                <div className="lp-step__num">PASSO {s.step}</div>
+                <h3 className="lp-step__title">{s.title}</h3>
+                <p className="lp-step__desc">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════ PLANOS ═══════ */}
+      <section id="planos" className="lp-section">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <div className="lp-tag">PLANOS & PREÇOS</div>
+            <h2 className="lp-section-title">
+              Escolha o plano ideal<br /><span className="lp-gold-text">para seu escritório</span>
+            </h2>
+          </div>
+
+          <div className="lp-plans">
+            {PLANOS.map((plan) => (
+              <div key={plan.name} className={`lp-plan ${plan.highlight ? "lp-plan--highlight" : ""}`}>
+                {plan.highlight && <div className="lp-plan__badge">MAIS POPULAR</div>}
+                <h3 className="lp-plan__name">{plan.name}</h3>
+                <p className="lp-plan__desc">{plan.desc}</p>
+                <div className="lp-plan__price">
+                  {plan.price !== "Sob consulta" ? (
+                    <>
+                      <span className="lp-plan__currency">R$</span>
+                      <span className="lp-plan__amount">{plan.price}</span>
+                      <span className="lp-plan__period">/mês</span>
+                    </>
+                  ) : (
+                    <span className="lp-plan__amount lp-plan__amount--custom">{plan.price}</span>
+                  )}
+                </div>
+                <ul className="lp-plan__features">
+                  {plan.features.map(f => (
+                    <li key={f}>✓ {f}</li>
+                  ))}
+                </ul>
+                <button
+                  className={plan.highlight ? "lp-btn-gold lp-btn-full" : "lp-btn-ghost lp-btn-full"}
+                  onClick={() => navigate("/auth")}
+                >{plan.cta}</button>
               </div>
             ))}
           </div>
@@ -364,49 +350,25 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════ DEPOIMENTOS ═══════ */}
-      <section id="depoimentos" style={{ padding: "120px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 80 }}>
-            <div style={{
-              display: "inline-block", padding: "6px 20px", borderRadius: 50, fontSize: 12,
-              background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.15)", color: "#c9a84c",
-              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 20,
-            }}>CASOS DE SUCESSO</div>
-            <h2 style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 900, margin: 0, color: "#f0ead6" }}>
-              Escritórios que já<br /><span style={{ color: "#c9a84c" }}>revolucionaram sua gestão</span>
+      <section id="depoimentos" className="lp-section lp-section--alt">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <div className="lp-tag">CASOS DE SUCESSO</div>
+            <h2 className="lp-section-title">
+              Escritórios que já<br /><span className="lp-gold-text">revolucionaram sua gestão</span>
             </h2>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 28 }}>
+          <div className="lp-testimonials">
             {TESTIMONIALS.map((t) => (
-              <div key={t.name} style={{
-                background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-                borderRadius: 24, padding: 36, position: "relative", overflow: "hidden",
-                transition: "all 0.3s",
-              }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.2)"; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; }}
-              >
-                {/* Metric badge */}
-                <div style={{
-                  position: "absolute", top: 20, right: 20,
-                  padding: "6px 14px", borderRadius: 8,
-                  background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
-                  color: "#c9a84c", fontSize: 12, fontWeight: 800,
-                }}>{t.metric}</div>
-
-                <div style={{ fontSize: 48, opacity: 0.08, position: "absolute", top: 8, left: 24, color: "#c9a84c", fontFamily: "serif" }}>"</div>
-                <p style={{ fontSize: 15, color: "#b8bcc8", lineHeight: 1.9, margin: "0 0 28px", fontStyle: "italic" }}>"{t.text}"</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 14,
-                    background: "linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.05))",
-                    border: "2px solid rgba(201,168,76,0.2)",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24,
-                  }}>{t.avatar}</div>
+              <div key={t.name} className="lp-testimonial">
+                <div className="lp-testimonial__metric">{t.metric}</div>
+                <p className="lp-testimonial__text">"{t.text}"</p>
+                <div className="lp-testimonial__author">
+                  <div className="lp-testimonial__avatar">{t.avatar}</div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#f0ead6" }}>{t.name}</div>
-                    <div style={{ fontSize: 12, color: "#64748b" }}>{t.role}</div>
+                    <div className="lp-testimonial__name">{t.name}</div>
+                    <div className="lp-testimonial__role">{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -416,68 +378,368 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════ CTA FINAL ═══════ */}
-      <section style={{ padding: "120px 24px", position: "relative", overflow: "hidden" }}>
-        {/* Background glow */}
-        <div style={{
-          position: "absolute", width: 600, height: 600, borderRadius: "50%",
-          background: "rgba(201,168,76,0.08)", filter: "blur(150px)",
-          top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-        }} />
-
-        <div style={{
-          maxWidth: 800, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1,
-          padding: "60px 48px", borderRadius: 28,
-          background: "linear-gradient(135deg, rgba(201,168,76,0.06), rgba(201,168,76,0.01))",
-          border: "1px solid rgba(201,168,76,0.15)",
-        }}>
+      <section className="lp-cta-final">
+        <div className="lp-cta-final__glow" />
+        <div className="lp-cta-final__box">
           <div style={{ fontSize: 60, marginBottom: 20 }}>⚡</div>
-          <h2 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 900, color: "#f0ead6", margin: "0 0 16px" }}>
-            Pronto para <span style={{ color: "#c9a84c" }}>triplicar</span> seus resultados?
+          <h2 className="lp-cta-final__title">
+            Pronto para <span className="lp-gold-text">triplicar</span> seus resultados?
           </h2>
-          <p style={{ color: "#94a3b8", fontSize: 17, margin: "0 0 36px", lineHeight: 1.7, maxWidth: 550, marginLeft: "auto", marginRight: "auto" }}>
-            Junte-se aos escritórios que já transformaram sua operação com a parceria <strong style={{ color: "#f0ead6" }}>Humano + IA</strong>.
+          <p className="lp-cta-final__sub">
+            Junte-se aos escritórios que já transformaram sua operação com a parceria <strong>Humano + IA</strong>.
           </p>
-          <button onClick={() => navigate("/auth")} style={{
-            background: "linear-gradient(135deg, #c9a84c, #b8942e)",
-            color: "#05050a", border: "none", borderRadius: 16,
-            padding: "20px 56px", fontSize: 18, fontWeight: 800,
-            cursor: "pointer", boxShadow: "0 12px 50px rgba(201,168,76,0.4)",
-            transition: "all 0.3s",
-          }}
-          onMouseOver={e => { e.currentTarget.style.transform = "translateY(-3px) scale(1.03)"; e.currentTarget.style.boxShadow = "0 18px 60px rgba(201,168,76,0.55)"; }}
-          onMouseOut={e => { e.currentTarget.style.transform = "translateY(0) scale(1)"; e.currentTarget.style.boxShadow = "0 12px 50px rgba(201,168,76,0.4)"; }}
-          >⚖️ Começar Agora — É Grátis</button>
-          <p style={{ color: "#475569", fontSize: 13, marginTop: 16 }}>Sem cartão de crédito • Setup em 2 minutos • Suporte dedicado</p>
+          <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>⚖️ Começar Agora — É Grátis</button>
+          <p className="lp-cta-final__note">Sem cartão de crédito • Setup em 2 minutos • Suporte dedicado</p>
         </div>
       </section>
 
       {/* ═══════ FOOTER ═══════ */}
-      <footer style={{ padding: "40px 24px", borderTop: "1px solid rgba(201,168,76,0.08)", textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 18, color: "#c9a84c" }}>⚖️</span>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#c9a84c" }}>Agent Jus IA</span>
+      <footer className="lp-footer">
+        <div className="lp-footer__brand">
+          <span>⚖️</span>
+          <span>Agent Jus IA</span>
         </div>
-        <p style={{ color: "#334155", fontSize: 13, margin: 0 }}>
-          © {new Date().getFullYear()} Agent Jus IA — Humano + IA revolucionando a gestão jurídica.
-        </p>
+        <p className="lp-footer__copy">© {new Date().getFullYear()} Agent Jus IA — Humano + IA revolucionando a gestão jurídica.</p>
       </footer>
 
-      {/* Global keyframes */}
       <style>{`
+        /* ====== BASE ====== */
+        .lp-root {
+          min-height: 100vh; background: #05050a; color: #f0ead6;
+          font-family: 'Inter', sans-serif; overflow-x: hidden;
+        }
+
+        /* ====== UTILITIES ====== */
+        .lp-gold-text {
+          background: linear-gradient(135deg, #c9a84c 0%, #e8d48b 30%, #c9a84c 60%, #ffd700 100%);
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+          filter: drop-shadow(0 0 30px rgba(201,168,76,0.3));
+        }
+        .lp-tag {
+          display: inline-block; padding: 6px 20px; border-radius: 50px; font-size: 12px;
+          background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.15);
+          color: #c9a84c; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 20px;
+        }
+        .lp-section-header { text-align: center; margin-bottom: 60px; }
+        .lp-section-title {
+          font-size: clamp(28px, 5vw, 48px); font-weight: 900; margin: 0; line-height: 1.1; color: #f0ead6;
+        }
+        .lp-container { max-width: 1200px; margin: 0 auto; }
+        .lp-container--narrow { max-width: 1000px; margin: 0 auto; }
+        .lp-section { padding: 80px 20px; }
+        .lp-section--alt { background: rgba(201,168,76,0.015); }
+
+        /* ====== BUTTONS ====== */
+        .lp-btn-gold {
+          background: linear-gradient(135deg, #c9a84c, #a8872e);
+          border: none; color: #05050a; border-radius: 12px; padding: 12px 28px;
+          cursor: pointer; font-size: 14px; font-weight: 700;
+          box-shadow: 0 4px 20px rgba(201,168,76,0.25); transition: all 0.3s;
+        }
+        .lp-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(201,168,76,0.4); }
+        .lp-btn-ghost {
+          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12);
+          color: #f0ead6; border-radius: 12px; padding: 12px 28px;
+          font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+        }
+        .lp-btn-ghost:hover { background: rgba(255,255,255,0.08); border-color: rgba(201,168,76,0.3); }
+        .lp-btn-sm { padding: 10px 22px; font-size: 13px; }
+        .lp-btn-lg { padding: 16px 40px; font-size: 16px; border-radius: 14px; }
+        .lp-btn-full { width: 100%; text-align: center; }
+
+        /* ====== NAVBAR ====== */
+        .lp-nav {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+          padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;
+          transition: all 0.4s;
+        }
+        .lp-nav--scrolled {
+          background: rgba(5,5,10,0.92); backdrop-filter: blur(24px);
+          border-bottom: 1px solid rgba(201,168,76,0.12);
+        }
+        .lp-nav__brand { display: flex; align-items: center; gap: 10px; }
+        .lp-nav__logo {
+          width: 36px; height: 36px; border-radius: 10px;
+          background: linear-gradient(135deg, #c9a84c, #a8872e);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 16px; font-weight: 900; color: #05050a;
+        }
+        .lp-nav__name { font-size: 20px; font-weight: 800; color: #c9a84c; letter-spacing: -0.02em; }
+        .lp-nav__links { display: flex; align-items: center; gap: 24px; }
+        .lp-nav__links a {
+          color: #94a3b8; font-size: 14px; text-decoration: none; font-weight: 500; transition: color 0.2s;
+        }
+        .lp-nav__links a:hover { color: #c9a84c; }
+        .lp-hamburger {
+          display: none; background: none; border: none; cursor: pointer; padding: 8px;
+          flex-direction: column; gap: 5px;
+        }
+        .lp-hamburger span {
+          display: block; width: 24px; height: 2px; background: #c9a84c; border-radius: 2px;
+        }
+
+        /* ====== MOBILE MENU ====== */
+        .lp-mobile-menu {
+          position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.8);
+          backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center;
+        }
+        .lp-mobile-menu__inner {
+          display: flex; flex-direction: column; gap: 20px; text-align: center;
+          padding: 40px; background: rgba(15,15,25,0.95); border-radius: 24px;
+          border: 1px solid rgba(201,168,76,0.15); min-width: 280px;
+        }
+        .lp-mobile-menu__inner a {
+          color: #f0ead6; font-size: 18px; font-weight: 600; text-decoration: none;
+          padding: 12px; border-radius: 12px; transition: background 0.2s;
+        }
+        .lp-mobile-menu__inner a:hover { background: rgba(201,168,76,0.1); }
+
+        /* ====== HERO ====== */
+        .lp-hero {
+          position: relative; min-height: 100vh; display: flex; align-items: center;
+          justify-content: center; overflow: hidden;
+        }
+        .lp-hero__3d { position: absolute; inset: 0; opacity: 0.6; }
+        .lp-hero__overlay1 { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, transparent 20%, #05050a 75%); }
+        .lp-hero__overlay2 { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,5,10,0.3) 0%, transparent 30%, transparent 70%, #05050a 100%); }
+        .lp-hero__scanlines {
+          position: absolute; inset: 0; opacity: 0.03; pointer-events: none;
+          background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(201,168,76,0.5) 2px, rgba(201,168,76,0.5) 4px);
+        }
+        .lp-hero__content {
+          position: relative; z-index: 10; text-align: center; max-width: 900px; padding: 0 20px;
+        }
+        .lp-badge-pulse {
+          display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px;
+          padding: 8px 20px; border-radius: 50px; font-size: 11px; font-weight: 600;
+          background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); color: #c9a84c;
+          animation: pulse 3s infinite;
+        }
+        .lp-badge-dot {
+          width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e;
+        }
+        .lp-hero__h1 {
+          font-size: clamp(32px, 7vw, 72px); font-weight: 900; line-height: 1.05;
+          margin: 0 0 20px; letter-spacing: -0.03em; color: #f0ead6;
+        }
+        .lp-hero__sub {
+          font-size: clamp(15px, 2.5vw, 20px); color: #b8bcc8; max-width: 650px;
+          margin: 0 auto 32px; line-height: 1.7; font-weight: 400;
+        }
+        .lp-hero__sub strong { color: #f0ead6; }
+        .lp-hero__btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .lp-scroll-indicator { margin-top: 48px; opacity: 0.4; }
+        .lp-scroll-mouse {
+          width: 24px; height: 40px; border: 2px solid rgba(201,168,76,0.4); border-radius: 12px;
+          margin: 0 auto; position: relative;
+        }
+        .lp-scroll-dot {
+          width: 4px; height: 8px; background: #c9a84c; border-radius: 2px;
+          position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+          animation: bounce 2s infinite;
+        }
+
+        /* ====== STATS ====== */
+        .lp-stats {
+          padding: 40px 20px;
+          background: linear-gradient(180deg, rgba(201,168,76,0.04) 0%, rgba(201,168,76,0.01) 100%);
+          border-top: 1px solid rgba(201,168,76,0.1); border-bottom: 1px solid rgba(201,168,76,0.1);
+        }
+        .lp-stats__grid {
+          display: flex; justify-content: center; gap: 32px; flex-wrap: wrap; max-width: 1000px; margin: 0 auto;
+        }
+        .lp-stats__item { text-align: center; min-width: 80px; }
+        .lp-stats__value { font-size: clamp(32px, 5vw, 44px); font-weight: 900; color: #c9a84c; line-height: 1; }
+        .lp-stats__label { font-size: 11px; color: #64748b; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+
+        /* ====== PILARES ====== */
+        .lp-pilares { display: flex; flex-direction: column; gap: 32px; }
+        .lp-pilar {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center;
+          padding: 40px 32px; background: rgba(255,255,255,0.015);
+          border: 1px solid rgba(255,255,255,0.06); border-radius: 24px;
+          transition: all 0.4s; position: relative; overflow: hidden;
+        }
+        .lp-pilar:hover { border-color: rgba(201,168,76,0.2); background: rgba(255,255,255,0.03); }
+        .lp-pilar__glow {
+          position: absolute; width: 250px; height: 250px; border-radius: 50%;
+          filter: blur(120px); opacity: 0.15; pointer-events: none; top: 0; right: -10%;
+        }
+        .lp-pilar--reverse .lp-pilar__text { order: 1; }
+        .lp-pilar--reverse .lp-pilar__icon { order: 0; }
+        .lp-pilar__text { position: relative; z-index: 1; }
+        .lp-pilar__tag {
+          display: inline-block; padding: 5px 14px; border-radius: 6px; font-size: 10px;
+          font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px;
+        }
+        .lp-pilar__title { font-size: clamp(22px, 3vw, 30px); font-weight: 800; color: #f0ead6; margin: 0 0 16px; line-height: 1.2; }
+        .lp-pilar__desc { font-size: 15px; color: #94a3b8; line-height: 1.8; margin: 0 0 24px; }
+        .lp-pilar__stats { display: flex; gap: 16px; flex-wrap: wrap; }
+        .lp-pilar__stat {
+          padding: 10px 16px; background: rgba(255,255,255,0.04); border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.06);
+        }
+        .lp-pilar__stat-value { font-size: 24px; font-weight: 900; color: #c9a84c; }
+        .lp-pilar__stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
+        .lp-pilar__icon {
+          display: flex; align-items: center; justify-content: center; position: relative; z-index: 1;
+        }
+        .lp-pilar__orb {
+          width: 180px; height: 180px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center; font-size: 72px;
+        }
+
+        /* ====== STEPS ====== */
+        .lp-steps {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;
+        }
+        .lp-step {
+          padding: 28px; border-radius: 20px; background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06); text-align: center; transition: all 0.3s;
+        }
+        .lp-step:hover { border-color: rgba(201,168,76,0.25); transform: translateY(-4px); }
+        .lp-step__icon {
+          width: 56px; height: 56px; border-radius: 14px; margin: 0 auto 16px;
+          background: linear-gradient(135deg, #c9a84c, #a8872e);
+          display: flex; align-items: center; justify-content: center; font-size: 24px;
+          box-shadow: 0 8px 24px rgba(201,168,76,0.2);
+        }
+        .lp-step__num { font-size: 11px; color: #c9a84c; font-weight: 800; letter-spacing: 0.15em; margin-bottom: 8px; }
+        .lp-step__title { font-size: 17px; font-weight: 700; color: #f0ead6; margin: 0 0 10px; }
+        .lp-step__desc { font-size: 13px; color: #94a3b8; line-height: 1.7; margin: 0; }
+
+        /* ====== PLANS ====== */
+        .lp-plans {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;
+          align-items: stretch;
+        }
+        .lp-plan {
+          padding: 36px 28px; border-radius: 24px; background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column;
+          position: relative; transition: all 0.3s;
+        }
+        .lp-plan:hover { border-color: rgba(201,168,76,0.2); transform: translateY(-4px); }
+        .lp-plan--highlight {
+          background: rgba(201,168,76,0.04); border-color: rgba(201,168,76,0.25);
+          box-shadow: 0 0 60px rgba(201,168,76,0.08);
+        }
+        .lp-plan__badge {
+          position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+          padding: 6px 20px; border-radius: 50px; font-size: 11px; font-weight: 800;
+          background: linear-gradient(135deg, #c9a84c, #a8872e); color: #05050a;
+          letter-spacing: 0.1em; white-space: nowrap;
+        }
+        .lp-plan__name { font-size: 22px; font-weight: 800; color: #f0ead6; margin: 0 0 6px; }
+        .lp-plan__desc { font-size: 13px; color: #64748b; margin: 0 0 24px; line-height: 1.5; }
+        .lp-plan__price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 28px; }
+        .lp-plan__currency { font-size: 18px; color: #94a3b8; font-weight: 600; }
+        .lp-plan__amount { font-size: 48px; font-weight: 900; color: #c9a84c; line-height: 1; }
+        .lp-plan__amount--custom { font-size: 28px; }
+        .lp-plan__period { font-size: 14px; color: #64748b; font-weight: 500; }
+        .lp-plan__features {
+          list-style: none; padding: 0; margin: 0 0 28px; flex: 1;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .lp-plan__features li { font-size: 14px; color: #b8bcc8; line-height: 1.5; }
+
+        /* ====== TESTIMONIALS ====== */
+        .lp-testimonials {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;
+        }
+        .lp-testimonial {
+          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 24px; padding: 32px; position: relative; overflow: hidden; transition: all 0.3s;
+        }
+        .lp-testimonial:hover { border-color: rgba(201,168,76,0.2); }
+        .lp-testimonial__metric {
+          position: absolute; top: 16px; right: 16px; padding: 5px 12px; border-radius: 8px;
+          background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.2);
+          color: #c9a84c; font-size: 11px; font-weight: 800;
+        }
+        .lp-testimonial__text {
+          font-size: 14px; color: #b8bcc8; line-height: 1.9; margin: 0 0 24px; font-style: italic;
+        }
+        .lp-testimonial__author { display: flex; align-items: center; gap: 12px; }
+        .lp-testimonial__avatar {
+          width: 48px; height: 48px; border-radius: 14px;
+          background: linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.05));
+          border: 2px solid rgba(201,168,76,0.2);
+          display: flex; align-items: center; justify-content: center; font-size: 22px;
+        }
+        .lp-testimonial__name { font-size: 14px; font-weight: 700; color: #f0ead6; }
+        .lp-testimonial__role { font-size: 11px; color: #64748b; }
+
+        /* ====== CTA FINAL ====== */
+        .lp-cta-final { padding: 80px 20px; position: relative; overflow: hidden; }
+        .lp-cta-final__glow {
+          position: absolute; width: 500px; height: 500px; border-radius: 50%;
+          background: rgba(201,168,76,0.08); filter: blur(150px);
+          top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;
+        }
+        .lp-cta-final__box {
+          max-width: 700px; margin: 0 auto; text-align: center; position: relative; z-index: 1;
+          padding: 48px 32px; border-radius: 28px;
+          background: linear-gradient(135deg, rgba(201,168,76,0.06), rgba(201,168,76,0.01));
+          border: 1px solid rgba(201,168,76,0.15);
+        }
+        .lp-cta-final__title {
+          font-size: clamp(24px, 4vw, 42px); font-weight: 900; color: #f0ead6; margin: 0 0 16px;
+        }
+        .lp-cta-final__sub { color: #94a3b8; font-size: 16px; margin: 0 0 32px; line-height: 1.7; }
+        .lp-cta-final__sub strong { color: #f0ead6; }
+        .lp-cta-final__note { color: #475569; font-size: 13px; margin-top: 16px; }
+
+        /* ====== FOOTER ====== */
+        .lp-footer { padding: 32px 20px; border-top: 1px solid rgba(201,168,76,0.08); text-align: center; }
+        .lp-footer__brand { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .lp-footer__brand span:first-child { font-size: 18px; color: #c9a84c; }
+        .lp-footer__brand span:last-child { font-size: 16px; font-weight: 700; color: #c9a84c; }
+        .lp-footer__copy { color: #334155; font-size: 13px; margin: 0; }
+
+        /* ====== ANIMATIONS ====== */
         @keyframes bounce {
           0%, 100% { transform: translateX(-50%) translateY(0); opacity: 1; }
           50% { transform: translateX(-50%) translateY(12px); opacity: 0.3; }
         }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+        /* ====== RESPONSIVE — TABLET ====== */
+        @media (max-width: 1024px) {
+          .lp-nav { padding: 12px 16px; }
+          .lp-pilar { grid-template-columns: 1fr; gap: 24px; padding: 32px 24px; }
+          .lp-pilar--reverse .lp-pilar__text { order: 0; }
+          .lp-pilar--reverse .lp-pilar__icon { order: 1; }
+          .lp-pilar__orb { width: 140px; height: 140px; font-size: 56px; }
+          .lp-section { padding: 60px 16px; }
         }
+
+        /* ====== RESPONSIVE — MOBILE ====== */
         @media (max-width: 768px) {
-          nav > div:last-child > a { display: none !important; }
-          section > div > div[style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
-          }
+          .lp-nav__links { display: none; }
+          .lp-hamburger { display: flex; }
+          .lp-hero__h1 { font-size: clamp(28px, 8vw, 48px); }
+          .lp-hero__btns { flex-direction: column; align-items: center; }
+          .lp-hero__btns .lp-btn-lg { width: 100%; max-width: 320px; }
+          .lp-scroll-indicator { display: none; }
+          .lp-stats__grid { gap: 20px; }
+          .lp-stats__item { min-width: 60px; }
+          .lp-stats__value { font-size: 28px; }
+          .lp-pilar { padding: 24px 20px; }
+          .lp-pilar__icon { justify-content: center; }
+          .lp-pilar__orb { width: 120px; height: 120px; font-size: 48px; }
+          .lp-steps { grid-template-columns: 1fr 1fr; }
+          .lp-plans { grid-template-columns: 1fr; }
+          .lp-testimonials { grid-template-columns: 1fr; }
+          .lp-section-header { margin-bottom: 40px; }
+          .lp-cta-final__box { padding: 36px 20px; }
+          .lp-badge-pulse { font-size: 10px; padding: 6px 14px; }
+        }
+
+        /* ====== RESPONSIVE — SMALL MOBILE ====== */
+        @media (max-width: 480px) {
+          .lp-steps { grid-template-columns: 1fr; }
+          .lp-hero__h1 { font-size: 28px; }
+          .lp-pilar__stats { flex-direction: column; }
         }
       `}</style>
     </div>
