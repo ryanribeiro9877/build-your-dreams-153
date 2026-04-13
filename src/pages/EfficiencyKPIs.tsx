@@ -45,6 +45,11 @@ export default function EfficiencyKPIs() {
   const [orchLogs, setOrchLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [filterDept, setFilterDept] = useState("all");
+  const [filterSeverity, setFilterSeverity] = useState("all");
+  const [filterPeriod, setFilterPeriod] = useState("30");
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     const [tasksRes, logsRes] = await Promise.all([
@@ -58,7 +63,6 @@ export default function EfficiencyKPIs() {
 
   useEffect(() => {
     fetchData();
-    // Realtime
     const channel = supabase.channel("efficiency_kpis")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_orchestration_log" }, () => fetchData())
@@ -66,11 +70,22 @@ export default function EfficiencyKPIs() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
+  // Apply period filter to tasks
+  const filteredTasks = useMemo(() => {
+    const now = new Date();
+    const daysAgo = new Date(now.getTime() - parseInt(filterPeriod) * 86400000);
+    let result = tasks.filter(t => new Date(t.created_at) >= daysAgo);
+    if (filterDept !== "all") {
+      result = result.filter(t => t.task_category === filterDept || t.agent_name?.toLowerCase().includes(filterDept));
+    }
+    return result;
+  }, [tasks, filterDept, filterPeriod]);
+
   // Compute metrics per department
   const deptMetrics = useMemo<DeptMetric[]>(() => {
     const now = new Date();
     return DEPTS.map(d => {
-      const deptTasks = tasks.filter(t => t.task_category === d.id || t.agent_name?.toLowerCase().includes(d.id));
+      const deptTasks = filteredTasks.filter(t => t.task_category === d.id || t.agent_name?.toLowerCase().includes(d.id));
       const pending = deptTasks.filter(t => t.status === "pending").length;
       const overdue = deptTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
       const critical = deptTasks.filter(t => t.priority === "critical").length;
@@ -79,7 +94,7 @@ export default function EfficiencyKPIs() {
       const bottleneckScore = Math.min(100, overdue * 15 + critical * 10 + Math.max(0, pending - 5) * 3);
       return { dept: d.id, label: d.label, color: d.color, icon: d.icon, total, pending, overdue, critical, avgLoad, bottleneckScore };
     }).sort((a, b) => b.bottleneckScore - a.bottleneckScore);
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Global KPIs
   const globalKPIs = useMemo(() => {
