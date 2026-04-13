@@ -1,0 +1,295 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
+
+/* ─── DEPARTMENT CONFIG ─── */
+const DEPTS = [
+  { id: "recepcao", label: "Recepção", color: "#3b82f6", icon: "🏢" },
+  { id: "marketing", label: "Marketing", color: "#f59e0b", icon: "📢" },
+  { id: "civel", label: "Cível", color: "#8b5cf6", icon: "⚖️" },
+  { id: "trabalhista", label: "Trabalhista", color: "#ef4444", icon: "👷" },
+  { id: "tributario", label: "Tributário", color: "#10b981", icon: "💰" },
+  { id: "protocolo", label: "Protocolo", color: "#6366f1", icon: "📋" },
+  { id: "calculos", label: "Cálculos", color: "#ec4899", icon: "🔢" },
+  { id: "audiencias", label: "Audiências", color: "#14b8a6", icon: "🏛️" },
+  { id: "monitoramento", label: "Monitoramento", color: "#f97316", icon: "🔍" },
+  { id: "financeiro", label: "Financeiro", color: "#2ecc71", icon: "💰" },
+  { id: "conversao", label: "Conversão", color: "#e74c3c", icon: "🔁" },
+  { id: "criacao", label: "Criação", color: "#e67e22", icon: "🎨" },
+  { id: "tech", label: "Tech", color: "#9b59b6", icon: "⚙️" },
+  { id: "compliance", label: "Compliance", color: "#0ea5e9", icon: "🛡️" },
+];
+
+const PRIORITY_COLORS: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#10b981" };
+const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#3b82f6", review: "#a855f7", completed: "#10b981", cancelled: "#888", approved: "#2dd4a0", rejected: "#ef4444" };
+
+interface DeptMetric {
+  dept: string;
+  label: string;
+  color: string;
+  icon: string;
+  total: number;
+  pending: number;
+  overdue: number;
+  critical: number;
+  avgLoad: number;
+  bottleneckScore: number; // 0-100
+}
+
+export default function EfficiencyKPIs() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [orchLogs, setOrchLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    const [tasksRes, logsRes] = await Promise.all([
+      supabase.from("agent_tasks").select("*").eq("user_id", user.id),
+      supabase.from("agent_orchestration_log").select("*").order("created_at", { ascending: false }).limit(50),
+    ]);
+    setTasks(tasksRes.data || []);
+    setOrchLogs(logsRes.data || []);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    fetchData();
+    // Realtime
+    const channel = supabase.channel("efficiency_kpis")
+      .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "agent_orchestration_log" }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]);
+
+  // Compute metrics per department
+  const deptMetrics = useMemo<DeptMetric[]>(() => {
+    const now = new Date();
+    return DEPTS.map(d => {
+      const deptTasks = tasks.filter(t => t.task_category === d.id || t.agent_name?.toLowerCase().includes(d.id));
+      const pending = deptTasks.filter(t => t.status === "pending").length;
+      const overdue = deptTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
+      const critical = deptTasks.filter(t => t.priority === "critical").length;
+      const total = deptTasks.length;
+      const avgLoad = total > 0 ? Math.min(100, Math.round((pending + critical * 2) / Math.max(total, 1) * 100)) : 0;
+      const bottleneckScore = Math.min(100, overdue * 15 + critical * 10 + Math.max(0, pending - 5) * 3);
+      return { dept: d.id, label: d.label, color: d.color, icon: d.icon, total, pending, overdue, critical, avgLoad, bottleneckScore };
+    }).sort((a, b) => b.bottleneckScore - a.bottleneckScore);
+  }, [tasks]);
+
+  // Global KPIs
+  const globalKPIs = useMemo(() => {
+    const now = new Date();
+    const total = tasks.length;
+    const pending = tasks.filter(t => t.status === "pending").length;
+    const inProgress = tasks.filter(t => t.status === "in_progress").length;
+    const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
+    const critical = tasks.filter(t => t.priority === "critical").length;
+    const completed = tasks.filter(t => t.status === "completed").length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const bottlenecks = deptMetrics.filter(d => d.bottleneckScore > 30).length;
+    return { total, pending, inProgress, overdue, critical, completed, completionRate, bottlenecks };
+  }, [tasks, deptMetrics]);
+
+  // Priority distribution for pie chart
+  const priorityData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
+    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [tasks]);
+
+  // Bottleneck trend (last 7 days from orchestration logs)
+  const trendData = useMemo(() => {
+    const days: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      days[key] = 0;
+    }
+    orchLogs.forEach(log => {
+      if (typeof log.action === "string" && log.action.startsWith("bottleneck_")) {
+        const d = new Date(log.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        if (days[d] !== undefined) days[d]++;
+      }
+    });
+    return Object.entries(days).map(([date, alerts]) => ({ date, alerts }));
+  }, [orchLogs]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#09090f", color: "#c9a84c" }}>
+        Carregando métricas de eficiência...
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Inter', sans-serif" }}>
+      {/* Header */}
+      <header style={{
+        display: "flex", alignItems: "center", gap: 16, padding: "16px 24px",
+        borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)",
+        flexWrap: "wrap",
+      }}>
+        <button onClick={() => navigate("/sistema")} style={{
+          background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
+          borderRadius: 8, padding: "6px 14px", color: "#c9a84c", cursor: "pointer", fontSize: 13, fontWeight: 500,
+        }}>← Voltar ao Sistema</button>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#ff6b6b", margin: 0 }}>
+            🧠 Central de Eficiência — KPIs em Tempo Real
+          </h1>
+          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Métricas de gargalo por departamento · Atualização automática</p>
+        </div>
+      </header>
+
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
+        {/* Global KPIs */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 28 }}>
+          {[
+            { label: "Total Tarefas", value: globalKPIs.total, color: "#c9a84c" },
+            { label: "Pendentes", value: globalKPIs.pending, color: "#f59e0b" },
+            { label: "Em Andamento", value: globalKPIs.inProgress, color: "#3b82f6" },
+            { label: "Vencidas", value: globalKPIs.overdue, color: globalKPIs.overdue > 0 ? "#ef4444" : "#2dd4a0" },
+            { label: "Críticas", value: globalKPIs.critical, color: globalKPIs.critical > 0 ? "#ef4444" : "#2dd4a0" },
+            { label: "Concluídas", value: globalKPIs.completed, color: "#2dd4a0" },
+            { label: "Taxa Conclusão", value: `${globalKPIs.completionRate}%`, color: globalKPIs.completionRate > 60 ? "#2dd4a0" : "#f59e0b" },
+            { label: "Gargalos Ativos", value: globalKPIs.bottlenecks, color: globalKPIs.bottlenecks > 3 ? "#ef4444" : "#f59e0b" },
+          ].map(k => (
+            <div key={k.label} style={{
+              padding: "16px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 10, borderLeft: `3px solid ${k.color}`,
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: k.color, fontFamily: "'Cormorant Garamond', serif" }}>{k.value}</div>
+              <div style={{ fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: "0.08em" }}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts row */}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 28 }}>
+          {/* Bottleneck trend */}
+          <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16 }}>📈 Alertas de Gargalo (7 dias)</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ff6b6b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#ff6b6b" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{ fill: "#888", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#888", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} />
+                <Area type="monotone" dataKey="alerts" stroke="#ff6b6b" fill="url(#alertGrad)" strokeWidth={2} name="Alertas" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Priority distribution */}
+          <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16 }}>🎯 Distribuição por Prioridade</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={priorityData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {priorityData.map((entry) => (
+                    <Cell key={entry.name} fill={PRIORITY_COLORS[entry.name] || "#888"} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Department bottleneck cards */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#ff6b6b", marginBottom: 12 }}>
+            🔴 Mapa de Gargalos por Departamento
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+            {deptMetrics.map(d => (
+              <div key={d.dept} style={{
+                padding: 16, borderRadius: 10,
+                background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.05)" : "rgba(255,255,255,0.02)",
+                border: `1px solid ${d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)"}`,
+                borderLeft: `3px solid ${d.color}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 18 }}>{d.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed" }}>{d.label}</div>
+                    <div style={{ fontSize: 10, color: "#888" }}>{d.total} tarefas</div>
+                  </div>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                    background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : d.bottleneckScore > 20 ? "rgba(245,158,11,0.2)" : "rgba(45,212,160,0.2)",
+                    color: d.bottleneckScore > 50 ? "#ff8080" : d.bottleneckScore > 20 ? "#fbbf24" : "#2dd4a0",
+                  }}>
+                    {d.bottleneckScore > 50 ? "🔴 CRÍTICO" : d.bottleneckScore > 20 ? "🟡 ATENÇÃO" : "🟢 OK"}
+                  </div>
+                </div>
+                {/* Bottleneck bar */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#888", marginBottom: 3 }}>
+                    <span>Score de Gargalo</span>
+                    <span>{d.bottleneckScore}/100</span>
+                  </div>
+                  <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{
+                      width: `${d.bottleneckScore}%`, height: "100%", borderRadius: 3,
+                      background: d.bottleneckScore > 50 ? "#ef4444" : d.bottleneckScore > 20 ? "#f59e0b" : "#2dd4a0",
+                      transition: "width 0.5s",
+                    }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
+                  <span style={{ color: "#f59e0b" }}>⏳ {d.pending} pendentes</span>
+                  <span style={{ color: d.overdue > 0 ? "#ef4444" : "#888" }}>⏰ {d.overdue} vencidas</span>
+                  <span style={{ color: d.critical > 0 ? "#ef4444" : "#888" }}>🚨 {d.critical} críticas</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent orchestration logs */}
+        <div style={{
+          marginTop: 24, padding: 20,
+          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 12 }}>📋 Últimos Eventos de Orquestração</div>
+          {orchLogs.length === 0 && (
+            <div style={{ fontSize: 12, color: "#888", textAlign: "center", padding: 20 }}>
+              Nenhum evento de orquestração registrado ainda
+            </div>
+          )}
+          {orchLogs.slice(0, 10).map((log, i) => (
+            <div key={log.id || i} style={{
+              display: "flex", gap: 10, padding: "8px 0", alignItems: "center",
+              borderBottom: i < 9 ? "1px solid rgba(255,255,255,0.04)" : "none",
+            }}>
+              <span style={{
+                fontSize: 9, padding: "2px 6px", borderRadius: 4,
+                background: log.action?.includes("critical") ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
+                color: log.action?.includes("critical") ? "#ff8080" : "#60a5fa",
+                fontFamily: "monospace", whiteSpace: "nowrap",
+              }}>{log.action}</span>
+              <span style={{ fontSize: 11, color: "#aaa", flex: 1 }}>
+                {typeof log.details === "object" && log.details?.message ? String(log.details.message) : JSON.stringify(log.details).slice(0, 80)}
+              </span>
+              <span style={{ fontSize: 9, color: "#666", fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                {new Date(log.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

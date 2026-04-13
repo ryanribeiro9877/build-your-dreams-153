@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 /* ─── TYPES ─── */
 interface Agent {
@@ -17,10 +18,9 @@ interface Agent {
   maxConcurrentTasks: number;
 }
 
-/* ─── AGENTS DATA (mirrors JurisCloudOS) ─── */
-const AGENTS: Agent[] = [
+/* ─── AGENTS DATA ─── */
+const INITIAL_AGENTS: Agent[] = [
   { id: 0, name: "CEO Agent Jus IA", avatar: "👑", color: "#c9a84c", role: "ceo", status: "active", department: ["*","diretoria"], currentTasks: 8, maxConcurrentTasks: 20, description: "Supervisiona todos os diretores e operação global" },
-  // Directors
   { id: 1, name: "Diretor de Recepção", avatar: "👔", color: "#3b82f6", role: "director", status: "active", department: ["recepcao","diretoria"], reportsTo: 0, currentTasks: 3, maxConcurrentTasks: 10 },
   { id: 9, name: "Diretor de Marketing", avatar: "🎯", color: "#f59e0b", role: "director", status: "active", department: ["marketing","diretoria"], reportsTo: 0, currentTasks: 5, maxConcurrentTasks: 10 },
   { id: 102, name: "Diretor Contencioso Cível", avatar: "⚖️", color: "#8b5cf6", role: "director", status: "active", department: ["civel","diretoria"], reportsTo: 0, currentTasks: 4, maxConcurrentTasks: 10 },
@@ -38,7 +38,7 @@ const AGENTS: Agent[] = [
   { id: 320, name: "Diretor de Criação (6.1)", avatar: "🎨", color: "#e67e22", role: "director", status: "active", department: ["criacao","diretoria"], reportsTo: 0, currentTasks: 5, maxConcurrentTasks: 10 },
   { id: 330, name: "Diretor Tech (7.1)", avatar: "⚙️", color: "#9b59b6", role: "director", status: "active", department: ["tech","diretoria"], reportsTo: 0, currentTasks: 4, maxConcurrentTasks: 10 },
   { id: 400, name: "Diretor de Eficiência", avatar: "🧠", color: "#ff6b6b", role: "director", status: "active", department: ["eficiencia","diretoria"], reportsTo: 0, currentTasks: 8, maxConcurrentTasks: 15 },
-  // Managers (sample per director)
+  // Managers
   { id: 2, name: "Ger. Atendimento", avatar: "📞", color: "#3b82f6", role: "manager", status: "active", department: ["recepcao"], reportsTo: 1, currentTasks: 4, maxConcurrentTasks: 8 },
   { id: 100, name: "Ger. Intake", avatar: "📥", color: "#3b82f6", role: "manager", status: "active", department: ["recepcao"], reportsTo: 1, currentTasks: 5, maxConcurrentTasks: 8 },
   { id: 10, name: "Ger. Campanhas", avatar: "📊", color: "#f59e0b", role: "manager", status: "active", department: ["marketing"], reportsTo: 9, currentTasks: 6, maxConcurrentTasks: 8 },
@@ -65,6 +65,7 @@ const AGENTS: Agent[] = [
   { id: 331, name: "Ger. Integrações", avatar: "🔌", color: "#9b59b6", role: "manager", status: "alert", department: ["tech"], reportsTo: 330, currentTasks: 6, maxConcurrentTasks: 8 },
   { id: 332, name: "Ger. Dados Operacionais", avatar: "🗄️", color: "#8e44ad", role: "manager", status: "active", department: ["tech"], reportsTo: 330, currentTasks: 4, maxConcurrentTasks: 8 },
   { id: 333, name: "Ger. Observabilidade", avatar: "👁️", color: "#8e44ad", role: "manager", status: "alert", department: ["tech"], reportsTo: 330, currentTasks: 7, maxConcurrentTasks: 10 },
+  // Efficiency specialists
   { id: 401, name: "Detector Gargalos Op.", avatar: "🔴", color: "#ff6b6b", role: "specialist", status: "active", department: ["eficiencia"], reportsTo: 400, currentTasks: 30, maxConcurrentTasks: 50 },
   { id: 402, name: "Detector Gargalos Mkt", avatar: "📉", color: "#ff6b6b", role: "specialist", status: "active", department: ["eficiencia"], reportsTo: 400, currentTasks: 12, maxConcurrentTasks: 20 },
   { id: 403, name: "Detector Gargalos Custos", avatar: "💸", color: "#ff6b6b", role: "specialist", status: "active", department: ["eficiencia"], reportsTo: 400, currentTasks: 8, maxConcurrentTasks: 15 },
@@ -95,7 +96,6 @@ function buildTree(agents: Agent[]): TreeNode[] {
   return roots;
 }
 
-/* ─── ROLE LABELS / COLORS ─── */
 const ROLE_STYLE: Record<string, { label: string; bg: string; text: string }> = {
   ceo: { label: "CEO", bg: "rgba(201,168,76,0.2)", text: "#c9a84c" },
   director: { label: "Diretor", bg: "rgba(139,92,246,0.15)", text: "#a78bfa" },
@@ -107,33 +107,52 @@ const ROLE_STYLE: Record<string, { label: string; bg: string; text: string }> = 
   orchestrator: { label: "Orquestrador", bg: "rgba(201,168,76,0.15)", text: "#c9a84c" },
 };
 
-/* ─── NODE COMPONENT ─── */
-function OrgNode({ node, depth, toggleExpand }: { node: TreeNode; depth: number; toggleExpand: (id: number) => void }) {
+/* ─── DRAG & DROP NODE ─── */
+function OrgNode({
+  node, depth, toggleExpand, draggedId, onDragStart, onDragOver, onDrop, dropTargetId,
+}: {
+  node: TreeNode; depth: number; toggleExpand: (id: number) => void;
+  draggedId: number | null; onDragStart: (id: number) => void;
+  onDragOver: (e: React.DragEvent, id: number) => void; onDrop: (targetId: number) => void;
+  dropTargetId: number | null;
+}) {
   const { agent } = node;
   const load = Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
   const rs = ROLE_STYLE[agent.role] || ROLE_STYLE.executor;
   const hasChildren = node.children.length > 0;
+  const isDragging = draggedId === agent.id;
+  const isDropTarget = dropTargetId === agent.id && draggedId !== agent.id;
+  const canDrag = agent.role !== "ceo"; // CEO can't be moved
 
   return (
     <div style={{ marginLeft: depth > 0 ? 24 : 0 }}>
-      {/* Connector line */}
       {depth > 0 && (
         <div style={{ display: "flex", alignItems: "center", marginLeft: -16, marginBottom: -8 }}>
           <div style={{ width: 16, height: 1, background: "rgba(255,255,255,0.08)" }} />
         </div>
       )}
       <div
+        draggable={canDrag}
+        onDragStart={(e) => { if (canDrag) { e.dataTransfer.effectAllowed = "move"; onDragStart(agent.id); } }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOver(e, agent.id); }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(agent.id); }}
         onClick={() => hasChildren && toggleExpand(agent.id)}
         style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "10px 14px", marginBottom: 4,
-          background: depth === 0 ? "rgba(201,168,76,0.06)" : "rgba(255,255,255,0.02)",
-          border: `1px solid ${agent.status === "alert" ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.06)"}`,
-          borderRadius: 10, cursor: hasChildren ? "pointer" : "default",
+          background: isDropTarget ? "rgba(45,212,160,0.12)" : isDragging ? "rgba(201,168,76,0.15)" : depth === 0 ? "rgba(201,168,76,0.06)" : "rgba(255,255,255,0.02)",
+          border: `1px solid ${isDropTarget ? "rgba(45,212,160,0.5)" : agent.status === "alert" ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.06)"}`,
+          borderRadius: 10,
+          cursor: canDrag ? "grab" : hasChildren ? "pointer" : "default",
           borderLeft: `3px solid ${agent.color}`,
           transition: "all 0.2s",
+          opacity: isDragging ? 0.5 : 1,
+          transform: isDropTarget ? "scale(1.02)" : "none",
         }}
       >
+        {canDrag && (
+          <span style={{ fontSize: 10, color: "#555", cursor: "grab", userSelect: "none" }} title="Arraste para mover">⋮⋮</span>
+        )}
         <div style={{
           width: 36, height: 36, borderRadius: 8,
           background: `${agent.color}18`, display: "flex", alignItems: "center", justifyContent: "center",
@@ -164,7 +183,12 @@ function OrgNode({ node, depth, toggleExpand }: { node: TreeNode; depth: number;
         )}
       </div>
       {node.expanded && node.children.map(child => (
-        <OrgNode key={child.agent.id} node={child} depth={depth + 1} toggleExpand={toggleExpand} />
+        <OrgNode
+          key={child.agent.id} node={child} depth={depth + 1}
+          toggleExpand={toggleExpand} draggedId={draggedId}
+          onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}
+          dropTargetId={dropTargetId}
+        />
       ))}
     </div>
   );
@@ -174,7 +198,7 @@ function OrgNode({ node, depth, toggleExpand }: { node: TreeNode; depth: number;
 function StatsBar({ agents }: { agents: Agent[] }) {
   const directors = agents.filter(a => a.role === "director").length;
   const managers = agents.filter(a => a.role === "manager").length;
-  const others = agents.length - 1 - directors - managers; // -1 for CEO
+  const others = agents.length - 1 - directors - managers;
   const totalLoad = Math.round(agents.reduce((s, a) => s + a.currentTasks, 0) / agents.reduce((s, a) => s + a.maxConcurrentTasks, 0) * 100);
 
   const stats = [
@@ -204,9 +228,16 @@ function StatsBar({ agents }: { agents: Agent[] }) {
 /* ─── PAGE ─── */
 export default function OrgChart() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [tree, setTree] = useState(() => buildTree(AGENTS));
-  const [filter, setFilter] = useState("");
+  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
+  const [tree, setTree] = useState(() => buildTree(INITIAL_AGENTS));
+  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null);
+  const [moveLog, setMoveLog] = useState<string[]>([]);
+
+  const rebuildTree = useCallback((newAgents: Agent[]) => {
+    setAgents(newAgents);
+    setTree(buildTree(newAgents));
+  }, []);
 
   const toggleExpand = useCallback((id: number) => {
     function toggle(nodes: TreeNode[]): TreeNode[] {
@@ -232,29 +263,81 @@ export default function OrgChart() {
     setTree(prev => collapse(prev));
   }, []);
 
+  const handleDragStart = useCallback((id: number) => setDraggedId(id), []);
+
+  const handleDragOver = useCallback((_e: React.DragEvent, id: number) => {
+    setDropTargetId(id);
+  }, []);
+
+  const handleDrop = useCallback((targetId: number) => {
+    if (draggedId === null || draggedId === targetId) {
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    // Prevent dropping onto own descendant
+    function isDescendant(agentsList: Agent[], parentId: number, childId: number): boolean {
+      const directChildren = agentsList.filter(a => a.reportsTo === parentId);
+      for (const child of directChildren) {
+        if (child.id === childId) return true;
+        if (isDescendant(agentsList, child.id, childId)) return true;
+      }
+      return false;
+    }
+
+    if (isDescendant(agents, draggedId, targetId)) {
+      toast.error("Não é possível mover um agente para dentro de seus subordinados");
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    const draggedAgent = agents.find(a => a.id === draggedId);
+    const targetAgent = agents.find(a => a.id === targetId);
+    if (!draggedAgent || !targetAgent) return;
+
+    const oldSuperior = agents.find(a => a.id === draggedAgent.reportsTo);
+    const newAgents = agents.map(a => {
+      if (a.id === draggedId) return { ...a, reportsTo: targetId };
+      return a;
+    });
+
+    rebuildTree(newAgents);
+
+    const logEntry = `${draggedAgent.avatar} ${draggedAgent.name} movido de "${oldSuperior?.name || 'CEO'}" → "${targetAgent.name}"`;
+    setMoveLog(prev => [logEntry, ...prev].slice(0, 20));
+    toast.success(`Agente reorganizado: ${draggedAgent.name} agora reporta a ${targetAgent.name}`);
+
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, agents, rebuildTree]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, []);
+
   return (
-    <div style={{
-      minHeight: "100vh", background: "#09090f", color: "#e8e8ed",
-      fontFamily: "'Inter', sans-serif",
-    }}>
+    <div
+      style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Inter', sans-serif" }}
+      onDragEnd={handleDragEnd}
+    >
       {/* Header */}
       <header style={{
         display: "flex", alignItems: "center", gap: 16, padding: "16px 24px",
         borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)",
+        flexWrap: "wrap",
       }}>
-        <button
-          onClick={() => navigate("/sistema")}
-          style={{
-            background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
-            borderRadius: 8, padding: "6px 14px", color: "#c9a84c", cursor: "pointer",
-            fontSize: 13, fontWeight: 500,
-          }}
-        >← Voltar ao Sistema</button>
+        <button onClick={() => navigate("/sistema")} style={{
+          background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
+          borderRadius: 8, padding: "6px 14px", color: "#c9a84c", cursor: "pointer", fontSize: 13, fontWeight: 500,
+        }}>← Voltar ao Sistema</button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#c9a84c", margin: 0 }}>
             Organograma Agent Jus IA
           </h1>
-          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Hierarquia completa: CEO → Diretores → Gerentes → Agentes</p>
+          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Arraste agentes entre departamentos para reorganizar a hierarquia</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={expandAll} style={{ background: "rgba(45,212,160,0.1)", border: "1px solid rgba(45,212,160,0.2)", borderRadius: 6, padding: "5px 12px", color: "#2dd4a0", cursor: "pointer", fontSize: 11 }}>
@@ -263,44 +346,68 @@ export default function OrgChart() {
           <button onClick={collapseAll} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ff8080", cursor: "pointer", fontSize: 11 }}>
             Recolher Tudo
           </button>
+          <button onClick={() => rebuildTree(INITIAL_AGENTS)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "5px 12px", color: "#60a5fa", cursor: "pointer", fontSize: 11 }}>
+            Resetar
+          </button>
         </div>
       </header>
 
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
-        <StatsBar agents={AGENTS} />
+      <div style={{ display: "flex", gap: 24, maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
+        {/* Main tree */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <StatsBar agents={agents} />
 
-        {/* Filter */}
-        <div style={{ marginBottom: 16 }}>
-          <input
-            placeholder="Filtrar por nome do agente..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            style={{
-              width: "100%", padding: "10px 14px", borderRadius: 8,
-              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
-              color: "#e8e8ed", fontSize: 13, outline: "none",
-            }}
-          />
-        </div>
+          {/* Drag hint */}
+          {draggedId !== null && (
+            <div style={{
+              padding: "8px 16px", marginBottom: 12, borderRadius: 8,
+              background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
+              fontSize: 12, color: "#c9a84c", textAlign: "center",
+            }}>
+              🔄 Solte sobre outro agente para mover a hierarquia
+            </div>
+          )}
 
-        {/* Tree */}
-        <div>
           {tree.map(node => (
-            <OrgNode key={node.agent.id} node={node} depth={0} toggleExpand={toggleExpand} />
+            <OrgNode
+              key={node.agent.id} node={node} depth={0}
+              toggleExpand={toggleExpand} draggedId={draggedId}
+              onDragStart={handleDragStart} onDragOver={handleDragOver}
+              onDrop={handleDrop} dropTargetId={dropTargetId}
+            />
           ))}
-        </div>
 
-        {/* Legend */}
-        <div style={{ marginTop: 32, padding: 16, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Legenda de Papéis</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {Object.entries(ROLE_STYLE).map(([key, val]) => (
-              <span key={key} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: val.bg, color: val.text, fontWeight: 600 }}>
-                {val.label}
-              </span>
-            ))}
+          {/* Legend */}
+          <div style={{ marginTop: 32, padding: 16, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Legenda de Papéis</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {Object.entries(ROLE_STYLE).map(([key, val]) => (
+                <span key={key} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: val.bg, color: val.text, fontWeight: 600 }}>
+                  {val.label}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Move log sidebar */}
+        {moveLog.length > 0 && (
+          <div style={{
+            width: 280, flexShrink: 0, padding: 16,
+            background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 10, height: "fit-content", position: "sticky", top: 24,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#c9a84c", marginBottom: 12 }}>📋 Log de Movimentações</div>
+            {moveLog.map((entry, i) => (
+              <div key={i} style={{
+                fontSize: 11, color: "#aaa", padding: "6px 0",
+                borderBottom: i < moveLog.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+              }}>
+                {entry}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
