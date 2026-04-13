@@ -73,13 +73,15 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [stateFilter, setStateFilter] = useState("todos");
   const [page, setPage] = useState(1);
+  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [processCounts, setProcessCounts] = useState<Record<string, number>>({});
 
   const [form, setForm] = useState({
     full_name: "", cpf: "", rg: "", email: "", phone: "",
     address: "", city: "", state: "BA", zip_code: "", notes: "",
   });
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { fetchClients(); fetchCounts(); }, []);
 
   async function fetchClients() {
     setLoading(true);
@@ -87,6 +89,17 @@ export default function Clients() {
     if (error) toast.error("Erro ao carregar clientes");
     else setClients(data || []);
     setLoading(false);
+  }
+
+  async function fetchCounts() {
+    const { data: tasks } = await supabase.from("agent_tasks").select("client_name");
+    const { data: processes } = await supabase.from("processes").select("client_name");
+    const tc: Record<string, number> = {};
+    const pc: Record<string, number> = {};
+    tasks?.forEach(t => { if (t.client_name) tc[t.client_name] = (tc[t.client_name] || 0) + 1; });
+    processes?.forEach(p => { if (p.client_name) pc[p.client_name] = (pc[p.client_name] || 0) + 1; });
+    setTaskCounts(tc);
+    setProcessCounts(pc);
   }
 
   async function fetchDocuments(clientId: string) {
@@ -268,10 +281,20 @@ export default function Clients() {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)", marginBottom: 4 }}>{client.full_name}</div>
-                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap", alignItems: "center" }}>
                   {client.cpf && <span>CPF: {client.cpf}</span>}
                   {client.phone && <span>📞 {client.phone}</span>}
                   {client.city && <span>📍 {client.city}/{client.state}</span>}
+                  {(taskCounts[client.full_name] || 0) > 0 && (
+                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>
+                      📋 {taskCounts[client.full_name]} tarefa{taskCounts[client.full_name] > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {(processCounts[client.full_name] || 0) > 0 && (
+                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(168,85,247,0.15)", color: "#a855f7", fontWeight: 600 }}>
+                      ⚖️ {processCounts[client.full_name]} processo{processCounts[client.full_name] > 1 ? "s" : ""}
+                    </span>
+                  )}
                   <span style={{
                     padding: "1px 8px", borderRadius: 4, fontSize: 9, textTransform: "uppercase",
                     background: client.status === "ativo" ? "rgba(45,212,160,0.15)" : client.status === "em_analise" ? "rgba(251,191,36,0.15)" : "rgba(239,68,68,0.15)",
