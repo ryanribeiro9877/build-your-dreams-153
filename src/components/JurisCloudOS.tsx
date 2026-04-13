@@ -172,11 +172,19 @@ const AGENTS: Agent[] = [
   // ══════════════════════════════════════════════════════════════
   // ── COBRANÇAS (5 agentes) ── Diretor → Gerente → Times
   // ══════════════════════════════════════════════════════════════
-  { id: 112, name: "Diretor Financeiro", status: "active", avatar: "💳", color: "#84cc16", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve"], department: ["cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 112 },
-  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 62 },
+  // ══════════════════════════════════════════════════════════════
+  // ── FINANCEIRO (4.1) - Diretor Financeiro do ClickUp ── Substituiu "Cobranças"
+  // ══════════════════════════════════════════════════════════════
+  { id: 112, name: "Diretor Financeiro (4.1)", status: "active", avatar: "💰", color: "#2ecc71", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["financeiro","cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0, description: "Visão total da operação financeira. Contas a pagar, receber, conciliação, custos, comissões, eficiência e alertas de redução de gasto." },
+  { id: 200, name: "Ger. Contas a Pagar (4.1.A)", status: "active", avatar: "💸", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 112 },
+  { id: 201, name: "Ger. Contas a Receber (4.1.B)", status: "active", avatar: "💵", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 112 },
+  { id: 202, name: "Ger. Conciliação Financeira (4.1.C)", status: "active", avatar: "🔄", color: "#27ae60", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 112 },
+  { id: 203, name: "Ger. Participações e Rateios (4.1.D)", status: "active", avatar: "🤝", color: "#27ae60", role: "manager", permissions: ["read","write","calculate"], department: ["financeiro"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2, reportsTo: 112 },
+  { id: 204, name: "Ger. Alertas Financeiros (4.1.E)", status: "alert", avatar: "🚨", color: "#e74c3c", role: "manager", permissions: ["read","write","approve","monitor"], department: ["financeiro","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 112, description: "Monitora anomalias de custos, receitas e gera alertas preventivos de gasto" },
+  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve"], department: ["cobrancas","financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 201 },
+  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 202 },
   { id: 64, name: "Negociador de Honorários", status: "active", avatar: "🤝", color: "#a3e635", role: "executor", permissions: ["read","write","contact_client"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 62 },
-  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 62 },
+  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 202 },
 
   // ══════════════════════════════════════════════════════════════
   // ── COMPLIANCE (5 agentes) ── Diretor → Gerente → Times
