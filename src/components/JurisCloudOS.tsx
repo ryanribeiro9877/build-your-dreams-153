@@ -1171,6 +1171,7 @@ export default function JurisCloudOS() {
                 <span>{a.text.slice(0, 28)}...</span>
               </div>
             ))}
+            <NotificationCenter />
             <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema">
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
