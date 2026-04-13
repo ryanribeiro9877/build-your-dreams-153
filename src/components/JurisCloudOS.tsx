@@ -1053,7 +1053,7 @@ export default function JurisCloudOS() {
               <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
               <span className="jc-nav-label">Meu Perfil</span>
             </div>
-            <div className="jc-nav-item" onClick={() => navigate("/site")}>
+            <div className="jc-nav-item" onClick={() => navigate("/")}>
               <span className="jc-nav-icon" style={{ color: "#06b6d4" }}>🌐</span>
               <span className="jc-nav-label">Voltar ao Site</span>
             </div>
