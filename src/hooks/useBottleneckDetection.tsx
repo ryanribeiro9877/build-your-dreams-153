@@ -29,10 +29,20 @@ export function useBottleneckDetection() {
     if (!user || initialized.current) return;
     initialized.current = true;
 
+    const saveNotification = async (alert: BottleneckAlert) => {
+      await supabase.from("bottleneck_notifications").insert({
+        user_id: user.id,
+        alert_type: alert.type,
+        severity: alert.severity,
+        department: alert.department,
+        message: alert.message,
+        agent_name: alert.agentName || null,
+      });
+    };
+
     const detectBottlenecks = async () => {
       const alerts: BottleneckAlert[] = [];
 
-      // 1. Check for overloaded task categories (>80% tasks pending/in_progress)
       const { data: tasks } = await supabase
         .from("agent_tasks")
         .select("task_category, status, priority, agent_name, due_date, title")
@@ -40,7 +50,6 @@ export function useBottleneckDetection() {
         .not("status", "in", '("completed","cancelled")');
 
       if (tasks && tasks.length > 0) {
-        // Group by category
         const byCategory: Record<string, typeof tasks> = {};
         tasks.forEach(t => {
           const cat = t.task_category || "geral";
@@ -48,7 +57,6 @@ export function useBottleneckDetection() {
           byCategory[cat].push(t);
         });
 
-        // Detect overloaded categories
         Object.entries(byCategory).forEach(([cat, catTasks]) => {
           const pending = catTasks.filter(t => t.status === "pending").length;
           if (pending > 10) {
@@ -61,7 +69,6 @@ export function useBottleneckDetection() {
           }
         });
 
-        // Detect critical tasks without agent
         const criticalNoAgent = tasks.filter(t => t.priority === "critical" && !t.agent_name);
         if (criticalNoAgent.length > 0) {
           alerts.push({
@@ -72,7 +79,6 @@ export function useBottleneckDetection() {
           });
         }
 
-        // Detect overdue tasks
         const now = new Date();
         const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < now);
         if (overdue.length > 5) {
@@ -91,7 +97,6 @@ export function useBottleneckDetection() {
           });
         }
 
-        // Detect agents with too many tasks
         const byAgent: Record<string, number> = {};
         tasks.forEach(t => {
           if (t.agent_name) {
@@ -111,7 +116,7 @@ export function useBottleneckDetection() {
         });
       }
 
-      // Log alerts to orchestration log
+      // Log to orchestration + save persistent notifications
       for (const alert of alerts) {
         await supabase.from("agent_orchestration_log").insert({
           action: `bottleneck_${alert.type}`,
@@ -123,9 +128,10 @@ export function useBottleneckDetection() {
             agent_name: alert.agentName,
           },
         });
+        await saveNotification(alert);
       }
 
-      // Display alerts as toasts
+      // Display toasts
       alerts.forEach(alert => {
         const id = `bottleneck-${alert.type}-${alert.department}`;
         if (alert.severity === "critical") {
@@ -146,14 +152,12 @@ export function useBottleneckDetection() {
       return alerts;
     };
 
-    // Listen to task changes in real-time for immediate bottleneck detection
     const channel = supabase
       .channel("bottleneck_monitor")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, async (payload) => {
         const task = payload.new as any;
         if (!task) return;
 
-        // Immediate alert for critical priority new tasks
         if (payload.eventType === "INSERT" && task.priority === "critical") {
           await supabase.from("agent_orchestration_log").insert({
             action: "bottleneck_realtime_critical",
@@ -164,9 +168,14 @@ export function useBottleneckDetection() {
               detected_at: new Date().toISOString(),
             },
           });
+          await saveNotification({
+            type: "overload",
+            severity: "critical",
+            department: "eficiencia",
+            message: `Tarefa crítica criada: ${task.title}`,
+          });
         }
 
-        // Check if task just became overdue
         if (task.due_date && new Date(task.due_date) < new Date() && task.status !== "completed" && task.status !== "cancelled") {
           toast.error(`🧠 Eficiência detectou prazo vencido: ${task.title}`, {
             duration: 10000,
@@ -176,7 +185,6 @@ export function useBottleneckDetection() {
       })
       .subscribe();
 
-    // Run initial check + periodic (every 5 minutes)
     detectBottlenecks();
     intervalRef.current = setInterval(detectBottlenecks, 5 * 60 * 1000);
 
