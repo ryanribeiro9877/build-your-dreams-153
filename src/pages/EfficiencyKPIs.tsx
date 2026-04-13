@@ -99,23 +99,22 @@ export default function EfficiencyKPIs() {
   // Global KPIs
   const globalKPIs = useMemo(() => {
     const now = new Date();
-    const total = tasks.length;
-    const pending = tasks.filter(t => t.status === "pending").length;
-    const inProgress = tasks.filter(t => t.status === "in_progress").length;
-    const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
-    const critical = tasks.filter(t => t.priority === "critical").length;
-    const completed = tasks.filter(t => t.status === "completed").length;
+    const total = filteredTasks.length;
+    const pending = filteredTasks.filter(t => t.status === "pending").length;
+    const inProgress = filteredTasks.filter(t => t.status === "in_progress").length;
+    const overdue = filteredTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
+    const critical = filteredTasks.filter(t => t.priority === "critical").length;
+    const completed = filteredTasks.filter(t => t.status === "completed").length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     const bottlenecks = deptMetrics.filter(d => d.bottleneckScore > 30).length;
     return { total, pending, inProgress, overdue, critical, completed, completionRate, bottlenecks };
-  }, [tasks, deptMetrics]);
+  }, [filteredTasks, deptMetrics]);
 
-  // Priority distribution for pie chart
   const priorityData = useMemo(() => {
     const counts: Record<string, number> = {};
-    tasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
+    filteredTasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Bottleneck trend (last 7 days from orchestration logs)
   const trendData = useMemo(() => {
