@@ -15,8 +15,11 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 const DEPARTMENTS = [
   { id: "assistente",    label: "Meu Assistente",          icon: "◈",  color: "#c9a84c", badge: 8  },
   { id: "diretoria",     label: "Diretoria / CEO",         icon: "👑", color: "#c9a84c", badge: 0  },
+  { id: "eficiencia",    label: "🧠 Central de Eficiência",icon: "🧠", color: "#ff6b6b", badge: 5  },
+  { id: "conversao",     label: "Conversão (2.1)",         icon: "🔁", color: "#e74c3c", badge: 7  },
   { id: "recepcao",      label: "Recepção",                icon: "🏢", color: "#3b82f6", badge: 6  },
   { id: "marketing",     label: "Marketing",               icon: "📢", color: "#f59e0b", badge: 5  },
+  { id: "criacao",       label: "Criação (6.1)",           icon: "🎨", color: "#e67e22", badge: 4  },
   { id: "civel",         label: "Contencioso Cível",       icon: "⚖️", color: "#8b5cf6", badge: 12 },
   { id: "trabalhista",   label: "Contencioso Trabalhista", icon: "👷", color: "#ef4444", badge: 7  },
   { id: "tributario",    label: "Contencioso Tributário",  icon: "💰", color: "#10b981", badge: 4  },
@@ -24,7 +27,9 @@ const DEPARTMENTS = [
   { id: "calculos",      label: "Cálculos Jurídicos",     icon: "🔢", color: "#ec4899", badge: 3  },
   { id: "audiencias",    label: "Audiências",              icon: "🏛️", color: "#14b8a6", badge: 11 },
   { id: "monitoramento", label: "Monitoramento Processual",icon: "🔍", color: "#f97316", badge: 15 },
+  { id: "financeiro",    label: "Financeiro (4.1)",        icon: "💰", color: "#2ecc71", badge: 6  },
   { id: "cobrancas",     label: "Cobranças",               icon: "💳", color: "#84cc16", badge: 2  },
+  { id: "tech",          label: "Tech (7.1)",              icon: "⚙️", color: "#9b59b6", badge: 3  },
   { id: "compliance",    label: "Compliance",              icon: "🛡️", color: "#0ea5e9", badge: 1  },
   { id: "familia",       label: "Família e Sucessões",     icon: "👨‍👩‍👧‍👦", color: "#a855f7", badge: 3  },
 ];
