@@ -187,7 +187,7 @@ export default function Clients() {
     }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button onClick={() => navigate("/")} style={{
+        <button onClick={() => navigate("/sistema")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
           fontFamily: "'DM Sans', sans-serif",

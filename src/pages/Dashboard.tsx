@@ -119,7 +119,7 @@ export default function Dashboard() {
             Visão geral em tempo real · {tasks.length} tarefas
           </p>
         </div>
-        <button onClick={() => navigate("/")} style={{
+        <button onClick={() => navigate("/sistema")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border, #1e1e2e)",
           background: "transparent", color: "var(--gold, #c9a84c)", cursor: "pointer",
           fontSize: 12, fontFamily: "'DM Sans', sans-serif",
