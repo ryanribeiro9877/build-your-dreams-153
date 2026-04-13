@@ -19,6 +19,21 @@ const STATS = [
   { value: "24/7", label: "Monitoramento" },
 ];
 
+const TESTIMONIALS = [
+  { name: "Dr. Marcos Oliveira", role: "Sócio Fundador — Oliveira & Associados", text: "Com o Agent Jus IA, reduzimos em 70% o tempo de confecção de peças. Nossos advogados agora focam em estratégia, não em burocracia.", avatar: "👨‍⚖️" },
+  { name: "Dra. Ana Carolina Souza", role: "Diretora Jurídica — TechLaw SP", text: "O monitoramento de prazos é impecável. Desde que adotamos, zero prazos perdidos. Os agentes de IA são como ter uma equipe extra 24/7.", avatar: "👩‍⚖️" },
+  { name: "Dr. Rafael Lima", role: "Advogado Trabalhista — Lima Advocacia", text: "A orquestração inteligente distribui as tarefas perfeitamente. Triplicamos nossa capacidade de atendimento sem contratar mais gente.", avatar: "👨‍💼" },
+];
+
+const INTEGRATIONS = [
+  { name: "Tribunais de Justiça", icon: "🏛️", desc: "Integração direta com PJe, ESAJ e portais de todos os tribunais estaduais e federais." },
+  { name: "WhatsApp Business", icon: "💬", desc: "Comunicação automatizada com clientes via WhatsApp para atualizações e coleta de documentos." },
+  { name: "Google Workspace", icon: "📧", desc: "Sincronização com Gmail, Calendar e Drive para gestão completa de agendas e documentos." },
+  { name: "Certificado Digital", icon: "🔐", desc: "Assinatura digital integrada para protocolo e peticionamento eletrônico instantâneo." },
+  { name: "BI & Analytics", icon: "📈", desc: "Dashboards avançados com métricas de produtividade, performance e resultados financeiros." },
+  { name: "Cálculos Jurídicos", icon: "🔢", desc: "Motor de cálculos trabalhistas, previdenciários e cíveis com atualização automática de índices." },
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
@@ -44,40 +59,24 @@ export default function LandingPage() {
           <span style={{ fontSize: 28, fontWeight: 800, color: "#c9a84c" }}>⚖️ Agent Jus IA</span>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
-          <button
-            onClick={() => navigate("/auth")}
-            style={{
-              background: "transparent", border: "1px solid rgba(201,168,76,0.3)",
-              color: "#c9a84c", borderRadius: 8, padding: "10px 24px",
-              cursor: "pointer", fontSize: 14, fontWeight: 600,
-            }}
-          >
-            Entrar
-          </button>
-          <button
-            onClick={() => navigate("/auth")}
-            style={{
-              background: "linear-gradient(135deg, #c9a84c, #a8872e)",
-              border: "none", color: "#09090f", borderRadius: 8,
-              padding: "10px 24px", cursor: "pointer",
-              fontSize: 14, fontWeight: 700,
-            }}
-          >
-            Começar Agora
-          </button>
+          <button onClick={() => navigate("/auth")} style={{
+            background: "transparent", border: "1px solid rgba(201,168,76,0.3)",
+            color: "#c9a84c", borderRadius: 8, padding: "10px 24px",
+            cursor: "pointer", fontSize: 14, fontWeight: 600,
+          }}>Entrar</button>
+          <button onClick={() => navigate("/auth")} style={{
+            background: "linear-gradient(135deg, #c9a84c, #a8872e)",
+            border: "none", color: "#09090f", borderRadius: 8,
+            padding: "10px 24px", cursor: "pointer", fontSize: 14, fontWeight: 700,
+          }}>Começar Agora</button>
         </div>
       </nav>
 
       {/* Hero */}
       <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        {/* 3D Background */}
         <div style={{ position: "absolute", inset: 0, opacity: 0.5 }}>
-          <Suspense fallback={null}>
-            <AgentScene3D />
-          </Suspense>
+          <Suspense fallback={null}><AgentScene3D /></Suspense>
         </div>
-
-        {/* Gradient overlays */}
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, transparent 30%, #09090f 80%)" }} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 200, background: "linear-gradient(to top, #09090f, transparent)" }} />
 
@@ -86,15 +85,11 @@ export default function LandingPage() {
             display: "inline-block", marginBottom: 20, padding: "6px 20px",
             borderRadius: 50, fontSize: 13, fontWeight: 600,
             background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", color: "#c9a84c",
-          }}>
-            🚀 Humano + IA = Resultados Extraordinários
-          </div>
+          }}>🚀 Humano + IA = Resultados Extraordinários</div>
 
           <h1 style={{ fontSize: "clamp(36px, 6vw, 64px)", fontWeight: 800, lineHeight: 1.1, margin: "0 0 20px" }}>
             <span style={{ color: "#f0ead6" }}>Revolucione a</span><br />
-            <span style={{ background: "linear-gradient(135deg, #c9a84c, #e8d48b, #c9a84c)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              Gestão Jurídica
-            </span><br />
+            <span style={{ background: "linear-gradient(135deg, #c9a84c, #e8d48b, #c9a84c)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Gestão Jurídica</span><br />
             <span style={{ color: "#f0ead6" }}>com Inteligência Artificial</span>
           </h1>
 
@@ -103,29 +98,17 @@ export default function LandingPage() {
           </p>
 
           <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <button
-              onClick={() => navigate("/auth")}
-              style={{
-                background: "linear-gradient(135deg, #c9a84c, #b8942e)",
-                color: "#09090f", border: "none", borderRadius: 12,
-                padding: "16px 40px", fontSize: 16, fontWeight: 700,
-                cursor: "pointer", boxShadow: "0 8px 30px rgba(201,168,76,0.3)",
-              }}
-            >
-              🚀 Experimentar Gratuitamente
-            </button>
-            <button
-              onClick={() => {
-                document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
-              }}
-              style={{
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-                color: "#f0ead6", borderRadius: 12, padding: "16px 32px",
-                fontSize: 16, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Conhecer Mais ↓
-            </button>
+            <button onClick={() => navigate("/auth")} style={{
+              background: "linear-gradient(135deg, #c9a84c, #b8942e)",
+              color: "#09090f", border: "none", borderRadius: 12,
+              padding: "16px 40px", fontSize: 16, fontWeight: 700,
+              cursor: "pointer", boxShadow: "0 8px 30px rgba(201,168,76,0.3)",
+            }}>🚀 Experimentar Gratuitamente</button>
+            <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} style={{
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#f0ead6", borderRadius: 12, padding: "16px 32px",
+              fontSize: 16, fontWeight: 600, cursor: "pointer",
+            }}>Conhecer Mais ↓</button>
           </div>
         </div>
       </section>
@@ -145,21 +128,16 @@ export default function LandingPage() {
       {/* Features */}
       <section id="features" style={{ padding: "100px 24px", maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 60 }}>
-          <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: 0 }}>
-            O Poder da Parceria Humano + IA
-          </h2>
+          <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: 0 }}>O Poder da Parceria Humano + IA</h2>
           <p style={{ color: "#94a3b8", fontSize: 16, marginTop: 12, maxWidth: 600, margin: "12px auto 0" }}>
             Cada profissional do seu escritório trabalha lado a lado com agentes de IA especializados.
           </p>
         </div>
-
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
           {FEATURES.map((f) => (
             <div key={f.title} style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(201,168,76,0.12)",
-              borderRadius: 16, padding: 28,
-              transition: "all 0.3s",
+              background: "rgba(255,255,255,0.02)", border: "1px solid rgba(201,168,76,0.12)",
+              borderRadius: 16, padding: 28, transition: "all 0.3s",
             }}
             onMouseOver={(e) => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.35)"; e.currentTarget.style.background = "rgba(201,168,76,0.04)"; }}
             onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.12)"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
@@ -172,12 +150,73 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Testimonials */}
+      <section style={{ padding: "100px 24px", background: "rgba(201,168,76,0.02)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 60 }}>
+            <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: 0 }}>O Que Nossos Clientes Dizem</h2>
+            <p style={{ color: "#94a3b8", fontSize: 16, marginTop: 12 }}>Escritórios que já revolucionaram sua gestão com IA</p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 28 }}>
+            {TESTIMONIALS.map((t) => (
+              <div key={t.name} style={{
+                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(201,168,76,0.12)",
+                borderRadius: 20, padding: 32, position: "relative",
+              }}>
+                <div style={{ fontSize: 48, opacity: 0.15, position: "absolute", top: 16, right: 24, color: "#c9a84c" }}>"</div>
+                <p style={{ fontSize: 15, color: "#c8c8d0", lineHeight: 1.8, margin: "0 0 24px", fontStyle: "italic" }}>"{t.text}"</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: "50%",
+                    background: "linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05))",
+                    border: "2px solid rgba(201,168,76,0.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+                  }}>{t.avatar}</div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#e2d5a0" }}>{t.name}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>{t.role}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Integrations */}
+      <section style={{ padding: "100px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 60 }}>
+          <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: 0 }}>Integrações Poderosas</h2>
+          <p style={{ color: "#94a3b8", fontSize: 16, marginTop: 12 }}>Conectado com as ferramentas que seu escritório já utiliza</p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+          {INTEGRATIONS.map((i) => (
+            <div key={i.name} style={{
+              display: "flex", alignItems: "center", gap: 16, padding: "20px 24px",
+              background: "rgba(255,255,255,0.02)", border: "1px solid rgba(201,168,76,0.1)",
+              borderRadius: 14, transition: "all 0.3s",
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.3)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.borderColor = "rgba(201,168,76,0.1)"; }}
+            >
+              <div style={{
+                width: 50, height: 50, borderRadius: 12, flexShrink: 0,
+                background: "linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.05))",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24,
+              }}>{i.icon}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#e2d5a0" }}>{i.name}</div>
+                <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>{i.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* How it works */}
       <section style={{ padding: "80px 24px", background: "rgba(201,168,76,0.02)" }}>
         <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-          <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: "0 0 50px" }}>
-            Como Funciona
-          </h2>
+          <h2 style={{ fontSize: 36, fontWeight: 800, color: "#c9a84c", margin: "0 0 50px" }}>Como Funciona</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 32 }}>
             {[
               { step: "01", title: "Conecte seu Time", desc: "Cada colaborador recebe acesso personalizado com permissões por papel." },
@@ -206,23 +245,16 @@ export default function LandingPage() {
           background: "linear-gradient(135deg, rgba(201,168,76,0.1), rgba(201,168,76,0.02))",
           border: "1px solid rgba(201,168,76,0.2)",
         }}>
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "#c9a84c", margin: "0 0 16px" }}>
-            Pronto para Revolucionar?
-          </h2>
+          <h2 style={{ fontSize: 32, fontWeight: 800, color: "#c9a84c", margin: "0 0 16px" }}>Pronto para Revolucionar?</h2>
           <p style={{ color: "#94a3b8", fontSize: 16, margin: "0 0 32px", lineHeight: 1.7 }}>
             Junte-se aos escritórios que já triplicaram seus resultados com a parceria Humano + IA.
           </p>
-          <button
-            onClick={() => navigate("/auth")}
-            style={{
-              background: "linear-gradient(135deg, #c9a84c, #b8942e)",
-              color: "#09090f", border: "none", borderRadius: 14,
-              padding: "18px 48px", fontSize: 18, fontWeight: 700,
-              cursor: "pointer", boxShadow: "0 8px 40px rgba(201,168,76,0.35)",
-            }}
-          >
-            ⚖️ Começar Agora — É Grátis
-          </button>
+          <button onClick={() => navigate("/auth")} style={{
+            background: "linear-gradient(135deg, #c9a84c, #b8942e)",
+            color: "#09090f", border: "none", borderRadius: 14,
+            padding: "18px 48px", fontSize: 18, fontWeight: 700,
+            cursor: "pointer", boxShadow: "0 8px 40px rgba(201,168,76,0.35)",
+          }}>⚖️ Começar Agora — É Grátis</button>
         </div>
       </section>
 
