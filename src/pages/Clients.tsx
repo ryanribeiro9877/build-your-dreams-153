@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -18,6 +18,8 @@ const DOCUMENT_TYPES = [
 ];
 
 const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
+const PAGE_SIZE = 20;
 
 interface Client {
   id: string;
@@ -68,8 +70,10 @@ export default function Clients() {
   const [docType, setDocType] = useState("outro");
   const [docNotes, setDocNotes] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [stateFilter, setStateFilter] = useState("todos");
+  const [page, setPage] = useState(1);
 
-  // Form fields
   const [form, setForm] = useState({
     full_name: "", cpf: "", rg: "", email: "", phone: "",
     address: "", city: "", state: "BA", zip_code: "", notes: "",
@@ -94,9 +98,7 @@ export default function Clients() {
   async function handleCreateClient(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    const { error } = await supabase.from("clients").insert({
-      ...form, created_by: user.id,
-    });
+    const { error } = await supabase.from("clients").insert({ ...form, created_by: user.id });
     if (error) { toast.error("Erro ao criar cliente: " + error.message); return; }
     toast.success("Cliente cadastrado com sucesso!");
     setForm({ full_name: "", cpf: "", rg: "", email: "", phone: "", address: "", city: "", state: "BA", zip_code: "", notes: "" });
@@ -109,22 +111,13 @@ export default function Clients() {
     setUploading(true);
     const file = e.target.files[0];
     const filePath = `${selectedClient.id}/${Date.now()}_${file.name}`;
-
     const { error: uploadErr } = await supabase.storage.from("client-documents").upload(filePath, file);
     if (uploadErr) { toast.error("Erro no upload: " + uploadErr.message); setUploading(false); return; }
-
     const { error: dbErr } = await supabase.from("client_documents").insert({
-      client_id: selectedClient.id,
-      document_type: docType,
-      document_name: docName || file.name,
-      file_path: filePath,
-      file_size: file.size,
-      mime_type: file.type,
-      notes: docNotes || null,
-      uploaded_by: user.id,
+      client_id: selectedClient.id, document_type: docType, document_name: docName || file.name,
+      file_path: filePath, file_size: file.size, mime_type: file.type, notes: docNotes || null, uploaded_by: user.id,
     });
     if (dbErr) { toast.error("Erro ao salvar documento: " + dbErr.message); setUploading(false); return; }
-
     toast.success("Documento anexado!");
     setDocName(""); setDocType("outro"); setDocNotes("");
     fetchDocuments(selectedClient.id);
@@ -140,11 +133,39 @@ export default function Clients() {
     if (selectedClient) fetchDocuments(selectedClient.id);
   }
 
-  const filtered = clients.filter(c =>
-    c.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.cpf && c.cpf.includes(search)) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = useMemo(() => {
+    let result = clients;
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter(c =>
+        c.full_name.toLowerCase().includes(s) ||
+        (c.cpf && c.cpf.includes(s)) ||
+        (c.email && c.email.toLowerCase().includes(s)) ||
+        (c.phone && c.phone.includes(s)) ||
+        (c.city && c.city.toLowerCase().includes(s))
+      );
+    }
+    if (statusFilter !== "todos") result = result.filter(c => c.status === statusFilter);
+    if (stateFilter !== "todos") result = result.filter(c => c.state === stateFilter);
+    return result;
+  }, [clients, search, statusFilter, stateFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, statusFilter, stateFilter]);
+
+  const uniqueStates = useMemo(() => {
+    const states = new Set(clients.map(c => c.state).filter(Boolean));
+    return Array.from(states).sort();
+  }, [clients]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    clients.forEach(c => { counts[c.status] = (counts[c.status] || 0) + 1; });
+    return counts;
+  }, [clients]);
 
   return (
     <div style={{
@@ -161,6 +182,9 @@ export default function Clients() {
         <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
           Gestão de Clientes
         </h1>
+        <span style={{ fontSize: 12, color: "var(--text3)", background: "var(--bg2)", padding: "4px 10px", borderRadius: 6 }}>
+          {clients.length} total
+        </span>
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowForm(!showForm)} style={{
           padding: "10px 20px", borderRadius: 8, border: "none", cursor: "pointer",
@@ -206,23 +230,33 @@ export default function Clients() {
         </form>
       )}
 
-      {/* Search */}
-      <div style={{ marginBottom: 16 }}>
+      {/* Search + Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input
-          style={{ ...inputStyle, maxWidth: 400 }}
-          placeholder="🔍 Buscar por nome, CPF ou email..."
+          style={{ ...inputStyle, maxWidth: 320, flex: "1 1 200px" }}
+          placeholder="🔍 Buscar nome, CPF, email, telefone, cidade..."
           value={search} onChange={e => setSearch(e.target.value)}
         />
+        <select style={{ ...inputStyle, maxWidth: 160 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="todos">Todos os status</option>
+          {Object.entries(statusCounts).map(([s, c]) => (
+            <option key={s} value={s}>{s} ({c})</option>
+          ))}
+        </select>
+        <select style={{ ...inputStyle, maxWidth: 120 }} value={stateFilter} onChange={e => setStateFilter(e.target.value)}>
+          <option value="todos">Todos UF</option>
+          {uniqueStates.map(s => <option key={s} value={s!}>{s}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: "var(--text3)" }}>
+          {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         {/* Client list */}
         <div style={{ flex: "1 1 350px", minWidth: 300 }}>
-          <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
-            {filtered.length} clientes
-          </div>
           {loading ? <div style={{ color: "var(--text3)" }}>Carregando...</div> :
-            filtered.map(client => (
+            paginated.map(client => (
               <div
                 key={client.id}
                 onClick={() => { setSelectedClient(client); fetchDocuments(client.id); }}
@@ -234,18 +268,77 @@ export default function Clients() {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)", marginBottom: 4 }}>{client.full_name}</div>
-                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)" }}>
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap" }}>
                   {client.cpf && <span>CPF: {client.cpf}</span>}
                   {client.phone && <span>📞 {client.phone}</span>}
+                  {client.city && <span>📍 {client.city}/{client.state}</span>}
                   <span style={{
                     padding: "1px 8px", borderRadius: 4, fontSize: 9, textTransform: "uppercase",
-                    background: client.status === "ativo" ? "rgba(45,212,160,0.15)" : "rgba(239,68,68,0.15)",
-                    color: client.status === "ativo" ? "#2dd4a0" : "#ef4444",
+                    background: client.status === "ativo" ? "rgba(45,212,160,0.15)" : client.status === "em_analise" ? "rgba(251,191,36,0.15)" : "rgba(239,68,68,0.15)",
+                    color: client.status === "ativo" ? "#2dd4a0" : client.status === "em_analise" ? "#fbbf24" : "#ef4444",
                   }}>{client.status}</span>
                 </div>
               </div>
             ))
           }
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--bg2)", color: page === 1 ? "var(--text3)" : "var(--text1)",
+                  cursor: page === 1 ? "default" : "pointer", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+                  opacity: page === 1 ? 0.5 : 1,
+                }}
+              >← Anterior</button>
+
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 7) {
+                  pageNum = i + 1;
+                } else if (page <= 4) {
+                  pageNum = i + 1;
+                } else if (page >= totalPages - 3) {
+                  pageNum = totalPages - 6 + i;
+                } else {
+                  pageNum = page - 3 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 6, fontSize: 12,
+                      border: pageNum === page ? "1px solid rgba(201,168,76,0.5)" : "1px solid var(--border)",
+                      background: pageNum === page ? "rgba(201,168,76,0.15)" : "var(--bg2)",
+                      color: pageNum === page ? "#c9a84c" : "var(--text2)",
+                      cursor: "pointer", fontWeight: pageNum === page ? 700 : 400,
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >{pageNum}</button>
+                );
+              })}
+
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--bg2)", color: page === totalPages ? "var(--text3)" : "var(--text1)",
+                  cursor: page === totalPages ? "default" : "pointer", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+                  opacity: page === totalPages ? 0.5 : 1,
+                }}
+              >Próxima →</button>
+
+              <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 8 }}>
+                Pág. {page}/{totalPages}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Client Detail + Documents */}
@@ -264,6 +357,7 @@ export default function Clients() {
                 {selectedClient.email && <div><span style={{ color: "var(--text3)" }}>Email:</span> <span style={{ color: "var(--text1)" }}>{selectedClient.email}</span></div>}
                 {selectedClient.phone && <div><span style={{ color: "var(--text3)" }}>Tel:</span> <span style={{ color: "var(--text1)" }}>{selectedClient.phone}</span></div>}
                 {selectedClient.address && <div style={{ gridColumn: "1/-1" }}><span style={{ color: "var(--text3)" }}>Endereço:</span> <span style={{ color: "var(--text1)" }}>{selectedClient.address}, {selectedClient.city}/{selectedClient.state} - {selectedClient.zip_code}</span></div>}
+                {selectedClient.notes && <div style={{ gridColumn: "1/-1" }}><span style={{ color: "var(--text3)" }}>Notas:</span> <span style={{ color: "var(--text2)" }}>{selectedClient.notes}</span></div>}
               </div>
             </div>
 
