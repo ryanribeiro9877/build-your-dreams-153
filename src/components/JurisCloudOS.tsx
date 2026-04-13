@@ -1015,10 +1015,6 @@ export default function JurisCloudOS() {
               onChange={e => setSidebarSearch(e.target.value)}
             />
             </div>
-            <div className="jc-nav-item" onClick={() => navigate("/site")}>
-              <span className="jc-nav-icon" style={{ color: "#06b6d4" }}>🌐</span>
-              <span className="jc-nav-label">Voltar ao Site</span>
-            </div>
 
           <nav className="jc-nav">
             <div className="jc-section-label">Departamentos</div>
