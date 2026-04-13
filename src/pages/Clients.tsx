@@ -73,13 +73,15 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [stateFilter, setStateFilter] = useState("todos");
   const [page, setPage] = useState(1);
+  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [processCounts, setProcessCounts] = useState<Record<string, number>>({});
 
   const [form, setForm] = useState({
     full_name: "", cpf: "", rg: "", email: "", phone: "",
     address: "", city: "", state: "BA", zip_code: "", notes: "",
   });
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { fetchClients(); fetchCounts(); }, []);
 
   async function fetchClients() {
     setLoading(true);
@@ -87,6 +89,17 @@ export default function Clients() {
     if (error) toast.error("Erro ao carregar clientes");
     else setClients(data || []);
     setLoading(false);
+  }
+
+  async function fetchCounts() {
+    const { data: tasks } = await supabase.from("agent_tasks").select("client_name");
+    const { data: processes } = await supabase.from("processes").select("client_name");
+    const tc: Record<string, number> = {};
+    const pc: Record<string, number> = {};
+    tasks?.forEach(t => { if (t.client_name) tc[t.client_name] = (tc[t.client_name] || 0) + 1; });
+    processes?.forEach(p => { if (p.client_name) pc[p.client_name] = (pc[p.client_name] || 0) + 1; });
+    setTaskCounts(tc);
+    setProcessCounts(pc);
   }
 
   async function fetchDocuments(clientId: string) {
