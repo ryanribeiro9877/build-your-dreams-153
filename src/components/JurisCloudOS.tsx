@@ -5,6 +5,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
+import WelcomeScreen from "@/components/WelcomeScreen";
 
 /* ─────────────────────────────────────────────────────────────
    AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
@@ -926,6 +927,7 @@ export default function JurisCloudOS() {
   const { user, userRoles, signOut } = useAuth();
   const { canAccessDepartment, canAccessAdmin, canAccessClients, canEdit, isReadOnly, roleLabel } = usePermissions();
   useRealtimeNotifications();
+  const [showWelcome, setShowWelcome]   = useState(true);
   const [activeDept, setActiveDept]     = useState("assistente");
   const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]         = useState("");
@@ -1112,12 +1114,18 @@ export default function JurisCloudOS() {
             </div>
           </header>
 
-          {/* MESSAGES */}
-          <div className="jc-messages">
-            {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-            {thinking && <ThinkingBubble agent={AGENTS[Math.floor(Math.random() * AGENTS.length)].name} />}
-            <div ref={messagesEndRef} />
-          </div>
+          {/* MESSAGES / WELCOME */}
+          {showWelcome ? (
+            <div className="jc-messages">
+              <WelcomeScreen onDismiss={() => setShowWelcome(false)} />
+            </div>
+          ) : (
+            <div className="jc-messages">
+              {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+              {thinking && <ThinkingBubble agent={AGENTS[Math.floor(Math.random() * AGENTS.length)].name} />}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
 
           {/* INPUT */}
           <div className="jc-input-area">
