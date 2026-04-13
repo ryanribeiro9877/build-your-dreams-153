@@ -161,6 +161,50 @@ export default function EfficiencyKPIs() {
         </div>
       </header>
 
+      {/* Filters */}
+      <div style={{
+        display: "flex", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+        background: "rgba(255,255,255,0.01)", flexWrap: "wrap", alignItems: "center",
+      }}>
+        <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Filtros:</span>
+        
+        <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="all">Todos os Departamentos</option>
+          {DEPTS.map(d => <option key={d.id} value={d.id}>{d.icon} {d.label}</option>)}
+        </select>
+
+        <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="7">Últimos 7 dias</option>
+          <option value="15">Últimos 15 dias</option>
+          <option value="30">Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+          <option value="365">Último ano</option>
+        </select>
+
+        <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="all">Todas as Severidades</option>
+          <option value="critical">🔴 Crítico (score {">"} 50)</option>
+          <option value="warning">🟡 Atenção (score {">"} 20)</option>
+          <option value="ok">🟢 OK (score ≤ 20)</option>
+        </select>
+
+        {(filterDept !== "all" || filterPeriod !== "30" || filterSeverity !== "all") && (
+          <button onClick={() => { setFilterDept("all"); setFilterPeriod("30"); setFilterSeverity("all"); }} style={{
+            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6,
+            padding: "5px 10px", color: "#ff8080", fontSize: 11, cursor: "pointer",
+          }}>✕ Limpar Filtros</button>
+        )}
+      </div>
+
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
         {/* Global KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 28 }}>
