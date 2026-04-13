@@ -271,7 +271,12 @@ export default function EfficiencyKPIs() {
             🔴 Mapa de Gargalos por Departamento
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-            {deptMetrics.map(d => (
+            {deptMetrics.filter(d => {
+              if (filterSeverity === "critical") return d.bottleneckScore > 50;
+              if (filterSeverity === "warning") return d.bottleneckScore > 20 && d.bottleneckScore <= 50;
+              if (filterSeverity === "ok") return d.bottleneckScore <= 20;
+              return true;
+            }).map(d => (
               <div key={d.dept} style={{
                 padding: 16, borderRadius: 10,
                 background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.05)" : "rgba(255,255,255,0.02)",
