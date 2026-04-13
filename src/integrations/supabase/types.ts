@@ -289,6 +289,42 @@ export type Database = {
           },
         ]
       }
+      bottleneck_notifications: {
+        Row: {
+          agent_name: string | null
+          alert_type: string
+          created_at: string
+          department: string | null
+          id: string
+          is_read: boolean
+          message: string
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          agent_name?: string | null
+          alert_type: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          is_read?: boolean
+          message: string
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          agent_name?: string | null
+          alert_type?: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       client_documents: {
         Row: {
           client_id: string

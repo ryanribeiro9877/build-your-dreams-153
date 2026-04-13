@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import WelcomeScreen from "@/components/WelcomeScreen";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 /* ─────────────────────────────────────────────────────────────
    AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
@@ -1170,6 +1171,7 @@ export default function JurisCloudOS() {
                 <span>{a.text.slice(0, 28)}...</span>
               </div>
             ))}
+            <NotificationCenter />
             <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema">
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
