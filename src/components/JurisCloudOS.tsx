@@ -5,6 +5,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
+import WelcomeScreen from "@/components/WelcomeScreen";
 
 /* ─────────────────────────────────────────────────────────────
    AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional

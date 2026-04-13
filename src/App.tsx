@@ -11,6 +11,7 @@ import Admin from "./pages/Admin.tsx";
 import Profile from "./pages/Profile.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
+import LandingPage from "./pages/LandingPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            <Route path="/site" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
