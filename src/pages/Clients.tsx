@@ -280,7 +280,14 @@ export default function Clients() {
                   transition: "all 0.2s",
                 }}
               >
-                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)", marginBottom: 4 }}>{client.full_name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)" }}>{client.full_name}</div>
+                  <button onClick={(e) => { e.stopPropagation(); navigate(`/clientes/${client.id}`); }} style={{
+                    padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)",
+                    background: "var(--bg)", color: "var(--text2)", cursor: "pointer", fontSize: 10,
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>Ver detalhes →</button>
+                </div>
                 <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap", alignItems: "center" }}>
                   {client.cpf && <span>CPF: {client.cpf}</span>}
                   {client.phone && <span>📞 {client.phone}</span>}

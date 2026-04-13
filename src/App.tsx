@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import Clients from "./pages/Clients.tsx";
+import ClientDetails from "./pages/ClientDetails.tsx";
 import Admin from "./pages/Admin.tsx";
 import Profile from "./pages/Profile.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+            <Route path="/clientes/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
