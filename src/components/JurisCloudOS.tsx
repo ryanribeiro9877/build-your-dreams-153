@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import WelcomeScreen from "@/components/WelcomeScreen";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 /* ─────────────────────────────────────────────────────────────
    AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
