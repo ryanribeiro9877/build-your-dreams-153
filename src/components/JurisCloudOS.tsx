@@ -1014,7 +1014,7 @@ export default function JurisCloudOS() {
               value={sidebarSearch}
               onChange={e => setSidebarSearch(e.target.value)}
             />
-          </div>
+            </div>
 
           <nav className="jc-nav">
             <div className="jc-section-label">Departamentos</div>
@@ -1052,6 +1052,10 @@ export default function JurisCloudOS() {
             <div className="jc-nav-item" onClick={() => navigate("/perfil")}>
               <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
               <span className="jc-nav-label">Meu Perfil</span>
+            </div>
+            <div className="jc-nav-item" onClick={() => navigate("/site")}>
+              <span className="jc-nav-icon" style={{ color: "#06b6d4" }}>🌐</span>
+              <span className="jc-nav-label">Voltar ao Site</span>
             </div>
             <div className="jc-nav-item" onClick={() => signOut()}>
               <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
