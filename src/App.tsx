@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import LandingPage from "./pages/LandingPage.tsx";
 import OrgChart from "./pages/OrgChart.tsx";
+import EfficiencyKPIs from "./pages/EfficiencyKPIs.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
+            <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
