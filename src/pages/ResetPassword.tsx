@@ -33,7 +33,7 @@ export default function ResetPassword() {
     setSubmitting(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Senha atualizada com sucesso!");
-    navigate("/");
+    navigate("/sistema");
   };
 
   const inputCss: React.CSSProperties = {

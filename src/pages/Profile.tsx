@@ -65,7 +65,7 @@ export default function Profile() {
       fontFamily: "'DM Sans', sans-serif", padding: "40px 20px",
     }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
-        <button onClick={() => navigate("/")} style={{
+        <button onClick={() => navigate("/sistema")} style={{
           background: "none", border: "1px solid #252534", color: "#9898b0",
           padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12, marginBottom: 24,
           fontFamily: "'DM Sans', sans-serif",
