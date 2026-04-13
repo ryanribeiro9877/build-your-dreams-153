@@ -15,8 +15,11 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 const DEPARTMENTS = [
   { id: "assistente",    label: "Meu Assistente",          icon: "◈",  color: "#c9a84c", badge: 8  },
   { id: "diretoria",     label: "Diretoria / CEO",         icon: "👑", color: "#c9a84c", badge: 0  },
+  { id: "eficiencia",    label: "🧠 Central de Eficiência",icon: "🧠", color: "#ff6b6b", badge: 5  },
+  { id: "conversao",     label: "Conversão (2.1)",         icon: "🔁", color: "#e74c3c", badge: 7  },
   { id: "recepcao",      label: "Recepção",                icon: "🏢", color: "#3b82f6", badge: 6  },
   { id: "marketing",     label: "Marketing",               icon: "📢", color: "#f59e0b", badge: 5  },
+  { id: "criacao",       label: "Criação (6.1)",           icon: "🎨", color: "#e67e22", badge: 4  },
   { id: "civel",         label: "Contencioso Cível",       icon: "⚖️", color: "#8b5cf6", badge: 12 },
   { id: "trabalhista",   label: "Contencioso Trabalhista", icon: "👷", color: "#ef4444", badge: 7  },
   { id: "tributario",    label: "Contencioso Tributário",  icon: "💰", color: "#10b981", badge: 4  },
@@ -24,7 +27,9 @@ const DEPARTMENTS = [
   { id: "calculos",      label: "Cálculos Jurídicos",     icon: "🔢", color: "#ec4899", badge: 3  },
   { id: "audiencias",    label: "Audiências",              icon: "🏛️", color: "#14b8a6", badge: 11 },
   { id: "monitoramento", label: "Monitoramento Processual",icon: "🔍", color: "#f97316", badge: 15 },
+  { id: "financeiro",    label: "Financeiro (4.1)",        icon: "💰", color: "#2ecc71", badge: 6  },
   { id: "cobrancas",     label: "Cobranças",               icon: "💳", color: "#84cc16", badge: 2  },
+  { id: "tech",          label: "Tech (7.1)",              icon: "⚙️", color: "#9b59b6", badge: 3  },
   { id: "compliance",    label: "Compliance",              icon: "🛡️", color: "#0ea5e9", badge: 1  },
   { id: "familia",       label: "Família e Sucessões",     icon: "👨‍👩‍👧‍👦", color: "#a855f7", badge: 3  },
 ];
@@ -167,11 +172,19 @@ const AGENTS: Agent[] = [
   // ══════════════════════════════════════════════════════════════
   // ── COBRANÇAS (5 agentes) ── Diretor → Gerente → Times
   // ══════════════════════════════════════════════════════════════
-  { id: 112, name: "Diretor Financeiro", status: "active", avatar: "💳", color: "#84cc16", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve"], department: ["cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 112 },
-  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 62 },
+  // ══════════════════════════════════════════════════════════════
+  // ── FINANCEIRO (4.1) - Diretor Financeiro do ClickUp ── Substituiu "Cobranças"
+  // ══════════════════════════════════════════════════════════════
+  { id: 112, name: "Diretor Financeiro (4.1)", status: "active", avatar: "💰", color: "#2ecc71", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["financeiro","cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0, description: "Visão total da operação financeira. Contas a pagar, receber, conciliação, custos, comissões, eficiência e alertas de redução de gasto." },
+  { id: 200, name: "Ger. Contas a Pagar (4.1.A)", status: "active", avatar: "💸", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 112 },
+  { id: 201, name: "Ger. Contas a Receber (4.1.B)", status: "active", avatar: "💵", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 112 },
+  { id: 202, name: "Ger. Conciliação Financeira (4.1.C)", status: "active", avatar: "🔄", color: "#27ae60", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 112 },
+  { id: 203, name: "Ger. Participações e Rateios (4.1.D)", status: "active", avatar: "🤝", color: "#27ae60", role: "manager", permissions: ["read","write","calculate"], department: ["financeiro"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2, reportsTo: 112 },
+  { id: 204, name: "Ger. Alertas Financeiros (4.1.E)", status: "alert", avatar: "🚨", color: "#e74c3c", role: "manager", permissions: ["read","write","approve","monitor"], department: ["financeiro","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 112, description: "Monitora anomalias de custos, receitas e gera alertas preventivos de gasto" },
+  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve"], department: ["cobrancas","financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 201 },
+  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 202 },
   { id: 64, name: "Negociador de Honorários", status: "active", avatar: "🤝", color: "#a3e635", role: "executor", permissions: ["read","write","contact_client"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 62 },
-  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 62 },
+  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 202 },
 
   // ══════════════════════════════════════════════════════════════
   // ── COMPLIANCE (5 agentes) ── Diretor → Gerente → Times
@@ -204,6 +217,52 @@ const AGENTS: Agent[] = [
   { id: 79, name: "Revisor de Comunicação", status: "active", avatar: "✅", color: "#67e8f9", role: "reviewer", permissions: ["read","approve","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 75, description: "Revisa respostas antes do envio ao cliente para garantir precisão e clareza" },
   { id: 80, name: "Agente de Envio via Recepção", status: "active", avatar: "📤", color: "#06b6d4", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 14, reportsTo: 75, description: "Envia a resposta final ao cliente via WhatsApp/email pela recepção" },
   { id: 81, name: "Monitor de Satisfação", status: "active", avatar: "⭐", color: "#a5f3fc", role: "monitor", permissions: ["read","monitor","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 10, reportsTo: 115, description: "Monitora se o cliente entendeu a resposta e se precisa de esclarecimentos adicionais" },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── CONVERSÃO (2.1) — Diretor de Orquestração de Conversão (do ClickUp)
+  // ══════════════════════════════════════════════════════════════
+  { id: 300, name: "Diretor de Conversão (2.1)", status: "active", avatar: "🔁", color: "#e74c3c", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["conversao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 12, currentTasks: 7, reportsTo: 0, description: "Comandar toda a inteligência de decisão sobre propostas, follow-ups, agressividade, canais, timing, spots, personalização e conversão final." },
+  { id: 301, name: "Ger. Inteligência Motores (2.1.A)", status: "active", avatar: "📊", color: "#e74c3c", role: "manager", permissions: ["read","write","approve","monitor"], department: ["conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 300, description: "Auditar e otimizar os motores de conversão estáticos, substituindo por inteligência adaptativa" },
+  { id: 302, name: "Ger. Decisão Omnichannel (2.1.B)", status: "active", avatar: "🌐", color: "#c0392b", role: "manager", permissions: ["read","write","approve","execute","contact_client"], department: ["conversao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 300, description: "Decidir canal ideal (ligação, SMS, e-mail, RCS, WhatsApp) por lead, origem e contexto" },
+  { id: 303, name: "Ger. Personalização (2.1.C)", status: "active", avatar: "✍️", color: "#c0392b", role: "manager", permissions: ["read","write","execute"], department: ["conversao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 300, description: "Personalizar conteúdo e abordagem por perfil do lead" },
+  { id: 304, name: "Ger. Perfis do Lead (2.1.D)", status: "active", avatar: "👤", color: "#e74c3c", role: "manager", permissions: ["read","write","execute"], department: ["conversao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 300, description: "Conhecer e classificar leads por perfil, origem, necessidade e probabilidade de conversão" },
+  { id: 305, name: "Ger. Qualidade Telefones (2.1.E)", status: "active", avatar: "📞", color: "#e74c3c", role: "manager", permissions: ["read","write","monitor"], department: ["conversao"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 300, description: "Validar e manter qualidade da base de telefones para contato" },
+  { id: 306, name: "Ger. Aprendizado Orquestração (2.1.F)", status: "active", avatar: "🧠", color: "#e74c3c", role: "manager", permissions: ["read","write","execute","monitor"], department: ["conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 300, description: "Aprender com resultados históricos e otimizar regras de orquestração progressivamente" },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── MARKETING (5.1) — Diretor de Marketing (do ClickUp) — Complementa o Marketing existente
+  // ══════════════════════════════════════════════════════════════
+  { id: 310, name: "Ger. Colmeia / WhatsApp (5.1.A)", status: "active", avatar: "🐝", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute","contact_client"], department: ["marketing","conversao"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 9, description: "Estratégia de colmeia: gestão massiva de WhatsApp, grupos, disparos segmentados" },
+  { id: 311, name: "Ger. Tráfego Pago (5.1.B)", status: "active", avatar: "📱", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute","market_study"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 8, reportsTo: 9, description: "Gestão avançada de tráfego pago: Meta Ads, Google Ads, otimização de ROAS" },
+  { id: 312, name: "Ger. Intel. Conversão Mkt (5.1.C)", status: "active", avatar: "🔬", color: "#f59e0b", role: "manager", permissions: ["read","write","execute","market_study","monitor"], department: ["marketing","conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 9, description: "Cruzar dados de marketing com conversão real para otimizar investimento" },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── CRIAÇÃO (6.1) — Diretor de Criação (do ClickUp)
+  // ══════════════════════════════════════════════════════════════
+  { id: 320, name: "Diretor de Criação (6.1)", status: "active", avatar: "🎨", color: "#e67e22", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["criacao","marketing","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0, description: "Liderar a criação de conteúdo, monitorar concorrência e garantir eficiência criativa" },
+  { id: 321, name: "Ger. Monitoramento Concorrência (6.1.A)", status: "active", avatar: "🔍", color: "#e67e22", role: "manager", permissions: ["read","write","monitor","market_study"], department: ["criacao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 320, description: "Monitorar anúncios, estratégias e posicionamento dos concorrentes em tempo real" },
+  { id: 322, name: "Ger. Estratégia Criativa (6.1.B)", status: "active", avatar: "💡", color: "#d35400", role: "manager", permissions: ["read","write","approve","execute"], department: ["criacao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 320, description: "Definir linhas criativas, copywriting estratégico e narrativas de campanha" },
+  { id: 323, name: "Ger. Eficiência Criativa (6.1.C)", status: "active", avatar: "📈", color: "#d35400", role: "manager", permissions: ["read","write","monitor","market_study"], department: ["criacao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 320, description: "Medir performance de criativos, testes A/B, otimizar CTR e engajamento" },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── TECH (7.1) — Diretor Tech (do ClickUp)
+  // ══════════════════════════════════════════════════════════════
+  { id: 330, name: "Diretor Tech (7.1)", status: "active", avatar: "⚙️", color: "#9b59b6", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["tech","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0, description: "Garantir funcionamento de integrações, dados operacionais e observabilidade de todo o sistema" },
+  { id: 331, name: "Ger. Integrações (7.1.A)", status: "alert", avatar: "🔌", color: "#9b59b6", role: "manager", permissions: ["read","write","approve","execute"], department: ["tech"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 330, description: "Gerenciar APIs, webhooks, conectores entre sistemas internos e externos" },
+  { id: 332, name: "Ger. Dados Operacionais (7.1.B)", status: "active", avatar: "🗄️", color: "#8e44ad", role: "manager", permissions: ["read","write","execute","monitor"], department: ["tech","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 330, description: "Consolidar dados de todas as operações para dashboards e análise" },
+  { id: 333, name: "Ger. Observabilidade (7.1.C)", status: "alert", avatar: "👁️", color: "#8e44ad", role: "manager", permissions: ["read","write","monitor","approve"], department: ["tech","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 330, description: "Alertas de falhas, latência, erros e saúde de todos os agentes e sistemas" },
+
+  // ══════════════════════════════════════════════════════════════
+  // ── CENTRAL DE EFICIÊNCIA — Agentes inteligentes de detecção de gargalos
+  // ── Atuam transversalmente em TODOS os departamentos
+  // ══════════════════════════════════════════════════════════════
+  { id: 400, name: "Diretor de Eficiência Operacional", status: "active", avatar: "🧠", color: "#ff6b6b", role: "director", permissions: ["read","write","approve","admin","monitor"], department: ["eficiencia","diretoria"], canOrchestrate: true, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 0, description: "Detectar e resolver gargalos operacionais, de marketing, custos e produtividade em tempo real" },
+  { id: 401, name: "Detector de Gargalos Operacionais", status: "active", avatar: "🔴", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","execute"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, reportsTo: 400, description: "Escaneia filas de tarefas, identifica agentes sobrecarregados, prazos atrasados e processos travados" },
+  { id: 402, name: "Detector de Gargalos de Marketing", status: "active", avatar: "📉", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","market_study"], department: ["eficiencia","marketing","conversao","criacao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 400, description: "Identifica campanhas com baixo ROI, leads parados, falhas de conversão e oportunidades perdidas" },
+  { id: 403, name: "Detector de Gargalos de Custos", status: "active", avatar: "💸", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","calculate"], department: ["eficiencia","financeiro","cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 400, description: "Monitora custos excessivos, comissões desproporcionais, processos financeiros ineficientes" },
+  { id: 404, name: "Detector de Gargalos Jurídicos", status: "active", avatar: "⚖️", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor"], department: ["eficiencia","civel","trabalhista","tributario","familia"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 25, reportsTo: 400, description: "Identifica processos parados, prazos críticos, petições atrasadas e sobrecarga de advogados" },
+  { id: 405, name: "Otimizador de Fluxo Interdepartamental", status: "active", avatar: "🔗", color: "#ff6b6b", role: "specialist", permissions: ["read","write","execute","monitor"], department: ["eficiencia","*"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 10, reportsTo: 400, description: "Garante comunicação fluida entre departamentos, detecta silos de informação e sugere redistribuição de tarefas" },
+  { id: 406, name: "Monitor de KPIs Global", status: "active", avatar: "📊", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400, description: "Dashboard vivo com KPIs de produtividade, tempo médio, taxas de conclusão e eficiência por departamento" },
 ];
 
 // ── ORCHESTRATION ENGINE ────────────────────────────────────
