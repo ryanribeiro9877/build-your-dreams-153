@@ -45,6 +45,11 @@ export default function EfficiencyKPIs() {
   const [orchLogs, setOrchLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [filterDept, setFilterDept] = useState("all");
+  const [filterSeverity, setFilterSeverity] = useState("all");
+  const [filterPeriod, setFilterPeriod] = useState("30");
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     const [tasksRes, logsRes] = await Promise.all([
@@ -58,7 +63,6 @@ export default function EfficiencyKPIs() {
 
   useEffect(() => {
     fetchData();
-    // Realtime
     const channel = supabase.channel("efficiency_kpis")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_orchestration_log" }, () => fetchData())
@@ -66,11 +70,22 @@ export default function EfficiencyKPIs() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
+  // Apply period filter to tasks
+  const filteredTasks = useMemo(() => {
+    const now = new Date();
+    const daysAgo = new Date(now.getTime() - parseInt(filterPeriod) * 86400000);
+    let result = tasks.filter(t => new Date(t.created_at) >= daysAgo);
+    if (filterDept !== "all") {
+      result = result.filter(t => t.task_category === filterDept || t.agent_name?.toLowerCase().includes(filterDept));
+    }
+    return result;
+  }, [tasks, filterDept, filterPeriod]);
+
   // Compute metrics per department
   const deptMetrics = useMemo<DeptMetric[]>(() => {
     const now = new Date();
     return DEPTS.map(d => {
-      const deptTasks = tasks.filter(t => t.task_category === d.id || t.agent_name?.toLowerCase().includes(d.id));
+      const deptTasks = filteredTasks.filter(t => t.task_category === d.id || t.agent_name?.toLowerCase().includes(d.id));
       const pending = deptTasks.filter(t => t.status === "pending").length;
       const overdue = deptTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
       const critical = deptTasks.filter(t => t.priority === "critical").length;
@@ -79,28 +94,27 @@ export default function EfficiencyKPIs() {
       const bottleneckScore = Math.min(100, overdue * 15 + critical * 10 + Math.max(0, pending - 5) * 3);
       return { dept: d.id, label: d.label, color: d.color, icon: d.icon, total, pending, overdue, critical, avgLoad, bottleneckScore };
     }).sort((a, b) => b.bottleneckScore - a.bottleneckScore);
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Global KPIs
   const globalKPIs = useMemo(() => {
     const now = new Date();
-    const total = tasks.length;
-    const pending = tasks.filter(t => t.status === "pending").length;
-    const inProgress = tasks.filter(t => t.status === "in_progress").length;
-    const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
-    const critical = tasks.filter(t => t.priority === "critical").length;
-    const completed = tasks.filter(t => t.status === "completed").length;
+    const total = filteredTasks.length;
+    const pending = filteredTasks.filter(t => t.status === "pending").length;
+    const inProgress = filteredTasks.filter(t => t.status === "in_progress").length;
+    const overdue = filteredTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== "completed" && t.status !== "cancelled").length;
+    const critical = filteredTasks.filter(t => t.priority === "critical").length;
+    const completed = filteredTasks.filter(t => t.status === "completed").length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     const bottlenecks = deptMetrics.filter(d => d.bottleneckScore > 30).length;
     return { total, pending, inProgress, overdue, critical, completed, completionRate, bottlenecks };
-  }, [tasks, deptMetrics]);
+  }, [filteredTasks, deptMetrics]);
 
-  // Priority distribution for pie chart
   const priorityData = useMemo(() => {
     const counts: Record<string, number> = {};
-    tasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
+    filteredTasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Bottleneck trend (last 7 days from orchestration logs)
   const trendData = useMemo(() => {
@@ -146,6 +160,50 @@ export default function EfficiencyKPIs() {
           <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Métricas de gargalo por departamento · Atualização automática</p>
         </div>
       </header>
+
+      {/* Filters */}
+      <div style={{
+        display: "flex", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+        background: "rgba(255,255,255,0.01)", flexWrap: "wrap", alignItems: "center",
+      }}>
+        <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Filtros:</span>
+        
+        <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="all">Todos os Departamentos</option>
+          {DEPTS.map(d => <option key={d.id} value={d.id}>{d.icon} {d.label}</option>)}
+        </select>
+
+        <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="7">Últimos 7 dias</option>
+          <option value="15">Últimos 15 dias</option>
+          <option value="30">Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+          <option value="365">Último ano</option>
+        </select>
+
+        <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+          padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
+        }}>
+          <option value="all">Todas as Severidades</option>
+          <option value="critical">🔴 Crítico (score {">"} 50)</option>
+          <option value="warning">🟡 Atenção (score {">"} 20)</option>
+          <option value="ok">🟢 OK (score ≤ 20)</option>
+        </select>
+
+        {(filterDept !== "all" || filterPeriod !== "30" || filterSeverity !== "all") && (
+          <button onClick={() => { setFilterDept("all"); setFilterPeriod("30"); setFilterSeverity("all"); }} style={{
+            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6,
+            padding: "5px 10px", color: "#ff8080", fontSize: 11, cursor: "pointer",
+          }}>✕ Limpar Filtros</button>
+        )}
+      </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
         {/* Global KPIs */}
@@ -213,7 +271,12 @@ export default function EfficiencyKPIs() {
             🔴 Mapa de Gargalos por Departamento
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-            {deptMetrics.map(d => (
+            {deptMetrics.filter(d => {
+              if (filterSeverity === "critical") return d.bottleneckScore > 50;
+              if (filterSeverity === "warning") return d.bottleneckScore > 20 && d.bottleneckScore <= 50;
+              if (filterSeverity === "ok") return d.bottleneckScore <= 20;
+              return true;
+            }).map(d => (
               <div key={d.dept} style={{
                 padding: 16, borderRadius: 10,
                 background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.05)" : "rgba(255,255,255,0.02)",
