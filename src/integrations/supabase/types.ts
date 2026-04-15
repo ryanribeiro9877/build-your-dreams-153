@@ -545,6 +545,66 @@ export type Database = {
         }
         Relationships: []
       }
+      token_balances: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          total_consumed: number
+          total_purchased: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_consumed?: number
+          total_purchased?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_consumed?: number
+          total_purchased?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      token_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          reference_id: string | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type?: Database["public"]["Enums"]["token_transaction_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -571,6 +631,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_tokens: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_reference_id?: string
+          p_type?: Database["public"]["Enums"]["token_transaction_type"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      consume_tokens: {
+        Args: { p_amount: number; p_description?: string; p_user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -624,6 +698,7 @@ export type Database = {
         | "rejected"
         | "completed"
         | "cancelled"
+      token_transaction_type: "purchase" | "consumption" | "bonus" | "refund"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -799,6 +874,7 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      token_transaction_type: ["purchase", "consumption", "bonus", "refund"],
     },
   },
 } as const

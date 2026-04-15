@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
@@ -641,6 +642,7 @@ export default function JurisCloudOS() {
   const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection();
+  const { tokenBalance, consumeTokens } = useTokenBalance();
 
   const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
@@ -689,9 +691,15 @@ export default function JurisCloudOS() {
     setIsRecording(true);
   };
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const val = (text || inputVal).trim();
     if (!val) return;
+    // Consume 1 token per message
+    const success = await consumeTokens(1, `Mensagem: ${val.slice(0, 50)}`);
+    if (!success) {
+      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: "⚠️ **Saldo de tokens insuficiente.** Recarregue seus tokens para continuar usando o sistema.", timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
+      return;
+    }
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
     setMessages(prev => [...prev, userMsg]);
     setInputVal("");
@@ -835,6 +843,13 @@ export default function JurisCloudOS() {
             ))}
 
             <NotificationCenter />
+
+            <button onClick={() => navigate("/tokens")} title="Meus Tokens"
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
+                background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", cursor: "pointer", color: "#c9a84c", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)" }}>
+              <Coins size={14} />
+              {tokenBalance.balance.toLocaleString()}
+            </button>
 
             <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
