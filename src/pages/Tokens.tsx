@@ -1,11 +1,20 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAuth } from "@/hooks/useAuth";
-import { Coins, ArrowLeft, TrendingUp, TrendingDown, Gift, RefreshCw, Zap, ShoppingCart, Info } from "lucide-react";
+import { Coins, ArrowLeft, TrendingUp, TrendingDown, Gift, RefreshCw, Zap, ShoppingCart, Info, X, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
+import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
+
+const TOKEN_PACKAGES = [
+  { id: "tokens_500_price", amount: 500, price: "R$ 9,90", popular: false },
+  { id: "tokens_2000_price", amount: 2000, price: "R$ 29,90", popular: true },
+  { id: "tokens_5000_price", amount: 5000, price: "R$ 59,90", popular: false },
+  { id: "tokens_15000_price", amount: 15000, price: "R$ 149,90", popular: false },
+];
 
 const PRICING_TIERS = [
   { action: "Comando simples", examples: "Ver prazos, avisar cliente, abrir fila", cost: 1 },
@@ -22,9 +31,12 @@ const typeConfig: Record<string, { label: string; icon: React.ReactNode; color: 
 
 export default function Tokens() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { tokenBalance, transactions, loading, fetchTransactions } = useTokenBalance();
+  const { tokenBalance, transactions, loading, fetchTransactions, fetchBalance } = useTokenBalance();
   const [loaded, setLoaded] = useState(false);
+  const [checkoutPkg, setCheckoutPkg] = useState<typeof TOKEN_PACKAGES[0] | null>(null);
+  const checkoutSuccess = searchParams.get("checkout") === "success";
 
   useEffect(() => {
     if (!loaded) {
@@ -32,6 +44,13 @@ export default function Tokens() {
       setLoaded(true);
     }
   }, [loaded, fetchTransactions]);
+
+  useEffect(() => {
+    if (checkoutSuccess) {
+      fetchBalance();
+      fetchTransactions();
+    }
+  }, [checkoutSuccess, fetchBalance, fetchTransactions]);
 
   if (loading) {
     return (
@@ -42,8 +61,9 @@ export default function Tokens() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090f] text-white p-4 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#09090f] text-white">
+      <PaymentTestModeBanner />
+      <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/sistema")} className="text-[#c9a84c] hover:bg-[#c9a84c]/10">
@@ -52,6 +72,16 @@ export default function Tokens() {
           <Coins className="w-6 h-6 text-[#c9a84c]" />
           <h1 className="text-2xl font-bold text-[#c9a84c]">Meus Tokens</h1>
         </div>
+
+        {/* Checkout success */}
+        {checkoutSuccess && (
+          <Card className="bg-emerald-500/10 border-emerald-500/30">
+            <CardContent className="flex items-center gap-3 py-4">
+              <CheckCircle className="w-6 h-6 text-emerald-400" />
+              <span className="text-emerald-400 font-medium">Pagamento realizado com sucesso! Seus tokens foram adicionados ao saldo.</span>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Balance Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -88,6 +118,60 @@ export default function Tokens() {
           </Card>
         </div>
 
+        {/* Stripe Checkout Overlay */}
+        {checkoutPkg && (
+          <Card className="bg-[#1a1a2e] border-[#c9a84c]/30">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-[#c9a84c]">Recarga de {checkoutPkg.amount.toLocaleString()} tokens</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setCheckoutPkg(null)} className="text-white/60 hover:text-white">
+                <X className="w-5 h-5" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <StripeEmbeddedCheckout
+                priceId={checkoutPkg.id}
+                customerEmail={user?.email || undefined}
+                userId={user?.id}
+                tokenAmount={checkoutPkg.amount}
+                returnUrl={`${window.location.origin}/tokens?checkout=success&session_id={CHECKOUT_SESSION_ID}`}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Recharge Packages */}
+        {!checkoutPkg && (
+          <Card className="bg-[#1a1a2e] border-[#c9a84c]/20">
+            <CardHeader>
+              <CardTitle className="text-[#c9a84c] flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" /> Recarregar Tokens
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {TOKEN_PACKAGES.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    className={`relative p-4 rounded-xl border transition-all hover:scale-105 ${
+                      pkg.popular
+                        ? "border-[#c9a84c] bg-[#c9a84c]/10 shadow-lg shadow-[#c9a84c]/10"
+                        : "border-white/10 bg-white/5 hover:border-[#c9a84c]/50"
+                    }`}
+                    onClick={() => setCheckoutPkg(pkg)}
+                  >
+                    {pkg.popular && (
+                      <span className="absolute -top-2 right-2 bg-[#c9a84c] text-black text-[10px] font-bold px-2 py-0.5 rounded-full">Popular</span>
+                    )}
+                    <div className="text-2xl font-bold text-white">{pkg.amount.toLocaleString()}</div>
+                    <div className="text-xs text-white/50">tokens</div>
+                    <div className="text-lg font-semibold text-[#c9a84c] mt-2">{pkg.price}</div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Token Pricing */}
         <Card className="bg-[#1a1a2e] border-[#c9a84c]/20">
           <CardHeader>
@@ -116,22 +200,6 @@ export default function Tokens() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-
-        {/* Recharge CTA */}
-        <Card className="bg-gradient-to-r from-[#c9a84c]/10 to-[#c9a84c]/5 border-[#c9a84c]/30">
-          <CardContent className="flex flex-col md:flex-row items-center justify-between gap-4 py-6">
-            <div>
-              <h3 className="text-lg font-bold text-[#c9a84c]">Precisa de mais tokens?</h3>
-              <p className="text-white/50 text-sm">Recarregue seu saldo a qualquer momento. Pagamento seguro via Stripe.</p>
-            </div>
-            <Button
-              className="bg-[#c9a84c] text-black hover:bg-[#b8973f] font-bold px-6"
-              onClick={() => alert("Stripe checkout será ativado em breve!")}
-            >
-              <ShoppingCart className="w-4 h-4 mr-2" /> Recarregar Tokens
-            </Button>
           </CardContent>
         </Card>
 
