@@ -177,6 +177,31 @@ const ALL_COMMANDS = [
   "Gerenciar usuários", "Ver organograma", "Auditoria geral", "Status orquestração",
 ];
 
+// Token cost per command type
+const TOKEN_COST: Record<string, { cost: number; label: string }> = {
+  "Gerar petição inicial": { cost: 10, label: "Geração de petição" },
+  "Resumir caso":          { cost: 5,  label: "Pesquisa jurídica" },
+  "Ver gargalos":          { cost: 5,  label: "Análise de eficiência" },
+  "Auditoria geral":       { cost: 5,  label: "Auditoria" },
+  "Status orquestração":   { cost: 5,  label: "Análise de orquestração" },
+  "Relatório do dia":      { cost: 5,  label: "Geração de relatório" },
+};
+const DEFAULT_TOKEN_COST = 1;
+
+function getTokenCost(message: string): { cost: number; label: string } {
+  // Check exact command match first
+  if (TOKEN_COST[message]) return TOKEN_COST[message];
+  // Check keywords for typed messages
+  const lower = message.toLowerCase();
+  if (lower.includes("petição") || lower.includes("peticao") || lower.includes("gerar documento"))
+    return { cost: 10, label: "Geração de petição" };
+  if (lower.includes("pesquis") || lower.includes("jurisprud") || lower.includes("precedent") || lower.includes("resumir caso"))
+    return { cost: 5, label: "Pesquisa jurídica" };
+  if (lower.includes("relatório") || lower.includes("relatorio") || lower.includes("auditoria"))
+    return { cost: 5, label: "Geração de relatório" };
+  return { cost: DEFAULT_TOKEN_COST, label: "Comando simples" };
+}
+
 type Theme = "dark" | "light";
 
 // ── STYLE INJECTION ──────────────────────────────────────────
@@ -694,10 +719,10 @@ export default function JurisCloudOS() {
   const handleSend = async (text?: string) => {
     const val = (text || inputVal).trim();
     if (!val) return;
-    // Consume 1 token per message
-    const success = await consumeTokens(1, `Mensagem: ${val.slice(0, 50)}`);
+    const { cost, label } = getTokenCost(val);
+    const success = await consumeTokens(cost, `${label}: ${val.slice(0, 50)}`);
     if (!success) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: "⚠️ **Saldo de tokens insuficiente.** Recarregue seus tokens para continuar usando o sistema.", timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
+      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `⚠️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
       return;
     }
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
