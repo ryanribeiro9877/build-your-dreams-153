@@ -1,301 +1,129 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
-import { supabase } from "@/integrations/supabase/client";
-import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
+import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import {
+  Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
+  Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
+  DollarSign, CreditCard, Settings, Shield, Heart, Users, BarChart3,
+  Network, Activity, User, Globe, LogOut, Send, Mic, MicOff, Sun, Moon,
+  Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
+  ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
+  MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
+  Circle,
+} from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
-   AGENT JUS IA  –  Sistema Operacional Empresarial Conversacional
+   AGENT JUS IA  –  Sistema Operacional Empresarial
 ───────────────────────────────────────────────────────────── */
 
-// ── DATA ────────────────────────────────────────────────────
+// ── Icon map for departments ──
+const DEPT_ICONS: Record<string, React.ComponentType<any>> = {
+  assistente: Sparkles, diretoria: Crown, eficiencia: Brain, conversao: RefreshCw,
+  recepcao: Building2, marketing: Megaphone, criacao: Palette, civel: Scale,
+  trabalhista: HardHat, tributario: Coins, protocolo: ClipboardList,
+  calculos: Calculator, audiencias: Landmark, monitoramento: Eye,
+  financeiro: DollarSign, cobrancas: CreditCard, tech: Settings,
+  compliance: Shield, familia: Heart,
+};
+
+const ROLE_ICONS: Record<string, React.ComponentType<any>> = {
+  ceo: Crown, director: Briefcase, orchestrator: Target, manager: ClipboardList,
+  specialist: Microscope, reviewer: CheckCircle, executor: Zap, monitor: Radio,
+};
+
 const DEPARTMENTS = [
-  { id: "assistente",    label: "Meu Assistente",          icon: "◈",  color: "#c9a84c", badge: 8  },
-  { id: "diretoria",     label: "Diretoria / CEO",         icon: "👑", color: "#c9a84c", badge: 0  },
-  { id: "eficiencia",    label: "🧠 Central de Eficiência",icon: "🧠", color: "#ff6b6b", badge: 5  },
-  { id: "conversao",     label: "Conversão (2.1)",         icon: "🔁", color: "#e74c3c", badge: 7  },
-  { id: "recepcao",      label: "Recepção",                icon: "🏢", color: "#3b82f6", badge: 6  },
-  { id: "marketing",     label: "Marketing",               icon: "📢", color: "#f59e0b", badge: 5  },
-  { id: "criacao",       label: "Criação (6.1)",           icon: "🎨", color: "#e67e22", badge: 4  },
-  { id: "civel",         label: "Contencioso Cível",       icon: "⚖️", color: "#8b5cf6", badge: 12 },
-  { id: "trabalhista",   label: "Contencioso Trabalhista", icon: "👷", color: "#ef4444", badge: 7  },
-  { id: "tributario",    label: "Contencioso Tributário",  icon: "💰", color: "#10b981", badge: 4  },
-  { id: "protocolo",     label: "Protocolo",               icon: "📋", color: "#6366f1", badge: 9  },
-  { id: "calculos",      label: "Cálculos Jurídicos",     icon: "🔢", color: "#ec4899", badge: 3  },
-  { id: "audiencias",    label: "Audiências",              icon: "🏛️", color: "#14b8a6", badge: 11 },
-  { id: "monitoramento", label: "Monitoramento Processual",icon: "🔍", color: "#f97316", badge: 15 },
-  { id: "financeiro",    label: "Financeiro (4.1)",        icon: "💰", color: "#2ecc71", badge: 6  },
-  { id: "cobrancas",     label: "Cobranças",               icon: "💳", color: "#84cc16", badge: 2  },
-  { id: "tech",          label: "Tech (7.1)",              icon: "⚙️", color: "#9b59b6", badge: 3  },
-  { id: "compliance",    label: "Compliance",              icon: "🛡️", color: "#0ea5e9", badge: 1  },
-  { id: "familia",       label: "Família e Sucessões",     icon: "👨‍👩‍👧‍👦", color: "#a855f7", badge: 3  },
+  { id: "assistente",    label: "Meu Assistente",          color: "#c9a84c", badge: 8  },
+  { id: "diretoria",     label: "Diretoria / CEO",         color: "#c9a84c", badge: 0  },
+  { id: "eficiencia",    label: "Central de Eficiência",    color: "#ff6b6b", badge: 5  },
+  { id: "conversao",     label: "Conversão",                color: "#e74c3c", badge: 7  },
+  { id: "recepcao",      label: "Recepção",                 color: "#3b82f6", badge: 6  },
+  { id: "marketing",     label: "Marketing",                color: "#f59e0b", badge: 5  },
+  { id: "criacao",       label: "Criação",                  color: "#e67e22", badge: 4  },
+  { id: "civel",         label: "Contencioso Cível",        color: "#8b5cf6", badge: 12 },
+  { id: "trabalhista",   label: "Contencioso Trabalhista",  color: "#ef4444", badge: 7  },
+  { id: "tributario",    label: "Contencioso Tributário",    color: "#10b981", badge: 4  },
+  { id: "protocolo",     label: "Protocolo",                color: "#6366f1", badge: 9  },
+  { id: "calculos",      label: "Cálculos Jurídicos",       color: "#ec4899", badge: 3  },
+  { id: "audiencias",    label: "Audiências",               color: "#14b8a6", badge: 11 },
+  { id: "monitoramento", label: "Monitoramento Processual", color: "#f97316", badge: 15 },
+  { id: "financeiro",    label: "Financeiro",               color: "#2ecc71", badge: 6  },
+  { id: "cobrancas",     label: "Cobranças",                color: "#84cc16", badge: 2  },
+  { id: "tech",          label: "Tecnologia",               color: "#9b59b6", badge: 3  },
+  { id: "compliance",    label: "Compliance",               color: "#0ea5e9", badge: 1  },
+  { id: "familia",       label: "Família e Sucessões",      color: "#a855f7", badge: 3  },
 ];
 
 type AgentRole = "ceo" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
 
 interface Agent {
-  id: number;
-  name: string;
-  status: "active" | "idle" | "alert";
-  avatar: string;
-  color: string;
-  role: AgentRole;
-  permissions: AgentPermission[];
-  department: string[];
-  canOrchestrate: boolean;
-  maxConcurrentTasks: number;
-  currentTasks: number;
-  description?: string;
-  maxProcessesMonitored?: number;
-  reportsTo?: number; // id do agente superior
+  id: number; name: string; status: "active" | "idle" | "alert";
+  color: string; role: AgentRole; permissions: AgentPermission[];
+  department: string[]; canOrchestrate: boolean;
+  maxConcurrentTasks: number; currentTasks: number;
+  description?: string; maxProcessesMonitored?: number; reportsTo?: number;
 }
 
+// Agents — avatars are now initials computed from name, no emojis
 const AGENTS: Agent[] = [
-  // ══════════════════════════════════════════════════════════════
-  // ── CEO (1 agente) ── Topo da hierarquia, supervisiona TODOS
-  // ══════════════════════════════════════════════════════════════
-  { id: 0, name: "CEO Agent Jus IA", status: "active", avatar: "👑", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global do escritório" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── RECEPÇÃO (9 agentes) ── Diretor → Gerentes → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 1, name: "Diretor de Recepção", status: "active", avatar: "👔", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 2, name: "Gerente de Atendimento", status: "active", avatar: "📞", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 1 },
-  { id: 100, name: "Gerente de Intake", status: "active", avatar: "📥", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","contact_client","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 1 },
-  { id: 3, name: "Agente Agendador", status: "active", avatar: "📅", color: "#60a5fa", role: "executor", permissions: ["read","write","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 2 },
-  { id: 4, name: "Confirmação de Audiências", status: "active", avatar: "✅", color: "#60a5fa", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao","audiencias"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 2 },
-  { id: 5, name: "Coletor de Documentos", status: "active", avatar: "📄", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 100 },
-  { id: 6, name: "Atendente WhatsApp", status: "active", avatar: "💬", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao","marketing"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 15, reportsTo: 100 },
-  { id: 7, name: "Monitor de Novos Clientes", status: "active", avatar: "🔔", color: "#3b82f6", role: "monitor", permissions: ["read","monitor","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 8, reportsTo: 100 },
-  { id: 8, name: "Agente de Triagem", status: "active", avatar: "🔀", color: "#3b82f6", role: "specialist", permissions: ["read","write","execute"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 2 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── MARKETING (12 agentes) ── Diretor → Gerentes → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 9, name: "Diretor de Marketing", status: "active", avatar: "🎯", color: "#f59e0b", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["marketing","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0 },
-  { id: 10, name: "Gerente de Campanhas", status: "active", avatar: "📊", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 9 },
-  { id: 101, name: "Gerente de Conteúdo", status: "active", avatar: "📝", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 9 },
-  { id: 11, name: "Monitor de Resultados", status: "active", avatar: "📈", color: "#fbbf24", role: "monitor", permissions: ["read","monitor","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 10, reportsTo: 10 },
-  { id: 12, name: "Especialista Copywriting", status: "active", avatar: "✍️", color: "#fbbf24", role: "specialist", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 101 },
-  { id: 13, name: "Especialista Copyright", status: "active", avatar: "©️", color: "#fcd34d", role: "specialist", permissions: ["read","write","approve"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 101 },
-  { id: 14, name: "Criador Imagem Estática", status: "active", avatar: "🖼️", color: "#fcd34d", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 101 },
-  { id: 15, name: "Criador Vídeo/Animação", status: "active", avatar: "🎬", color: "#f59e0b", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 101 },
-  { id: 16, name: "Especialista Tráfego Pago", status: "active", avatar: "💰", color: "#f59e0b", role: "specialist", permissions: ["read","write","execute","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 10 },
-  { id: 17, name: "Analista de Concorrência", status: "active", avatar: "🔎", color: "#fbbf24", role: "specialist", permissions: ["read","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 10 },
-  { id: 18, name: "Analista de Mercado", status: "active", avatar: "🌍", color: "#fbbf24", role: "specialist", permissions: ["read","market_study"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 10 },
-  { id: 19, name: "Automação de Marketing", status: "active", avatar: "⚙️", color: "#fcd34d", role: "executor", permissions: ["read","write","execute"], department: ["marketing"], canOrchestrate: false, maxConcurrentTasks: 12, currentTasks: 8, reportsTo: 10 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CONTENCIOSO CÍVEL (10 agentes) ── Diretor → Gerentes → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 102, name: "Diretor Contencioso Cível", status: "active", avatar: "⚖️", color: "#8b5cf6", role: "director", permissions: ["read","write","approve","admin","petition"], department: ["civel","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
-  { id: 20, name: "Gerente Processual Cível", status: "active", avatar: "📋", color: "#8b5cf6", role: "manager", permissions: ["read","write","approve","petition"], department: ["civel"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 102 },
-  { id: 103, name: "Gerente de Análise Cível", status: "active", avatar: "🔬", color: "#8b5cf6", role: "manager", permissions: ["read","write","approve"], department: ["civel"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 102 },
-  { id: 21, name: "Pesquisador Jurisprudencial", status: "active", avatar: "📚", color: "#8b5cf6", role: "specialist", permissions: ["read","write","execute"], department: ["civel","trabalhista","tributario"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 103 },
-  { id: 22, name: "Redator de Petições", status: "active", avatar: "📝", color: "#a78bfa", role: "executor", permissions: ["read","write","execute","petition"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 20 },
-  { id: 23, name: "Analista de Contratos", status: "active", avatar: "🔍", color: "#a78bfa", role: "reviewer", permissions: ["read","write","approve"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 4, reportsTo: 103 },
-  { id: 24, name: "Monitor de Prazos Cível", status: "alert", avatar: "⏰", color: "#c4b5fd", role: "monitor", permissions: ["read","monitor"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, maxProcessesMonitored: 50, reportsTo: 20 },
-  { id: 25, name: "Estrategista Processual", status: "active", avatar: "🧠", color: "#8b5cf6", role: "specialist", permissions: ["read","write","approve"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 103 },
-  { id: 26, name: "Agente Recursal", status: "active", avatar: "📑", color: "#a78bfa", role: "specialist", permissions: ["read","write","execute","petition"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 20 },
-  { id: 27, name: "Comunicador Interdepartamental", status: "active", avatar: "🔗", color: "#c4b5fd", role: "executor", permissions: ["read","write","execute"], department: ["civel","*"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 102 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CONTENCIOSO TRABALHISTA (8 agentes) ── Diretor → Gerentes → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 104, name: "Diretor Contencioso Trabalhista", status: "active", avatar: "👷", color: "#ef4444", role: "director", permissions: ["read","write","approve","admin"], department: ["trabalhista","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 28, name: "Gerente Processual Trabalhista", status: "active", avatar: "📋", color: "#ef4444", role: "manager", permissions: ["read","write","approve"], department: ["trabalhista"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 104 },
-  { id: 105, name: "Gerente de Audiências Trab.", status: "active", avatar: "🏛️", color: "#ef4444", role: "manager", permissions: ["read","write","approve","schedule"], department: ["trabalhista","audiencias"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 104 },
-  { id: 29, name: "Pesquisador Trabalhista", status: "active", avatar: "📚", color: "#ef4444", role: "specialist", permissions: ["read","write","execute"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 28 },
-  { id: 30, name: "Redator Trabalhista", status: "active", avatar: "📝", color: "#f87171", role: "executor", permissions: ["read","write","petition"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 28 },
-  { id: 31, name: "Analista de Verbas", status: "active", avatar: "💵", color: "#f87171", role: "specialist", permissions: ["read","write","calculate"], department: ["trabalhista","calculos"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 28 },
-  { id: 32, name: "Monitor Prazos Trabalhista", status: "alert", avatar: "⏰", color: "#fca5a5", role: "monitor", permissions: ["read","monitor"], department: ["trabalhista"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, maxProcessesMonitored: 50, reportsTo: 28 },
-  { id: 33, name: "Preparador Audiência Trab.", status: "active", avatar: "🏛️", color: "#fca5a5", role: "executor", permissions: ["read","write","schedule"], department: ["trabalhista","audiencias"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 105 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CONTENCIOSO TRIBUTÁRIO (8 agentes) ── Diretor → Gerentes → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 106, name: "Diretor Contencioso Tributário", status: "active", avatar: "💰", color: "#10b981", role: "director", permissions: ["read","write","approve","admin"], department: ["tributario","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 34, name: "Gerente Processual Tributário", status: "active", avatar: "📋", color: "#10b981", role: "manager", permissions: ["read","write","approve"], department: ["tributario"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 106 },
-  { id: 107, name: "Gerente de Planejamento Fiscal", status: "active", avatar: "📊", color: "#10b981", role: "manager", permissions: ["read","write","approve","calculate"], department: ["tributario"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 106 },
-  { id: 35, name: "Pesquisador Tributário", status: "active", avatar: "📚", color: "#10b981", role: "specialist", permissions: ["read","write","execute"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 34 },
-  { id: 36, name: "Redator Tributário", status: "active", avatar: "📝", color: "#34d399", role: "executor", permissions: ["read","write","petition"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 34 },
-  { id: 37, name: "Analista Fiscal", status: "active", avatar: "📊", color: "#34d399", role: "specialist", permissions: ["read","write","calculate"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 107 },
-  { id: 38, name: "Monitor Tributário", status: "active", avatar: "⏰", color: "#6ee7b7", role: "monitor", permissions: ["read","monitor"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 25, maxProcessesMonitored: 50, reportsTo: 34 },
-  { id: 39, name: "Planejador Tributário", status: "active", avatar: "🧠", color: "#6ee7b7", role: "specialist", permissions: ["read","write","approve"], department: ["tributario"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 107 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── PROTOCOLO (7 agentes) ── Diretor → Gerente → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 108, name: "Diretor de Protocolo", status: "active", avatar: "📋", color: "#6366f1", role: "director", permissions: ["read","write","approve","admin","protocol"], department: ["protocolo","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
-  { id: 40, name: "Gerente de Protocolo", status: "active", avatar: "📋", color: "#6366f1", role: "manager", permissions: ["read","write","approve","protocol"], department: ["protocolo"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 108 },
-  { id: 41, name: "Coletor de Documentos Proto.", status: "active", avatar: "📎", color: "#6366f1", role: "executor", permissions: ["read","write","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 10, reportsTo: 40 },
-  { id: 42, name: "Uploader de Sistema", status: "active", avatar: "⬆️", color: "#818cf8", role: "executor", permissions: ["read","write","execute","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 40 },
-  { id: 43, name: "Verificador de Envio", status: "active", avatar: "✔️", color: "#818cf8", role: "reviewer", permissions: ["read","approve","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 9, reportsTo: 40 },
-  { id: 44, name: "Consultor de Datas", status: "active", avatar: "📅", color: "#a5b4fc", role: "specialist", permissions: ["read","write","schedule"], department: ["protocolo","audiencias"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 40 },
-  { id: 45, name: "Confirmador de Protocolo", status: "active", avatar: "✅", color: "#a5b4fc", role: "reviewer", permissions: ["read","approve","protocol"], department: ["protocolo"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 40 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CÁLCULOS JURÍDICOS (6 agentes) ── Diretor → Gerente → Cadeia de 4 revisores
-  // ══════════════════════════════════════════════════════════════
-  { id: 109, name: "Diretor de Cálculos", status: "active", avatar: "🔢", color: "#ec4899", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["calculos","diretoria"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 0 },
-  { id: 46, name: "Gerente de Cálculos", status: "active", avatar: "🔢", color: "#ec4899", role: "manager", permissions: ["read","write","approve","calculate","review_calculation"], department: ["calculos"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 109 },
-  { id: 47, name: "Calculista Principal", status: "active", avatar: "🧮", color: "#ec4899", role: "executor", permissions: ["read","write","execute","calculate"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 46 },
-  { id: 48, name: "Revisor de Cálculos 1", status: "active", avatar: "🔍", color: "#f472b6", role: "reviewer", permissions: ["read","review_calculation"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 46 },
-  { id: 49, name: "Revisor de Cálculos 2", status: "active", avatar: "🔎", color: "#f472b6", role: "reviewer", permissions: ["read","review_calculation"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 46 },
-  { id: 50, name: "Revisor de Cálculos 3", status: "active", avatar: "🧐", color: "#f9a8d4", role: "reviewer", permissions: ["read","review_calculation","approve"], department: ["calculos"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 46 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── AUDIÊNCIAS (7 agentes) ── Diretor → Gerente → Times escalonados
-  // ══════════════════════════════════════════════════════════════
-  { id: 110, name: "Diretor de Audiências", status: "active", avatar: "🏛️", color: "#14b8a6", role: "director", permissions: ["read","write","approve","admin","schedule"], department: ["audiencias","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
-  { id: 51, name: "Gerente de Audiências", status: "active", avatar: "🏛️", color: "#14b8a6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["audiencias"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 110 },
-  { id: 52, name: "Lembrete 7 Dias", status: "active", avatar: "📢", color: "#14b8a6", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 15, reportsTo: 51 },
-  { id: 53, name: "Lembrete 3 Dias", status: "active", avatar: "📣", color: "#2dd4bf", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 18, reportsTo: 51 },
-  { id: 54, name: "Lembrete 2 Dias", status: "active", avatar: "🔔", color: "#2dd4bf", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 20, reportsTo: 51 },
-  { id: 55, name: "Lembrete Dia D", status: "alert", avatar: "🚨", color: "#5eead4", role: "executor", permissions: ["read","contact_client","schedule"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 22, reportsTo: 51 },
-  { id: 56, name: "Agente Pós-Audiência", status: "active", avatar: "📋", color: "#5eead4", role: "specialist", permissions: ["read","write","execute"], department: ["audiencias"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 51 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── MONITORAMENTO PROCESSUAL (6 agentes) ── Diretor → Gerente → Scanners
-  // ══════════════════════════════════════════════════════════════
-  { id: 111, name: "Diretor de Monitoramento", status: "active", avatar: "🔍", color: "#f97316", role: "director", permissions: ["read","write","approve","admin","monitor"], department: ["monitoramento","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
-  { id: 57, name: "Gerente de Monitoramento", status: "active", avatar: "🔍", color: "#f97316", role: "manager", permissions: ["read","write","approve","monitor"], department: ["monitoramento"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 111 },
-  { id: 58, name: "Scanner de Movimentações", status: "active", avatar: "📡", color: "#f97316", role: "executor", permissions: ["read","monitor"], department: ["monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 40, maxProcessesMonitored: 50, reportsTo: 57 },
-  { id: 59, name: "Analisador Deferimento", status: "active", avatar: "✅", color: "#fb923c", role: "specialist", permissions: ["read","monitor","execute"], department: ["monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, maxProcessesMonitored: 50, reportsTo: 57 },
-  { id: 60, name: "Preparador Razões/Contrarrazões", status: "active", avatar: "⚔️", color: "#fb923c", role: "executor", permissions: ["read","write","execute","petition"], department: ["monitoramento","civel"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 57 },
-  { id: 61, name: "Gerador de Relatórios", status: "idle", avatar: "📊", color: "#fdba74", role: "executor", permissions: ["read","write"], department: ["monitoramento","assistente"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 57 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── COBRANÇAS (5 agentes) ── Diretor → Gerente → Times
-  // ══════════════════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════════════════
-  // ── FINANCEIRO (4.1) - Diretor Financeiro do ClickUp ── Substituiu "Cobranças"
-  // ══════════════════════════════════════════════════════════════
-  { id: 112, name: "Diretor Financeiro (4.1)", status: "active", avatar: "💰", color: "#2ecc71", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["financeiro","cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0, description: "Visão total da operação financeira. Contas a pagar, receber, conciliação, custos, comissões, eficiência e alertas de redução de gasto." },
-  { id: 200, name: "Ger. Contas a Pagar (4.1.A)", status: "active", avatar: "💸", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 112 },
-  { id: 201, name: "Ger. Contas a Receber (4.1.B)", status: "active", avatar: "💵", color: "#2ecc71", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro","cobrancas"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 112 },
-  { id: 202, name: "Ger. Conciliação Financeira (4.1.C)", status: "active", avatar: "🔄", color: "#27ae60", role: "manager", permissions: ["read","write","approve","calculate"], department: ["financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 112 },
-  { id: 203, name: "Ger. Participações e Rateios (4.1.D)", status: "active", avatar: "🤝", color: "#27ae60", role: "manager", permissions: ["read","write","calculate"], department: ["financeiro"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2, reportsTo: 112 },
-  { id: 204, name: "Ger. Alertas Financeiros (4.1.E)", status: "alert", avatar: "🚨", color: "#e74c3c", role: "manager", permissions: ["read","write","approve","monitor"], department: ["financeiro","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 112, description: "Monitora anomalias de custos, receitas e gera alertas preventivos de gasto" },
-  { id: 62, name: "Gerente de Cobranças", status: "active", avatar: "💳", color: "#84cc16", role: "manager", permissions: ["read","write","approve"], department: ["cobrancas","financeiro"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 201 },
-  { id: 63, name: "Controlador Financeiro", status: "active", avatar: "📉", color: "#84cc16", role: "specialist", permissions: ["read","write","calculate"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 202 },
-  { id: 64, name: "Negociador de Honorários", status: "active", avatar: "🤝", color: "#a3e635", role: "executor", permissions: ["read","write","contact_client"], department: ["cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 62 },
-  { id: 65, name: "Relatórios Financeiros", status: "active", avatar: "📊", color: "#a3e635", role: "executor", permissions: ["read","write"], department: ["cobrancas","financeiro"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 2, reportsTo: 202 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── COMPLIANCE (5 agentes) ── Diretor → Gerente → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 113, name: "Diretor de Compliance", status: "active", avatar: "🛡️", color: "#0ea5e9", role: "director", permissions: ["read","write","approve","admin"], department: ["compliance","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 66, name: "Gerente de Compliance", status: "active", avatar: "🛡️", color: "#0ea5e9", role: "manager", permissions: ["read","write","approve"], department: ["compliance"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 113 },
-  { id: 67, name: "Auditor Interno", status: "active", avatar: "🔬", color: "#0ea5e9", role: "reviewer", permissions: ["read","approve"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 66 },
-  { id: 68, name: "Agente LGPD", status: "active", avatar: "🔒", color: "#38bdf8", role: "specialist", permissions: ["read","write","approve"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 66 },
-  { id: 69, name: "Monitor Regulatório", status: "active", avatar: "📜", color: "#38bdf8", role: "monitor", permissions: ["read","monitor"], department: ["compliance"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 66 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── FAMÍLIA E SUCESSÕES (6 agentes) ── Diretor → Gerente → Times
-  // ══════════════════════════════════════════════════════════════
-  { id: 114, name: "Diretor de Família e Sucessões", status: "active", avatar: "👨‍👩‍👧‍👦", color: "#a855f7", role: "director", permissions: ["read","write","approve","admin"], department: ["familia","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
-  { id: 70, name: "Gerente de Família", status: "active", avatar: "👨‍👩‍👧‍👦", color: "#a855f7", role: "manager", permissions: ["read","write","approve"], department: ["familia"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 114 },
-  { id: 71, name: "Pesquisador Família", status: "active", avatar: "📚", color: "#a855f7", role: "specialist", permissions: ["read","write","execute"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 70 },
-  { id: 72, name: "Redator Família", status: "active", avatar: "📝", color: "#c084fc", role: "executor", permissions: ["read","write","petition"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 70 },
-  { id: 73, name: "Mediador Familiar", status: "active", avatar: "🤝", color: "#c084fc", role: "specialist", permissions: ["read","write","contact_client"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 2, reportsTo: 70 },
-  { id: 74, name: "Especialista Inventários", status: "active", avatar: "📜", color: "#d8b4fe", role: "specialist", permissions: ["read","write","calculate"], department: ["familia"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 70 },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CONSULTA PROCESSUAL & COMUNICAÇÃO AO CLIENTE (8 agentes)
-  // ── Time que consulta processos e gera respostas fáceis para clientes leigos via recepção
-  // ══════════════════════════════════════════════════════════════
-  { id: 115, name: "Diretor de Comunicação ao Cliente", status: "active", avatar: "📨", color: "#06b6d4", role: "director", permissions: ["read","write","approve","admin","contact_client"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0, description: "Dirige o time que traduz linguagem jurídica em linguagem acessível ao cliente" },
-  { id: 75, name: "Gerente de Consulta Processual", status: "active", avatar: "🔎", color: "#06b6d4", role: "manager", permissions: ["read","write","approve","contact_client"], department: ["recepcao","monitoramento"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 115, description: "Gerencia o fluxo de consulta de processos e geração de respostas simplificadas" },
-  { id: 76, name: "Consultor de Andamento", status: "active", avatar: "📋", color: "#22d3ee", role: "specialist", permissions: ["read","monitor","execute"], department: ["recepcao","monitoramento"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, maxProcessesMonitored: 50, reportsTo: 75, description: "Consulta o andamento processual nos tribunais e extrai informações relevantes" },
-  { id: 77, name: "Simplificador Jurídico", status: "active", avatar: "💡", color: "#22d3ee", role: "specialist", permissions: ["read","write","execute"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 75, description: "Traduz decisões judiciais e termos jurídicos em linguagem simples e acessível" },
-  { id: 78, name: "Redator de Respostas ao Cliente", status: "active", avatar: "✏️", color: "#67e8f9", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 75, description: "Redige mensagens claras e humanizadas para enviar ao cliente via recepção" },
-  { id: 79, name: "Revisor de Comunicação", status: "active", avatar: "✅", color: "#67e8f9", role: "reviewer", permissions: ["read","approve","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 75, description: "Revisa respostas antes do envio ao cliente para garantir precisão e clareza" },
-  { id: 80, name: "Agente de Envio via Recepção", status: "active", avatar: "📤", color: "#06b6d4", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 14, reportsTo: 75, description: "Envia a resposta final ao cliente via WhatsApp/email pela recepção" },
-  { id: 81, name: "Monitor de Satisfação", status: "active", avatar: "⭐", color: "#a5f3fc", role: "monitor", permissions: ["read","monitor","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 30, currentTasks: 10, reportsTo: 115, description: "Monitora se o cliente entendeu a resposta e se precisa de esclarecimentos adicionais" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CONVERSÃO (2.1) — Diretor de Orquestração de Conversão (do ClickUp)
-  // ══════════════════════════════════════════════════════════════
-  { id: 300, name: "Diretor de Conversão (2.1)", status: "active", avatar: "🔁", color: "#e74c3c", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["conversao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 12, currentTasks: 7, reportsTo: 0, description: "Comandar toda a inteligência de decisão sobre propostas, follow-ups, agressividade, canais, timing, spots, personalização e conversão final." },
-  { id: 301, name: "Ger. Inteligência Motores (2.1.A)", status: "active", avatar: "📊", color: "#e74c3c", role: "manager", permissions: ["read","write","approve","monitor"], department: ["conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 300, description: "Auditar e otimizar os motores de conversão estáticos, substituindo por inteligência adaptativa" },
-  { id: 302, name: "Ger. Decisão Omnichannel (2.1.B)", status: "active", avatar: "🌐", color: "#c0392b", role: "manager", permissions: ["read","write","approve","execute","contact_client"], department: ["conversao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 300, description: "Decidir canal ideal (ligação, SMS, e-mail, RCS, WhatsApp) por lead, origem e contexto" },
-  { id: 303, name: "Ger. Personalização (2.1.C)", status: "active", avatar: "✍️", color: "#c0392b", role: "manager", permissions: ["read","write","execute"], department: ["conversao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 300, description: "Personalizar conteúdo e abordagem por perfil do lead" },
-  { id: 304, name: "Ger. Perfis do Lead (2.1.D)", status: "active", avatar: "👤", color: "#e74c3c", role: "manager", permissions: ["read","write","execute"], department: ["conversao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 300, description: "Conhecer e classificar leads por perfil, origem, necessidade e probabilidade de conversão" },
-  { id: 305, name: "Ger. Qualidade Telefones (2.1.E)", status: "active", avatar: "📞", color: "#e74c3c", role: "manager", permissions: ["read","write","monitor"], department: ["conversao"], canOrchestrate: false, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 300, description: "Validar e manter qualidade da base de telefones para contato" },
-  { id: 306, name: "Ger. Aprendizado Orquestração (2.1.F)", status: "active", avatar: "🧠", color: "#e74c3c", role: "manager", permissions: ["read","write","execute","monitor"], department: ["conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 6, currentTasks: 3, reportsTo: 300, description: "Aprender com resultados históricos e otimizar regras de orquestração progressivamente" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── MARKETING (5.1) — Diretor de Marketing (do ClickUp) — Complementa o Marketing existente
-  // ══════════════════════════════════════════════════════════════
-  { id: 310, name: "Ger. Colmeia / WhatsApp (5.1.A)", status: "active", avatar: "🐝", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute","contact_client"], department: ["marketing","conversao"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 9, description: "Estratégia de colmeia: gestão massiva de WhatsApp, grupos, disparos segmentados" },
-  { id: 311, name: "Ger. Tráfego Pago (5.1.B)", status: "active", avatar: "📱", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute","market_study"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 8, reportsTo: 9, description: "Gestão avançada de tráfego pago: Meta Ads, Google Ads, otimização de ROAS" },
-  { id: 312, name: "Ger. Intel. Conversão Mkt (5.1.C)", status: "active", avatar: "🔬", color: "#f59e0b", role: "manager", permissions: ["read","write","execute","market_study","monitor"], department: ["marketing","conversao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 9, description: "Cruzar dados de marketing com conversão real para otimizar investimento" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CRIAÇÃO (6.1) — Diretor de Criação (do ClickUp)
-  // ══════════════════════════════════════════════════════════════
-  { id: 320, name: "Diretor de Criação (6.1)", status: "active", avatar: "🎨", color: "#e67e22", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["criacao","marketing","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0, description: "Liderar a criação de conteúdo, monitorar concorrência e garantir eficiência criativa" },
-  { id: 321, name: "Ger. Monitoramento Concorrência (6.1.A)", status: "active", avatar: "🔍", color: "#e67e22", role: "manager", permissions: ["read","write","monitor","market_study"], department: ["criacao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 320, description: "Monitorar anúncios, estratégias e posicionamento dos concorrentes em tempo real" },
-  { id: 322, name: "Ger. Estratégia Criativa (6.1.B)", status: "active", avatar: "💡", color: "#d35400", role: "manager", permissions: ["read","write","approve","execute"], department: ["criacao","marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 320, description: "Definir linhas criativas, copywriting estratégico e narrativas de campanha" },
-  { id: 323, name: "Ger. Eficiência Criativa (6.1.C)", status: "active", avatar: "📈", color: "#d35400", role: "manager", permissions: ["read","write","monitor","market_study"], department: ["criacao","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 320, description: "Medir performance de criativos, testes A/B, otimizar CTR e engajamento" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── TECH (7.1) — Diretor Tech (do ClickUp)
-  // ══════════════════════════════════════════════════════════════
-  { id: 330, name: "Diretor Tech (7.1)", status: "active", avatar: "⚙️", color: "#9b59b6", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["tech","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0, description: "Garantir funcionamento de integrações, dados operacionais e observabilidade de todo o sistema" },
-  { id: 331, name: "Ger. Integrações (7.1.A)", status: "alert", avatar: "🔌", color: "#9b59b6", role: "manager", permissions: ["read","write","approve","execute"], department: ["tech"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 330, description: "Gerenciar APIs, webhooks, conectores entre sistemas internos e externos" },
-  { id: 332, name: "Ger. Dados Operacionais (7.1.B)", status: "active", avatar: "🗄️", color: "#8e44ad", role: "manager", permissions: ["read","write","execute","monitor"], department: ["tech","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 330, description: "Consolidar dados de todas as operações para dashboards e análise" },
-  { id: 333, name: "Ger. Observabilidade (7.1.C)", status: "alert", avatar: "👁️", color: "#8e44ad", role: "manager", permissions: ["read","write","monitor","approve"], department: ["tech","eficiencia"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 7, reportsTo: 330, description: "Alertas de falhas, latência, erros e saúde de todos os agentes e sistemas" },
-
-  // ══════════════════════════════════════════════════════════════
-  // ── CENTRAL DE EFICIÊNCIA — Agentes inteligentes de detecção de gargalos
-  // ── Atuam transversalmente em TODOS os departamentos
-  // ══════════════════════════════════════════════════════════════
-  { id: 400, name: "Diretor de Eficiência Operacional", status: "active", avatar: "🧠", color: "#ff6b6b", role: "director", permissions: ["read","write","approve","admin","monitor"], department: ["eficiencia","diretoria"], canOrchestrate: true, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 0, description: "Detectar e resolver gargalos operacionais, de marketing, custos e produtividade em tempo real" },
-  { id: 401, name: "Detector de Gargalos Operacionais", status: "active", avatar: "🔴", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","execute"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, reportsTo: 400, description: "Escaneia filas de tarefas, identifica agentes sobrecarregados, prazos atrasados e processos travados" },
-  { id: 402, name: "Detector de Gargalos de Marketing", status: "active", avatar: "📉", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","market_study"], department: ["eficiencia","marketing","conversao","criacao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 400, description: "Identifica campanhas com baixo ROI, leads parados, falhas de conversão e oportunidades perdidas" },
-  { id: 403, name: "Detector de Gargalos de Custos", status: "active", avatar: "💸", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","calculate"], department: ["eficiencia","financeiro","cobrancas"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 400, description: "Monitora custos excessivos, comissões desproporcionais, processos financeiros ineficientes" },
-  { id: 404, name: "Detector de Gargalos Jurídicos", status: "active", avatar: "⚖️", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor"], department: ["eficiencia","civel","trabalhista","tributario","familia"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 25, reportsTo: 400, description: "Identifica processos parados, prazos críticos, petições atrasadas e sobrecarga de advogados" },
-  { id: 405, name: "Otimizador de Fluxo Interdepartamental", status: "active", avatar: "🔗", color: "#ff6b6b", role: "specialist", permissions: ["read","write","execute","monitor"], department: ["eficiencia","*"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 10, reportsTo: 400, description: "Garante comunicação fluida entre departamentos, detecta silos de informação e sugere redistribuição de tarefas" },
-  { id: 406, name: "Monitor de KPIs Global", status: "active", avatar: "📊", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400, description: "Dashboard vivo com KPIs de produtividade, tempo médio, taxas de conclusão e eficiência por departamento" },
+  { id: 0, name: "CEO Agent Jus IA", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
+  { id: 1, name: "Diretor de Recepção", status: "active", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
+  { id: 2, name: "Gerente de Atendimento", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 1 },
+  { id: 100, name: "Gerente de Intake", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","contact_client","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 1 },
+  { id: 3, name: "Agente Agendador", status: "active", color: "#60a5fa", role: "executor", permissions: ["read","write","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 15, currentTasks: 7, reportsTo: 2 },
+  { id: 4, name: "Confirmação de Audiências", status: "active", color: "#60a5fa", role: "executor", permissions: ["read","write","contact_client","schedule"], department: ["recepcao","audiencias"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 12, reportsTo: 2 },
+  { id: 5, name: "Coletor de Documentos", status: "active", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 100 },
+  { id: 6, name: "Atendente WhatsApp", status: "active", color: "#93c5fd", role: "executor", permissions: ["read","write","contact_client"], department: ["recepcao","marketing"], canOrchestrate: false, maxConcurrentTasks: 25, currentTasks: 15, reportsTo: 100 },
+  { id: 7, name: "Monitor de Novos Clientes", status: "active", color: "#3b82f6", role: "monitor", permissions: ["read","monitor","schedule"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 20, currentTasks: 8, reportsTo: 100 },
+  { id: 8, name: "Agente de Triagem", status: "active", color: "#3b82f6", role: "specialist", permissions: ["read","write","execute"], department: ["recepcao"], canOrchestrate: false, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 2 },
+  { id: 9, name: "Diretor de Marketing", status: "active", color: "#f59e0b", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["marketing","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0 },
+  { id: 10, name: "Gerente de Campanhas", status: "active", color: "#f59e0b", role: "manager", permissions: ["read","write","approve","execute"], department: ["marketing"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 6, reportsTo: 9 },
+  { id: 102, name: "Diretor Contencioso Cível", status: "active", color: "#8b5cf6", role: "director", permissions: ["read","write","approve","admin","petition"], department: ["civel","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
+  { id: 20, name: "Gerente Processual Cível", status: "active", color: "#8b5cf6", role: "manager", permissions: ["read","write","approve","petition"], department: ["civel"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 102 },
+  { id: 22, name: "Redator de Petições", status: "active", color: "#a78bfa", role: "executor", permissions: ["read","write","execute","petition"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 5, currentTasks: 3, reportsTo: 20 },
+  { id: 24, name: "Monitor de Prazos Cível", status: "alert", color: "#c4b5fd", role: "monitor", permissions: ["read","monitor"], department: ["civel"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, maxProcessesMonitored: 50, reportsTo: 20 },
+  { id: 104, name: "Diretor Contencioso Trabalhista", status: "active", color: "#ef4444", role: "director", permissions: ["read","write","approve","admin"], department: ["trabalhista","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
+  { id: 28, name: "Gerente Processual Trabalhista", status: "active", color: "#ef4444", role: "manager", permissions: ["read","write","approve"], department: ["trabalhista"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 104 },
+  { id: 106, name: "Diretor Contencioso Tributário", status: "active", color: "#10b981", role: "director", permissions: ["read","write","approve","admin"], department: ["tributario","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
+  { id: 108, name: "Diretor de Protocolo", status: "active", color: "#6366f1", role: "director", permissions: ["read","write","approve","admin","protocol"], department: ["protocolo","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
+  { id: 40, name: "Gerente de Protocolo", status: "active", color: "#6366f1", role: "manager", permissions: ["read","write","approve","protocol"], department: ["protocolo"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 6, reportsTo: 108 },
+  { id: 109, name: "Diretor de Cálculos", status: "active", color: "#ec4899", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["calculos","diretoria"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 3, reportsTo: 0 },
+  { id: 46, name: "Gerente de Cálculos", status: "active", color: "#ec4899", role: "manager", permissions: ["read","write","approve","calculate","review_calculation"], department: ["calculos"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 109 },
+  { id: 110, name: "Diretor de Audiências", status: "active", color: "#14b8a6", role: "director", permissions: ["read","write","approve","admin","schedule"], department: ["audiencias","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
+  { id: 111, name: "Diretor de Monitoramento", status: "active", color: "#f97316", role: "director", permissions: ["read","write","approve","admin","monitor"], department: ["monitoramento","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
+  { id: 112, name: "Diretor Financeiro", status: "active", color: "#2ecc71", role: "director", permissions: ["read","write","approve","admin","calculate"], department: ["financeiro","cobrancas","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0 },
+  { id: 113, name: "Diretor de Compliance", status: "active", color: "#0ea5e9", role: "director", permissions: ["read","write","approve","admin"], department: ["compliance","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
+  { id: 114, name: "Diretor de Família", status: "active", color: "#a855f7", role: "director", permissions: ["read","write","approve","admin"], department: ["familia","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
+  { id: 300, name: "Diretor de Conversão", status: "active", color: "#e74c3c", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["conversao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 12, currentTasks: 7, reportsTo: 0 },
+  { id: 320, name: "Diretor de Criação", status: "active", color: "#e67e22", role: "director", permissions: ["read","write","approve","admin","market_study"], department: ["criacao","marketing","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 5, reportsTo: 0 },
+  { id: 330, name: "Diretor Tech", status: "active", color: "#9b59b6", role: "director", permissions: ["read","write","approve","admin","execute"], department: ["tech","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 4, reportsTo: 0 },
+  { id: 400, name: "Diretor de Eficiência", status: "active", color: "#ff6b6b", role: "director", permissions: ["read","write","approve","admin","monitor"], department: ["eficiencia","diretoria"], canOrchestrate: true, maxConcurrentTasks: 15, currentTasks: 8, reportsTo: 0 },
+  { id: 401, name: "Detector de Gargalos", status: "active", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","execute"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, reportsTo: 400 },
+  { id: 406, name: "Monitor de KPIs Global", status: "active", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400 },
 ];
 
-// ── ORCHESTRATION ENGINE ────────────────────────────────────
 function getAgentsForDepartment(deptId: string): Agent[] {
   return AGENTS.filter(a => a.department.includes("*") || a.department.includes(deptId));
 }
-
 function getAgentLoad(agent: Agent): number {
   return Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
 }
-
-function canAgentPerform(agent: Agent, permission: AgentPermission): boolean {
-  return agent.permissions.includes(permission) || agent.permissions.includes("admin");
-}
-
-function getOrchestrators(): Agent[] {
-  return AGENTS.filter(a => a.canOrchestrate && a.status !== "idle");
-}
-
-function getAvailableAgents(): Agent[] {
-  return AGENTS.filter(a => a.currentTasks < a.maxConcurrentTasks);
-}
-
 function getAgentsByRole(role: AgentRole): Agent[] {
   return AGENTS.filter(a => a.role === role);
 }
-
-function getTotalCapacity(): { used: number; total: number; percentage: number } {
+function getTotalCapacity() {
   const used = AGENTS.reduce((s, a) => s + a.currentTasks, 0);
   const total = AGENTS.reduce((s, a) => s + a.maxConcurrentTasks, 0);
   return { used, total, percentage: Math.round((used / total) * 100) };
+}
+function getInitials(name: string) {
+  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 const PROCESSES = [
@@ -318,73 +146,34 @@ const INITIAL_MESSAGES = [
     content: null,
     card: {
       type: "briefing",
-      title: "Bom dia, Dr. Agent Jus IA ✦",
+      title: "Bom dia, Dr. Agent Jus IA",
       summary: "Aqui está sua visão operacional de hoje",
       items: [
-        { icon: "⚠", label: "Prazos críticos",      value: "3", accent: "#ef4444" },
-        { icon: "✦", label: "Revisões pendentes",    value: "12", accent: "#f59e0b" },
-        { icon: "◈", label: "Novos contratos",       value: "2", accent: "#2dd4a0" },
-        { icon: "⬡", label: "Audiências esta semana",value: "7", accent: "#4f8ef7" },
-        { icon: "◉", label: "Leads qualificados",    value: "5", accent: "#c9a84c" },
-        { icon: "⬠", label: "Protocolos em fila",   value: "9", accent: "#a78bfa" },
+        { label: "Prazos críticos",      value: "3", accent: "#ef4444" },
+        { label: "Revisões pendentes",    value: "12", accent: "#f59e0b" },
+        { label: "Novos contratos",       value: "2", accent: "#2dd4a0" },
+        { label: "Audiências esta semana",value: "7", accent: "#4f8ef7" },
+        { label: "Leads qualificados",    value: "5", accent: "#c9a84c" },
+        { label: "Protocolos em fila",   value: "9", accent: "#a78bfa" },
       ],
     },
     timestamp: "08:00",
   },
   {
-    id: 2, role: "user",
-    content: "Mostre os casos mais urgentes do bancário hoje",
-    timestamp: "08:03",
+    id: 2, role: "user", content: "Mostre os casos mais urgentes do bancário hoje", timestamp: "08:03",
   },
   {
     id: 3, role: "assistant", agent: "Pesquisador Jurídico",
-    content: "Identifiquei **3 casos críticos** no departamento bancário. O caso #0023847 tem prazo fatal **hoje às 17h** para contestação. Recomendo acionar o Redator Processual imediatamente.",
-    card: {
-      type: "process-list",
-      processes: PROCESSES.filter(p => p.area === "Bancário" || p.area === "Cível"),
-    },
+    content: "Identifiquei **3 casos críticos** no departamento bancário. O caso #0023847 tem prazo fatal **hoje às 17h** para contestação.",
+    card: { type: "process-list", processes: PROCESSES.filter(p => p.area === "Bancário" || p.area === "Cível") },
     timestamp: "08:03",
   },
 ];
 
-const TASK_QUEUES = [
-  { id: "confeccao", label: "📝 Confecção de Peças", color: "#8b5cf6", items: [
-    { id: "t1", title: "Petição inicial – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Redator de Petições", status: "em andamento" },
-    { id: "t2", title: "Contestação – Caso #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Redator Trabalhista", status: "aguardando" },
-    { id: "t3", title: "Recurso de apelação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Agente Recursal", status: "em andamento" },
-    { id: "t4", title: "Razões finais – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Petições", status: "aguardando" },
-  ]},
-  { id: "protocolar", label: "📋 A Protocolar", color: "#6366f1", items: [
-    { id: "t5", title: "Protocolar inicial #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Uploader de Sistema", status: "pronto" },
-    { id: "t6", title: "Protocolar contestação #0019234", client: "Ana Paula F.", priority: "high" as const, agent: "Coletor de Documentos Proto.", status: "aguardando docs" },
-    { id: "t7", title: "Protocolar recurso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Verificador de Envio", status: "verificando" },
-  ]},
-  { id: "revisao", label: "🔍 Em Revisão", color: "#f59e0b", items: [
-    { id: "t8", title: "Revisar cálculos – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Revisor de Cálculos 1", status: "revisão 1/3" },
-    { id: "t9", title: "Revisar petição – Caso #0023847", client: "Marcos V.", priority: "critical" as const, agent: "Analista de Contratos", status: "aprovação pendente" },
-  ]},
-  { id: "comunicacao", label: "💬 Comunicação ao Cliente", color: "#06b6d4", items: [
-    { id: "t10", title: "Informar andamento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Simplificador Jurídico", status: "redigindo" },
-    { id: "t11", title: "Confirmar audiência – Caso #0031102", client: "Roberto M.", priority: "high" as const, agent: "Agente de Envio via Recepção", status: "aguardando aprovação" },
-    { id: "t12", title: "Enviar resultado – Caso #0041887", client: "Clínica São Lucas", priority: "low" as const, agent: "Redator de Respostas ao Cliente", status: "redigindo" },
-  ]},
-  { id: "audiencias_fila", label: "🏛️ Preparação de Audiências", color: "#14b8a6", items: [
-    { id: "t13", title: "Preparar docs – Audiência 15/04", client: "Marcos V.", priority: "critical" as const, agent: "Preparador Audiência Trab.", status: "em andamento" },
-    { id: "t14", title: "Lembrete 3 dias – Audiência 17/04", client: "Ana Paula F.", priority: "high" as const, agent: "Lembrete 3 Dias", status: "agendado" },
-  ]},
-  { id: "monitoramento_fila", label: "🔍 Monitoramento de Resultados", color: "#f97316", items: [
-    { id: "t15", title: "Verificar deferimento – Caso #0019234", client: "Ana Paula F.", priority: "medium" as const, agent: "Analisador Deferimento", status: "consultando" },
-    { id: "t16", title: "Verificar movimentação – Caso #0031102", client: "Roberto M.", priority: "medium" as const, agent: "Scanner de Movimentações", status: "monitorando" },
-  ]},
-];
-
-const QUICK_COMMANDS = [
-  "Gerar petição inicial",
-  "Ver prazos fatais",
-  "Resumir caso",
-  "Avisar cliente",
-  "Abrir fila de revisão",
-  "Relatório do dia",
+const ALL_COMMANDS = [
+  "Gerar petição inicial", "Ver prazos fatais", "Resumir caso", "Avisar cliente",
+  "Abrir fila de revisão", "Relatório do dia", "Ver gargalos", "Painel financeiro",
+  "Gerenciar usuários", "Ver organograma", "Auditoria geral", "Status orquestração",
 ];
 
 type Theme = "dark" | "light";
@@ -393,119 +182,77 @@ type Theme = "dark" | "light";
 const GlobalStyles = ({ theme }: { theme: Theme }) => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --font-disp: 'Cormorant Garamond', Georgia, serif;
       --font-body: 'DM Sans', sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
-      --gold:     #c9a84c;
-      --gold2:    #e8c96a;
-      --blue:     #4f8ef7;
-      --teal:     #2dd4a0;
-      --purple:   #a78bfa;
-      --red:      #ef4444;
-      --amber:    #f59e0b;
+      --gold: #c9a84c; --gold2: #e8c96a;
+      --blue: #4f8ef7; --teal: #2dd4a0; --purple: #a78bfa;
+      --red: #ef4444; --amber: #f59e0b;
       --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-
-    /* DARK THEME */
     [data-theme="dark"] {
-      --bg:       #09090f;
-      --bg2:      #111118;
-      --bg3:      #16161f;
-      --bg4:      #1d1d28;
-      --border:   #252534;
-      --border2:  #2e2e42;
-      --text1:    #eeeef5;
-      --text2:    #9898b0;
-      --text3:    #5a5a72;
+      --bg: #09090f; --bg2: #111118; --bg3: #16161f; --bg4: #1d1d28;
+      --border: #252534; --border2: #2e2e42;
+      --text1: #eeeef5; --text2: #9898b0; --text3: #5a5a72;
       --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.08);
-      --user-bubble-border: rgba(201,168,76,0.2);
-      --scrollbar-thumb: var(--border2);
+      --user-bubble-bg: rgba(201,168,76,0.08); --user-bubble-border: rgba(201,168,76,0.2);
       --badge-bg: rgba(255,255,255,0.07);
     }
-
-    /* LIGHT THEME */
     [data-theme="light"] {
-      --bg:       #f5f5f7;
-      --bg2:      #ffffff;
-      --bg3:      #f0f0f4;
-      --bg4:      #e8e8ee;
-      --border:   #d8d8e0;
-      --border2:  #c8c8d4;
-      --text1:    #1a1a2e;
-      --text2:    #5a5a72;
-      --text3:    #8888a0;
+      --bg: #f5f5f7; --bg2: #ffffff; --bg3: #f0f0f4; --bg4: #e8e8ee;
+      --border: #d8d8e0; --border2: #c8c8d4;
+      --text1: #1a1a2e; --text2: #5a5a72; --text3: #8888a0;
       --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.06);
-      --user-bubble-border: rgba(201,168,76,0.25);
-      --scrollbar-thumb: var(--border2);
+      --user-bubble-bg: rgba(201,168,76,0.06); --user-bubble-border: rgba(201,168,76,0.25);
       --badge-bg: rgba(0,0,0,0.06);
     }
-
-    /* SMOOTH THEME TRANSITIONS */
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
-    .jc-input-area, .jc-msg-bubble, .jc-card-briefing, .jc-kpi,
-    .jc-case-card, .jc-alert-item, .jc-nav-item, .jc-search,
-    .jc-input-row, .jc-cmd, .jc-user-chip, .jc-theme-toggle,
-    .jc-agent-item, .jc-process-row, .jc-right-tab, .jc-agents-section {
-      transition: background-color var(--theme-transition),
-                  border-color var(--theme-transition),
-                  color var(--theme-transition),
-                  box-shadow var(--theme-transition);
+    .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
+    .jc-nav-item, .jc-input-row, .jc-cmd, .jc-user-chip, .jc-theme-toggle,
+    .jc-agent-item, .jc-right-tab, .jc-agents-section {
+      transition: background-color var(--theme-transition), border-color var(--theme-transition),
+                  color var(--theme-transition), box-shadow var(--theme-transition);
     }
-
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
-
     .jc-root { display: flex; height: 100vh; overflow: hidden; background: var(--bg); }
 
-    /* ── SIDEBAR ── */
+    /* SIDEBAR */
     .jc-sidebar {
-      width: 260px; min-width: 260px;
-      background: var(--bg2);
+      width: 260px; min-width: 260px; background: var(--bg2);
       border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow: hidden;
-      transition: transform 0.3s ease, opacity 0.3s ease;
+      display: flex; flex-direction: column; overflow: hidden;
+      transition: transform 0.3s ease;
     }
     .jc-logo {
-      padding: 20px 20px 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 20px 20px 16px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 10px;
     }
     .jc-logo-mark {
       width: 32px; height: 32px;
       background: linear-gradient(135deg, var(--gold), var(--gold2));
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
       font-size: 16px; font-weight: 700; color: var(--logo-text);
-      font-family: var(--font-disp);
-      box-shadow: 0 0 16px rgba(201,168,76,0.35);
+      font-family: var(--font-disp); box-shadow: 0 0 16px rgba(201,168,76,0.35);
     }
-    .jc-logo-text { font-family: var(--font-disp); font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--text1); }
-    .jc-logo-sub  { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
+    .jc-logo-text { font-family: var(--font-disp); font-size: 18px; font-weight: 600; color: var(--text1); }
+    .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
 
     .jc-search {
-      margin: 12px 12px 8px;
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px 12px;
-      display: flex; align-items: center; gap: 8px;
-      cursor: text; transition: border-color 0.2s;
+      margin: 12px 12px 8px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 8px;
     }
     .jc-search:hover { border-color: var(--border2); }
     .jc-search input {
       background: none; border: none; outline: none;
-      font-family: var(--font-body); font-size: 12px; color: var(--text2);
-      width: 100%;
+      font-family: var(--font-body); font-size: 12px; color: var(--text2); width: 100%;
     }
     .jc-search input::placeholder { color: var(--text3); }
 
     .jc-nav { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
     .jc-nav::-webkit-scrollbar { width: 4px; }
-    .jc-nav::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+    .jc-nav::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 
     .jc-section-label {
       font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -514,12 +261,10 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-nav-item {
       display: flex; align-items: center; gap: 10px;
       padding: 8px 10px; border-radius: 8px; cursor: pointer;
-      transition: background 0.15s; position: relative;
-      margin-bottom: 1px;
+      transition: background 0.15s; margin-bottom: 1px;
     }
     .jc-nav-item:hover { background: var(--bg4); }
     .jc-nav-item.active { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.15); }
-    .jc-nav-icon { font-size: 14px; width: 20px; text-align: center; opacity: 0.85; }
     .jc-nav-label { font-size: 13px; font-weight: 400; color: var(--text1); flex: 1; }
     .jc-nav-badge {
       font-size: 10px; font-family: var(--font-mono);
@@ -531,57 +276,40 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-agents-section { padding: 8px; border-top: 1px solid var(--border); }
     .jc-agent-item {
       display: flex; align-items: center; gap: 8px;
-      padding: 6px 8px; border-radius: 6px; cursor: pointer;
-      transition: background 0.15s;
+      padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s;
     }
     .jc-agent-item:hover { background: var(--bg3); }
     .jc-agent-avatar {
       width: 26px; height: 26px; border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 9px; font-weight: 700; font-family: var(--font-mono);
-      flex-shrink: 0;
+      font-size: 9px; font-weight: 700; font-family: var(--font-mono); flex-shrink: 0;
     }
     .jc-agent-name { font-size: 11px; color: var(--text2); flex: 1; line-height: 1.2; }
-    .jc-agent-dot {
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-    }
-    .jc-agent-dot.active  { background: var(--teal); box-shadow: 0 0 6px rgba(45,212,160,0.6); animation: pulse 2s infinite; }
-    .jc-agent-dot.idle    { background: var(--border2); }
-    .jc-agent-dot.alert   { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.6); animation: pulse 1s infinite; }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    /* ── MAIN ── */
+    /* MAIN */
     .jc-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-    /* TOPBAR */
     .jc-topbar {
-      height: 52px; min-height: 52px;
-      background: var(--bg2); border-bottom: 1px solid var(--border);
+      height: 52px; min-height: 52px; background: var(--bg2);
+      border-bottom: 1px solid var(--border);
       display: flex; align-items: center; padding: 0 20px; gap: 12px;
     }
-    .jc-dept-title { font-family: var(--font-disp); font-size: 20px; font-weight: 600; color: var(--text1); letter-spacing: 0.01em; }
-    .jc-dept-sub   { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 1px; }
+    .jc-dept-title { font-family: var(--font-disp); font-size: 20px; font-weight: 600; color: var(--text1); }
+    .jc-dept-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
     .jc-topbar-spacer { flex: 1; }
     .jc-alert-chip {
       display: flex; align-items: center; gap: 6px;
       padding: 5px 10px; border-radius: 20px; cursor: pointer;
-      font-size: 11px; font-weight: 500; border: 1px solid;
-      transition: opacity 0.15s;
+      font-size: 11px; font-weight: 500; border: 1px solid; transition: opacity 0.15s;
     }
     .jc-alert-chip:hover { opacity: 0.8; }
-    .jc-alert-chip.fatal   { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ff8080; }
+    .jc-alert-chip.fatal { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ff8080; }
     .jc-alert-chip.warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #fbbf24; }
-    .jc-alert-chip.info    { background: rgba(79,142,247,0.1); border-color: rgba(79,142,247,0.3); color: #93c5fd; }
-    .jc-alert-chip.success { background: rgba(45,212,160,0.1); border-color: rgba(45,212,160,0.3); color: #6ee7b7; }
     .jc-user-chip {
       display: flex; align-items: center; gap: 8px;
-      padding: 4px 12px 4px 4px;
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 20px; cursor: pointer;
+      padding: 4px 12px 4px 4px; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 20px; cursor: pointer;
     }
     .jc-user-avatar {
       width: 26px; height: 26px; border-radius: 50%;
@@ -591,50 +319,26 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     .jc-user-name { font-size: 12px; color: var(--text1); }
 
-    /* THEME TOGGLE */
-    .jc-theme-toggle {
-      display: flex; align-items: center; gap: 6px;
-      padding: 4px 10px; border-radius: 20px;
-      background: var(--bg3); border: 1px solid var(--border);
-      cursor: pointer; font-size: 14px;
-      transition: all 0.2s;
-      user-select: none;
-    }
-    .jc-theme-toggle:hover { border-color: var(--border2); }
-
     /* MESSAGES */
-    .jc-messages {
-      flex: 1; overflow-y: auto;
-      padding: 24px 0;
-      scroll-behavior: smooth;
-    }
+    .jc-messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
     .jc-messages::-webkit-scrollbar { width: 4px; }
     .jc-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
     .jc-msg-wrap {
-      display: flex; gap: 12px;
-      padding: 8px 24px; max-width: 860px; margin: 0 auto;
+      display: flex; gap: 12px; padding: 8px 32px; max-width: 960px; margin: 0 auto;
       animation: fadeUp 0.3s ease both;
     }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .jc-msg-wrap.user { flex-direction: row-reverse; }
-
     .jc-msg-avatar {
       width: 32px; height: 32px; min-width: 32px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 700; font-family: var(--font-mono);
     }
     .jc-msg-bubble {
-      max-width: 72%; background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 12px; padding: 12px 14px;
-      font-size: 13.5px; line-height: 1.65; color: var(--text1);
+      max-width: 75%; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: var(--text1);
     }
-    .jc-msg-wrap.user .jc-msg-bubble {
-      background: var(--user-bubble-bg); border-color: var(--user-bubble-border);
-    }
+    .jc-msg-wrap.user .jc-msg-bubble { background: var(--user-bubble-bg); border-color: var(--user-bubble-border); }
     .jc-msg-meta {
       font-size: 10px; color: var(--text3); margin-bottom: 4px;
       font-family: var(--font-mono); display: flex; align-items: center; gap: 6px;
@@ -642,41 +346,34 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-msg-meta .agent-tag {
       font-size: 9px; padding: 2px 7px; border-radius: 4px;
       background: rgba(201,168,76,0.12); color: var(--gold); border: 1px solid rgba(201,168,76,0.2);
-      font-family: var(--font-body); font-weight: 500; letter-spacing: 0.04em;
+      font-family: var(--font-body); font-weight: 500;
     }
     .jc-msg-text b, .jc-msg-text strong { color: var(--gold2); font-weight: 600; }
 
-    /* BRIEFING CARD */
+    /* BRIEFING */
     .jc-card-briefing {
       background: linear-gradient(135deg, rgba(201,168,76,0.06), rgba(79,142,247,0.04));
-      border: 1px solid rgba(201,168,76,0.2);
-      border-radius: 14px; padding: 20px; margin-top: 2px;
+      border: 1px solid rgba(201,168,76,0.2); border-radius: 14px; padding: 20px; margin-top: 2px;
     }
-    .jc-card-briefing-title {
-      font-family: var(--font-disp); font-size: 22px; font-weight: 600;
-      color: var(--gold2); margin-bottom: 4px; letter-spacing: 0.01em;
-    }
+    .jc-card-briefing-title { font-family: var(--font-disp); font-size: 22px; font-weight: 600; color: var(--gold2); margin-bottom: 4px; }
     .jc-card-briefing-sub { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
     .jc-card-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
     .jc-kpi {
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px;
-      transition: border-color 0.2s;
     }
     .jc-kpi:hover { border-color: var(--border2); }
-    .jc-kpi-icon { font-size: 16px; }
     .jc-kpi-value { font-family: var(--font-disp); font-size: 26px; font-weight: 600; line-height: 1; }
     .jc-kpi-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
 
-    /* PROCESS LIST CARD */
+    /* PROCESS LIST */
     .jc-card-processes { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
     .jc-process-row {
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: 10px; padding: 11px 14px;
-      display: flex; align-items: center; gap: 12px; cursor: pointer;
-      transition: all 0.2s;
+      display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s;
     }
-    .jc-process-row:hover { border-color: var(--border2); background: var(--bg3); transform: translateX(2px); }
+    .jc-process-row:hover { border-color: var(--border2); background: var(--bg3); }
     .jc-process-id { font-family: var(--font-mono); font-size: 10px; color: var(--text3); min-width: 72px; }
     .jc-process-client { font-size: 12.5px; font-weight: 500; flex: 1; color: var(--text1); }
     .jc-process-area { font-size: 10px; padding: 2px 8px; border-radius: 5px; }
@@ -686,43 +383,34 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       text-transform: uppercase; letter-spacing: 0.06em;
     }
     .jc-process-badge.urgente { background: rgba(239,68,68,0.15); color: #ff8080; border: 1px solid rgba(239,68,68,0.25); }
-    .jc-process-badge.normal  { background: rgba(79,142,247,0.12); color: #93c5fd; border: 1px solid rgba(79,142,247,0.2); }
+    .jc-process-badge.normal { background: rgba(79,142,247,0.12); color: #93c5fd; border: 1px solid rgba(79,142,247,0.2); }
     .jc-process-badge.revisar { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
     .jc-process-value { font-family: var(--font-mono); font-size: 11px; color: var(--teal); min-width: 80px; text-align: right; }
 
-    /* THINKING INDICATOR */
-    .jc-thinking {
-      display: flex; align-items: center; gap: 4px; padding: 4px 0;
-    }
+    /* THINKING */
+    .jc-thinking { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
     .jc-thinking span {
       width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
       animation: thinking 1.2s infinite; display: inline-block;
     }
     .jc-thinking span:nth-child(2) { animation-delay: 0.2s; }
     .jc-thinking span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes thinking {
-      0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); }
-      30% { opacity: 1; transform: scale(1.2); }
-    }
+    @keyframes thinking { 0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1.2); } }
 
-    /* INPUT BAR */
-    .jc-input-area {
-      background: var(--bg2); border-top: 1px solid var(--border);
-      padding: 12px 24px 16px;
-    }
+    /* INPUT */
+    .jc-input-area { background: var(--bg2); border-top: 1px solid var(--border); padding: 12px 32px 16px; }
     .jc-commands { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .jc-cmd {
-      font-size: 11px; padding: 4px 10px; border-radius: 16px;
+      font-size: 11px; padding: 5px 12px; border-radius: 16px;
       background: var(--bg3); border: 1px solid var(--border2);
-      color: var(--text2); cursor: pointer; white-space: nowrap;
-      transition: all 0.15s; font-family: var(--font-body);
+      color: var(--text2); cursor: pointer; white-space: nowrap; transition: all 0.15s;
+      font-family: var(--font-body); display: flex; align-items: center; gap: 4px;
     }
     .jc-cmd:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.25); color: var(--gold2); }
     .jc-input-row {
       display: flex; align-items: flex-end; gap: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
-      border-radius: 14px; padding: 10px 14px;
-      transition: border-color 0.2s;
+      border-radius: 14px; padding: 10px 14px; transition: border-color 0.2s;
     }
     .jc-input-row:focus-within { border-color: rgba(201,168,76,0.4); }
     .jc-textarea {
@@ -731,156 +419,110 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       line-height: 1.5; max-height: 120px; min-height: 22px;
     }
     .jc-textarea::placeholder { color: var(--text3); }
-    .jc-send-btn {
-      width: 34px; height: 34px; border-radius: 9px;
-      background: linear-gradient(135deg, var(--gold), var(--gold2));
-      border: none; cursor: pointer;
+    .jc-send-btn, .jc-mic-btn {
+      width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      color: #0a0a12; font-size: 15px; font-weight: 700;
       transition: all 0.2s; flex-shrink: 0;
+    }
+    .jc-send-btn {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #0a0a12;
     }
     .jc-send-btn:hover { transform: scale(1.05); box-shadow: 0 0 16px rgba(201,168,76,0.4); }
     .jc-send-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-    .jc-input-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; letter-spacing: 0.04em; }
+    .jc-mic-btn {
+      background: var(--bg4); color: var(--text2); border: 1px solid var(--border);
+    }
+    .jc-mic-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .jc-mic-btn.recording { background: rgba(239,68,68,0.15); border-color: var(--red); color: var(--red); animation: pulse 1s infinite; }
+    .jc-input-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; }
 
     /* RIGHT PANEL */
     .jc-right-panel {
-      width: 300px; min-width: 300px;
-      background: var(--bg2); border-left: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
+      width: 320px; min-width: 320px; background: var(--bg2);
+      border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
     }
     .jc-right-header {
-      padding: 16px 16px 12px;
-      border-bottom: 1px solid var(--border);
+      padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
       font-family: var(--font-disp); font-size: 16px; font-weight: 600; color: var(--text1);
     }
-    .jc-right-tabs {
-      display: flex; border-bottom: 1px solid var(--border); padding: 0 12px;
-    }
+    .jc-right-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 12px; }
     .jc-right-tab {
       font-size: 11px; padding: 9px 12px; cursor: pointer; color: var(--text3);
-      border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap;
-      font-weight: 500;
+      border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; font-weight: 500;
+      display: flex; align-items: center; gap: 4px;
     }
     .jc-right-tab.active { color: var(--gold); border-color: var(--gold); }
     .jc-right-body { flex: 1; overflow-y: auto; padding: 12px; }
     .jc-right-body::-webkit-scrollbar { width: 3px; }
     .jc-right-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    /* CASE CARD right panel */
     .jc-case-card {
       background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px; margin-bottom: 8px;
-      cursor: pointer; transition: all 0.2s;
+      border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;
     }
     .jc-case-card:hover { border-color: var(--border2); background: var(--bg4); }
     .jc-case-num { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-bottom: 4px; }
     .jc-case-name { font-size: 13px; font-weight: 500; color: var(--text1); margin-bottom: 6px; }
     .jc-case-row { display: flex; justify-content: space-between; align-items: center; }
-    .jc-case-area-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
     .jc-case-prazo-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text3); margin-top: 6px; }
 
-    /* ALERT LIST */
     .jc-alert-item {
       display: flex; gap: 10px; align-items: flex-start;
-      padding: 10px; border-radius: 8px; margin-bottom: 6px;
-      border: 1px solid; cursor: pointer; transition: opacity 0.15s;
+      padding: 10px; border-radius: 8px; margin-bottom: 6px; border: 1px solid; cursor: pointer;
     }
-    .jc-alert-item:hover { opacity: 0.8; }
-    .jc-alert-item.fatal   { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.2); }
+    .jc-alert-item.fatal { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.2); }
     .jc-alert-item.warning { background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.2); }
-    .jc-alert-item.info    { background: rgba(79,142,247,0.07); border-color: rgba(79,142,247,0.2); }
+    .jc-alert-item.info { background: rgba(79,142,247,0.07); border-color: rgba(79,142,247,0.2); }
     .jc-alert-item.success { background: rgba(45,212,160,0.07); border-color: rgba(45,212,160,0.2); }
-    .jc-alert-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
-    .jc-alert-item.fatal .jc-alert-dot   { background: var(--red); }
-    .jc-alert-item.warning .jc-alert-dot { background: var(--amber); }
-    .jc-alert-item.info .jc-alert-dot    { background: var(--blue); }
-    .jc-alert-item.success .jc-alert-dot { background: var(--teal); }
     .jc-alert-text { font-size: 11.5px; color: var(--text1); line-height: 1.4; flex: 1; }
     .jc-alert-time { font-size: 9px; color: var(--text3); font-family: var(--font-mono); white-space: nowrap; }
 
-    /* MOBILE OVERLAY */
-    .jc-sidebar-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 40;
-      background: rgba(0,0,0,0.5);
-    }
+    .jc-sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.5); }
     .jc-sidebar-overlay.visible { display: block; }
-
-    /* HAMBURGER */
-    .jc-hamburger {
-      display: none;
-      background: none; border: none; cursor: pointer;
-      font-size: 20px; color: var(--text1); padding: 4px;
-      line-height: 1;
-    }
-
-    /* MOBILE RIGHT PANEL TOGGLE */
+    .jc-hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text1); padding: 4px; }
     .jc-right-toggle {
-      display: none;
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 8px; padding: 6px 10px; cursor: pointer;
-      font-size: 11px; color: var(--text2);
-      transition: all 0.15s;
+      display: none; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 11px; color: var(--text2);
+      align-items: center; gap: 4px;
     }
-    .jc-right-toggle:hover { border-color: var(--border2); color: var(--text1); }
-
-    /* SCROLLBAR global tweak */
     * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
 
-    /* ── RESPONSIVE ── */
     @media (max-width: 1024px) {
       .jc-right-panel { display: none; }
       .jc-right-panel.mobile-visible {
-        display: flex;
-        position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
-        width: 300px;
-        box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+        display: flex; position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
+        width: 300px; box-shadow: -4px 0 24px rgba(0,0,0,0.3);
       }
-      .jc-right-toggle { display: block; }
+      .jc-right-toggle { display: flex; }
     }
-
     @media (max-width: 768px) {
       .jc-sidebar {
         position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+        transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.3);
       }
       .jc-sidebar.mobile-open { transform: translateX(0); }
       .jc-sidebar-overlay.visible { display: block; }
       .jc-hamburger { display: block; }
-
       .jc-topbar { padding: 0 12px; gap: 8px; }
       .jc-alert-chip { display: none; }
       .jc-dept-title { font-size: 16px; }
-      .jc-dept-sub { font-size: 9px; }
-
-      .jc-msg-wrap { padding: 8px 12px; }
+      .jc-msg-wrap { padding: 8px 16px; }
       .jc-msg-bubble { max-width: 85%; font-size: 13px; }
       .jc-card-grid { grid-template-columns: 1fr 1fr; }
-
       .jc-input-area { padding: 8px 12px 12px; }
-      .jc-commands { gap: 4px; }
       .jc-cmd { font-size: 10px; padding: 3px 8px; }
-
-      .jc-process-row { flex-wrap: wrap; gap: 6px; padding: 10px; }
-      .jc-process-id { min-width: auto; }
-      .jc-process-value { min-width: auto; }
     }
-
     @media (max-width: 480px) {
       .jc-card-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
       .jc-kpi { padding: 8px; }
       .jc-kpi-value { font-size: 20px; }
-      .jc-card-briefing { padding: 14px; }
-      .jc-card-briefing-title { font-size: 18px; }
       .jc-user-chip { display: none; }
     }
   `}</style>
 );
 
 // ── SUB-COMPONENTS ───────────────────────────────────────────
-
 function BriefingCard({ card }: { card: any }) {
   return (
     <div className="jc-card-briefing">
@@ -889,7 +531,6 @@ function BriefingCard({ card }: { card: any }) {
       <div className="jc-card-grid">
         {card.items.map((item: any, i: number) => (
           <div className="jc-kpi" key={i} style={{ borderLeftColor: item.accent, borderLeftWidth: 2 }}>
-            <div className="jc-kpi-icon" style={{ color: item.accent }}>{item.icon}</div>
             <div className="jc-kpi-value" style={{ color: item.accent }}>{item.value}</div>
             <div className="jc-kpi-label">{item.label}</div>
           </div>
@@ -913,7 +554,11 @@ function ProcessListCard({ processes }: { processes: any[] }) {
             border: `1px solid ${areaColors[p.area] || "#4f8ef7"}30`
           }}>{p.area}</div>
           <div className="jc-process-prazo" style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text2)" }}>
-            {p.prazo === "HOJE" ? "⚠ HOJE" : `⏱ ${p.prazo}`}
+            {p.prazo === "HOJE" ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                <AlertTriangle size={10} /> HOJE
+              </span>
+            ) : p.prazo}
           </div>
           <div className={`jc-process-badge ${p.status}`}>{p.status}</div>
           <div className="jc-process-value">{p.value}</div>
@@ -927,23 +572,21 @@ function MessageBubble({ msg }: { msg: any }) {
   const agentColors: Record<string, string> = {
     "Meu Assistente": "#c9a84c", "Pesquisador Jurídico": "#2dd4a0",
     "Redator Processual": "#a78bfa", "Controlador de Prazos": "#ef4444",
-    "Gerador de Relatórios": "#34d399",
   };
   const isUser = msg.role === "user";
   const color = agentColors[msg.agent] || "#4f8ef7";
 
   return (
     <div className={`jc-msg-wrap ${isUser ? "user" : ""}`}>
-      {!isUser && (
-        <div className="jc-msg-avatar" style={{ background: `${color}20`, color, border: `1px solid ${color}30`, fontSize: 11 }}>
-          {msg.agent ? msg.agent.split(" ").map((w: string) => w[0]).join("").slice(0, 2) : "AI"}
-        </div>
-      )}
-      {isUser && (
-        <div className="jc-msg-avatar" style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.25)", fontFamily: "'Cormorant Garamond', serif", fontSize: 14 }}>
-          JC
-        </div>
-      )}
+      <div className="jc-msg-avatar" style={{
+        background: isUser ? "rgba(201,168,76,0.15)" : `${color}20`,
+        color: isUser ? "#c9a84c" : color,
+        border: `1px solid ${isUser ? "rgba(201,168,76,0.25)" : `${color}30`}`,
+        fontFamily: isUser ? "'Cormorant Garamond', serif" : "var(--font-mono)",
+        fontSize: isUser ? 14 : 11,
+      }}>
+        {isUser ? "U" : (msg.agent ? getInitials(msg.agent) : "AI")}
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "80%" }}>
         {!isUser && msg.agent && (
           <div className="jc-msg-meta">
@@ -970,7 +613,7 @@ function ThinkingBubble({ agent }: { agent: string }) {
   return (
     <div className="jc-msg-wrap">
       <div className="jc-msg-avatar" style={{ background: "rgba(201,168,76,0.1)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.2)", fontSize: 11 }}>
-        {agent.split(" ").map((w: string) => w[0]).join("").slice(0, 2)}
+        {getInitials(agent)}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="jc-msg-meta"><span className="agent-tag">{agent}</span><span>agora</span></div>
@@ -982,38 +625,69 @@ function ThinkingBubble({ agent }: { agent: string }) {
   );
 }
 
+// ── ALERT ICON HELPER ───────────────────────────────────────
+function AlertIcon({ type }: { type: string }) {
+  const size = 14;
+  if (type === "fatal") return <AlertTriangle size={size} style={{ color: "#ff8080" }} />;
+  if (type === "warning") return <AlertCircle size={size} style={{ color: "#fbbf24" }} />;
+  if (type === "success") return <CheckCircle size={size} style={{ color: "#6ee7b7" }} />;
+  return <Info size={size} style={{ color: "#93c5fd" }} />;
+}
+
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
   const navigate = useNavigate();
   const { user, userRoles, signOut } = useAuth();
-  const { canAccessDepartment, canAccessAdmin, canAccessClients, canEdit, isReadOnly, roleLabel } = usePermissions();
+  const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection();
-  const [showWelcome, setShowWelcome]   = useState(true);
-  const [activeDept, setActiveDept]     = useState("assistente");
-  const [messages, setMessages]         = useState<any[]>(INITIAL_MESSAGES);
-  const [inputVal, setInputVal]         = useState("");
-  const [thinking, setThinking]         = useState(false);
-  const [rightTab, setRightTab]         = useState("processos");
+
+  const [showWelcome, setShowWelcome]     = useState(true);
+  const [activeDept, setActiveDept]       = useState("assistente");
+  const [messages, setMessages]           = useState<any[]>(INITIAL_MESSAGES);
+  const [inputVal, setInputVal]           = useState("");
+  const [thinking, setThinking]           = useState(false);
+  const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const [theme, setTheme]               = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("jc-theme") as Theme) || "dark";
-    }
+  const [theme, setTheme]                 = useState<Theme>(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("jc-theme") as Theme) || "dark";
     return "dark";
   });
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [isRecording, setIsRecording]     = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
-
-  useEffect(() => {
-    localStorage.setItem("jc-theme", theme);
-  }, [theme]);
+  useEffect(() => { localStorage.setItem("jc-theme", theme); }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+
+  // Voice input
+  const toggleRecording = () => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.lang = "pt-BR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript;
+      setInputVal(prev => prev + (prev ? " " : "") + transcript);
+    };
+    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = () => setIsRecording(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  };
 
   const handleSend = (text?: string) => {
     const val = (text || inputVal).trim();
@@ -1022,22 +696,19 @@ export default function JurisCloudOS() {
     setMessages(prev => [...prev, userMsg]);
     setInputVal("");
     setThinking(true);
-
     setTimeout(() => {
       setThinking(false);
-      const agentResponses = [
-        { agent: "Pesquisador Jurídico", content: "Encontrei **3 precedentes relevantes** no TJBA relacionados à sua consulta. O mais recente é de março/2026 e fortalece a tese de revisão contratual. Deseja que eu prepare uma minuta com essas citações?" },
-        { agent: "Controlador de Prazos", content: "⚠ Atenção: detectei **2 prazos críticos** para os próximos 3 dias úteis. O caso #0023847 (Bancário) vence **hoje às 17h**. Recomendo acionar o Redator Processual imediatamente." },
-        { agent: "Redator Processual",   content: "Posso gerar a **petição inicial** ou **contestação** com base nos documentos do cliente. Para iniciar, preciso confirmar: qual a vara e tribunal de destino?" },
-        { agent: "Meu Assistente",       content: "Entendido. Estou **orquestrando os agentes necessários** para atender sua solicitação. O Pesquisador Jurídico está mapeando jurisprudência e o Controlador de Prazos verificando impactos." },
+      const responses = [
+        { agent: "Pesquisador Jurídico", content: "Encontrei **3 precedentes relevantes** no TJBA. O mais recente fortalece a tese de revisão contratual." },
+        { agent: "Controlador de Prazos", content: "Detectei **2 prazos críticos** nos próximos 3 dias úteis. O caso #0023847 vence **hoje às 17h**." },
+        { agent: "Redator Processual", content: "Posso gerar a **petição inicial** com base nos documentos. Qual a vara e tribunal de destino?" },
+        { agent: "Meu Assistente", content: "Estou **orquestrando os agentes** para atender sua solicitação. Pesquisador mapeando jurisprudência." },
       ];
-      const response = agentResponses[Math.floor(Math.random() * agentResponses.length)];
-      const asstMsg = {
-        id: Date.now() + 1, role: "assistant", agent: response.agent,
-        content: response.content,
+      const r = responses[Math.floor(Math.random() * responses.length)];
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: "assistant", agent: r.agent, content: r.content,
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages(prev => [...prev, asstMsg]);
+      }]);
     }, 1800 + Math.random() * 600);
   };
 
@@ -1048,18 +719,43 @@ export default function JurisCloudOS() {
   const activeDeptData = DEPARTMENTS.find(d => d.id === activeDept);
   const areaColors: Record<string, string> = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdenciário": "#f59e0b", "Contratos": "#4f8ef7" };
 
+  // Filter departments by role
+  const visibleDepts = DEPARTMENTS.filter(d => canAccessDepartment(d.id));
+  // Filter commands by role
+  const visibleCommands = ALL_COMMANDS.filter(c => canSeeCommand(c));
+  // Filter agents by role + department
+  const visibleAgents = (() => {
+    const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(activeDept);
+    return deptAgents.filter(a => canSeeAgentRole(a.role)).slice(0, visibility.maxAgentsShown);
+  })();
+
+  const DeptIcon = DEPT_ICONS[activeDept] || Sparkles;
+
+  // Menu items config
+  const MENU_ITEMS = [
+    { id: "clientes", label: "Clientes", icon: Users, color: "#2dd4a0", action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
+    { id: "admin", label: "Administração", icon: Crown, color: "#c9a84c", action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
+    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: "#c9a84c", action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
+    { id: "organograma", label: "Organograma", icon: Network, color: "#a78bfa", action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") },
+    { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: "#ff6b6b", action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
+    { id: "perfil", label: "Meu Perfil", icon: User, color: "#a78bfa", action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
+    { id: "site", label: "Voltar ao Site", icon: Globe, color: "#06b6d4", action: () => navigate("/"), show: canSeeMenuItem("site") },
+    { id: "sair", label: "Sair", icon: LogOut, color: "#ef4444", action: () => signOut(), show: canSeeMenuItem("sair") },
+  ];
+
+  const roleLabelsMap: Record<string, string> = {
+    ceo: "CEO", director: "Diretor", orchestrator: "Orquestrador", manager: "Gerente",
+    specialist: "Especialista", reviewer: "Revisor", executor: "Executor", monitor: "Monitor",
+  };
+
   return (
     <div data-theme={theme}>
       <GlobalStyles theme={theme} />
       <div className="jc-root">
+        {/* MOBILE OVERLAY */}
+        <div className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`} onClick={() => setSidebarOpen(false)} />
 
-        {/* MOBILE SIDEBAR OVERLAY */}
-        <div
-          className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`}
-          onClick={() => setSidebarOpen(false)}
-        />
-
-        {/* ── SIDEBAR ── */}
+        {/* SIDEBAR */}
         <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
           <div className="jc-logo">
             <div className="jc-logo-mark">A</div>
@@ -1070,115 +766,87 @@ export default function JurisCloudOS() {
           </div>
 
           <div className="jc-search">
-            <span style={{ fontSize: 12, color: "var(--text3)" }}>⌕</span>
-            <input
-              placeholder="Buscar processo, cliente..."
-              value={sidebarSearch}
-              onChange={e => setSidebarSearch(e.target.value)}
-            />
-            </div>
+            <Search size={14} style={{ color: "var(--text3)", flexShrink: 0 }} />
+            <input placeholder="Buscar processo, cliente..." value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} />
+          </div>
 
           <nav className="jc-nav">
             <div className="jc-section-label">Departamentos</div>
-            {DEPARTMENTS.filter(dept => canAccessDepartment(dept.id)).map(dept => (
-              <div
-                key={dept.id}
-                className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
-                onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}
-              >
-                <span className="jc-nav-icon" style={{ color: dept.color }}>{dept.icon}</span>
-                <span className="jc-nav-label">{dept.label}</span>
-                {dept.badge > 0 && (
-                  <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>
-                )}
-              </div>
-            ))}
+            {visibleDepts.map(dept => {
+              const Icon = DEPT_ICONS[dept.id] || Sparkles;
+              return (
+                <div key={dept.id} className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
+                  onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}>
+                  <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
+                  <span className="jc-nav-label">{dept.label}</span>
+                  {dept.badge > 0 && <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>}
+                </div>
+              );
+            })}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            {canAccessClients && (
-              <div className="jc-nav-item" onClick={() => navigate("/clientes")}>
-                <span className="jc-nav-icon" style={{ color: "#2dd4a0" }}>👥</span>
-                <span className="jc-nav-label">Clientes</span>
-              </div>
-            )}
-            {canAccessAdmin && (
-              <div className="jc-nav-item" onClick={() => navigate("/admin")}>
-                <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>👑</span>
-                <span className="jc-nav-label">Administração</span>
-              </div>
-            )}
-            <div className="jc-nav-item" onClick={() => navigate("/dashboard")}>
-              <span className="jc-nav-icon" style={{ color: "#c9a84c" }}>📊</span>
-              <span className="jc-nav-label">Dashboard</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/organograma")}>
-              <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>🏗️</span>
-              <span className="jc-nav-label">Organograma</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/eficiencia")}>
-              <span className="jc-nav-icon" style={{ color: "#ff6b6b" }}>🧠</span>
-              <span className="jc-nav-label">KPIs Eficiência</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/perfil")}>
-              <span className="jc-nav-icon" style={{ color: "#a78bfa" }}>👤</span>
-              <span className="jc-nav-label">Meu Perfil</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => navigate("/")}>
-              <span className="jc-nav-icon" style={{ color: "#06b6d4" }}>🌐</span>
-              <span className="jc-nav-label">Voltar ao Site</span>
-            </div>
-            <div className="jc-nav-item" onClick={() => signOut()}>
-              <span className="jc-nav-icon" style={{ color: "#ef4444" }}>🚪</span>
-              <span className="jc-nav-label">Sair</span>
-            </div>
-          </nav>
-
-          <div className="jc-agents-section">
-            <div className="jc-section-label">Agentes do {activeDeptData?.label || "Departamento"} ({getAgentsForDepartment(activeDept).length})</div>
-            {getAgentsForDepartment(activeDept).slice(0, 8).map(agent => (
-              <div className="jc-agent-item" key={agent.id}>
-                <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25`, fontSize: 14 }}>
-                  {agent.avatar}
-                </div>
-                <div className="jc-agent-name">{agent.name}</div>
-                <div className={`jc-agent-dot ${agent.status}`} />
+            {MENU_ITEMS.filter(m => m.show).map(item => (
+              <div key={item.id} className="jc-nav-item" onClick={item.action}>
+                <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
+                <span className="jc-nav-label">{item.label}</span>
               </div>
             ))}
-            {getAgentsForDepartment(activeDept).length > 8 && (
-              <div style={{ fontSize: 10, color: "var(--text3)", padding: "4px 8px", textAlign: "center" }}>
-                +{getAgentsForDepartment(activeDept).length - 8} agentes
-              </div>
-            )}
+          </nav>
+
+          {/* Agents in sidebar - filtered by role */}
+          <div className="jc-agents-section">
+            <div className="jc-section-label">Agentes ({visibleAgents.length})</div>
+            {visibleAgents.map(agent => {
+              const RoleIcon = ROLE_ICONS[agent.role] || Zap;
+              return (
+                <div className="jc-agent-item" key={agent.id}>
+                  <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
+                    {getInitials(agent.name)}
+                  </div>
+                  <div className="jc-agent-name">{agent.name}</div>
+                  <Circle size={6} fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
+                    style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
+                </div>
+              );
+            })}
           </div>
         </aside>
 
-        {/* ── MAIN COLUMN ── */}
+        {/* MAIN */}
         <main className="jc-main">
-
-          {/* TOPBAR */}
           <header className="jc-topbar">
-            <button className="jc-hamburger" onClick={() => setSidebarOpen(true)}>☰</button>
+            <button className="jc-hamburger" onClick={() => setSidebarOpen(true)}>
+              <Menu size={20} />
+            </button>
             <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-              <div className="jc-dept-title" style={{ color: activeDeptData?.color }}>
-                {activeDeptData?.icon} {activeDeptData?.label}
+              <div className="jc-dept-title" style={{ color: activeDeptData?.color, display: "flex", alignItems: "center", gap: 8 }}>
+                <DeptIcon size={20} />
+                {activeDeptData?.label}
               </div>
-              <div className="jc-dept-sub">Sistema Operacional Conversacional</div>
+              <div className="jc-dept-sub">Sistema Operacional</div>
             </div>
             <div className="jc-topbar-spacer" />
-            {ALERTS.slice(0, 2).map((a, i) => (
+
+            {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
               <div key={i} className={`jc-alert-chip ${a.type}`}>
-                <span>{a.type === "fatal" ? "⚠" : a.type === "warning" ? "◈" : a.type === "success" ? "✓" : "ℹ"}</span>
+                <AlertIcon type={a.type} />
                 <span>{a.text.slice(0, 28)}...</span>
               </div>
             ))}
+
             <NotificationCenter />
-            <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema">
-              {theme === "dark" ? "☀️" : "🌙"}
+
+            <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
+                background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)" }}>
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
+
             <button className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
-              {rightPanelOpen ? "✕ Fechar" : "📋 Operações"}
+              {rightPanelOpen ? <><PanelRightClose size={14} /> Fechar</> : <><PanelRightOpen size={14} /> Operações</>}
             </button>
-            <div className="jc-user-chip" onClick={() => signOut()} style={{ cursor: "pointer" }} title="Clique para sair">
+
+            <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil">
               <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
               <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
               {userRoles.length > 0 && (
@@ -1189,15 +857,13 @@ export default function JurisCloudOS() {
             </div>
           </header>
 
-          {/* MESSAGES / WELCOME */}
+          {/* CONTENT */}
           {showWelcome ? (
-            <div className="jc-messages">
-              <WelcomeScreen onDismiss={() => setShowWelcome(false)} />
-            </div>
+            <div className="jc-messages"><WelcomeScreen onDismiss={() => setShowWelcome(false)} /></div>
           ) : (
             <div className="jc-messages">
               {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-              {thinking && <ThinkingBubble agent={AGENTS[Math.floor(Math.random() * AGENTS.length)].name} />}
+              {thinking && <ThinkingBubble agent={AGENTS[Math.floor(Math.random() * 5)].name} />}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -1205,51 +871,51 @@ export default function JurisCloudOS() {
           {/* INPUT */}
           <div className="jc-input-area">
             <div className="jc-commands">
-              {QUICK_COMMANDS.map((cmd, i) => (
-                <button key={i} className="jc-cmd" onClick={() => handleSend(cmd)}>/{cmd}</button>
+              {visibleCommands.map((cmd, i) => (
+                <button key={i} className="jc-cmd" onClick={() => handleSend(cmd)}>
+                  <ChevronRight size={10} /> {cmd}
+                </button>
               ))}
             </div>
             <div className="jc-input-row">
-              <textarea
-                ref={textareaRef}
-                className="jc-textarea"
+              <textarea ref={textareaRef} className="jc-textarea"
                 placeholder={`Fale com os agentes do ${activeDeptData?.label || "departamento"}...`}
                 value={inputVal}
-                onChange={e => {
-                  setInputVal(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-                }}
-                onKeyDown={handleKeyDown}
-                rows={1}
-              />
+                onChange={e => { setInputVal(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                onKeyDown={handleKeyDown} rows={1} />
+              <button className={`jc-mic-btn ${isRecording ? "recording" : ""}`} onClick={toggleRecording} title={isRecording ? "Parar gravação" : "Falar"}>
+                {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+              </button>
               <button className="jc-send-btn" onClick={() => handleSend()} disabled={thinking || !inputVal.trim()}>
-                ↑
+                <Send size={16} />
               </button>
             </div>
             <div className="jc-input-hint">
-              {isReadOnly && <span style={{ color: "#f59e0b", marginRight: 8 }}>🔒 Modo leitura ({roleLabel})</span>}
-              Enter para enviar · Shift+Enter para nova linha · Use / para comandos rápidos
+              {isReadOnly && <span style={{ color: "#f59e0b", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
+              Enter para enviar · Shift+Enter para nova linha
             </div>
           </div>
         </main>
 
-        {/* ── RIGHT PANEL ── */}
+        {/* RIGHT PANEL */}
         <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""}`}>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
           <div className="jc-right-tabs">
-            {["filas", "processos", "alertas", "agentes"].map(tab => (
-              <div key={tab} className={`jc-right-tab ${rightTab === tab ? "active" : ""}`} onClick={() => setRightTab(tab)}>
-                {tab === "filas" ? "Filas" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {[
+              { id: "filas", label: "Filas", icon: ListTodo },
+              { id: "processos", label: "Processos", icon: FileText },
+              { id: "alertas", label: "Alertas", icon: AlertTriangle },
+              { id: "agentes", label: "Agentes", icon: Zap },
+            ].map(tab => (
+              <div key={tab.id} className={`jc-right-tab ${rightTab === tab.id ? "active" : ""}`} onClick={() => setRightTab(tab.id)}>
+                <tab.icon size={12} /> {tab.label}
               </div>
             ))}
           </div>
           <div className="jc-right-body">
-            {rightTab === "filas" && (
-              <TaskQueuesPanel />
-            )}
+            {rightTab === "filas" && <TaskQueuesPanel />}
 
             {rightTab === "processos" && (
               <>
@@ -1261,7 +927,8 @@ export default function JurisCloudOS() {
                     <div className="jc-case-num">Proc. #{p.id} · {p.tribunal}</div>
                     <div className="jc-case-name">{p.client}</div>
                     <div className="jc-case-row">
-                      <span className="jc-case-area-tag" style={{
+                      <span style={{
+                        fontSize: 10, padding: "2px 7px", borderRadius: 4,
                         background: `${areaColors[p.area] || "#4f8ef7"}18`,
                         color: areaColors[p.area] || "#4f8ef7",
                         border: `1px solid ${areaColors[p.area] || "#4f8ef7"}30`
@@ -1269,8 +936,8 @@ export default function JurisCloudOS() {
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--teal)" }}>{p.value}</span>
                     </div>
                     <div className="jc-case-prazo-row">
-                      <span style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text3)" }}>
-                        {p.prazo === "HOJE" ? "⚠ Prazo HOJE" : `⏱ Prazo em ${p.prazo}`}
+                      <span style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text3)", display: "flex", alignItems: "center", gap: 3 }}>
+                        {p.prazo === "HOJE" ? <><AlertTriangle size={10} /> Prazo HOJE</> : <>Prazo em {p.prazo}</>}
                       </span>
                       <div style={{ flex: 1 }} />
                       <span className={`jc-process-badge ${p.status}`}>{p.status}</span>
@@ -1287,7 +954,7 @@ export default function JurisCloudOS() {
                 </div>
                 {ALERTS.map((a, i) => (
                   <div key={i} className={`jc-alert-item ${a.type}`}>
-                    <div className="jc-alert-dot" />
+                    <AlertIcon type={a.type} />
                     <div className="jc-alert-text">{a.text}</div>
                     <div className="jc-alert-time">{a.time}</div>
                   </div>
@@ -1296,38 +963,29 @@ export default function JurisCloudOS() {
             )}
 
             {rightTab === "agentes" && (() => {
-              const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(activeDept);
               const capacity = getTotalCapacity();
-              const roleLabels: Record<AgentRole, string> = { ceo: "👑 CEO", director: "👔 Diretor", orchestrator: "🎯 Orquestrador", manager: "📋 Gerente", specialist: "🔬 Especialista", reviewer: "✅ Revisor", executor: "⚡ Executor", monitor: "📡 Monitor" };
-              const roleCounts = (["ceo","director","orchestrator","manager","specialist","reviewer","executor","monitor"] as AgentRole[]).map(r => ({ role: r, label: roleLabels[r], count: getAgentsByRole(r).length }));
               return (
                 <>
-                  <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
-                    {AGENTS.length} agentes total · {AGENTS.filter(a => a.status === "active").length} ativos
-                  </div>
-                  <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 8, padding: "8px", background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                    <div style={{ marginBottom: 4 }}>📊 Capacidade Global: {capacity.used}/{capacity.total} tarefas ({capacity.percentage}%)</div>
-                    <div style={{ background: "var(--bg)", borderRadius: 4, height: 6, overflow: "hidden", marginBottom: 6 }}>
-                      <div style={{ width: `${capacity.percentage}%`, height: "100%", borderRadius: 4, background: capacity.percentage > 80 ? "var(--red)" : capacity.percentage > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
+                  {visibility.showCapacityPanel && (
+                    <div style={{ fontSize: 10, color: "var(--text2)", marginBottom: 8, padding: 8, background: "var(--bg4)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                      <div style={{ marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                        <BarChart3 size={12} /> Capacidade: {capacity.used}/{capacity.total} ({capacity.percentage}%)
+                      </div>
+                      <div style={{ background: "var(--bg)", borderRadius: 4, height: 6, overflow: "hidden" }}>
+                        <div style={{ width: `${capacity.percentage}%`, height: "100%", borderRadius: 4, background: capacity.percentage > 80 ? "var(--red)" : capacity.percentage > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
+                      </div>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {roleCounts.map(r => (
-                        <span key={r.role} style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: "var(--badge-bg)", color: "var(--text2)" }}>
-                          {r.label}: {r.count}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                  )}
                   <div style={{ fontSize: 10, color: "var(--gold)", marginBottom: 8 }}>
-                    {activeDept === "assistente" ? "Todos os departamentos" : `${activeDeptData?.icon} ${activeDeptData?.label}`} · {deptAgents.length} agentes
+                    {visibleAgents.length} agentes visíveis
                   </div>
-                  {deptAgents.map(agent => {
+                  {visibleAgents.map(agent => {
                     const load = getAgentLoad(agent);
+                    const RoleIcon = ROLE_ICONS[agent.role] || Zap;
                     return (
                       <div key={agent.id} style={{
                         background: "var(--bg3)", border: "1px solid var(--border)",
-                        borderRadius: 10, padding: "12px", marginBottom: 8,
-                        cursor: "pointer", transition: "border-color 0.2s, background-color var(--theme-transition)"
+                        borderRadius: 10, padding: 12, marginBottom: 8, cursor: "pointer",
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                           <div style={{
@@ -1335,48 +993,23 @@ export default function JurisCloudOS() {
                             background: `${agent.color}18`, color: agent.color,
                             border: `1px solid ${agent.color}25`,
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 16, flexShrink: 0
-                          }}>{agent.avatar}</div>
+                            fontSize: 11, fontWeight: 700, fontFamily: "var(--font-mono)", flexShrink: 0
+                          }}>{getInitials(agent.name)}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.name}</div>
-                            <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                              {roleLabels[agent.role]} · {agent.status === "active" ? "● Ativo" : agent.status === "alert" ? "⚠ Alerta" : "○ Ocioso"}
+                            <div style={{ fontSize: 9, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 4 }}>
+                              <RoleIcon size={10} /> {roleLabelsMap[agent.role] || agent.role}
                             </div>
-                            {agent.reportsTo !== undefined && (() => {
-                              const superior = AGENTS.find(a => a.id === agent.reportsTo);
-                              return superior ? (
-                                <div style={{ fontSize: 8, color: "var(--text3)", marginTop: 1 }}>
-                                  ↳ reporta a: {superior.name}
-                                </div>
-                              ) : null;
-                            })()}
                           </div>
-                          <div className={`jc-agent-dot ${agent.status}`} />
+                          <Circle size={8}
+                            fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
+                            style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
                         </div>
                         <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
-                          <div style={{
-                            width: `${load}%`, height: "100%", borderRadius: 4,
-                            background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)",
-                            transition: "width 0.5s ease"
-                          }} />
+                          <div style={{ width: `${load}%`, height: "100%", borderRadius: 4, background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ fontSize: 9, color: "var(--text3)" }}>
-                            Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks}
-                          </div>
-                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                            {agent.permissions.slice(0, 4).map(p => (
-                              <span key={p} style={{
-                                fontSize: 7, padding: "1px 4px", borderRadius: 3,
-                                background: p === "admin" ? "rgba(201,168,76,0.15)" : p === "approve" ? "rgba(45,212,160,0.15)" : "var(--badge-bg)",
-                                color: p === "admin" ? "var(--gold)" : p === "approve" ? "var(--teal)" : "var(--text3)",
-                                textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--font-mono)"
-                              }}>{p}</span>
-                            ))}
-                            {agent.permissions.length > 4 && (
-                              <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3, background: "var(--badge-bg)", color: "var(--text3)", fontFamily: "var(--font-mono)" }}>+{agent.permissions.length - 4}</span>
-                            )}
-                          </div>
+                          <span style={{ fontSize: 9, color: "var(--text3)" }}>Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks}</span>
                         </div>
                       </div>
                     );
@@ -1387,12 +1020,8 @@ export default function JurisCloudOS() {
           </div>
         </aside>
 
-        {/* RIGHT PANEL OVERLAY (mobile) */}
         {rightPanelOpen && (
-          <div
-            style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }}
-            onClick={() => setRightPanelOpen(false)}
-          />
+          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} />
         )}
       </div>
     </div>

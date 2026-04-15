@@ -1,57 +1,57 @@
 import { useAuth } from "@/hooks/useAuth";
-
-// Maps user roles to allowed departments and capabilities
-const ROLE_PERMISSIONS: Record<string, {
-  departments: string[] | "*";
-  canEdit: boolean;
-  canDelete: boolean;
-  canAccessAdmin: boolean;
-  canAccessFinancial: boolean;
-  canAccessClients: boolean;
-  label: string;
-}> = {
-  admin:        { departments: "*", canEdit: true, canDelete: true, canAccessAdmin: true, canAccessFinancial: true, canAccessClients: true, label: "Administrador" },
-  director:     { departments: "*", canEdit: true, canDelete: true, canAccessAdmin: false, canAccessFinancial: true, canAccessClients: true, label: "Diretor" },
-  manager:      { departments: ["assistente","recepcao","civel","trabalhista","tributario","protocolo","calculos","audiencias","monitoramento","cobrancas","compliance","familia"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: true, canAccessClients: true, label: "Gerente" },
-  lawyer:       { departments: ["assistente","civel","trabalhista","tributario","audiencias","monitoramento","familia"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: true, label: "Advogado" },
-  receptionist: { departments: ["assistente","recepcao"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: true, label: "Recepcionista" },
-  intern:       { departments: ["assistente","recepcao","civel","trabalhista"], canEdit: false, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: true, label: "Estagiário" },
-  financial:    { departments: ["assistente","cobrancas"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: true, canAccessClients: false, label: "Financeiro" },
-  marketing:    { departments: ["assistente","marketing"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: false, label: "Marketing" },
-  protocol:     { departments: ["assistente","protocolo"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: false, label: "Protocolo" },
-  calculator:   { departments: ["assistente","calculos"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: false, label: "Calculista" },
-  compliance:   { departments: ["assistente","compliance"], canEdit: true, canDelete: false, canAccessAdmin: false, canAccessFinancial: false, canAccessClients: false, label: "Compliance" },
-};
+import { getRoleVisibility, type RoleVisibility } from "@/config/roleVisibility";
 
 export function usePermissions() {
   const { userRoles } = useAuth();
 
-  // Get the highest-privilege role
   const primaryRole = userRoles[0] || "intern";
-  const perms = ROLE_PERMISSIONS[primaryRole] || ROLE_PERMISSIONS.intern;
+  const visibility = getRoleVisibility(primaryRole);
 
   const canAccessDepartment = (deptId: string) => {
-    if (perms.departments === "*") return true;
-    return perms.departments.includes(deptId);
+    if (visibility.departments === "*") return true;
+    return visibility.departments.includes(deptId);
   };
 
-  const canEdit = perms.canEdit;
-  const canDelete = perms.canDelete;
-  const canAccessAdmin = perms.canAccessAdmin;
-  const canAccessFinancial = perms.canAccessFinancial;
-  const canAccessClients = perms.canAccessClients;
-  const roleLabel = perms.label;
+  const canSeeCommand = (cmd: string) => {
+    return visibility.commands.includes(cmd);
+  };
+
+  const canSeeMenuItem = (item: string) => {
+    return visibility.menuItems.includes(item);
+  };
+
+  const canSeeAgentRole = (role: string) => {
+    if (visibility.agentRolesVisible === "*") return true;
+    return (visibility.agentRolesVisible as string[]).includes(role);
+  };
+
+  const isAdmin = primaryRole === "admin";
+  const isDirector = primaryRole === "director";
+  const isManager = primaryRole === "manager";
+  const canEdit = ["admin", "director", "manager", "lawyer", "receptionist", "financial", "marketing", "protocol", "calculator", "compliance"].includes(primaryRole);
+  const canDelete = ["admin", "director"].includes(primaryRole);
+  const canAccessAdmin = primaryRole === "admin";
+  const canAccessFinancial = ["admin", "director", "manager", "financial"].includes(primaryRole);
+  const canAccessClients = ["admin", "director", "manager", "lawyer", "receptionist", "intern"].includes(primaryRole);
   const isReadOnly = !canEdit;
+  const roleLabel = visibility.label;
 
   return {
     primaryRole,
     roleLabel,
+    visibility,
     canAccessDepartment,
+    canSeeCommand,
+    canSeeMenuItem,
+    canSeeAgentRole,
     canEdit,
     canDelete,
     canAccessAdmin,
     canAccessFinancial,
     canAccessClients,
     isReadOnly,
+    isAdmin,
+    isDirector,
+    isManager,
   };
 }
