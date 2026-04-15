@@ -2,17 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAuth } from "@/hooks/useAuth";
-import { Coins, ArrowLeft, TrendingUp, TrendingDown, Gift, RefreshCw, Zap, ShoppingCart } from "lucide-react";
+import { Coins, ArrowLeft, TrendingUp, TrendingDown, Gift, RefreshCw, Zap, ShoppingCart, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const TOKEN_PACKAGES = [
-  { id: "500", amount: 500, price: "R$ 9,90", popular: false },
-  { id: "2000", amount: 2000, price: "R$ 29,90", popular: true },
-  { id: "5000", amount: 5000, price: "R$ 59,90", popular: false },
-  { id: "15000", amount: 15000, price: "R$ 149,90", popular: false },
+const PRICING_TIERS = [
+  { action: "Comando simples", examples: "Ver prazos, avisar cliente, abrir fila", cost: 1 },
+  { action: "Pesquisa jurídica", examples: "Resumir caso, jurisprudência, auditoria, relatório", cost: 5 },
+  { action: "Geração de petição", examples: "Gerar petição inicial, redigir documento", cost: 10 },
 ];
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -90,37 +88,50 @@ export default function Tokens() {
           </Card>
         </div>
 
-        {/* Recharge Packages */}
+        {/* Token Pricing */}
         <Card className="bg-[#1a1a2e] border-[#c9a84c]/20">
           <CardHeader>
             <CardTitle className="text-[#c9a84c] flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5" /> Recarregar Tokens
+              <Info className="w-5 h-5" /> Tabela de Consumo por Token
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {TOKEN_PACKAGES.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  className={`relative p-4 rounded-xl border transition-all hover:scale-105 ${
-                    pkg.popular
-                      ? "border-[#c9a84c] bg-[#c9a84c]/10 shadow-lg shadow-[#c9a84c]/10"
-                      : "border-white/10 bg-white/5 hover:border-[#c9a84c]/50"
-                  }`}
-                  onClick={() => {
-                    // TODO: Stripe checkout
-                    alert(`Stripe checkout para ${pkg.amount} tokens será integrado em breve!`);
-                  }}
-                >
-                  {pkg.popular && (
-                    <Badge className="absolute -top-2 right-2 bg-[#c9a84c] text-black text-[10px]">Popular</Badge>
-                  )}
-                  <div className="text-2xl font-bold text-white">{pkg.amount.toLocaleString()}</div>
-                  <div className="text-xs text-white/50">tokens</div>
-                  <div className="text-lg font-semibold text-[#c9a84c] mt-2">{pkg.price}</div>
-                </button>
-              ))}
+            <Table>
+              <TableHeader>
+                <TableRow className="border-white/10">
+                  <TableHead className="text-white/60">Tipo de Ação</TableHead>
+                  <TableHead className="text-white/60">Exemplos</TableHead>
+                  <TableHead className="text-white/60 text-right">Custo (tokens)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {PRICING_TIERS.map((tier) => (
+                  <TableRow key={tier.action} className="border-white/5">
+                    <TableCell className="font-medium text-white">{tier.action}</TableCell>
+                    <TableCell className="text-white/50 text-xs">{tier.examples}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-[#c9a84c] font-bold text-lg">{tier.cost}</span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Recharge CTA */}
+        <Card className="bg-gradient-to-r from-[#c9a84c]/10 to-[#c9a84c]/5 border-[#c9a84c]/30">
+          <CardContent className="flex flex-col md:flex-row items-center justify-between gap-4 py-6">
+            <div>
+              <h3 className="text-lg font-bold text-[#c9a84c]">Precisa de mais tokens?</h3>
+              <p className="text-white/50 text-sm">Recarregue seu saldo a qualquer momento. Pagamento seguro via Stripe.</p>
             </div>
+            <Button
+              className="bg-[#c9a84c] text-black hover:bg-[#b8973f] font-bold px-6"
+              onClick={() => alert("Stripe checkout será ativado em breve!")}
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" /> Recarregar Tokens
+            </Button>
           </CardContent>
         </Card>
 
