@@ -911,11 +911,14 @@ export default function JurisCloudOS() {
           {/* INPUT */}
           <div className="jc-input-area">
             <div className="jc-commands">
-              {visibleCommands.map((cmd, i) => (
-                <button key={i} className="jc-cmd" onClick={() => handleSend(cmd)}>
-                  <ChevronRight size={10} /> {cmd}
-                </button>
-              ))}
+              {visibleCommands.map((cmd, i) => {
+                const { cost } = getTokenCost(cmd);
+                return (
+                  <button key={i} className="jc-cmd" onClick={() => handleSend(cmd)} title={`Custo: ${cost} token(s)`}>
+                    <ChevronRight size={10} /> {cmd} <span style={{ opacity: 0.5, fontSize: 9, marginLeft: 4 }}>({cost}t)</span>
+                  </button>
+                );
+              })}
             </div>
             <div className="jc-input-row">
               <textarea ref={textareaRef} className="jc-textarea"
