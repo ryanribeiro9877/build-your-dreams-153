@@ -15,6 +15,7 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 import LandingPage from "./pages/LandingPage.tsx";
 import OrgChart from "./pages/OrgChart.tsx";
 import EfficiencyKPIs from "./pages/EfficiencyKPIs.tsx";
+import Tokens from "./pages/Tokens.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
             <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
+            <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
