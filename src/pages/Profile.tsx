@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ArrowLeft, User, Save } from "lucide-react";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -68,24 +69,25 @@ export default function Profile() {
         <button onClick={() => navigate("/sistema")} style={{
           background: "none", border: "1px solid #252534", color: "#9898b0",
           padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12, marginBottom: 24,
-          fontFamily: "'DM Sans', sans-serif",
-        }}>← Voltar</button>
+          fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 6,
+        }}><ArrowLeft size={14} /> Voltar</button>
 
         <div style={{
           padding: 32, borderRadius: 16, background: "#111118",
           border: "1px solid #252534", boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
         }}>
-          {/* Avatar */}
           <div style={{ textAlign: "center", marginBottom: 28 }}>
             <div style={{
               width: 80, height: 80, borderRadius: "50%", margin: "0 auto 12px",
               background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 32, fontWeight: 700, color: "#0a0a12",
-              fontFamily: "'Cormorant Garamond', serif",
               boxShadow: "0 0 24px rgba(201,168,76,0.35)",
             }}>
-              {displayName ? displayName[0].toUpperCase() : user?.email?.[0]?.toUpperCase() || "U"}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                <User size={36} color="#0a0a12" />
+              )}
             </div>
             <div style={{ fontSize: 10, color: "#c9a84c", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               {roleLabel} ({primaryRole})
@@ -120,7 +122,9 @@ export default function Profile() {
             fontFamily: "'DM Sans', sans-serif",
             opacity: saving ? 0.7 : 1,
             boxShadow: "0 4px 20px rgba(201,168,76,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}>
+            <Save size={16} />
             {saving ? "Salvando..." : "Salvar Perfil"}
           </button>
         </div>

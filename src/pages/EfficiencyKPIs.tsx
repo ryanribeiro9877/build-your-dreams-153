@@ -3,39 +3,44 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
+import {
+  Building2, Megaphone, Scale, HardHat, Coins, FileText, Hash, Landmark,
+  Search, DollarSign, RefreshCw, Palette, Settings, ShieldCheck,
+  Brain, TrendingUp, Target, ClipboardList, Clock, AlertTriangle, Siren, X, ArrowLeft
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /* ─── DEPARTMENT CONFIG ─── */
-const DEPTS = [
-  { id: "recepcao", label: "Recepção", color: "#3b82f6", icon: "🏢" },
-  { id: "marketing", label: "Marketing", color: "#f59e0b", icon: "📢" },
-  { id: "civel", label: "Cível", color: "#8b5cf6", icon: "⚖️" },
-  { id: "trabalhista", label: "Trabalhista", color: "#ef4444", icon: "👷" },
-  { id: "tributario", label: "Tributário", color: "#10b981", icon: "💰" },
-  { id: "protocolo", label: "Protocolo", color: "#6366f1", icon: "📋" },
-  { id: "calculos", label: "Cálculos", color: "#ec4899", icon: "🔢" },
-  { id: "audiencias", label: "Audiências", color: "#14b8a6", icon: "🏛️" },
-  { id: "monitoramento", label: "Monitoramento", color: "#f97316", icon: "🔍" },
-  { id: "financeiro", label: "Financeiro", color: "#2ecc71", icon: "💰" },
-  { id: "conversao", label: "Conversão", color: "#e74c3c", icon: "🔁" },
-  { id: "criacao", label: "Criação", color: "#e67e22", icon: "🎨" },
-  { id: "tech", label: "Tech", color: "#9b59b6", icon: "⚙️" },
-  { id: "compliance", label: "Compliance", color: "#0ea5e9", icon: "🛡️" },
+const DEPTS: { id: string; label: string; color: string; icon: LucideIcon }[] = [
+  { id: "recepcao", label: "Recepção", color: "#3b82f6", icon: Building2 },
+  { id: "marketing", label: "Marketing", color: "#f59e0b", icon: Megaphone },
+  { id: "civel", label: "Cível", color: "#8b5cf6", icon: Scale },
+  { id: "trabalhista", label: "Trabalhista", color: "#ef4444", icon: HardHat },
+  { id: "tributario", label: "Tributário", color: "#10b981", icon: Coins },
+  { id: "protocolo", label: "Protocolo", color: "#6366f1", icon: FileText },
+  { id: "calculos", label: "Cálculos", color: "#ec4899", icon: Hash },
+  { id: "audiencias", label: "Audiências", color: "#14b8a6", icon: Landmark },
+  { id: "monitoramento", label: "Monitoramento", color: "#f97316", icon: Search },
+  { id: "financeiro", label: "Financeiro", color: "#2ecc71", icon: DollarSign },
+  { id: "conversao", label: "Conversão", color: "#e74c3c", icon: RefreshCw },
+  { id: "criacao", label: "Criação", color: "#e67e22", icon: Palette },
+  { id: "tech", label: "Tech", color: "#9b59b6", icon: Settings },
+  { id: "compliance", label: "Compliance", color: "#0ea5e9", icon: ShieldCheck },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#10b981" };
-const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#3b82f6", review: "#a855f7", completed: "#10b981", cancelled: "#888", approved: "#2dd4a0", rejected: "#ef4444" };
 
 interface DeptMetric {
   dept: string;
   label: string;
   color: string;
-  icon: string;
+  Icon: LucideIcon;
   total: number;
   pending: number;
   overdue: number;
   critical: number;
   avgLoad: number;
-  bottleneckScore: number; // 0-100
+  bottleneckScore: number;
 }
 
 export default function EfficiencyKPIs() {
@@ -45,7 +50,6 @@ export default function EfficiencyKPIs() {
   const [orchLogs, setOrchLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [filterDept, setFilterDept] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterPeriod, setFilterPeriod] = useState("30");
@@ -70,7 +74,6 @@ export default function EfficiencyKPIs() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  // Apply period filter to tasks
   const filteredTasks = useMemo(() => {
     const now = new Date();
     const daysAgo = new Date(now.getTime() - parseInt(filterPeriod) * 86400000);
@@ -81,7 +84,6 @@ export default function EfficiencyKPIs() {
     return result;
   }, [tasks, filterDept, filterPeriod]);
 
-  // Compute metrics per department
   const deptMetrics = useMemo<DeptMetric[]>(() => {
     const now = new Date();
     return DEPTS.map(d => {
@@ -92,11 +94,10 @@ export default function EfficiencyKPIs() {
       const total = deptTasks.length;
       const avgLoad = total > 0 ? Math.min(100, Math.round((pending + critical * 2) / Math.max(total, 1) * 100)) : 0;
       const bottleneckScore = Math.min(100, overdue * 15 + critical * 10 + Math.max(0, pending - 5) * 3);
-      return { dept: d.id, label: d.label, color: d.color, icon: d.icon, total, pending, overdue, critical, avgLoad, bottleneckScore };
+      return { dept: d.id, label: d.label, color: d.color, Icon: d.icon, total, pending, overdue, critical, avgLoad, bottleneckScore };
     }).sort((a, b) => b.bottleneckScore - a.bottleneckScore);
   }, [filteredTasks]);
 
-  // Global KPIs
   const globalKPIs = useMemo(() => {
     const now = new Date();
     const total = filteredTasks.length;
@@ -116,7 +117,6 @@ export default function EfficiencyKPIs() {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [filteredTasks]);
 
-  // Bottleneck trend (last 7 days from orchestration logs)
   const trendData = useMemo(() => {
     const days: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) {
@@ -143,7 +143,6 @@ export default function EfficiencyKPIs() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Inter', sans-serif" }}>
-      {/* Header */}
       <header style={{
         display: "flex", alignItems: "center", gap: 16, padding: "16px 24px",
         borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)",
@@ -152,28 +151,28 @@ export default function EfficiencyKPIs() {
         <button onClick={() => navigate("/sistema")} style={{
           background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)",
           borderRadius: 8, padding: "6px 14px", color: "#c9a84c", cursor: "pointer", fontSize: 13, fontWeight: 500,
-        }}>← Voltar ao Sistema</button>
+          display: "flex", alignItems: "center", gap: 6,
+        }}><ArrowLeft size={14} /> Voltar ao Sistema</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#ff6b6b", margin: 0 }}>
-            🧠 Central de Eficiência — KPIs em Tempo Real
+          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#ff6b6b", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+            <Brain size={24} /> Central de Eficiência — KPIs em Tempo Real
           </h1>
           <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Métricas de gargalo por departamento · Atualização automática</p>
         </div>
       </header>
 
-      {/* Filters */}
       <div style={{
         display: "flex", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)",
         background: "rgba(255,255,255,0.01)", flexWrap: "wrap", alignItems: "center",
       }}>
         <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Filtros:</span>
-        
+
         <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{
           background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
           padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
         }}>
           <option value="all">Todos os Departamentos</option>
-          {DEPTS.map(d => <option key={d.id} value={d.id}>{d.icon} {d.label}</option>)}
+          {DEPTS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
 
         <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} style={{
@@ -192,21 +191,21 @@ export default function EfficiencyKPIs() {
           padding: "5px 10px", color: "#e8e8ed", fontSize: 12, cursor: "pointer",
         }}>
           <option value="all">Todas as Severidades</option>
-          <option value="critical">🔴 Crítico (score {">"} 50)</option>
-          <option value="warning">🟡 Atenção (score {">"} 20)</option>
-          <option value="ok">🟢 OK (score ≤ 20)</option>
+          <option value="critical">Crítico (score {">"} 50)</option>
+          <option value="warning">Atenção (score {">"} 20)</option>
+          <option value="ok">OK (score ≤ 20)</option>
         </select>
 
         {(filterDept !== "all" || filterPeriod !== "30" || filterSeverity !== "all") && (
           <button onClick={() => { setFilterDept("all"); setFilterPeriod("30"); setFilterSeverity("all"); }} style={{
             background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6,
             padding: "5px 10px", color: "#ff8080", fontSize: 11, cursor: "pointer",
-          }}>✕ Limpar Filtros</button>
+            display: "flex", alignItems: "center", gap: 4,
+          }}><X size={12} /> Limpar Filtros</button>
         )}
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
-        {/* Global KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 28 }}>
           {[
             { label: "Total Tarefas", value: globalKPIs.total, color: "#c9a84c" },
@@ -228,11 +227,11 @@ export default function EfficiencyKPIs() {
           ))}
         </div>
 
-        {/* Charts row */}
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 28 }}>
-          {/* Bottleneck trend */}
           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16 }}>📈 Alertas de Gargalo (7 dias)</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <TrendingUp size={16} color="#ff6b6b" /> Alertas de Gargalo (7 dias)
+            </div>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={trendData}>
                 <defs>
@@ -249,9 +248,10 @@ export default function EfficiencyKPIs() {
             </ResponsiveContainer>
           </div>
 
-          {/* Priority distribution */}
           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16 }}>🎯 Distribuição por Prioridade</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <Target size={16} color="#c9a84c" /> Distribuição por Prioridade
+            </div>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={priorityData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -265,10 +265,9 @@ export default function EfficiencyKPIs() {
           </div>
         </div>
 
-        {/* Department bottleneck cards */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#ff6b6b", marginBottom: 12 }}>
-            🔴 Mapa de Gargalos por Departamento
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#ff6b6b", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <AlertTriangle size={16} /> Mapa de Gargalos por Departamento
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
             {deptMetrics.filter(d => {
@@ -276,57 +275,60 @@ export default function EfficiencyKPIs() {
               if (filterSeverity === "warning") return d.bottleneckScore > 20 && d.bottleneckScore <= 50;
               if (filterSeverity === "ok") return d.bottleneckScore <= 20;
               return true;
-            }).map(d => (
-              <div key={d.dept} style={{
-                padding: 16, borderRadius: 10,
-                background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.05)" : "rgba(255,255,255,0.02)",
-                border: `1px solid ${d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)"}`,
-                borderLeft: `3px solid ${d.color}`,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 18 }}>{d.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed" }}>{d.label}</div>
-                    <div style={{ fontSize: 10, color: "#888" }}>{d.total} tarefas</div>
-                  </div>
-                  <div style={{
-                    fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
-                    background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : d.bottleneckScore > 20 ? "rgba(245,158,11,0.2)" : "rgba(45,212,160,0.2)",
-                    color: d.bottleneckScore > 50 ? "#ff8080" : d.bottleneckScore > 20 ? "#fbbf24" : "#2dd4a0",
-                  }}>
-                    {d.bottleneckScore > 50 ? "🔴 CRÍTICO" : d.bottleneckScore > 20 ? "🟡 ATENÇÃO" : "🟢 OK"}
-                  </div>
-                </div>
-                {/* Bottleneck bar */}
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#888", marginBottom: 3 }}>
-                    <span>Score de Gargalo</span>
-                    <span>{d.bottleneckScore}/100</span>
-                  </div>
-                  <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+            }).map(d => {
+              const DeptIcon = d.Icon;
+              return (
+                <div key={d.dept} style={{
+                  padding: 16, borderRadius: 10,
+                  background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.05)" : "rgba(255,255,255,0.02)",
+                  border: `1px solid ${d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)"}`,
+                  borderLeft: `3px solid ${d.color}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <DeptIcon size={18} color={d.color} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed" }}>{d.label}</div>
+                      <div style={{ fontSize: 10, color: "#888" }}>{d.total} tarefas</div>
+                    </div>
                     <div style={{
-                      width: `${d.bottleneckScore}%`, height: "100%", borderRadius: 3,
-                      background: d.bottleneckScore > 50 ? "#ef4444" : d.bottleneckScore > 20 ? "#f59e0b" : "#2dd4a0",
-                      transition: "width 0.5s",
-                    }} />
+                      fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                      background: d.bottleneckScore > 50 ? "rgba(239,68,68,0.2)" : d.bottleneckScore > 20 ? "rgba(245,158,11,0.2)" : "rgba(45,212,160,0.2)",
+                      color: d.bottleneckScore > 50 ? "#ff8080" : d.bottleneckScore > 20 ? "#fbbf24" : "#2dd4a0",
+                    }}>
+                      {d.bottleneckScore > 50 ? "CRÍTICO" : d.bottleneckScore > 20 ? "ATENÇÃO" : "OK"}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#888", marginBottom: 3 }}>
+                      <span>Score de Gargalo</span>
+                      <span>{d.bottleneckScore}/100</span>
+                    </div>
+                    <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${d.bottleneckScore}%`, height: "100%", borderRadius: 3,
+                        background: d.bottleneckScore > 50 ? "#ef4444" : d.bottleneckScore > 20 ? "#f59e0b" : "#2dd4a0",
+                        transition: "width 0.5s",
+                      }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
+                    <span style={{ color: "#f59e0b", display: "flex", alignItems: "center", gap: 3 }}><Clock size={10} /> {d.pending} pendentes</span>
+                    <span style={{ color: d.overdue > 0 ? "#ef4444" : "#888", display: "flex", alignItems: "center", gap: 3 }}><AlertTriangle size={10} /> {d.overdue} vencidas</span>
+                    <span style={{ color: d.critical > 0 ? "#ef4444" : "#888", display: "flex", alignItems: "center", gap: 3 }}><Siren size={10} /> {d.critical} críticas</span>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
-                  <span style={{ color: "#f59e0b" }}>⏳ {d.pending} pendentes</span>
-                  <span style={{ color: d.overdue > 0 ? "#ef4444" : "#888" }}>⏰ {d.overdue} vencidas</span>
-                  <span style={{ color: d.critical > 0 ? "#ef4444" : "#888" }}>🚨 {d.critical} críticas</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Recent orchestration logs */}
         <div style={{
           marginTop: 24, padding: 20,
           background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 12 }}>📋 Últimos Eventos de Orquestração</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <ClipboardList size={16} /> Últimos Eventos de Orquestração
+          </div>
           {orchLogs.length === 0 && (
             <div style={{ fontSize: 12, color: "#888", textAlign: "center", padding: 20 }}>
               Nenhum evento de orquestração registrado ainda

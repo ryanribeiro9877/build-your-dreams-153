@@ -3,21 +3,25 @@ import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Crown, Briefcase, ClipboardList, Scale, Building2, BookOpen,
+  CreditCard, Megaphone, FileText, Hash, ShieldCheck, ArrowLeft
+} from "lucide-react";
 
 const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
 const ROLES = [
-  { value: "admin", label: "Administrador", icon: "👑" },
-  { value: "director", label: "Diretor", icon: "👔" },
-  { value: "manager", label: "Gerente", icon: "📋" },
-  { value: "lawyer", label: "Advogado", icon: "⚖️" },
-  { value: "receptionist", label: "Recepcionista", icon: "🏢" },
-  { value: "intern", label: "Estagiário", icon: "📚" },
-  { value: "financial", label: "Financeiro", icon: "💳" },
-  { value: "marketing", label: "Marketing", icon: "📢" },
-  { value: "protocol", label: "Protocolo", icon: "📋" },
-  { value: "calculator", label: "Calculista", icon: "🔢" },
-  { value: "compliance", label: "Compliance", icon: "🛡️" },
+  { value: "admin", label: "Administrador", icon: Crown },
+  { value: "director", label: "Diretor", icon: Briefcase },
+  { value: "manager", label: "Gerente", icon: ClipboardList },
+  { value: "lawyer", label: "Advogado", icon: Scale },
+  { value: "receptionist", label: "Recepcionista", icon: Building2 },
+  { value: "intern", label: "Estagiário", icon: BookOpen },
+  { value: "financial", label: "Financeiro", icon: CreditCard },
+  { value: "marketing", label: "Marketing", icon: Megaphone },
+  { value: "protocol", label: "Protocolo", icon: FileText },
+  { value: "calculator", label: "Calculista", icon: Hash },
+  { value: "compliance", label: "Compliance", icon: ShieldCheck },
 ];
 
 export default function Auth() {
@@ -70,19 +74,16 @@ export default function Auth() {
       background: "#09090f", fontFamily: "'DM Sans', sans-serif",
       position: "relative", overflow: "hidden",
     }}>
-      {/* 3D Background */}
       <Suspense fallback={null}>
         <AgentScene3D />
       </Suspense>
 
-      {/* Gradient overlays */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 1,
         background: "radial-gradient(ellipse at center, transparent 30%, #09090f 75%)",
         pointerEvents: "none",
       }} />
 
-      {/* Card */}
       <div style={{
         position: "relative", zIndex: 10,
         width: "100%", maxWidth: 420, padding: 32, borderRadius: 20,
@@ -90,7 +91,6 @@ export default function Auth() {
         boxShadow: "0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,168,76,0.08)",
         backdropFilter: "blur(20px)",
       }}>
-        {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
             width: 52, height: 52, borderRadius: 14, margin: "0 auto 12px",
@@ -108,7 +108,6 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Tabs (only login/signup) */}
         {mode !== "forgot" && (
           <div style={{ display: "flex", marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(37,37,52,0.6)" }}>
             {(["login", "signup"] as const).map(m => (
@@ -130,7 +129,7 @@ export default function Auth() {
               fontSize: 12, fontFamily: "'DM Sans', sans-serif", padding: 0,
               display: "flex", alignItems: "center", gap: 4,
             }}>
-              ← Voltar ao login
+              <ArrowLeft size={12} /> Voltar ao login
             </button>
             <div style={{ fontSize: 16, fontWeight: 600, color: "#eeeef5", marginTop: 12 }}>
               Recuperar senha
@@ -164,20 +163,23 @@ export default function Auth() {
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Função no escritório</label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {ROLES.map(role => (
-                  <button key={role.value} type="button" onClick={() => setSelectedRole(role.value)} style={{
-                    padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-                    border: selectedRole === role.value ? "1px solid #c9a84c" : "1px solid rgba(37,37,52,0.6)",
-                    background: selectedRole === role.value ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
-                    color: selectedRole === role.value ? "#c9a84c" : "#9898b0",
-                    fontSize: 11, fontFamily: "'DM Sans', sans-serif",
-                    display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s",
-                    backdropFilter: "blur(4px)",
-                  }}>
-                    <span>{role.icon}</span>
-                    <span>{role.label}</span>
-                  </button>
-                ))}
+                {ROLES.map(role => {
+                  const IconComp = role.icon;
+                  return (
+                    <button key={role.value} type="button" onClick={() => setSelectedRole(role.value)} style={{
+                      padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                      border: selectedRole === role.value ? "1px solid #c9a84c" : "1px solid rgba(37,37,52,0.6)",
+                      background: selectedRole === role.value ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
+                      color: selectedRole === role.value ? "#c9a84c" : "#9898b0",
+                      fontSize: 11, fontFamily: "'DM Sans', sans-serif",
+                      display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s",
+                      backdropFilter: "blur(4px)",
+                    }}>
+                      <IconComp size={14} />
+                      <span>{role.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -195,7 +197,6 @@ export default function Auth() {
           </button>
         </form>
 
-        {/* Forgot password link */}
         {mode === "login" && (
           <div style={{ textAlign: "center", marginTop: 16 }}>
             <button onClick={() => setMode("forgot")} style={{
@@ -211,7 +212,6 @@ export default function Auth() {
           </div>
         )}
 
-        {/* Animated status bar */}
         <div style={{
           marginTop: 20, height: 2, borderRadius: 1, overflow: "hidden",
           background: "rgba(37,37,52,0.4)",
