@@ -68,7 +68,7 @@ export default function Admin() {
       minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
       fontFamily: "'DM Sans', sans-serif", padding: 20,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <button onClick={() => navigate("/sistema")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
@@ -77,6 +77,12 @@ export default function Admin() {
         <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#c9a84c", margin: 0 }}>
           👑 Painel de Administração
         </h1>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => navigate("/admin/tokens")} style={{
+          padding: "8px 16px", borderRadius: 8, border: "1px solid #c9a84c",
+          background: "rgba(201,168,76,0.15)", color: "#c9a84c", cursor: "pointer", fontSize: 13,
+          fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+        }}>🪙 Dashboard de Tokens</button>
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>
