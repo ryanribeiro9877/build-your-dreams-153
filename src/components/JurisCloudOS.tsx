@@ -1020,7 +1020,15 @@ export default function JurisCloudOS() {
         </main>
 
         {/* RIGHT PANEL */}
-        <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""}`}>
+        <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}>
+          <button
+            className="jc-right-toggle-desk"
+            onClick={() => setRightCollapsed(c => !c)}
+            title={rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
+            aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+          >
+            {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+          </button>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
