@@ -90,10 +90,23 @@ export default function AdminUiEvents() {
   const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
   // Whether export should include only the raw rejected events (skip buckets).
   const [exportRejectedOnly, setExportRejectedOnly] = useState<boolean>(false);
+  // Whether CSV export should additionally skip the bucket section. Independent
+  // from `exportRejectedOnly` so admins can still see buckets in JSON.
+  const [csvSkipBuckets, setCsvSkipBuckets] = useState<boolean>(false);
   // Last TTL prune result for the inline summary on the admin panel.
   const [lastPrune, setLastPrune] = useState<{
     pruned: number; bucketed: number; remaining: number; at: string; ttlHours: number;
   } | null>(null);
+  // Schema validation result (from "Validar export" action).
+  const [validation, setValidation] = useState<(ExportValidationResult & { fileName: string }) | null>(null);
+  // Healthcheck temporary sample-rate override (UI state only — doesn't persist).
+  const [healthOverrideEnabled, setHealthOverrideEnabled] = useState<boolean>(false);
+  const [healthOverridePct, setHealthOverridePct] = useState<number>(100);
+  // Bucket table sort key.
+  const [bucketSort, setBucketSort] = useState<"count" | "category" | "code" | "sampleRateAtRead">("count");
+  // Compare view state — two parsed exports + diff.
+  const [compareA, setCompareA] = useState<{ name: string; data: Record<string, unknown> } | null>(null);
+  const [compareB, setCompareB] = useState<{ name: string; data: Record<string, unknown> } | null>(null);
 
   useEffect(() => {
     const off = onDebugChange(() => {
