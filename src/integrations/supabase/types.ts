@@ -644,6 +644,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ui_events: {
+        Row: {
+          created_at: string
+          event_name: string
+          id: string
+          metadata: Json | null
+          session_id: string | null
+          surface: string | null
+          target_id: string | null
+          target_label: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_name: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          target_id?: string | null
+          target_label?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_name?: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          target_id?: string | null
+          target_label?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -661,6 +697,33 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_ui_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          right_collapsed: boolean
+          sidebar_collapsed: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          right_collapsed?: boolean
+          sidebar_collapsed?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          right_collapsed?: boolean
+          sidebar_collapsed?: boolean
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

@@ -9,6 +9,8 @@ import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useUiPreferences } from "@/hooks/useUiPreferences";
+import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
   Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
@@ -279,6 +281,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       box-shadow: 0 2px 6px rgba(0,0,0,0.18);
     }
     .jc-sidebar-toggle:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
+    .jc-sidebar-toggle:focus-visible,
+    .jc-right-toggle-desk:focus-visible,
+    .jc-nav-item:focus-visible,
+    .jc-agent-item:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(201,168,76,0.18);
+    }
+    .jc-sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
 
     .jc-logo {
       padding: 18px 14px 14px; border-bottom: 1px solid var(--border);
@@ -574,8 +588,14 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       .jc-right-panel { display: none; }
       .jc-right-panel.mobile-visible {
         display: flex; position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
-        width: 300px; box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+        width: min(320px, 90vw); box-shadow: -4px 0 24px rgba(0,0,0,0.3);
       }
+      /* In mobile mode, the off-canvas right panel always shows full content */
+      .jc-right-panel.mobile-visible.collapsed { width: min(320px, 90vw); min-width: 0; border-left: 1px solid var(--border); }
+      .jc-right-panel.mobile-visible.collapsed > *:not(.jc-right-toggle-desk) { display: revert; }
+      /* Hide the desktop floating toggle on mobile to avoid stray buttons */
+      .jc-right-toggle-desk { display: none; }
+      .jc-right-panel.mobile-visible .jc-right-toggle-desk { display: none; }
       .jc-right-toggle { display: flex; }
     }
     @media (max-width: 768px) {
@@ -746,28 +766,86 @@ export default function JurisCloudOS() {
   });
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("jc-sidebar-collapsed") === "1";
-    return true;
-  });
-  const [rightCollapsed, setRightCollapsed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("jc-right-collapsed") === "1";
-    return true;
-  });
+  // Persisted per-user UI preferences (synced via Lovable Cloud).
+  const {
+    sidebarCollapsed,
+    rightCollapsed,
+    setSidebarCollapsed,
+    setRightCollapsed,
+  } = useUiPreferences();
   const [isRecording, setIsRecording]     = useState(false);
+  const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
   useEffect(() => { localStorage.setItem("jc-theme", theme); }, [theme]);
-  useEffect(() => { localStorage.setItem("jc-sidebar-collapsed", sidebarCollapsed ? "1" : "0"); }, [sidebarCollapsed]);
-  useEffect(() => { localStorage.setItem("jc-right-collapsed", rightCollapsed ? "1" : "0"); }, [rightCollapsed]);
 
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+
+  // Toggle helpers with tracking + a11y live-region announcement.
+  const announce = (msg: string) => {
+    setShortcutAnnouncement(msg);
+    window.setTimeout(() => setShortcutAnnouncement(""), 1500);
+  };
+
+  const handleSidebarToggle = (source: "click" | "keyboard" = "click") => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      trackUiEvent("sidebar_toggle", {
+        surface: "left_sidebar",
+        collapsed: next,
+        source,
+      });
+      announce(next ? "Menu lateral recolhido" : "Menu lateral expandido");
+      return next;
+    });
+  };
+
+  const handleRightToggle = (source: "click" | "keyboard" = "click") => {
+    setRightCollapsed(prev => {
+      const next = !prev;
+      trackUiEvent("right_panel_toggle", {
+        surface: "right_panel",
+        collapsed: next,
+        source,
+      });
+      announce(next ? "Painel de operações recolhido" : "Painel de operações expandido");
+      return next;
+    });
+  };
+
+  // Keyboard shortcuts: Ctrl/Cmd+B (sidebar), Ctrl/Cmd+O (right panel).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Skip when typing in inputs/textareas/contenteditable
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "b") {
+        e.preventDefault();
+        trackUiEvent("shortcut_used", { target_id: "ctrl+b", surface: "left_sidebar" });
+        handleSidebarToggle("keyboard");
+      } else if (key === "o") {
+        e.preventDefault();
+        trackUiEvent("shortcut_used", { target_id: "ctrl+o", surface: "right_panel" });
+        handleRightToggle("keyboard");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // Voice input
   const toggleRecording = () => {
@@ -883,13 +961,14 @@ export default function JurisCloudOS() {
           className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
           aria-label="Menu lateral de navegação"
         >
-          {withTooltip(sidebarCollapsed ? "Expandir menu" : "Recolher menu",
+          {withTooltip(`${sidebarCollapsed ? "Expandir" : "Recolher"} menu (Ctrl+B)`,
             <button
               className="jc-sidebar-toggle"
-              onClick={() => setSidebarCollapsed(c => !c)}
+              onClick={() => handleSidebarToggle("click")}
               aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
               aria-expanded={!sidebarCollapsed}
               aria-controls="jc-sidebar"
+              aria-keyshortcuts="Control+B Meta+B"
               type="button"
             >
               {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
@@ -918,19 +997,29 @@ export default function JurisCloudOS() {
             <div className="jc-section-label">Departamentos</div>
             {visibleDepts.map(dept => {
               const Icon = DEPT_ICONS[dept.id] || Sparkles;
+              const activate = (source: "click" | "keyboard") => {
+                setActiveDept(dept.id);
+                setSidebarOpen(false);
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: dept.id,
+                  target_label: dept.label,
+                  source,
+                  collapsed: sidebarCollapsed,
+                });
+              };
               return withTooltip(dept.label,
                 <div
                   key={dept.id}
                   className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
-                  onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}
+                  onClick={() => activate("click")}
                   role="button"
                   tabIndex={0}
                   aria-current={activeDept === dept.id ? "page" : undefined}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setActiveDept(dept.id);
-                      setSidebarOpen(false);
+                      activate("keyboard");
                     }
                   }}
                 >
@@ -942,21 +1031,33 @@ export default function JurisCloudOS() {
             })}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            {MENU_ITEMS.filter(m => m.show).map(item => withTooltip(item.label,
-              <div
-                key={item.id}
-                className="jc-nav-item"
-                onClick={item.action}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.action(); }
-                }}
-              >
-                <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
-                <span className="jc-nav-label">{item.label}</span>
-              </div>
-            ))}
+            {MENU_ITEMS.filter(m => m.show).map(item => {
+              const activate = (source: "click" | "keyboard") => {
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: item.id,
+                  target_label: item.label,
+                  source,
+                  collapsed: sidebarCollapsed,
+                });
+                item.action();
+              };
+              return withTooltip(item.label,
+                <div
+                  key={item.id}
+                  className="jc-nav-item"
+                  onClick={() => activate("click")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate("keyboard"); }
+                  }}
+                >
+                  <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
+                  <span className="jc-nav-label">{item.label}</span>
+                </div>
+              );
+            })}
           </nav>
 
           {/* Agents in sidebar - filtered by role */}
@@ -1085,17 +1186,18 @@ export default function JurisCloudOS() {
             <TooltipTrigger asChild>
               <button
                 className="jc-right-toggle-desk"
-                onClick={() => setRightCollapsed(c => !c)}
+                onClick={() => handleRightToggle("click")}
                 aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
                 aria-expanded={!rightCollapsed}
                 aria-controls="jc-right-panel"
+                aria-keyshortcuts="Control+O Meta+O"
                 type="button"
               >
                 {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="left" sideOffset={8}>
-              {rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
+              {rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)"}
             </TooltipContent>
           </Tooltip>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1218,8 +1320,13 @@ export default function JurisCloudOS() {
         </aside>
 
         {rightPanelOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} />
+          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} aria-hidden="true" />
         )}
+
+        {/* Live region for keyboard shortcut announcements (visually hidden, screen reader only) */}
+        <div className="jc-sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {shortcutAnnouncement}
+        </div>
       </div>
       </TooltipProvider>
     </div>
