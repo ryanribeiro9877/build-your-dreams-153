@@ -1137,7 +1137,8 @@ export default function JurisCloudOS() {
                   <Circle size={6} className="jc-agent-status-dot"
                     fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
                     style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
-                </div>
+                </div>,
+                `agent_${agent.id}`
               );
             })}
           </div>
