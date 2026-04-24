@@ -995,6 +995,10 @@ export default function JurisCloudOS() {
         {/* MOBILE OVERLAY */}
         <div className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`} onClick={() => setSidebarOpen(false)} />
 
+        {/* Optional dim overlay when collapsed-sidebar tooltips are open (a11y) */}
+        {tooltipOverlay && openTooltipCount > 0 && (
+          <div className="jc-tooltip-overlay" aria-hidden="true" />
+        )}
         {/* SIDEBAR */}
         <aside
           id="jc-sidebar"
