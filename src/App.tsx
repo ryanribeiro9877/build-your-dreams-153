@@ -18,6 +18,7 @@ import EfficiencyKPIs from "./pages/EfficiencyKPIs.tsx";
 import Tokens from "./pages/Tokens.tsx";
 import AdminTokens from "./pages/AdminTokens.tsx";
 import AdminUiEvents from "./pages/AdminUiEvents.tsx";
+import AdminMaster from "./pages/AdminMaster.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
