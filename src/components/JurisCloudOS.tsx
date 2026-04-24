@@ -221,6 +221,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     [data-theme="dark"] {
       --bg: #09090f; --bg2: #111118; --bg3: #16161f; --bg4: #1d1d28;
       --border: #252534; --border2: #2e2e42;
+      --card-border: rgba(255,255,255,0.14);
+      --card-border-hover: rgba(255,255,255,0.24);
       --text1: #eeeef5; --text2: #9898b0; --text3: #5a5a72;
       --logo-text: #0a0a12;
       --user-bubble-bg: rgba(201,168,76,0.08); --user-bubble-border: rgba(201,168,76,0.2);
@@ -229,6 +231,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     [data-theme="light"] {
       --bg: #f5f5f7; --bg2: #ffffff; --bg3: #f0f0f4; --bg4: #e8e8ee;
       --border: #d8d8e0; --border2: #c8c8d4;
+      --card-border: #d8d8e0;
+      --card-border-hover: #b8b8c8;
       --text1: #1a1a2e; --text2: #5a5a72; --text3: #8888a0;
       --logo-text: #0a0a12;
       --user-bubble-bg: rgba(201,168,76,0.06); --user-bubble-border: rgba(201,168,76,0.25);
