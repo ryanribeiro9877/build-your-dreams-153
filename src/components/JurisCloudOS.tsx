@@ -16,7 +16,7 @@ import {
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
   MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
-  Circle,
+  PanelLeftOpen, PanelLeftClose, Circle,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
