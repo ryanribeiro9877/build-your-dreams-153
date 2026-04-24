@@ -17,6 +17,9 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [lowThreshold, setLowThresholdState] = useState<number>(10);
+
+  useEffect(() => { setLowThresholdState(getLowBalanceThreshold()); }, []);
 
   useEffect(() => {
     if (!user) return;
