@@ -17,7 +17,7 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge, FileCheck2, GitCompareArrows, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
@@ -25,7 +25,9 @@ import {
   getRejectedTtlHours, setRejectedTtlHours,
   getSampleRate, setSampleRate,
   EXPORT_SCHEMA_VERSION,
+  validateExportPayload,
   type RejectedEvent, type RejectionBucket, type HealthCheckResult,
+  type ExportValidationResult,
 } from "@/lib/uiTracking";
 import { Checkbox } from "@/components/ui/checkbox";
 
