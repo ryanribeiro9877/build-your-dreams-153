@@ -996,7 +996,7 @@ export default function JurisCloudOS() {
             >
               {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
             </button>
-          )}
+          , "sidebar_toggle_btn")}
 
           <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
