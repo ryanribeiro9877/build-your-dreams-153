@@ -764,12 +764,29 @@ export default function AdminUiEvents() {
                   <table className="w-full text-sm">
                     <thead className="text-left border-b border-border">
                       <tr>
-                        <th className="py-2 pr-3">Categoria</th>
-                        <th className="py-2 pr-3">Código</th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("category")}>
+                            Categoria <ArrowUpDown className={`h-3 w-3 ${bucketSort === "category" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("code")}>
+                            Código <ArrowUpDown className={`h-3 w-3 ${bucketSort === "code" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
                         <th className="py-2 pr-3">Motivo</th>
-                        <th className="py-2 pr-3">Ocorrências</th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("count")}>
+                            Ocorrências <ArrowUpDown className={`h-3 w-3 ${bucketSort === "count" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
                         <th className="py-2 pr-3" title="Eventos estimados capturados pela amostragem atual">
                           Capturados (~{Math.round(sampleRate * 100)}%)
+                        </th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("sampleRateAtRead")} title="Taxa de amostragem no momento da leitura">
+                            sampleRateAtRead <ArrowUpDown className={`h-3 w-3 ${bucketSort === "sampleRateAtRead" ? "text-primary" : "opacity-40"}`} />
+                          </button>
                         </th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
@@ -777,7 +794,7 @@ export default function AdminUiEvents() {
                       </tr>
                     </thead>
                     <tbody>
-                      {buckets.map((b) => {
+                      {sortedBuckets.map((b) => {
                         const isActive = bucketFilter?.key === b.key;
                         return (
                           <tr key={b.key} className={`border-b border-border/50 align-top ${isActive ? "bg-muted/40" : ""}`}>
