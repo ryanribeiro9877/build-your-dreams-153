@@ -5,37 +5,37 @@ const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
 const PILARES = [
   {
-    icon: "📣",
-    tag: "MARKETING JURÍDICO",
-    title: "Atraia clientes no piloto automático",
-    desc: "Marketing simplificado que leva o cliente certo para o seu escritório. Campanhas inteligentes, presença digital impactante e captação automatizada — sem complicação.",
+    icon: "🧠",
+    tag: "VOCÊ É O ESTRATEGISTA",
+    title: "Você pensa. Eles executam.",
+    desc: "Chega de afogar advogados em tarefas repetitivas. Você define o caso, a estratégia e o resultado esperado — sua força de IA cuida de petições, prazos, cálculos, protocolos e comunicação. Seu tempo volta a ser seu.",
     stats: [
-      { value: "5x", label: "mais leads qualificados" },
-      { value: "70%", label: "menos custo por cliente" },
+      { value: "8h", label: "devolvidas por dia" },
+      { value: "0", label: "tarefas operacionais" },
     ],
     gradient: "linear-gradient(135deg, #06b6d4, #0891b2)",
     glow: "rgba(6,182,212,0.3)",
   },
   {
-    icon: "⚖️",
-    tag: "GESTÃO PROCESSUAL",
-    title: "Gerencie milhares de processos com facilidade",
-    desc: "Seu time ganha superpoderes. Cada advogado, estagiário e assistente trabalha com um exército de agentes de IA dedicados. Prazos monitorados 24/7, tarefas distribuídas automaticamente.",
+    icon: "🤖",
+    tag: "SUA EQUIPE INVISÍVEL",
+    title: "91 agentes. Trabalhando para você. Sempre.",
+    desc: "Enquanto você dorme, jantar com a família ou descansa, sua força de IA está protocolando, calculando, redigindo e monitorando prazos. Eles não cansam, não esquecem, não pedem férias. Você comanda — eles entregam.",
     stats: [
-      { value: "0", label: "prazos perdidos" },
-      { value: "24/7", label: "monitoramento contínuo" },
+      { value: "24/7", label: "ativos por você" },
+      { value: "91+", label: "agentes ao seu serviço" },
     ],
     gradient: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
     glow: "rgba(139,92,246,0.3)",
   },
   {
-    icon: "🚀",
-    tag: "RESULTADOS 3X",
-    title: "Triplique o faturamento do seu escritório",
-    desc: "91+ agentes de IA especializados formam um exército digital para seu time. O que antes levava dias, agora é feito em minutos. Mais processos, mais clientes, mais receita.",
+    icon: "👑",
+    tag: "VOCÊ NO COMANDO",
+    title: "Você dá a ordem. O resultado chega pronto.",
+    desc: "Cada decisão importante volta para suas mãos com tudo preparado: análise feita, peça redigida, cálculo conferido. Você só aprova e assina. Pare de executar tarefas — comece a comandar resultados.",
     stats: [
-      { value: "3x", label: "mais faturamento" },
-      { value: "91+", label: "agentes IA dedicados" },
+      { value: "3x", label: "mais clientes atendidos" },
+      { value: "100%", label: "decisão sua" },
     ],
     gradient: "linear-gradient(135deg, #c9a84c, #e8c96a)",
     glow: "rgba(201,168,76,0.3)",
@@ -43,24 +43,24 @@ const PILARES = [
 ];
 
 const COMO_FUNCIONA = [
-  { step: "01", icon: "🔗", title: "Conecte seu Time", desc: "Cadastre advogados, estagiários e assistentes. Cada um recebe permissões personalizadas e seus próprios agentes de IA." },
-  { step: "02", icon: "🤖", title: "Exército de IA Ativado", desc: "91+ agentes especializados em 13 departamentos — petições, cálculos, prazos, audiências, marketing — tudo automatizado." },
-  { step: "03", icon: "📊", title: "Monitore e Escale", desc: "Dashboard em tempo real com KPIs, alertas inteligentes e visão 360° de todos os processos e clientes." },
-  { step: "04", icon: "💰", title: "Triplique Resultados", desc: "Mais capacidade = mais clientes atendidos = mais faturamento. Sem precisar contratar mais pessoas." },
+  { step: "01", icon: "💬", title: "Você dá a ordem", desc: "Em linguagem natural, no chat. 'Faça a inicial trabalhista do cliente Silva' — só isso. Como falar com um assistente de elite." },
+  { step: "02", icon: "⚡", title: "Sua força de IA mobiliza", desc: "O agente certo é acionado. Ele consulta, redige, calcula, protocola. Outros agentes revisam. Tudo em minutos, sem você mexer um dedo." },
+  { step: "03", icon: "✅", title: "O resultado chega para você", desc: "Peça pronta para revisão, prazo registrado, cliente comunicado. Você aprova com um clique e segue para o próximo caso." },
+  { step: "04", icon: "🌴", title: "Você recupera sua vida", desc: "Mais tempo com a família. Mais foco no que importa. Mais clientes atendidos sem contratar ninguém. Você vira o estrategista — não o executor." },
 ];
 
 const TESTIMONIALS = [
-  { name: "Dr. Marcos Oliveira", role: "Sócio Fundador — Oliveira & Associados", text: "Reduzimos 70% do tempo de confecção de peças. Nossos advogados agora focam em estratégia, não em burocracia. O faturamento triplicou em 8 meses.", avatar: "👨‍⚖️", metric: "+300% faturamento" },
-  { name: "Dra. Ana Carolina Souza", role: "Diretora Jurídica — TechLaw SP", text: "Zero prazos perdidos desde que adotamos. Os agentes de IA monitoram tudo 24/7. É como ter uma equipe extra que nunca dorme.", avatar: "👩‍⚖️", metric: "0 prazos perdidos" },
-  { name: "Dr. Rafael Lima", role: "Advogado Trabalhista — Lima Advocacia", text: "A orquestração inteligente distribui tarefas perfeitamente. Triplicamos a capacidade de atendimento sem contratar ninguém.", avatar: "👨‍💼", metric: "3x mais clientes" },
+  { name: "Dr. Marcos Oliveira", role: "Sócio Fundador — Oliveira & Associados", text: "Antes eu trabalhava 14h por dia. Hoje saio às 18h e meus agentes continuam protocolando peças. Voltei a jantar com minha família.", avatar: "👨‍⚖️", metric: "8h/dia recuperadas" },
+  { name: "Dra. Ana Carolina Souza", role: "Diretora Jurídica — TechLaw SP", text: "Eu não executo mais nada operacional. Minha função virou estratégica: defino, aprovo, assino. Os agentes fazem o resto. Triplicamos a banca em 6 meses.", avatar: "👩‍⚖️", metric: "0 tarefas operacionais" },
+  { name: "Dr. Rafael Lima", role: "Advogado Trabalhista — Lima Advocacia", text: "É como ter 90 estagiários de elite que nunca dormem. Eu só comando. Eles entregam tudo pronto para minha assinatura. Inacreditável.", avatar: "👨‍💼", metric: "3x mais casos por mês" },
 ];
 
 const STATS_BANNER = [
-  { value: "91+", label: "Agentes IA" },
-  { value: "13", label: "Departamentos" },
-  { value: "3x", label: "Produtividade" },
-  { value: "24/7", label: "Monitoramento" },
-  { value: "0", label: "Prazos Perdidos" },
+  { value: "91+", label: "Agentes ao seu serviço" },
+  { value: "8h", label: "Devolvidas por dia" },
+  { value: "3x", label: "Mais casos atendidos" },
+  { value: "24/7", label: "Trabalhando por você" },
+  { value: "0", label: "Tarefas operacionais" },
 ];
 
 const PLANOS = [
