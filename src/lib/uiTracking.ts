@@ -47,6 +47,30 @@ const DEFAULT_TTL_HOURS = 6;
 const SAMPLE_RATE_KEY = "lf_ui_sample_rate";
 
 /**
+ * Schema version for exported debug payloads. Bump whenever the JSON shape
+ * (top-level keys, bucket fields, rejected event fields) changes so that
+ * downstream consumers can detect incompatible exports.
+ */
+export const EXPORT_SCHEMA_VERSION = "1.0.0";
+
+/**
+ * Deterministic test hooks. In production these are no-ops; tests can inject
+ * a seeded RNG (`__setRandomForTests`) or force every event through sampling
+ * (`__setForceCapture`) so flaky `Math.random` paths become deterministic.
+ */
+let __rng: (() => number) | null = null;
+let __forceCapture = false;
+export function __setRandomForTests(fn: (() => number) | null) {
+  __rng = fn;
+}
+export function __setForceCapture(force: boolean) {
+  __forceCapture = force;
+}
+function rand(): number {
+  return __rng ? __rng() : Math.random();
+}
+
+/**
  * Sampling rate (0..1). 1 = capture all events, 0 = capture none.
  * Persisted in localStorage so it survives reloads while admins iterate.
  */
