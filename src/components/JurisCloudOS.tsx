@@ -937,12 +937,35 @@ export default function JurisCloudOS() {
   };
 
   // Wrap in tooltip when sidebar is collapsed (desktop). Plain element otherwise.
-  const withTooltip = (label: string, node: React.ReactElement) => {
+  // - Tracks tooltip_open
+  // - Closes on Escape (Radix default behavior when trigger has focus)
+  // - Returns focus to the trigger automatically (Radix default), so Tab order is preserved.
+  const withTooltip = (label: string, node: React.ReactElement, targetId?: string) => {
     if (!sidebarCollapsed) return node;
     return (
-      <Tooltip delayDuration={150}>
+      <Tooltip
+        delayDuration={150}
+        onOpenChange={(open) => {
+          if (open) {
+            trackUiEvent("tooltip_open", {
+              surface: "left_sidebar",
+              target_id: targetId,
+              target_label: label,
+            });
+          }
+        }}
+      >
         <TooltipTrigger asChild>{node}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          onEscapeKeyDown={(e) => {
+            // Radix already closes the tooltip; we keep focus on the trigger.
+            e.preventDefault();
+          }}
+        >
+          {label}
+        </TooltipContent>
       </Tooltip>
     );
   };
@@ -973,7 +996,7 @@ export default function JurisCloudOS() {
             >
               {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
             </button>
-          )}
+          , "sidebar_toggle_btn")}
 
           <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
@@ -1016,9 +1039,27 @@ export default function JurisCloudOS() {
                   role="button"
                   tabIndex={0}
                   aria-current={activeDept === dept.id ? "page" : undefined}
+                  onFocus={(e) => {
+                    // Track keyboard navigation only — ignore programmatic/mouse focus.
+                    if ((e.nativeEvent as FocusEvent & { sourceCapabilities?: unknown }).sourceCapabilities === null
+                      || e.target.matches(":focus-visible")) {
+                      trackUiEvent("tab_navigate", {
+                        surface: "left_sidebar",
+                        target_id: dept.id,
+                        target_label: dept.label,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+                      trackUiEvent("key_activate", {
+                        surface: "left_sidebar",
+                        target_id: dept.id,
+                        target_label: dept.label,
+                        source: "keyboard",
+                      });
                       activate("keyboard");
                     }
                   }}
@@ -1026,7 +1067,8 @@ export default function JurisCloudOS() {
                   <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{dept.label}</span>
                   {dept.badge > 0 && <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>}
-                </div>
+                </div>,
+                dept.id
               );
             })}
 
@@ -1049,13 +1091,33 @@ export default function JurisCloudOS() {
                   onClick={() => activate("click")}
                   role="button"
                   tabIndex={0}
+                  onFocus={(e) => {
+                    if (e.target.matches(":focus-visible")) {
+                      trackUiEvent("tab_navigate", {
+                        surface: "left_sidebar",
+                        target_id: item.id,
+                        target_label: item.label,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate("keyboard"); }
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      trackUiEvent("key_activate", {
+                        surface: "left_sidebar",
+                        target_id: item.id,
+                        target_label: item.label,
+                        source: "keyboard",
+                      });
+                      activate("keyboard");
+                    }
                   }}
                 >
                   <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{item.label}</span>
-                </div>
+                </div>,
+                item.id
               );
             })}
           </nav>
@@ -1075,7 +1137,8 @@ export default function JurisCloudOS() {
                   <Circle size={6} className="jc-agent-status-dot"
                     fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
                     style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
-                </div>
+                </div>,
+                `agent_${agent.id}`
               );
             })}
           </div>
