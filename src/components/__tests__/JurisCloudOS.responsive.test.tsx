@@ -60,9 +60,7 @@ describe("Sidebar responsive behavior", () => {
     // Lazy import after mocks are set up
     const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
     const { container } = render(
-      <TooltipProvider>
-        <JurisCloudOS />
-      </TooltipProvider>
+      <Wrap><JurisCloudOS /></Wrap>
     );
 
     const sidebar = container.querySelector("#jc-sidebar");
@@ -83,9 +81,7 @@ describe("Sidebar responsive behavior", () => {
 
     const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
     const { container } = render(
-      <TooltipProvider>
-        <JurisCloudOS />
-      </TooltipProvider>
+      <Wrap><JurisCloudOS /></Wrap>
     );
 
     const navItem = container.querySelector(".jc-nav-item") as HTMLElement | null;
@@ -102,9 +98,7 @@ describe("Sidebar responsive behavior", () => {
     setViewport(375, 812);
     const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
     const { container } = render(
-      <TooltipProvider>
-        <JurisCloudOS />
-      </TooltipProvider>
+      <Wrap><JurisCloudOS /></Wrap>
     );
 
     const sidebar = container.querySelector("#jc-sidebar");
