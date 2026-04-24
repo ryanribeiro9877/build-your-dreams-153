@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -16,7 +17,11 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2 } from "lucide-react";
+import {
+  getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
+  type RejectedEvent,
+} from "@/lib/uiTracking";
 
 /**
  * Admin dashboard for ui_events: lets admins filter by date range, event type,
@@ -62,8 +67,21 @@ export default function AdminUiEvents() {
   const [to, setTo] = useState<string>(isoDaysAgo(0));
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [userFilter, setUserFilter] = useState<string>("");
+  const [labelFilter, setLabelFilter] = useState<string>("");
+  const [groupBySession, setGroupBySession] = useState<boolean>(false);
   const [rows, setRows] = useState<UiEventRow[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Debug panel state
+  const [rejected, setRejected] = useState<RejectedEvent[]>(getRejectedEvents());
+  const [rejectedCount, setRejectedCount] = useState<number>(getRejectedCount());
+  useEffect(() => {
+    const off = onDebugChange(() => {
+      setRejected(getRejectedEvents());
+      setRejectedCount(getRejectedCount());
+    });
+    return () => { off(); };
+  }, []);
 
   const isAdmin = hasRole("admin");
 
@@ -82,7 +100,7 @@ export default function AdminUiEvents() {
     if (!isAdmin) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, from, to, eventFilter, userFilter]);
+  }, [isAdmin, from, to, eventFilter, userFilter, labelFilter]);
 
   async function load() {
     setLoading(true);
@@ -96,6 +114,8 @@ export default function AdminUiEvents() {
 
     if (eventFilter !== "all") query = query.eq("event_name", eventFilter);
     if (userFilter.trim()) query = query.eq("user_id", userFilter.trim());
+    const lbl = labelFilter.trim();
+    if (lbl) query = query.ilike("target_label", `%${lbl}%`);
 
     const { data, error } = await query;
     if (!error && data) setRows(data as UiEventRow[]);
@@ -132,6 +152,42 @@ export default function AdminUiEvents() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([label, total]) => ({ label, total }));
+  }, [rows]);
+
+  // Group by session — surfaces journeys/funnels and possible navigation jams.
+  const sessionGroups = useMemo(() => {
+    const map = new Map<string, UiEventRow[]>();
+    for (const r of rows) {
+      const key = r.session_id ?? "(sem sessão)";
+      const arr = map.get(key) ?? [];
+      arr.push(r);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries())
+      .map(([sessionId, evs]) => {
+        const sorted = [...evs].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const durationMs = new Date(last.created_at).getTime() - new Date(first.created_at).getTime();
+        const eventCounts: Record<string, number> = {};
+        for (const e of sorted) eventCounts[e.event_name] = (eventCounts[e.event_name] ?? 0) + 1;
+        return {
+          sessionId,
+          total: sorted.length,
+          start: first.created_at,
+          end: last.created_at,
+          durationMs,
+          user_id: first.user_id,
+          eventCounts,
+          firstEvent: first.event_name,
+          lastEvent: last.event_name,
+          lastTarget: last.target_label ?? last.target_id ?? "—",
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 50);
   }, [rows]);
 
   if (authLoading || !isAdmin) {
@@ -192,6 +248,78 @@ export default function AdminUiEvents() {
                 onChange={(e) => setUserFilter(e.target.value)}
               />
             </div>
+            <div>
+              <Label htmlFor="label">Buscar por label do alvo</Label>
+              <Input
+                id="label"
+                placeholder="ex: Cível, Perfil, Recolher…"
+                value={labelFilter}
+                onChange={(e) => setLabelFilter(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-6">
+              <Switch id="group" checked={groupBySession} onCheckedChange={setGroupBySession} />
+              <Label htmlFor="group" className="cursor-pointer">Agrupar por sessão</Label>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Debug panel */}
+        <Card className={rejectedCount > 0 ? "border-destructive/50" : ""}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className={`h-4 w-4 ${rejectedCount > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+              Modo de depuração — eventos rejeitados nesta sessão
+              <span className={`ml-2 px-2 py-0.5 rounded-md text-xs font-mono ${rejectedCount > 0 ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"}`}>
+                {rejectedCount}
+              </span>
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => {
+                setRejected(getRejectedEvents()); setRejectedCount(getRejectedCount());
+              }}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Atualizar
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearRejectedEvents} disabled={rejectedCount === 0}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Limpar
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {rejected.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma falha registrada nesta sessão. RLS, payload e rede estão OK.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left border-b border-border">
+                    <tr>
+                      <th className="py-2 pr-3">Quando</th>
+                      <th className="py-2 pr-3">Evento</th>
+                      <th className="py-2 pr-3">Motivo</th>
+                      <th className="py-2 pr-3">Código</th>
+                      <th className="py-2 pr-3">Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rejected.slice().reverse().slice(0, 20).map((r, i) => (
+                      <tr key={`${r.at}-${i}`} className="border-b border-border/50 align-top">
+                        <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
+                          {new Date(r.at).toLocaleString()}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono text-xs">{r.name}</td>
+                        <td className="py-1.5 pr-3 text-destructive">{r.reason}</td>
+                        <td className="py-1.5 pr-3 font-mono text-xs">{r.code ?? "—"}</td>
+                        <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(r.payload)}>
+                          {JSON.stringify(r.payload)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -271,6 +399,65 @@ export default function AdminUiEvents() {
             </ChartContainer>
           </CardContent>
         </Card>
+
+        {/* Sessions (group-by-session view) */}
+        {groupBySession && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Sessões ({sessionGroups.length}) — possíveis gargalos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left border-b border-border">
+                  <tr>
+                    <th className="py-2 pr-3">Sessão</th>
+                    <th className="py-2 pr-3">Eventos</th>
+                    <th className="py-2 pr-3">Duração</th>
+                    <th className="py-2 pr-3">Início → Fim</th>
+                    <th className="py-2 pr-3">Último alvo</th>
+                    <th className="py-2 pr-3">Usuário</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionGroups.map((g) => {
+                    const mins = Math.round(g.durationMs / 60000);
+                    const secs = Math.round((g.durationMs % 60000) / 1000);
+                    return (
+                      <tr key={g.sessionId} className="border-b border-border/50 align-top">
+                        <td className="py-1.5 pr-3 font-mono text-[11px]">{g.sessionId.slice(0, 18)}…</td>
+                        <td className="py-1.5 pr-3">
+                          <div className="font-semibold">{g.total}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {Object.entries(g.eventCounts).map(([k, v]) => `${k}:${v}`).join(" · ")}
+                          </div>
+                        </td>
+                        <td className="py-1.5 pr-3 whitespace-nowrap">
+                          {mins > 0 ? `${mins}m ` : ""}{secs}s
+                        </td>
+                        <td className="py-1.5 pr-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(g.start).toLocaleTimeString()} → {new Date(g.end).toLocaleTimeString()}
+                        </td>
+                        <td className="py-1.5 pr-3">{g.lastTarget}</td>
+                        <td className="py-1.5 pr-3 font-mono text-xs">
+                          {g.user_id ? g.user_id.slice(0, 8) : "anon"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sessionGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                        Nenhuma sessão no período.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Recent rows */}
         <Card>

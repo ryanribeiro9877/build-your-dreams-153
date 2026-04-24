@@ -576,6 +576,14 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     .jc-sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.5); }
     .jc-sidebar-overlay.visible { display: block; }
+    .jc-tooltip-overlay {
+      position: fixed; inset: 0; z-index: 45;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(1px);
+      pointer-events: none;
+      animation: jcTooltipFade 120ms ease-out;
+    }
+    @keyframes jcTooltipFade { from { opacity: 0 } to { opacity: 1 } }
     .jc-hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text1); padding: 4px; }
     .jc-right-toggle {
       display: none; background: var(--bg3); border: 1px solid var(--border);
@@ -936,19 +944,36 @@ export default function JurisCloudOS() {
     specialist: "Especialista", reviewer: "Revisor", executor: "Executor", monitor: "Monitor",
   };
 
+  // Optional dim overlay when tooltips open on collapsed sidebar — improves
+  // contrast/legibility. Opt-in via localStorage flag (`jc-tooltip-overlay`).
+  const [openTooltipCount, setOpenTooltipCount] = useState(0);
+  const [tooltipOverlay] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("jc-tooltip-overlay") === "1";
+  });
+
   // Wrap in tooltip when sidebar is collapsed (desktop). Plain element otherwise.
   // - Tracks tooltip_open
   // - Closes on Escape (Radix default behavior when trigger has focus)
   // - Returns focus to the trigger automatically (Radix default), so Tab order is preserved.
-  const withTooltip = (label: string, node: React.ReactElement, targetId?: string) => {
-    if (!sidebarCollapsed) return node;
+  const withTooltip = (
+    label: string,
+    node: React.ReactElement,
+    targetId?: string,
+    opts?: { side?: "right" | "left" | "top" | "bottom"; surface?: string; alwaysOn?: boolean }
+  ) => {
+    const enabled = opts?.alwaysOn || sidebarCollapsed;
+    if (!enabled) return node;
+    const side = opts?.side ?? "right";
+    const surface = opts?.surface ?? "left_sidebar";
     return (
       <Tooltip
         delayDuration={150}
         onOpenChange={(open) => {
+          setOpenTooltipCount((n) => Math.max(0, n + (open ? 1 : -1)));
           if (open) {
             trackUiEvent("tooltip_open", {
-              surface: "left_sidebar",
+              surface,
               target_id: targetId,
               target_label: label,
             });
@@ -957,7 +982,7 @@ export default function JurisCloudOS() {
       >
         <TooltipTrigger asChild>{node}</TooltipTrigger>
         <TooltipContent
-          side="right"
+          side={side}
           sideOffset={8}
           onEscapeKeyDown={(e) => {
             // Radix already closes the tooltip; we keep focus on the trigger.
@@ -978,6 +1003,10 @@ export default function JurisCloudOS() {
         {/* MOBILE OVERLAY */}
         <div className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`} onClick={() => setSidebarOpen(false)} />
 
+        {/* Optional dim overlay when collapsed-sidebar tooltips are open (a11y) */}
+        {tooltipOverlay && openTooltipCount > 0 && (
+          <div className="jc-tooltip-overlay" aria-hidden="true" />
+        )}
         {/* SIDEBAR */}
         <aside
           id="jc-sidebar"
@@ -1245,24 +1274,22 @@ export default function JurisCloudOS() {
           className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}
           aria-label="Central de operações"
         >
-          <Tooltip delayDuration={150}>
-            <TooltipTrigger asChild>
-              <button
-                className="jc-right-toggle-desk"
-                onClick={() => handleRightToggle("click")}
-                aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
-                aria-expanded={!rightCollapsed}
-                aria-controls="jc-right-panel"
-                aria-keyshortcuts="Control+O Meta+O"
-                type="button"
-              >
-                {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8}>
-              {rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)"}
-            </TooltipContent>
-          </Tooltip>
+          {withTooltip(
+            rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)",
+            <button
+              className="jc-right-toggle-desk"
+              onClick={() => handleRightToggle("click")}
+              aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+              aria-expanded={!rightCollapsed}
+              aria-controls="jc-right-panel"
+              aria-keyshortcuts="Control+O Meta+O"
+              type="button"
+            >
+              {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+            </button>,
+            "right_panel_toggle_btn",
+            { side: "left", surface: "right_panel", alwaysOn: true }
+          )}
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
