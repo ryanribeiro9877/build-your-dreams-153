@@ -292,6 +292,8 @@ export interface HealthCheckResult {
   code?: string;
   category?: RejectionCategory;
   durationMs: number;
+  /** Optional sample-rate override applied to this run (0..1). */
+  sampleRateOverride?: number;
 }
 
 export interface HealthCheckOptions {
