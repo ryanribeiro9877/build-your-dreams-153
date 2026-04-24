@@ -115,17 +115,23 @@ export default function AdminUiEvents() {
   // Apply TTL change with confirmation + instant prune so admins can verify.
   const applyTtl = (hours: number) => {
     if (!Number.isFinite(hours) || hours <= 0) return;
-    setRejectedTtlHours(hours);
-    const before = getRejectedCount();
-    // setRejectedTtlHours triggers a prune internally; pull the fresh state.
-    const after = getRejectedCount();
+    const bucketsBefore = getRejectionBuckets().length;
+    const result = setRejectedTtlHours(hours);
+    const freshBuckets = getRejectionBuckets();
     setRejected(getRejectedEvents());
-    setRejectedCount(after);
-    setBuckets(getRejectionBuckets());
-    const pruned = Math.max(0, before - after);
+    setRejectedCount(result.remaining);
+    setBuckets(freshBuckets);
+    const bucketed = Math.max(0, bucketsBefore - freshBuckets.length);
+    setLastPrune({
+      pruned: result.pruned,
+      bucketed,
+      remaining: result.remaining,
+      at: result.at,
+      ttlHours: hours,
+    });
     toast.success(`TTL atualizado para ${hours}h`, {
-      description: pruned > 0
-        ? `${pruned} evento(s) expirado(s) foram removidos imediatamente.`
+      description: result.pruned > 0
+        ? `${result.pruned} evento(s) expirado(s) removido(s) · ${bucketed} bucket(s) eliminado(s) · ${result.remaining} restante(s).`
         : "Nenhum evento expirado a remover agora.",
     });
   };
