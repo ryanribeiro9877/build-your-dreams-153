@@ -97,13 +97,19 @@ export function getRejectedTtlHours(): number {
   return Number.isFinite(v) && v > 0 ? v : DEFAULT_TTL_HOURS;
 }
 
-export function setRejectedTtlHours(hours: number) {
-  if (typeof window === "undefined") return;
-  if (!Number.isFinite(hours) || hours <= 0) return;
+export function setRejectedTtlHours(hours: number): { pruned: number; remaining: number; at: string } {
+  const at = new Date().toISOString();
+  if (typeof window === "undefined") return { pruned: 0, remaining: 0, at };
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return { pruned: 0, remaining: getRejectedCount(), at };
+  }
+  const before = getRejectedCount();
   sessionStorage.setItem(TTL_KEY, String(hours));
-  // Trigger pruning on next read
-  pruneExpired();
+  // Trigger pruning with the new TTL applied
+  const kept = pruneExpired();
+  const remaining = kept.length;
   notifyDebugListeners();
+  return { pruned: Math.max(0, before - remaining), remaining, at };
 }
 
 export function classifyRejection(reason: string, code?: string): RejectionCategory {
