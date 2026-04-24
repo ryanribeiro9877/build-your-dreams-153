@@ -289,12 +289,52 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Track initial landing page view (once per session per path).
+  useEffect(() => {
+    trackEvent("page_view", { section: "landing" });
+  }, []);
+
+  // Track when key sections come into view.
+  useEffect(() => {
+    const seen = new Set<string>();
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          const id = (e.target as HTMLElement).id;
+          if (e.isIntersecting && id && !seen.has(id)) {
+            seen.add(id);
+            trackEvent("section_view", { section: id });
+          }
+        });
+      },
+      { threshold: 0.4 }
+    );
+    document.querySelectorAll("section[id]").forEach((s) => obs.observe(s));
+    return () => obs.disconnect();
+  }, []);
+
+  /** Centralized handler for every CTA → tracks then navigates. */
+  const goToAuth = (ctaId: string, ctaLabel: string, section: string) => {
+    onCtaClick(ctaId, ctaLabel, section, "/auth");
+    navigate("/auth");
+  };
+
+  const toggleFaq = (i: number) => {
+    const next = openFaq === i ? null : i;
+    setOpenFaq(next);
+    if (next !== null) {
+      trackEvent("faq_open", { section: "faq", cta_id: `faq_${i}`, cta_label: FAQ[i].q });
+    }
+  };
+
 
   return (
     <div className="lf-root">
