@@ -466,7 +466,27 @@ export default function AdminUiEvents() {
                 {rejectedCount}
               </span>
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Gauge className="h-3.5 w-3.5" />
+                <Label htmlFor="sample" className="text-xs">Amostragem</Label>
+                <Select
+                  value={String(sampleRate)}
+                  onValueChange={(v) => applySampleRate(Number(v))}
+                >
+                  <SelectTrigger id="sample" className="h-7 w-24 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">100%</SelectItem>
+                    <SelectItem value="0.5">50%</SelectItem>
+                    <SelectItem value="0.25">25%</SelectItem>
+                    <SelectItem value="0.1">10%</SelectItem>
+                    <SelectItem value="0.01">1%</SelectItem>
+                    <SelectItem value="0">Pausado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
                 <Label htmlFor="ttl" className="text-xs">TTL (h)</Label>
@@ -476,14 +496,26 @@ export default function AdminUiEvents() {
                   min={1}
                   max={72}
                   value={ttlHours}
-                  onChange={(e) => {
+                  onChange={(e) => setTtlHours(Number(e.target.value))}
+                  onBlur={(e) => {
                     const v = Number(e.target.value);
-                    setTtlHours(v);
-                    if (v > 0) setRejectedTtlHours(v);
+                    if (v > 0 && v !== getRejectedTtlHours()) applyTtl(v);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = Number((e.target as HTMLInputElement).value);
+                      if (v > 0) applyTtl(v);
+                    }
                   }}
                   className="h-7 w-16 text-xs"
                 />
               </div>
+              <Button size="sm" variant="ghost" onClick={() => exportDebug("json")} disabled={rejectedCount === 0 && buckets.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" /> JSON
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => exportDebug("csv")} disabled={rejectedCount === 0 && buckets.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" /> CSV
+              </Button>
               <Button size="sm" variant="ghost" onClick={() => {
                 setRejected(getRejectedEvents()); setRejectedCount(getRejectedCount()); setBuckets(getRejectionBuckets());
               }}>
