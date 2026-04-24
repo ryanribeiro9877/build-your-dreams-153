@@ -581,8 +581,16 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       .jc-sidebar {
         position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
         transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+        width: 240px !important; min-width: 240px !important;
       }
       .jc-sidebar.mobile-open { transform: translateX(0); }
+      .jc-sidebar.collapsed .jc-logo-info,
+      .jc-sidebar.collapsed .jc-search,
+      .jc-sidebar.collapsed .jc-section-label,
+      .jc-sidebar.collapsed .jc-nav-label,
+      .jc-sidebar.collapsed .jc-nav-badge,
+      .jc-sidebar.collapsed .jc-agent-name { display: revert; }
+      .jc-sidebar-toggle { display: none; }
       .jc-sidebar-overlay.visible { display: block; }
       .jc-hamburger { display: block; }
       .jc-topbar { padding: 0 12px; gap: 8px; }
