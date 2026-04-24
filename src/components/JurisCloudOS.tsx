@@ -1302,8 +1302,13 @@ export default function JurisCloudOS() {
         </aside>
 
         {rightPanelOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} />
+          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} aria-hidden="true" />
         )}
+
+        {/* Live region for keyboard shortcut announcements (visually hidden, screen reader only) */}
+        <div className="jc-sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {shortcutAnnouncement}
+        </div>
       </div>
       </TooltipProvider>
     </div>
