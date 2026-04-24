@@ -28,25 +28,82 @@ export interface UiEventPayload {
   [key: string]: string | number | boolean | undefined;
 }
 
+export type RejectionCategory = "rls" | "payload" | "network" | "unknown";
+
 export interface RejectedEvent {
   at: string; // ISO timestamp
   name: string;
   reason: string;
   code?: string;
+  category: RejectionCategory;
   payload: Record<string, unknown>;
 }
 
 const REJECT_BUFFER_MAX = 50;
 const REJECT_KEY = "lf_ui_rejected_events";
 const COUNT_KEY = "lf_ui_rejected_count";
+const TTL_KEY = "lf_ui_rejected_ttl_hours";
+const DEFAULT_TTL_HOURS = 6;
+
+export function getRejectedTtlHours(): number {
+  if (typeof window === "undefined") return DEFAULT_TTL_HOURS;
+  const v = Number(sessionStorage.getItem(TTL_KEY));
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_TTL_HOURS;
+}
+
+export function setRejectedTtlHours(hours: number) {
+  if (typeof window === "undefined") return;
+  if (!Number.isFinite(hours) || hours <= 0) return;
+  sessionStorage.setItem(TTL_KEY, String(hours));
+  // Trigger pruning on next read
+  pruneExpired();
+  notifyDebugListeners();
+}
+
+export function classifyRejection(reason: string, code?: string): RejectionCategory {
+  const r = (reason || "").toLowerCase();
+  if (code === "42501" || r.includes("row-level security") || r.includes("rls")) return "rls";
+  if (
+    code === "23514" || code === "23502" || code === "23505" ||
+    r.includes("violates check") || r.includes("violates not-null") ||
+    r.includes("invalid input") || r.includes("payload") || r.includes("constraint")
+  ) return "payload";
+  if (
+    r.includes("failed to fetch") || r.includes("network") || r.includes("timeout") ||
+    r.includes("offline") || r.includes("aborted")
+  ) return "network";
+  return "unknown";
+}
+
+function pruneExpired(): RejectedEvent[] {
+  if (typeof window === "undefined") return [];
+  const ttlMs = getRejectedTtlHours() * 60 * 60 * 1000;
+  const cutoff = Date.now() - ttlMs;
+  let buf: RejectedEvent[] = [];
+  try {
+    buf = JSON.parse(sessionStorage.getItem(REJECT_KEY) ?? "[]");
+  } catch {
+    buf = [];
+  }
+  const kept = buf.filter((e) => {
+    const t = new Date(e.at).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  });
+  if (kept.length !== buf.length) {
+    try {
+      sessionStorage.setItem(REJECT_KEY, JSON.stringify(kept));
+      sessionStorage.setItem(COUNT_KEY, String(kept.length));
+    } catch {
+      // ignore
+    }
+  }
+  return kept;
+}
 
 function readBuffer(): RejectedEvent[] {
   if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(sessionStorage.getItem(REJECT_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
+  // Prune on every read so stale entries silently disappear.
+  return pruneExpired();
 }
 
 function writeBuffer(buf: RejectedEvent[]) {
@@ -102,6 +159,7 @@ function recordFailure(name: string, payload: Record<string, unknown>, reason: s
     name,
     reason,
     code,
+    category: classifyRejection(reason, code),
     payload,
   };
   const buf = readBuffer();
@@ -112,6 +170,103 @@ function recordFailure(name: string, payload: Record<string, unknown>, reason: s
   if (typeof window !== "undefined" && (import.meta as ImportMeta & { env: { DEV?: boolean } }).env?.DEV) {
     // eslint-disable-next-line no-console
     console.warn("[ui-track:rejected]", name, reason, entry);
+  }
+}
+
+/**
+ * Aggregates rejected events by `category` and `code`, returning counters and
+ * the most recent example for each bucket. Used by the admin debug panel.
+ */
+export interface RejectionBucket {
+  key: string;
+  category: RejectionCategory;
+  code?: string;
+  reason: string;
+  count: number;
+  lastAt: string;
+  lastPayload: Record<string, unknown>;
+}
+
+export function getRejectionBuckets(): RejectionBucket[] {
+  const events = readBuffer();
+  const map = new Map<string, RejectionBucket>();
+  for (const e of events) {
+    const key = `${e.category}::${e.code ?? "-"}::${e.reason.slice(0, 80)}`;
+    const cur = map.get(key);
+    if (!cur) {
+      map.set(key, {
+        key,
+        category: e.category,
+        code: e.code,
+        reason: e.reason,
+        count: 1,
+        lastAt: e.at,
+        lastPayload: e.payload,
+      });
+    } else {
+      cur.count += 1;
+      if (new Date(e.at).getTime() > new Date(cur.lastAt).getTime()) {
+        cur.lastAt = e.at;
+        cur.lastPayload = e.payload;
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Health-check: inserts a synthetic `nav_click` event and reports whether
+ * the database accepted it. Does NOT pollute the rejected buffer on success.
+ */
+export interface HealthCheckResult {
+  ok: boolean;
+  at: string;
+  reason?: string;
+  code?: string;
+  category?: RejectionCategory;
+  durationMs: number;
+}
+
+export async function runTrackingHealthCheck(): Promise<HealthCheckResult> {
+  const startedAt = new Date().toISOString();
+  const t0 = performance.now();
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const event = {
+      event_name: "nav_click" as const,
+      user_id: auth?.user?.id ?? null,
+      session_id: getSessionId(),
+      surface: "healthcheck",
+      target_id: "healthcheck",
+      target_label: "tracking_healthcheck",
+      metadata: { healthcheck: true, at: startedAt } as Record<string, unknown>,
+    };
+    const { error } = await (
+      supabase.from as unknown as (t: string) => {
+        insert: (v: unknown) => Promise<{ error: { message: string; code?: string } | null }>;
+      }
+    )("ui_events").insert(event);
+    const durationMs = Math.round(performance.now() - t0);
+    if (error) {
+      return {
+        ok: false,
+        at: startedAt,
+        reason: error.message,
+        code: error.code,
+        category: classifyRejection(error.message, error.code),
+        durationMs,
+      };
+    }
+    return { ok: true, at: startedAt, durationMs };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      at: startedAt,
+      reason,
+      category: classifyRejection(reason),
+      durationMs: Math.round(performance.now() - t0),
+    };
   }
 }
 
