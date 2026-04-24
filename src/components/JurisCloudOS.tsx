@@ -943,13 +943,14 @@ export default function JurisCloudOS() {
           className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
           aria-label="Menu lateral de navegação"
         >
-          {withTooltip(sidebarCollapsed ? "Expandir menu" : "Recolher menu",
+          {withTooltip(`${sidebarCollapsed ? "Expandir" : "Recolher"} menu (Ctrl+B)`,
             <button
               className="jc-sidebar-toggle"
-              onClick={() => setSidebarCollapsed(c => !c)}
+              onClick={() => handleSidebarToggle("click")}
               aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
               aria-expanded={!sidebarCollapsed}
               aria-controls="jc-sidebar"
+              aria-keyshortcuts="Control+B Meta+B"
               type="button"
             >
               {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
@@ -978,19 +979,29 @@ export default function JurisCloudOS() {
             <div className="jc-section-label">Departamentos</div>
             {visibleDepts.map(dept => {
               const Icon = DEPT_ICONS[dept.id] || Sparkles;
+              const activate = (source: "click" | "keyboard") => {
+                setActiveDept(dept.id);
+                setSidebarOpen(false);
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: dept.id,
+                  target_label: dept.label,
+                  source,
+                  collapsed: sidebarCollapsed,
+                });
+              };
               return withTooltip(dept.label,
                 <div
                   key={dept.id}
                   className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
-                  onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}
+                  onClick={() => activate("click")}
                   role="button"
                   tabIndex={0}
                   aria-current={activeDept === dept.id ? "page" : undefined}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setActiveDept(dept.id);
-                      setSidebarOpen(false);
+                      activate("keyboard");
                     }
                   }}
                 >
@@ -1002,21 +1013,33 @@ export default function JurisCloudOS() {
             })}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            {MENU_ITEMS.filter(m => m.show).map(item => withTooltip(item.label,
-              <div
-                key={item.id}
-                className="jc-nav-item"
-                onClick={item.action}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.action(); }
-                }}
-              >
-                <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
-                <span className="jc-nav-label">{item.label}</span>
-              </div>
-            ))}
+            {MENU_ITEMS.filter(m => m.show).map(item => {
+              const activate = (source: "click" | "keyboard") => {
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: item.id,
+                  target_label: item.label,
+                  source,
+                  collapsed: sidebarCollapsed,
+                });
+                item.action();
+              };
+              return withTooltip(item.label,
+                <div
+                  key={item.id}
+                  className="jc-nav-item"
+                  onClick={() => activate("click")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate("keyboard"); }
+                  }}
+                >
+                  <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
+                  <span className="jc-nav-label">{item.label}</span>
+                </div>
+              );
+            })}
           </nav>
 
           {/* Agents in sidebar - filtered by role */}
