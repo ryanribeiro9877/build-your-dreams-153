@@ -193,9 +193,11 @@ export default function AdminUiEvents() {
 
   const exportDebug = (format: "json" | "csv") => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const includeBuckets = !exportRejectedOnly;
-    // Standardized context block — embedded in JSON exports so consumers can
-    // reliably compare snapshots taken across sessions/environments.
+    // JSON honors `exportRejectedOnly`; CSV honors `csvSkipBuckets` (separate
+    // checkbox for faster CSV-only debugging when there are many bucket rows).
+    const includeBucketsJson = !exportRejectedOnly;
+    const includeBucketsCsv = !csvSkipBuckets;
+    const includeBuckets = format === "csv" ? includeBucketsCsv : includeBucketsJson;
     const context = {
       schema: "lf.ui-tracking.debug-export",
       schemaVersion: EXPORT_SCHEMA_VERSION,
@@ -239,6 +241,32 @@ export default function AdminUiEvents() {
     });
   };
 
+  // Validates a JSON file picked by the admin against the expected schema.
+  const handleValidateExport = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const result = validateExportPayload(parsed);
+      setValidation({ ...result, fileName: file.name });
+      if (result.ok) {
+        toast.success(`Schema válido — ${file.name}`, {
+          description: `Versão ${result.schemaVersion}, todos os campos presentes.`,
+        });
+      } else {
+        const issues = [
+          result.missingFields.length && `${result.missingFields.length} campo(s) faltando`,
+          result.bucketIssues.length && `${result.bucketIssues.length} bucket(s) com problema`,
+          result.rejectedIssues.length && `${result.rejectedIssues.length} evento(s) com problema`,
+          !result.versionMatches && "versão divergente",
+        ].filter(Boolean).join(" · ");
+        toast.error(`Schema inválido — ${file.name}`, { description: issues || "Verifique o painel." });
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      toast.error("Falha ao ler JSON", { description: reason });
+    }
+  };
+
   // Apply drilldown filter to the raw rejected list shown below.
   const filteredRejected = useMemo(() => {
     if (!bucketFilter) return rejected;
@@ -249,15 +277,124 @@ export default function AdminUiEvents() {
     );
   }, [rejected, bucketFilter]);
 
+  // Sorted view of buckets (for the table headers).
+  const sortedBuckets = useMemo(() => {
+    const arr = [...buckets];
+    arr.sort((a, b) => {
+      switch (bucketSort) {
+        case "category": return a.category.localeCompare(b.category);
+        case "code": return (a.code ?? "").localeCompare(b.code ?? "");
+        case "sampleRateAtRead": return b.sampleRateAtRead - a.sampleRateAtRead;
+        default: return b.count - a.count;
+      }
+    });
+    return arr;
+  }, [buckets, bucketSort]);
+
   // Health-check state
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthHistory, setHealthHistory] = useState<HealthCheckResult[]>([]);
   const handleHealthCheck = async () => {
     setHealthLoading(true);
-    const result = await runTrackingHealthCheck();
+    const override = healthOverrideEnabled
+      ? Math.max(0, Math.min(1, healthOverridePct / 100))
+      : undefined;
+    const result = await runTrackingHealthCheck({ sampleRateOverride: override });
     setHealthHistory((prev) => [result, ...prev].slice(0, 5));
     setHealthLoading(false);
   };
+
+  // Compare exports — load a JSON file into slot A or B.
+  const loadCompareFile = async (slot: "A" | "B", file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      if (slot === "A") setCompareA({ name: file.name, data: parsed });
+      else setCompareB({ name: file.name, data: parsed });
+    } catch (err) {
+      toast.error("Falha ao ler JSON", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  // Diff two exports across the metrics admins care about.
+  type CompareDiff = {
+    schemaVersion: { a?: string; b?: string };
+    ttlHours: { a?: number; b?: number; delta: number };
+    rejectedCount: { a: number; b: number; delta: number };
+    sampleRate: { a?: number; b?: number };
+    buckets: Array<{
+      key: string; category: string; code?: string; reason: string;
+      countA: number; countB: number; deltaCount: number;
+      capturedA: number; capturedB: number; deltaCaptured: number;
+      onlyIn?: "A" | "B";
+    }>;
+  };
+  const compareDiff = useMemo<CompareDiff | null>(() => {
+    if (!compareA || !compareB) return null;
+    const a = compareA.data; const b = compareB.data;
+    const ba = Array.isArray(a.buckets) ? (a.buckets as Array<Record<string, unknown>>) : [];
+    const bb = Array.isArray(b.buckets) ? (b.buckets as Array<Record<string, unknown>>) : [];
+    const keyOf = (x: Record<string, unknown>) =>
+      `${String(x.category ?? "-")}::${String(x.code ?? "-")}::${String(x.reason ?? "-").slice(0, 80)}`;
+    const map = new Map<string, CompareDiff["buckets"][number]>();
+    for (const x of ba) {
+      const k = keyOf(x);
+      map.set(k, {
+        key: k,
+        category: String(x.category ?? "-"),
+        code: x.code as string | undefined,
+        reason: String(x.reason ?? ""),
+        countA: Number(x.count ?? 0), countB: 0, deltaCount: -Number(x.count ?? 0),
+        capturedA: Number(x.estimatedCaptured ?? 0), capturedB: 0,
+        deltaCaptured: -Number(x.estimatedCaptured ?? 0),
+        onlyIn: "A",
+      });
+    }
+    for (const x of bb) {
+      const k = keyOf(x);
+      const existing = map.get(k);
+      const cb = Number(x.count ?? 0);
+      const capb = Number(x.estimatedCaptured ?? 0);
+      if (existing) {
+        existing.countB = cb;
+        existing.capturedB = capb;
+        existing.deltaCount = cb - existing.countA;
+        existing.deltaCaptured = capb - existing.capturedA;
+        existing.onlyIn = undefined;
+      } else {
+        map.set(k, {
+          key: k,
+          category: String(x.category ?? "-"),
+          code: x.code as string | undefined,
+          reason: String(x.reason ?? ""),
+          countA: 0, countB: cb, deltaCount: cb,
+          capturedA: 0, capturedB: capb, deltaCaptured: capb,
+          onlyIn: "B",
+        });
+      }
+    }
+    const ttlA = typeof a.ttlHours === "number" ? a.ttlHours : undefined;
+    const ttlB = typeof b.ttlHours === "number" ? b.ttlHours : undefined;
+    return {
+      schemaVersion: {
+        a: typeof a.schemaVersion === "string" ? a.schemaVersion : undefined,
+        b: typeof b.schemaVersion === "string" ? b.schemaVersion : undefined,
+      },
+      ttlHours: { a: ttlA, b: ttlB, delta: (ttlB ?? 0) - (ttlA ?? 0) },
+      rejectedCount: {
+        a: Number(a.rejectedCount ?? 0),
+        b: Number(b.rejectedCount ?? 0),
+        delta: Number(b.rejectedCount ?? 0) - Number(a.rejectedCount ?? 0),
+      },
+      sampleRate: {
+        a: typeof a.sampleRate === "number" ? a.sampleRate : undefined,
+        b: typeof b.sampleRate === "number" ? b.sampleRate : undefined,
+      },
+      buckets: Array.from(map.values()).sort((x, y) => Math.abs(y.deltaCount) - Math.abs(x.deltaCount)),
+    };
+  }, [compareA, compareB]);
 
   const categoryLabel: Record<string, string> = {
     rls: "RLS", payload: "Validação payload", network: "Rede", unknown: "Desconhecido",
