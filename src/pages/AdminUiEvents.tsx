@@ -949,6 +949,230 @@ export default function AdminUiEvents() {
           </CardContent>
         </Card>
 
+        {/* Validate export schema */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileCheck2 className="h-4 w-4 text-muted-foreground" />
+              Validar export
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                schema esperado <code className="font-mono">{EXPORT_SCHEMA_VERSION}</code>
+              </span>
+            </CardTitle>
+            <Label className="cursor-pointer">
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleValidateExport(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                <FileCheck2 className="h-3.5 w-3.5" /> Selecionar JSON
+              </span>
+            </Label>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Carrega um JSON exportado e verifica <code className="font-mono">schemaVersion</code> e
+              campos obrigatórios antes de você comparar arquivos.
+            </p>
+            {!validation ? (
+              <p className="text-xs text-muted-foreground">Nenhum arquivo validado nesta sessão.</p>
+            ) : (
+              <div className={`rounded-md border p-3 text-sm ${validation.ok ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"}`}>
+                <div className="font-medium mb-1 flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${validation.ok ? "bg-emerald-500" : "bg-destructive"}`} />
+                  {validation.fileName}
+                  <span className="text-xs text-muted-foreground font-mono">
+                    schema {validation.schemaVersion ?? "—"} {validation.versionMatches ? "✓" : "✗"}
+                  </span>
+                </div>
+                {validation.missingFields.length > 0 && (
+                  <div className="text-xs text-destructive">
+                    Campos faltando: <span className="font-mono">{validation.missingFields.join(", ")}</span>
+                  </div>
+                )}
+                {validation.bucketIssues.length > 0 && (
+                  <div className="text-xs text-destructive mt-1">
+                    {validation.bucketIssues.length} bucket(s) com campos faltando (ex.: índice {validation.bucketIssues[0].index} → {validation.bucketIssues[0].missing.join(", ")})
+                  </div>
+                )}
+                {validation.rejectedIssues.length > 0 && (
+                  <div className="text-xs text-destructive mt-1">
+                    {validation.rejectedIssues.length} evento(s) rejeitado(s) com campos faltando (ex.: índice {validation.rejectedIssues[0].index} → {validation.rejectedIssues[0].missing.join(", ")})
+                  </div>
+                )}
+                {validation.notes.length > 0 && (
+                  <ul className="text-xs text-muted-foreground mt-2 list-disc list-inside">
+                    {validation.notes.map((n, i) => (<li key={i}>{n}</li>))}
+                  </ul>
+                )}
+                {validation.ok && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    Tudo certo — pronto para comparar.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Compare two exports */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <GitCompareArrows className="h-4 w-4 text-muted-foreground" />
+              Comparar dois exports
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Carregue dois JSONs exportados para ver diffs em TTL, contagem de rejeitados e
+              <code className="font-mono"> estimatedCaptured</code> por bucket.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(["A", "B"] as const).map((slot) => {
+                const current = slot === "A" ? compareA : compareB;
+                return (
+                  <div key={slot} className="rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm">Arquivo {slot}</span>
+                      {current && (
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => slot === "A" ? setCompareA(null) : setCompareB(null)}>
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                    <Label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void loadCompareFile(slot, f);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                        Selecionar JSON
+                      </span>
+                    </Label>
+                    {current && (
+                      <div className="mt-2 text-xs text-muted-foreground font-mono truncate" title={current.name}>
+                        {current.name}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {compareDiff && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">schemaVersion</div>
+                    <div className="font-mono">
+                      {compareDiff.schemaVersion.a ?? "—"} → {compareDiff.schemaVersion.b ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">TTL (h)</div>
+                    <div className="font-mono">
+                      {compareDiff.ttlHours.a ?? "—"} → {compareDiff.ttlHours.b ?? "—"}
+                      {compareDiff.ttlHours.delta !== 0 && (
+                        <span className={`ml-2 ${compareDiff.ttlHours.delta > 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          ({compareDiff.ttlHours.delta > 0 ? "+" : ""}{compareDiff.ttlHours.delta})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">rejectedCount</div>
+                    <div className="font-mono">
+                      {compareDiff.rejectedCount.a} → {compareDiff.rejectedCount.b}
+                      {compareDiff.rejectedCount.delta !== 0 && (
+                        <span className={`ml-2 ${compareDiff.rejectedCount.delta < 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          ({compareDiff.rejectedCount.delta > 0 ? "+" : ""}{compareDiff.rejectedCount.delta})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      {compareDiff.rejectedCount.delta < 0 ? "TTL pruning provável" : compareDiff.rejectedCount.delta > 0 ? "Mais falhas em B" : "Sem mudança"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">sampleRate</div>
+                    <div className="font-mono">
+                      {compareDiff.sampleRate.a !== undefined ? `${Math.round(compareDiff.sampleRate.a * 100)}%` : "—"}
+                      {" → "}
+                      {compareDiff.sampleRate.b !== undefined ? `${Math.round(compareDiff.sampleRate.b * 100)}%` : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Diffs por bucket ({compareDiff.buckets.length})</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left border-b border-border">
+                        <tr>
+                          <th className="py-2 pr-3">Categoria</th>
+                          <th className="py-2 pr-3">Código</th>
+                          <th className="py-2 pr-3">Motivo</th>
+                          <th className="py-2 pr-3">count A → B</th>
+                          <th className="py-2 pr-3">Δ count</th>
+                          <th className="py-2 pr-3">captured A → B</th>
+                          <th className="py-2 pr-3">Δ captured</th>
+                          <th className="py-2 pr-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {compareDiff.buckets.map((b) => (
+                          <tr key={b.key} className="border-b border-border/50 align-top">
+                            <td className="py-1.5 pr-3">
+                              <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category] ?? ""}`}>
+                                {categoryLabel[b.category] ?? b.category}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
+                            <td className="py-1.5 pr-3 max-w-xs truncate" title={b.reason}>{b.reason}</td>
+                            <td className="py-1.5 pr-3 font-mono">{b.countA} → {b.countB}</td>
+                            <td className={`py-1.5 pr-3 font-mono ${b.deltaCount > 0 ? "text-destructive" : b.deltaCount < 0 ? "text-emerald-600" : ""}`}>
+                              {b.deltaCount > 0 ? "+" : ""}{b.deltaCount}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono">{b.capturedA} → {b.capturedB}</td>
+                            <td className={`py-1.5 pr-3 font-mono ${b.deltaCaptured > 0 ? "text-destructive" : b.deltaCaptured < 0 ? "text-emerald-600" : ""}`}>
+                              {b.deltaCaptured > 0 ? "+" : ""}{b.deltaCaptured}
+                            </td>
+                            <td className="py-1.5 pr-3 text-xs">
+                              {b.onlyIn === "A" ? <span className="text-amber-600">Só em A (pruned)</span>
+                                : b.onlyIn === "B" ? <span className="text-blue-600">Novo em B</span>
+                                : <span className="text-muted-foreground">Em ambos</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {compareDiff.buckets.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="py-6 text-center text-muted-foreground text-xs">
+                              Sem buckets em nenhum dos arquivos.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Totals by event */}
         <Card>
           <CardHeader>
