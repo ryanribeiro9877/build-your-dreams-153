@@ -1113,10 +1113,8 @@ export default function JurisCloudOS() {
                     const load = getAgentLoad(agent);
                     const RoleIcon = ROLE_ICONS[agent.role] || Zap;
                     return (
-                      <div key={agent.id} style={{
-                        background: "var(--bg3)", border: "1px solid var(--border)",
-                        borderRadius: 10, padding: 12, marginBottom: 8, cursor: "pointer",
-                      }}>
+                      <div key={agent.id} className="jc-agent-card-rp">
+
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                           <div style={{
                             width: 36, height: 36, borderRadius: 9,
