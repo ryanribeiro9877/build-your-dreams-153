@@ -248,10 +248,10 @@ export default function LandingPage() {
       <section id="pilares" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">OS 3 PILARES</div>
+            <div className="lp-tag">A NOVA ORDEM</div>
             <h2 className="lp-section-title">
-              <span>Tudo que seu escritório precisa</span><br />
-              <span className="lp-gold-text">em uma plataforma</span>
+              <span>Você no comando.</span><br />
+              <span className="lp-gold-text">Eles no trabalho pesado.</span>
             </h2>
           </div>
 
@@ -287,9 +287,9 @@ export default function LandingPage() {
       <section id="como-funciona" className="lp-section lp-section--alt">
         <div className="lp-container lp-container--narrow">
           <div className="lp-section-header">
-            <div className="lp-tag">PASSO A PASSO</div>
+            <div className="lp-tag">SEU NOVO DIA</div>
             <h2 className="lp-section-title">
-              Simples de começar,<br /><span className="lp-gold-text">impossível de largar</span>
+              Um comando seu.<br /><span className="lp-gold-text">Um exército em ação.</span>
             </h2>
           </div>
 
@@ -310,9 +310,9 @@ export default function LandingPage() {
       <section id="planos" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">PLANOS & PREÇOS</div>
+            <div className="lp-tag">SUA FORÇA DE TRABALHO</div>
             <h2 className="lp-section-title">
-              Escolha o plano ideal<br /><span className="lp-gold-text">para seu escritório</span>
+              Quantos agentes<br /><span className="lp-gold-text">vão trabalhar para você?</span>
             </h2>
           </div>
 
@@ -352,9 +352,9 @@ export default function LandingPage() {
       <section id="depoimentos" className="lp-section lp-section--alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">CASOS DE SUCESSO</div>
+            <div className="lp-tag">QUEM JÁ COMANDA</div>
             <h2 className="lp-section-title">
-              Escritórios que já<br /><span className="lp-gold-text">revolucionaram sua gestão</span>
+              Advogados que pararam de executar<br /><span className="lp-gold-text">e começaram a comandar</span>
             </h2>
           </div>
 
@@ -380,15 +380,15 @@ export default function LandingPage() {
       <section className="lp-cta-final">
         <div className="lp-cta-final__glow" />
         <div className="lp-cta-final__box">
-          <div style={{ fontSize: 60, marginBottom: 20 }}>⚡</div>
+          <div style={{ fontSize: 60, marginBottom: 20 }}>👑</div>
           <h2 className="lp-cta-final__title">
-            Pronto para <span className="lp-gold-text">triplicar</span> seus resultados?
+            Está na hora de <span className="lp-gold-text">comandar</span>.
           </h2>
           <p className="lp-cta-final__sub">
-            Junte-se aos escritórios que já transformaram sua operação com a parceria <strong>Humano + IA</strong>.
+            Você é advogado, não operador. Deixe sua força de IA executar — e <strong>recupere seu tempo, sua família e seu lucro</strong>.
           </p>
-          <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>⚖️ Começar Agora — É Grátis</button>
-          <p className="lp-cta-final__note">Sem cartão de crédito • Setup em 2 minutos • Suporte dedicado</p>
+          <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>👑 Assumir o comando agora</button>
+          <p className="lp-cta-final__note">Sem cartão de crédito • Setup em 2 minutos • Cancele quando quiser</p>
         </div>
       </section>
 
@@ -396,9 +396,9 @@ export default function LandingPage() {
       <footer className="lp-footer">
         <div className="lp-footer__brand">
           <span>⚖️</span>
-          <span>Agent Jus IA</span>
+          <span>LexForce</span>
         </div>
-        <p className="lp-footer__copy">© {new Date().getFullYear()} Agent Jus IA — Humano + IA revolucionando a gestão jurídica.</p>
+        <p className="lp-footer__copy">© {new Date().getFullYear()} LexForce — Sua força de trabalho de IA jurídica. Você comanda. Eles executam.</p>
       </footer>
 
       <style>{`
