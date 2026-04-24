@@ -1972,6 +1972,10 @@ export default function LandingPage() {
           .lf-fluxo { grid-template-columns: 1fr; gap: 20px; }
           .lf-fluxo__connector { display: none; }
           .lf-seguranca { grid-template-columns: 1fr; }
+          .lf-casos { grid-template-columns: 1fr; }
+          .lf-faq__q { font-size: 15px; padding: 18px 20px; }
+          .lf-faq__a p { padding: 0 20px 20px; }
+          .lf-faq__footer { flex-direction: column; text-align: center; }
         }
 
         /* ───── RESPONSIVE — MOBILE ───── */
