@@ -1039,9 +1039,27 @@ export default function JurisCloudOS() {
                   role="button"
                   tabIndex={0}
                   aria-current={activeDept === dept.id ? "page" : undefined}
+                  onFocus={(e) => {
+                    // Track keyboard navigation only — ignore programmatic/mouse focus.
+                    if ((e.nativeEvent as FocusEvent & { sourceCapabilities?: unknown }).sourceCapabilities === null
+                      || e.target.matches(":focus-visible")) {
+                      trackUiEvent("tab_navigate", {
+                        surface: "left_sidebar",
+                        target_id: dept.id,
+                        target_label: dept.label,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+                      trackUiEvent("key_activate", {
+                        surface: "left_sidebar",
+                        target_id: dept.id,
+                        target_label: dept.label,
+                        source: "keyboard",
+                      });
                       activate("keyboard");
                     }
                   }}
@@ -1049,7 +1067,8 @@ export default function JurisCloudOS() {
                   <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{dept.label}</span>
                   {dept.badge > 0 && <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>}
-                </div>
+                </div>,
+                dept.id
               );
             })}
 
