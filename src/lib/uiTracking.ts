@@ -28,25 +28,82 @@ export interface UiEventPayload {
   [key: string]: string | number | boolean | undefined;
 }
 
+export type RejectionCategory = "rls" | "payload" | "network" | "unknown";
+
 export interface RejectedEvent {
   at: string; // ISO timestamp
   name: string;
   reason: string;
   code?: string;
+  category: RejectionCategory;
   payload: Record<string, unknown>;
 }
 
 const REJECT_BUFFER_MAX = 50;
 const REJECT_KEY = "lf_ui_rejected_events";
 const COUNT_KEY = "lf_ui_rejected_count";
+const TTL_KEY = "lf_ui_rejected_ttl_hours";
+const DEFAULT_TTL_HOURS = 6;
+
+export function getRejectedTtlHours(): number {
+  if (typeof window === "undefined") return DEFAULT_TTL_HOURS;
+  const v = Number(sessionStorage.getItem(TTL_KEY));
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_TTL_HOURS;
+}
+
+export function setRejectedTtlHours(hours: number) {
+  if (typeof window === "undefined") return;
+  if (!Number.isFinite(hours) || hours <= 0) return;
+  sessionStorage.setItem(TTL_KEY, String(hours));
+  // Trigger pruning on next read
+  pruneExpired();
+  notifyDebugListeners();
+}
+
+export function classifyRejection(reason: string, code?: string): RejectionCategory {
+  const r = (reason || "").toLowerCase();
+  if (code === "42501" || r.includes("row-level security") || r.includes("rls")) return "rls";
+  if (
+    code === "23514" || code === "23502" || code === "23505" ||
+    r.includes("violates check") || r.includes("violates not-null") ||
+    r.includes("invalid input") || r.includes("payload") || r.includes("constraint")
+  ) return "payload";
+  if (
+    r.includes("failed to fetch") || r.includes("network") || r.includes("timeout") ||
+    r.includes("offline") || r.includes("aborted")
+  ) return "network";
+  return "unknown";
+}
+
+function pruneExpired(): RejectedEvent[] {
+  if (typeof window === "undefined") return [];
+  const ttlMs = getRejectedTtlHours() * 60 * 60 * 1000;
+  const cutoff = Date.now() - ttlMs;
+  let buf: RejectedEvent[] = [];
+  try {
+    buf = JSON.parse(sessionStorage.getItem(REJECT_KEY) ?? "[]");
+  } catch {
+    buf = [];
+  }
+  const kept = buf.filter((e) => {
+    const t = new Date(e.at).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  });
+  if (kept.length !== buf.length) {
+    try {
+      sessionStorage.setItem(REJECT_KEY, JSON.stringify(kept));
+      sessionStorage.setItem(COUNT_KEY, String(kept.length));
+    } catch {
+      // ignore
+    }
+  }
+  return kept;
+}
 
 function readBuffer(): RejectedEvent[] {
   if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(sessionStorage.getItem(REJECT_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
+  // Prune on every read so stale entries silently disappear.
+  return pruneExpired();
 }
 
 function writeBuffer(buf: RejectedEvent[]) {
