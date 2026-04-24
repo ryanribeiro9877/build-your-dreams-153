@@ -24,3 +24,4 @@ Language: Application UI and terminology in Portuguese (PT-BR).
 - [Agent Orchestration](mem://features/agent-orchestration) — Hierarchical AI structure (CEO to Teams), workload limits, and logic
 - [Org Chart](mem://features/org-chart) — Drag-and-drop hierarchy visualizer on /organograma
 - [Efficiency Monitoring](mem://features/efficiency-monitoring) — Bottleneck detection engine and agent workload scoring on /eficiencia
+- [Landing Tracking](mem://features/landing-tracking) — Anonymous event tracking for landing CTAs, page views, section views, FAQ opens via landing_events table (admin-only read)
