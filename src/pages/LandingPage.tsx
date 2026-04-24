@@ -1456,6 +1456,215 @@ export default function LandingPage() {
           margin: 0;
         }
 
+        /* ───── CASOS DE USO ───── */
+        .lf-casos {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 24px;
+        }
+        .lf-caso {
+          --accent: #c9a84c;
+          padding: 32px 28px;
+          border-radius: 24px;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%);
+          border: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          flex-direction: column;
+          transition: all 0.3s;
+          position: relative;
+          overflow: hidden;
+        }
+        .lf-caso::before {
+          content: "";
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, transparent, var(--accent), transparent);
+          opacity: 0.6;
+        }
+        .lf-caso:hover {
+          transform: translateY(-4px);
+          border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+          box-shadow: 0 24px 60px -24px color-mix(in srgb, var(--accent) 28%, transparent);
+        }
+        .lf-caso__head {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 18px;
+        }
+        .lf-caso__icon {
+          width: 44px; height: 44px;
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--accent) 12%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+          color: var(--accent);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .lf-caso__badge {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.16em;
+          color: var(--accent);
+          padding: 4px 10px;
+          border-radius: 100px;
+          background: color-mix(in srgb, var(--accent) 10%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+        }
+        .lf-caso__title {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 22px;
+          font-weight: 600;
+          color: #f0ead6;
+          margin: 0 0 22px;
+          line-height: 1.25;
+          letter-spacing: -0.005em;
+        }
+        .lf-caso__block { margin-bottom: 18px; }
+        .lf-caso__label {
+          display: block;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #64748b;
+          margin-bottom: 6px;
+        }
+        .lf-caso__block p {
+          font-size: 13.5px;
+          color: #b8bcc8;
+          line-height: 1.65;
+          margin: 0;
+        }
+        .lf-caso__metrics {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-top: auto;
+          padding-top: 22px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .lf-caso__metric {
+          text-align: center;
+          padding: 10px 6px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.025);
+        }
+        .lf-caso__metric-value {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--accent);
+          line-height: 1;
+        }
+        .lf-caso__metric-label {
+          font-size: 9.5px;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 600;
+          margin-top: 6px;
+          line-height: 1.3;
+        }
+
+        /* ───── FAQ ───── */
+        .lf-faq {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .lf-faq__item {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          overflow: hidden;
+          transition: all 0.3s;
+        }
+        .lf-faq__item:hover {
+          border-color: rgba(201,168,76,0.2);
+        }
+        .lf-faq__item--open {
+          background: rgba(201,168,76,0.04);
+          border-color: rgba(201,168,76,0.28);
+        }
+        .lf-faq__q {
+          width: 100%;
+          background: none;
+          border: none;
+          padding: 22px 24px;
+          color: #f0ead6;
+          font-family: 'Inter', sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          line-height: 1.4;
+          transition: color 0.2s;
+        }
+        .lf-faq__q:hover { color: #c9a84c; }
+        .lf-faq__icon {
+          flex-shrink: 0;
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          background: rgba(201,168,76,0.1);
+          border: 1px solid rgba(201,168,76,0.25);
+          color: #c9a84c;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform 0.3s;
+        }
+        .lf-faq__item--open .lf-faq__icon {
+          background: rgba(201,168,76,0.2);
+        }
+        .lf-faq__a {
+          max-height: 0;
+          overflow: hidden;
+          transition: max-height 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .lf-faq__item--open .lf-faq__a {
+          max-height: 480px;
+        }
+        .lf-faq__a p {
+          padding: 0 24px 24px;
+          margin: 0;
+          color: #b8bcc8;
+          font-size: 14.5px;
+          line-height: 1.75;
+        }
+        .lf-faq__footer {
+          margin-top: 36px;
+          padding: 22px 28px;
+          border-radius: 16px;
+          background: linear-gradient(135deg, rgba(201,168,76,0.06), rgba(201,168,76,0.015));
+          border: 1px solid rgba(201,168,76,0.18);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .lf-faq__footer svg { color: #c9a84c; flex-shrink: 0; }
+        .lf-faq__footer p {
+          margin: 0;
+          color: #b8bcc8;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        .lf-faq__contact {
+          background: none;
+          border: none;
+          color: #c9a84c;
+          font-weight: 700;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          padding: 0;
+          transition: color 0.2s;
+        }
+        .lf-faq__contact:hover { color: #f0d97a; }
+
         /* ───── PLANS ───── */
         .lf-plans {
           display: grid;
