@@ -331,4 +331,38 @@ describe("Tooltip overlay (collapsed sidebar)", () => {
     }
     expect(container.querySelector(".jc-tooltip-overlay")).toBeNull();
   });
+
+  it("double Escape on collapsed-sidebar tooltip closes it and keeps focus on trigger", async () => {
+    setViewport(1280);
+    localStorage.setItem("jc-sidebar-collapsed", "1");
+    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
+    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
+
+    const trigger = container.querySelector(".jc-nav-item") as HTMLElement | null;
+    if (!trigger) return; // role-gated; nothing to test
+
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    // Allow Radix tooltip a chance to open via focus.
+    await new Promise((r) => setTimeout(r, 200));
+
+    const beforeY = window.scrollY;
+
+    // First Escape: should close tooltip if open, focus stays on trigger.
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.activeElement).toBe(trigger);
+
+    // Second Escape: tooltip already closed; focus must remain pinned and
+    // the page must not scroll to top (focus({preventScroll:true}) contract).
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(document.activeElement).toBe(trigger);
+    expect(container.querySelector(".jc-tooltip-overlay")).toBeNull();
+    expect(window.scrollY).toBe(beforeY);
+  });
 });
