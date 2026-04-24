@@ -588,8 +588,14 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       .jc-right-panel { display: none; }
       .jc-right-panel.mobile-visible {
         display: flex; position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
-        width: 300px; box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+        width: min(320px, 90vw); box-shadow: -4px 0 24px rgba(0,0,0,0.3);
       }
+      /* In mobile mode, the off-canvas right panel always shows full content */
+      .jc-right-panel.mobile-visible.collapsed { width: min(320px, 90vw); min-width: 0; border-left: 1px solid var(--border); }
+      .jc-right-panel.mobile-visible.collapsed > *:not(.jc-right-toggle-desk) { display: revert; }
+      /* Hide the desktop floating toggle on mobile to avoid stray buttons */
+      .jc-right-toggle-desk { display: none; }
+      .jc-right-panel.mobile-visible .jc-right-toggle-desk { display: none; }
       .jc-right-toggle { display: flex; }
     }
     @media (max-width: 768px) {
