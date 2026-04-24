@@ -60,6 +60,40 @@ export function useUiPreferences() {
     };
   }, [user?.id]);
 
+  // Realtime: listen for changes to this user's row from any device.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`user_ui_preferences:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_ui_preferences",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as
+            | { sidebar_collapsed?: boolean; right_collapsed?: boolean }
+            | undefined;
+          if (!row) return;
+          if (typeof row.sidebar_collapsed === "boolean") {
+            setSidebarCollapsedState(row.sidebar_collapsed);
+            writeLocal(LS_SIDEBAR, row.sidebar_collapsed);
+          }
+          if (typeof row.right_collapsed === "boolean") {
+            setRightCollapsedState(row.right_collapsed);
+            writeLocal(LS_RIGHT, row.right_collapsed);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // Debounced persistence to backend.
   const persist = useCallback(
     (patch: { sidebar_collapsed?: boolean; right_collapsed?: boolean }) => {
