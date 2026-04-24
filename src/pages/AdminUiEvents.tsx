@@ -17,11 +17,13 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge } from "lucide-react";
+import { toast } from "sonner";
 import {
   getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
   getRejectionBuckets, runTrackingHealthCheck,
   getRejectedTtlHours, setRejectedTtlHours,
+  getSampleRate, setSampleRate,
   type RejectedEvent, type RejectionBucket, type HealthCheckResult,
 } from "@/lib/uiTracking";
 
@@ -79,6 +81,10 @@ export default function AdminUiEvents() {
   const [rejectedCount, setRejectedCount] = useState<number>(getRejectedCount());
   const [buckets, setBuckets] = useState<RejectionBucket[]>(getRejectionBuckets());
   const [ttlHours, setTtlHours] = useState<number>(getRejectedTtlHours());
+  const [sampleRate, setSampleRateState] = useState<number>(getSampleRate());
+  // Drilldown filter for the raw rejected-events table (set from a bucket row).
+  const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
+
   useEffect(() => {
     const off = onDebugChange(() => {
       setRejected(getRejectedEvents());
@@ -97,6 +103,103 @@ export default function AdminUiEvents() {
     }, 30_000);
     return () => clearInterval(t);
   }, []);
+
+  // Apply TTL change with confirmation + instant prune so admins can verify.
+  const applyTtl = (hours: number) => {
+    if (!Number.isFinite(hours) || hours <= 0) return;
+    setRejectedTtlHours(hours);
+    const before = getRejectedCount();
+    // setRejectedTtlHours triggers a prune internally; pull the fresh state.
+    const after = getRejectedCount();
+    setRejected(getRejectedEvents());
+    setRejectedCount(after);
+    setBuckets(getRejectionBuckets());
+    const pruned = Math.max(0, before - after);
+    toast.success(`TTL atualizado para ${hours}h`, {
+      description: pruned > 0
+        ? `${pruned} evento(s) expirado(s) foram removidos imediatamente.`
+        : "Nenhum evento expirado a remover agora.",
+    });
+  };
+
+  const applySampleRate = (rate: number) => {
+    const clamped = Math.max(0, Math.min(1, rate));
+    setSampleRate(clamped);
+    setSampleRateState(clamped);
+    toast.success(`Taxa de amostragem: ${Math.round(clamped * 100)}%`, {
+      description: clamped === 0
+        ? "Tracking pausado. Nenhum evento será enviado."
+        : clamped < 1
+          ? `Apenas ~${Math.round(clamped * 100)}% dos eventos serão registrados.`
+          : "Capturando 100% dos eventos.",
+    });
+  };
+
+  // Build CSV from a generic array of records.
+  function toCsv(rows: Array<Record<string, unknown>>): string {
+    if (rows.length === 0) return "";
+    const headers = Array.from(
+      rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>())
+    );
+    const escape = (v: unknown) => {
+      const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const r of rows) lines.push(headers.map((h) => escape(r[h])).join(","));
+    return lines.join("\n");
+  }
+
+  function download(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const exportDebug = (format: "json" | "csv") => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    if (format === "json") {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        ttlHours,
+        sampleRate,
+        rejectedCount,
+        buckets,
+        rejected,
+      };
+      download(`ui-rejected-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
+    } else {
+      const csvBuckets = toCsv(buckets.map((b) => ({
+        category: b.category, code: b.code ?? "", reason: b.reason,
+        count: b.count, lastAt: b.lastAt, lastPayload: b.lastPayload,
+      })));
+      const csvRejected = toCsv(rejected.map((r) => ({
+        at: r.at, name: r.name, category: r.category,
+        code: r.code ?? "", reason: r.reason, payload: r.payload,
+      })));
+      const combined = `# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      download(`ui-rejected-${stamp}.csv`, combined, "text/csv");
+    }
+    toast.success(`Exportado (${format.toUpperCase()})`, {
+      description: `${rejected.length} evento(s) e ${buckets.length} bucket(s).`,
+    });
+  };
+
+  // Apply drilldown filter to the raw rejected list shown below.
+  const filteredRejected = useMemo(() => {
+    if (!bucketFilter) return rejected;
+    return rejected.filter((r) =>
+      r.category === bucketFilter.category &&
+      (r.code ?? null) === (bucketFilter.code ?? null) &&
+      r.reason === bucketFilter.reason
+    );
+  }, [rejected, bucketFilter]);
 
   // Health-check state
   const [healthLoading, setHealthLoading] = useState(false);
@@ -363,7 +466,27 @@ export default function AdminUiEvents() {
                 {rejectedCount}
               </span>
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Gauge className="h-3.5 w-3.5" />
+                <Label htmlFor="sample" className="text-xs">Amostragem</Label>
+                <Select
+                  value={String(sampleRate)}
+                  onValueChange={(v) => applySampleRate(Number(v))}
+                >
+                  <SelectTrigger id="sample" className="h-7 w-24 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">100%</SelectItem>
+                    <SelectItem value="0.5">50%</SelectItem>
+                    <SelectItem value="0.25">25%</SelectItem>
+                    <SelectItem value="0.1">10%</SelectItem>
+                    <SelectItem value="0.01">1%</SelectItem>
+                    <SelectItem value="0">Pausado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
                 <Label htmlFor="ttl" className="text-xs">TTL (h)</Label>
@@ -373,14 +496,26 @@ export default function AdminUiEvents() {
                   min={1}
                   max={72}
                   value={ttlHours}
-                  onChange={(e) => {
+                  onChange={(e) => setTtlHours(Number(e.target.value))}
+                  onBlur={(e) => {
                     const v = Number(e.target.value);
-                    setTtlHours(v);
-                    if (v > 0) setRejectedTtlHours(v);
+                    if (v > 0 && v !== getRejectedTtlHours()) applyTtl(v);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = Number((e.target as HTMLInputElement).value);
+                      if (v > 0) applyTtl(v);
+                    }
                   }}
                   className="h-7 w-16 text-xs"
                 />
               </div>
+              <Button size="sm" variant="ghost" onClick={() => exportDebug("json")} disabled={rejectedCount === 0 && buckets.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" /> JSON
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => exportDebug("csv")} disabled={rejectedCount === 0 && buckets.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" /> CSV
+              </Button>
               <Button size="sm" variant="ghost" onClick={() => {
                 setRejected(getRejectedEvents()); setRejectedCount(getRejectedCount()); setBuckets(getRejectionBuckets());
               }}>
@@ -406,27 +541,42 @@ export default function AdminUiEvents() {
                         <th className="py-2 pr-3">Ocorrências</th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
+                        <th className="py-2 pr-3">Ação</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {buckets.map((b) => (
-                        <tr key={b.key} className="border-b border-border/50 align-top">
-                          <td className="py-1.5 pr-3">
-                            <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category]}`}>
-                              {categoryLabel[b.category]}
-                            </span>
-                          </td>
-                          <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
-                          <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
-                          <td className="py-1.5 pr-3 font-mono">{b.count}</td>
-                          <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
-                            {new Date(b.lastAt).toLocaleString()}
-                          </td>
-                          <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(b.lastPayload)}>
-                            {JSON.stringify(b.lastPayload)}
-                          </td>
-                        </tr>
-                      ))}
+                      {buckets.map((b) => {
+                        const isActive = bucketFilter?.key === b.key;
+                        return (
+                          <tr key={b.key} className={`border-b border-border/50 align-top ${isActive ? "bg-muted/40" : ""}`}>
+                            <td className="py-1.5 pr-3">
+                              <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category]}`}>
+                                {categoryLabel[b.category]}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
+                            <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
+                            <td className="py-1.5 pr-3 font-mono">{b.count}</td>
+                            <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
+                              {new Date(b.lastAt).toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(b.lastPayload)}>
+                              {JSON.stringify(b.lastPayload)}
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <Button
+                                size="sm"
+                                variant={isActive ? "default" : "ghost"}
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setBucketFilter(isActive ? null : b)}
+                              >
+                                <Filter className="h-3 w-3 mr-1" />
+                                {isActive ? "Filtrando" : "Ver eventos"}
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -439,7 +589,28 @@ export default function AdminUiEvents() {
               </p>
             ) : (
               <div>
-                <h3 className="text-sm font-semibold mb-2">Eventos brutos recentes</h3>
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                  <h3 className="text-sm font-semibold">
+                    Eventos brutos {bucketFilter ? "(filtrados)" : "recentes"}
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                      {filteredRejected.length} de {rejected.length}
+                    </span>
+                  </h3>
+                  {bucketFilter && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`px-1.5 py-0.5 rounded ${categoryClass[bucketFilter.category]}`}>
+                        {categoryLabel[bucketFilter.category]}
+                      </span>
+                      <span className="font-mono">{bucketFilter.code ?? "—"}</span>
+                      <span className="text-muted-foreground max-w-xs truncate" title={bucketFilter.reason}>
+                        {bucketFilter.reason}
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setBucketFilter(null)}>
+                        Limpar filtro
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-left border-b border-border">
@@ -453,7 +624,7 @@ export default function AdminUiEvents() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rejected.slice().reverse().slice(0, 20).map((r, i) => (
+                      {filteredRejected.slice().reverse().slice(0, 50).map((r, i) => (
                         <tr key={`${r.at}-${i}`} className="border-b border-border/50 align-top">
                           <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
                             {new Date(r.at).toLocaleString()}
@@ -471,6 +642,13 @@ export default function AdminUiEvents() {
                           </td>
                         </tr>
                       ))}
+                      {filteredRejected.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-muted-foreground text-xs">
+                            Nenhum evento corresponde ao filtro selecionado.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

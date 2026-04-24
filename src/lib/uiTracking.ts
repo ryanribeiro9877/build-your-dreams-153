@@ -44,6 +44,28 @@ const REJECT_KEY = "lf_ui_rejected_events";
 const COUNT_KEY = "lf_ui_rejected_count";
 const TTL_KEY = "lf_ui_rejected_ttl_hours";
 const DEFAULT_TTL_HOURS = 6;
+const SAMPLE_RATE_KEY = "lf_ui_sample_rate";
+
+/**
+ * Sampling rate (0..1). 1 = capture all events, 0 = capture none.
+ * Persisted in localStorage so it survives reloads while admins iterate.
+ */
+export function getSampleRate(): number {
+  if (typeof window === "undefined") return 1;
+  const raw = localStorage.getItem(SAMPLE_RATE_KEY);
+  if (raw === null || raw === "") return 1;
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v < 0 || v > 1) return 1;
+  return v;
+}
+
+export function setSampleRate(rate: number) {
+  if (typeof window === "undefined") return;
+  if (!Number.isFinite(rate)) return;
+  const clamped = Math.max(0, Math.min(1, rate));
+  localStorage.setItem(SAMPLE_RATE_KEY, String(clamped));
+  notifyDebugListeners();
+}
 
 export function getRejectedTtlHours(): number {
   if (typeof window === "undefined") return DEFAULT_TTL_HOURS;
@@ -284,6 +306,10 @@ function getSessionId(): string {
 export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = {}) {
   try {
     if (typeof window === "undefined") return;
+
+    // Apply sampling — admins can throttle volume while testing features.
+    const rate = getSampleRate();
+    if (rate < 1 && Math.random() >= rate) return;
 
     const { data: auth } = await supabase.auth.getUser();
     const event = {
