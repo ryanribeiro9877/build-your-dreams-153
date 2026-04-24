@@ -250,13 +250,13 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* SIDEBAR */
     .jc-sidebar {
-      width: 210px; min-width: 210px; background: var(--bg2);
+      width: 184px; min-width: 184px; background: var(--bg2);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column; overflow: hidden;
       transition: width 0.25s ease, min-width 0.25s ease, transform 0.3s ease;
       position: relative;
     }
-    .jc-sidebar.collapsed { width: 56px; min-width: 56px; }
+    .jc-sidebar.collapsed { width: 52px; min-width: 52px; }
     .jc-sidebar.collapsed .jc-logo-info,
     .jc-sidebar.collapsed .jc-search,
     .jc-sidebar.collapsed .jc-section-label,
