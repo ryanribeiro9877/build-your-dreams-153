@@ -338,8 +338,10 @@ export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = 
     if (typeof window === "undefined") return;
 
     // Apply sampling — admins can throttle volume while testing features.
+    // Tests can opt into deterministic capture via __setForceCapture(true) or
+    // inject a seeded RNG via __setRandomForTests(fn).
     const rate = getSampleRate();
-    if (rate < 1 && Math.random() >= rate) return;
+    if (!__forceCapture && rate < 1 && rand() >= rate) return;
 
     const { data: auth } = await supabase.auth.getUser();
     const event = {
