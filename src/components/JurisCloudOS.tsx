@@ -281,6 +281,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       box-shadow: 0 2px 6px rgba(0,0,0,0.18);
     }
     .jc-sidebar-toggle:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
+    .jc-sidebar-toggle:focus-visible,
+    .jc-right-toggle-desk:focus-visible,
+    .jc-nav-item:focus-visible,
+    .jc-agent-item:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(201,168,76,0.18);
+    }
+    .jc-sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
 
     .jc-logo {
       padding: 18px 14px 14px; border-bottom: 1px solid var(--border);
