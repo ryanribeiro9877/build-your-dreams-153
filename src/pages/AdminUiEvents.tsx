@@ -77,13 +77,46 @@ export default function AdminUiEvents() {
   // Debug panel state
   const [rejected, setRejected] = useState<RejectedEvent[]>(getRejectedEvents());
   const [rejectedCount, setRejectedCount] = useState<number>(getRejectedCount());
+  const [buckets, setBuckets] = useState<RejectionBucket[]>(getRejectionBuckets());
+  const [ttlHours, setTtlHours] = useState<number>(getRejectedTtlHours());
   useEffect(() => {
     const off = onDebugChange(() => {
       setRejected(getRejectedEvents());
       setRejectedCount(getRejectedCount());
+      setBuckets(getRejectionBuckets());
     });
     return () => { off(); };
   }, []);
+
+  // Periodic refresh so TTL pruning is reflected in the UI even without events.
+  useEffect(() => {
+    const t = setInterval(() => {
+      setRejected(getRejectedEvents());
+      setRejectedCount(getRejectedCount());
+      setBuckets(getRejectionBuckets());
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Health-check state
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthHistory, setHealthHistory] = useState<HealthCheckResult[]>([]);
+  const handleHealthCheck = async () => {
+    setHealthLoading(true);
+    const result = await runTrackingHealthCheck();
+    setHealthHistory((prev) => [result, ...prev].slice(0, 5));
+    setHealthLoading(false);
+  };
+
+  const categoryLabel: Record<string, string> = {
+    rls: "RLS", payload: "Validação payload", network: "Rede", unknown: "Desconhecido",
+  };
+  const categoryClass: Record<string, string> = {
+    rls: "bg-destructive/15 text-destructive",
+    payload: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    network: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    unknown: "bg-muted text-muted-foreground",
+  };
 
   const isAdmin = hasRole("admin");
 
