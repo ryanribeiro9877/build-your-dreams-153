@@ -18,35 +18,74 @@ interface TokenTransaction {
   created_at: string;
 }
 
-const LOW_BALANCE_THRESHOLD = 10;
-const CRITICAL_BALANCE_THRESHOLD = 0;
+const DEFAULT_LOW_BALANCE_THRESHOLD = 10;
+const THRESHOLD_STORAGE_KEY = "lowBalanceThreshold";
+// Sessionsto storage so the warning re-triggers in a new browser session/tab cycle
+const WARNED_LOW_KEY = "lowBalanceWarned";
+const WARNED_ZERO_KEY = "zeroBalanceWarned";
+
+export function getLowBalanceThreshold(): number {
+  if (typeof window === "undefined") return DEFAULT_LOW_BALANCE_THRESHOLD;
+  const stored = window.localStorage.getItem(THRESHOLD_STORAGE_KEY);
+  const n = stored ? parseInt(stored, 10) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_LOW_BALANCE_THRESHOLD;
+}
+
+export function setLowBalanceThreshold(value: number) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(THRESHOLD_STORAGE_KEY, String(Math.max(0, Math.floor(value))));
+  // Reset session warnings so the new threshold can warn again
+  window.sessionStorage.removeItem(WARNED_LOW_KEY);
+  window.sessionStorage.removeItem(WARNED_ZERO_KEY);
+}
+
+/** Suggest a recharge package based on current balance — picks the smallest tier that
+ *  comfortably covers a typical workload, escalating with deficit. */
+export function suggestRechargePackage(balance: number): { amount: number; query: string } {
+  if (balance <= 0) return { amount: 2000, query: "?suggested=2000" };
+  if (balance < 50) return { amount: 500, query: "?suggested=500" };
+  if (balance < 200) return { amount: 2000, query: "?suggested=2000" };
+  return { amount: 5000, query: "?suggested=5000" };
+}
 
 export function useTokenBalance() {
   const { user } = useAuth();
   const [tokenBalance, setTokenBalance] = useState<TokenBalance>({ balance: 0, totalPurchased: 0, totalConsumed: 0 });
   const [transactions, setTransactions] = useState<TokenTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const lastWarnedRef = useRef<number | null>(null);
+  const warnedThisRenderRef = useRef(false);
 
   const checkLowBalance = useCallback((balance: number) => {
-    // Avoid duplicate toasts: only warn when crossing threshold downward
-    const last = lastWarnedRef.current;
-    if (balance <= CRITICAL_BALANCE_THRESHOLD && last !== 0) {
+    if (typeof window === "undefined") return;
+    const threshold = getLowBalanceThreshold();
+    const zeroWarned = window.sessionStorage.getItem(WARNED_ZERO_KEY) === "1";
+    const lowWarned = window.sessionStorage.getItem(WARNED_LOW_KEY) === "1";
+
+    const goRecharge = () => {
+      const { query } = suggestRechargePackage(balance);
+      window.location.href = `/tokens${query}`;
+    };
+
+    if (balance <= 0 && !zeroWarned) {
+      const { amount } = suggestRechargePackage(balance);
       toast.error("Saldo zerado!", {
-        description: "Recarregue tokens para continuar usando os agentes.",
-        action: { label: "Recarregar", onClick: () => (window.location.href = "/tokens") },
+        description: `Recarregue tokens para continuar. Sugestão: pacote de ${amount.toLocaleString()} tokens.`,
+        action: { label: "Recarregar", onClick: goRecharge },
+        duration: 10000,
+      });
+      window.sessionStorage.setItem(WARNED_ZERO_KEY, "1");
+    } else if (balance > 0 && balance < threshold && !lowWarned) {
+      const { amount } = suggestRechargePackage(balance);
+      toast.warning(`Saldo baixo: ${balance} tokens restantes`, {
+        description: `Limite de aviso: ${threshold}. Sugerimos o pacote de ${amount.toLocaleString()} tokens.`,
+        action: { label: "Recarregar agora", onClick: goRecharge },
         duration: 8000,
       });
-      lastWarnedRef.current = 0;
-    } else if (balance > 0 && balance < LOW_BALANCE_THRESHOLD && (last === null || last >= LOW_BALANCE_THRESHOLD)) {
-      toast.warning(`Saldo baixo: ${balance} tokens restantes`, {
-        description: "Considere recarregar para evitar interrupções.",
-        action: { label: "Recarregar", onClick: () => (window.location.href = "/tokens") },
-        duration: 6000,
-      });
-      lastWarnedRef.current = balance;
-    } else if (balance >= LOW_BALANCE_THRESHOLD) {
-      lastWarnedRef.current = balance;
+      window.sessionStorage.setItem(WARNED_LOW_KEY, "1");
+    } else if (balance >= threshold) {
+      // Reset warnings when balance recovers above threshold
+      window.sessionStorage.removeItem(WARNED_LOW_KEY);
+      window.sessionStorage.removeItem(WARNED_ZERO_KEY);
     }
   }, []);
 
@@ -63,7 +102,13 @@ export function useTokenBalance() {
         totalPurchased: data.total_purchased,
         totalConsumed: data.total_consumed,
       });
-      checkLowBalance(data.balance);
+      if (!warnedThisRenderRef.current) {
+        warnedThisRenderRef.current = true;
+        checkLowBalance(data.balance);
+      } else {
+        // After consumption events still allow re-evaluation, but session flags gate duplicates
+        checkLowBalance(data.balance);
+      }
     }
     setLoading(false);
   }, [user, checkLowBalance]);

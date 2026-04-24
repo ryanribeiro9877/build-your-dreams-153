@@ -45,6 +45,16 @@ export default function Tokens() {
     }
   }, [loaded, fetchTransactions]);
 
+  // Auto-open the suggested package coming from low-balance alert
+  useEffect(() => {
+    const suggested = searchParams.get("suggested");
+    if (suggested && !checkoutPkg) {
+      const amt = parseInt(suggested, 10);
+      const pkg = TOKEN_PACKAGES.find((p) => p.amount === amt);
+      if (pkg) setCheckoutPkg(pkg);
+    }
+  }, [searchParams, checkoutPkg]);
+
   useEffect(() => {
     if (checkoutSuccess) {
       fetchBalance();

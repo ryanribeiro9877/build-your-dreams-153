@@ -4,7 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, User, Save } from "lucide-react";
+import { ArrowLeft, User, Save, Bell } from "lucide-react";
+import { getLowBalanceThreshold, setLowBalanceThreshold } from "@/hooks/useTokenBalance";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -16,6 +17,9 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [lowThreshold, setLowThresholdState] = useState<number>(10);
+
+  useEffect(() => { setLowThresholdState(getLowBalanceThreshold()); }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -113,6 +117,42 @@ export default function Profile() {
           <div style={{ marginBottom: 24 }}>
             <label style={labelStyle}>URL do Avatar (opcional)</label>
             <input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} style={inputStyle} placeholder="https://..." />
+          </div>
+
+          {/* Preferências de notificação */}
+          <div style={{
+            marginBottom: 24, padding: 16, borderRadius: 10,
+            background: "#16161f", border: "1px solid #252534",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: "#c9a84c" }}>
+              <Bell size={14} />
+              <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Alertas de saldo
+              </span>
+            </div>
+            <label style={labelStyle}>Avisar quando saldo ficar abaixo de</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="number"
+                min={0}
+                value={lowThreshold}
+                onChange={(e) => setLowThresholdState(parseInt(e.target.value || "0", 10))}
+                style={{ ...inputStyle, flex: 1 }}
+                placeholder="10"
+              />
+              <button
+                onClick={() => { setLowBalanceThreshold(lowThreshold); toast.success(`Alerta configurado para ${lowThreshold} tokens`); }}
+                style={{
+                  padding: "0 16px", borderRadius: 8, border: "1px solid #c9a84c40",
+                  background: "transparent", color: "#c9a84c", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                }}
+              >
+                Aplicar
+              </button>
+            </div>
+            <div style={{ fontSize: 10, color: "#5a5a72", marginTop: 6 }}>
+              O aviso é exibido apenas uma vez por sessão. Reaparece se o saldo subir e cair novamente.
+            </div>
           </div>
 
           <button onClick={handleSave} disabled={saving} style={{
