@@ -8,6 +8,7 @@ import { useTokenBalance } from "@/hooks/useTokenBalance";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
   Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
@@ -250,13 +251,13 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* SIDEBAR */
     .jc-sidebar {
-      width: 210px; min-width: 210px; background: var(--bg2);
+      width: 184px; min-width: 184px; background: var(--bg2);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column; overflow: hidden;
       transition: width 0.25s ease, min-width 0.25s ease, transform 0.3s ease;
       position: relative;
     }
-    .jc-sidebar.collapsed { width: 56px; min-width: 56px; }
+    .jc-sidebar.collapsed { width: 52px; min-width: 52px; }
     .jc-sidebar.collapsed .jc-logo-info,
     .jc-sidebar.collapsed .jc-search,
     .jc-sidebar.collapsed .jc-section-label,
@@ -581,8 +582,16 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       .jc-sidebar {
         position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
         transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+        width: 240px !important; min-width: 240px !important;
       }
       .jc-sidebar.mobile-open { transform: translateX(0); }
+      .jc-sidebar.collapsed .jc-logo-info,
+      .jc-sidebar.collapsed .jc-search,
+      .jc-sidebar.collapsed .jc-section-label,
+      .jc-sidebar.collapsed .jc-nav-label,
+      .jc-sidebar.collapsed .jc-nav-badge,
+      .jc-sidebar.collapsed .jc-agent-name { display: revert; }
+      .jc-sidebar-toggle { display: none; }
       .jc-sidebar-overlay.visible { display: block; }
       .jc-hamburger { display: block; }
       .jc-topbar { padding: 0 12px; gap: 8px; }
@@ -849,23 +858,43 @@ export default function JurisCloudOS() {
     specialist: "Especialista", reviewer: "Revisor", executor: "Executor", monitor: "Monitor",
   };
 
+  // Wrap in tooltip when sidebar is collapsed (desktop). Plain element otherwise.
+  const withTooltip = (label: string, node: React.ReactElement) => {
+    if (!sidebarCollapsed) return node;
+    return (
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>{node}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+      </Tooltip>
+    );
+  };
+
   return (
     <div data-theme={theme}>
       <GlobalStyles theme={theme} />
+      <TooltipProvider delayDuration={150}>
       <div className="jc-root">
         {/* MOBILE OVERLAY */}
         <div className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`} onClick={() => setSidebarOpen(false)} />
 
         {/* SIDEBAR */}
-        <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
-          <button
-            className="jc-sidebar-toggle"
-            onClick={() => setSidebarCollapsed(c => !c)}
-            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-            aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
-          </button>
+        <aside
+          id="jc-sidebar"
+          className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
+          aria-label="Menu lateral de navegação"
+        >
+          {withTooltip(sidebarCollapsed ? "Expandir menu" : "Recolher menu",
+            <button
+              className="jc-sidebar-toggle"
+              onClick={() => setSidebarCollapsed(c => !c)}
+              aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="jc-sidebar"
+              type="button"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
+            </button>
+          )}
 
           <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
@@ -877,17 +906,34 @@ export default function JurisCloudOS() {
 
           <div className="jc-search">
             <Search size={14} style={{ color: "var(--text3)", flexShrink: 0 }} />
-            <input placeholder="Buscar processo, cliente..." value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} />
+            <input
+              placeholder="Buscar processo, cliente..."
+              value={sidebarSearch}
+              onChange={e => setSidebarSearch(e.target.value)}
+              aria-label="Buscar processo ou cliente"
+            />
           </div>
 
-          <nav className="jc-nav">
+          <nav className="jc-nav" aria-label="Departamentos e sistema">
             <div className="jc-section-label">Departamentos</div>
             {visibleDepts.map(dept => {
               const Icon = DEPT_ICONS[dept.id] || Sparkles;
-              return (
-                <div key={dept.id} className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
-                  title={sidebarCollapsed ? dept.label : undefined}
-                  onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}>
+              return withTooltip(dept.label,
+                <div
+                  key={dept.id}
+                  className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
+                  onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={activeDept === dept.id ? "page" : undefined}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setActiveDept(dept.id);
+                      setSidebarOpen(false);
+                    }
+                  }}
+                >
                   <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{dept.label}</span>
                   {dept.badge > 0 && <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>}
@@ -896,8 +942,17 @@ export default function JurisCloudOS() {
             })}
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
-            {MENU_ITEMS.filter(m => m.show).map(item => (
-              <div key={item.id} className="jc-nav-item" title={sidebarCollapsed ? item.label : undefined} onClick={item.action}>
+            {MENU_ITEMS.filter(m => m.show).map(item => withTooltip(item.label,
+              <div
+                key={item.id}
+                className="jc-nav-item"
+                onClick={item.action}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.action(); }
+                }}
+              >
                 <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
                 <span className="jc-nav-label">{item.label}</span>
               </div>
@@ -905,12 +960,13 @@ export default function JurisCloudOS() {
           </nav>
 
           {/* Agents in sidebar - filtered by role */}
-          <div className="jc-agents-section">
+          <div className="jc-agents-section" aria-label="Agentes ativos">
             <div className="jc-section-label">Agentes ({visibleAgents.length})</div>
             {visibleAgents.map(agent => {
               const RoleIcon = ROLE_ICONS[agent.role] || Zap;
-              return (
-                <div className="jc-agent-item" key={agent.id} title={sidebarCollapsed ? agent.name : undefined}>
+              const statusLabel = agent.status === "active" ? "ativo" : agent.status === "alert" ? "em alerta" : "inativo";
+              return withTooltip(`${agent.name} — ${statusLabel}`,
+                <div className="jc-agent-item" key={agent.id} aria-label={`${agent.name} (${statusLabel})`}>
                   <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
                     {getInitials(agent.name)}
                   </div>
@@ -1020,15 +1076,28 @@ export default function JurisCloudOS() {
         </main>
 
         {/* RIGHT PANEL */}
-        <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}>
-          <button
-            className="jc-right-toggle-desk"
-            onClick={() => setRightCollapsed(c => !c)}
-            title={rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
-            aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
-          >
-            {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
-          </button>
+        <aside
+          id="jc-right-panel"
+          className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}
+          aria-label="Central de operações"
+        >
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                className="jc-right-toggle-desk"
+                onClick={() => setRightCollapsed(c => !c)}
+                aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+                aria-expanded={!rightCollapsed}
+                aria-controls="jc-right-panel"
+                type="button"
+              >
+                {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" sideOffset={8}>
+              {rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
+            </TooltipContent>
+          </Tooltip>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
@@ -1152,6 +1221,7 @@ export default function JurisCloudOS() {
           <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} />
         )}
       </div>
+      </TooltipProvider>
     </div>
   );
 }
