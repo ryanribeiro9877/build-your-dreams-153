@@ -65,7 +65,10 @@ export async function trackEvent(name: TrackEventName, payload: TrackEventPayloa
     }
 
     // Fire-and-forget. We do not await the result on the user's path.
-    void supabase.from("landing_events").insert(event);
+    // Cast required until generated types include the new table after migration sync.
+    void (supabase.from as unknown as (t: string) => { insert: (v: unknown) => Promise<unknown> })(
+      "landing_events"
+    ).insert(event);
   } catch {
     // Tracking must never break the UI.
   }
