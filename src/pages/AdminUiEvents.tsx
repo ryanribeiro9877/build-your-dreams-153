@@ -541,27 +541,42 @@ export default function AdminUiEvents() {
                         <th className="py-2 pr-3">Ocorrências</th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
+                        <th className="py-2 pr-3">Ação</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {buckets.map((b) => (
-                        <tr key={b.key} className="border-b border-border/50 align-top">
-                          <td className="py-1.5 pr-3">
-                            <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category]}`}>
-                              {categoryLabel[b.category]}
-                            </span>
-                          </td>
-                          <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
-                          <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
-                          <td className="py-1.5 pr-3 font-mono">{b.count}</td>
-                          <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
-                            {new Date(b.lastAt).toLocaleString()}
-                          </td>
-                          <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(b.lastPayload)}>
-                            {JSON.stringify(b.lastPayload)}
-                          </td>
-                        </tr>
-                      ))}
+                      {buckets.map((b) => {
+                        const isActive = bucketFilter?.key === b.key;
+                        return (
+                          <tr key={b.key} className={`border-b border-border/50 align-top ${isActive ? "bg-muted/40" : ""}`}>
+                            <td className="py-1.5 pr-3">
+                              <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category]}`}>
+                                {categoryLabel[b.category]}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
+                            <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
+                            <td className="py-1.5 pr-3 font-mono">{b.count}</td>
+                            <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
+                              {new Date(b.lastAt).toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(b.lastPayload)}>
+                              {JSON.stringify(b.lastPayload)}
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <Button
+                                size="sm"
+                                variant={isActive ? "default" : "ghost"}
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setBucketFilter(isActive ? null : b)}
+                              >
+                                <Filter className="h-3 w-3 mr-1" />
+                                {isActive ? "Filtrando" : "Ver eventos"}
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -574,7 +589,28 @@ export default function AdminUiEvents() {
               </p>
             ) : (
               <div>
-                <h3 className="text-sm font-semibold mb-2">Eventos brutos recentes</h3>
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                  <h3 className="text-sm font-semibold">
+                    Eventos brutos {bucketFilter ? "(filtrados)" : "recentes"}
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                      {filteredRejected.length} de {rejected.length}
+                    </span>
+                  </h3>
+                  {bucketFilter && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`px-1.5 py-0.5 rounded ${categoryClass[bucketFilter.category]}`}>
+                        {categoryLabel[bucketFilter.category]}
+                      </span>
+                      <span className="font-mono">{bucketFilter.code ?? "—"}</span>
+                      <span className="text-muted-foreground max-w-xs truncate" title={bucketFilter.reason}>
+                        {bucketFilter.reason}
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setBucketFilter(null)}>
+                        Limpar filtro
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-left border-b border-border">
@@ -588,7 +624,7 @@ export default function AdminUiEvents() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rejected.slice().reverse().slice(0, 20).map((r, i) => (
+                      {filteredRejected.slice().reverse().slice(0, 50).map((r, i) => (
                         <tr key={`${r.at}-${i}`} className="border-b border-border/50 align-top">
                           <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
                             {new Date(r.at).toLocaleString()}
@@ -606,6 +642,13 @@ export default function AdminUiEvents() {
                           </td>
                         </tr>
                       ))}
+                      {filteredRejected.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-muted-foreground text-xs">
+                            Nenhum evento corresponde ao filtro selecionado.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
