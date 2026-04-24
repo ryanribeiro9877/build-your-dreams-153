@@ -604,6 +604,35 @@ export default function AdminUiEvents() {
               Insere um evento sintético em <code className="font-mono">ui_events</code> para validar
               que o tracking está funcionando antes de você testar mudanças.
             </p>
+            {/* Temporary sample-rate override — not persisted to localStorage. */}
+            <div className="flex flex-wrap items-center gap-3 mb-4 p-2 rounded-md border border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="health-override"
+                  checked={healthOverrideEnabled}
+                  onCheckedChange={setHealthOverrideEnabled}
+                />
+                <Label htmlFor="health-override" className="text-xs cursor-pointer">
+                  Override sampleRate (apenas neste teste)
+                </Label>
+              </div>
+              <div className={`flex items-center gap-2 ${healthOverrideEnabled ? "" : "opacity-50 pointer-events-none"}`}>
+                <Input
+                  id="health-override-pct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={healthOverridePct}
+                  onChange={(e) => setHealthOverridePct(Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="h-7 w-20 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">% para esta execução</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                Atual: <span className="font-mono">{Math.round(sampleRate * 100)}%</span> · não altera localStorage
+              </span>
+            </div>
             {healthHistory.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhuma verificação executada nesta sessão.</p>
             ) : (
