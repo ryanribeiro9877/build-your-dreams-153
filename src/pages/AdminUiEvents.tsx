@@ -81,6 +81,10 @@ export default function AdminUiEvents() {
   const [rejectedCount, setRejectedCount] = useState<number>(getRejectedCount());
   const [buckets, setBuckets] = useState<RejectionBucket[]>(getRejectionBuckets());
   const [ttlHours, setTtlHours] = useState<number>(getRejectedTtlHours());
+  const [sampleRate, setSampleRateState] = useState<number>(getSampleRate());
+  // Drilldown filter for the raw rejected-events table (set from a bucket row).
+  const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
+
   useEffect(() => {
     const off = onDebugChange(() => {
       setRejected(getRejectedEvents());
@@ -99,6 +103,103 @@ export default function AdminUiEvents() {
     }, 30_000);
     return () => clearInterval(t);
   }, []);
+
+  // Apply TTL change with confirmation + instant prune so admins can verify.
+  const applyTtl = (hours: number) => {
+    if (!Number.isFinite(hours) || hours <= 0) return;
+    setRejectedTtlHours(hours);
+    const before = getRejectedCount();
+    // setRejectedTtlHours triggers a prune internally; pull the fresh state.
+    const after = getRejectedCount();
+    setRejected(getRejectedEvents());
+    setRejectedCount(after);
+    setBuckets(getRejectionBuckets());
+    const pruned = Math.max(0, before - after);
+    toast.success(`TTL atualizado para ${hours}h`, {
+      description: pruned > 0
+        ? `${pruned} evento(s) expirado(s) foram removidos imediatamente.`
+        : "Nenhum evento expirado a remover agora.",
+    });
+  };
+
+  const applySampleRate = (rate: number) => {
+    const clamped = Math.max(0, Math.min(1, rate));
+    setSampleRate(clamped);
+    setSampleRateState(clamped);
+    toast.success(`Taxa de amostragem: ${Math.round(clamped * 100)}%`, {
+      description: clamped === 0
+        ? "Tracking pausado. Nenhum evento será enviado."
+        : clamped < 1
+          ? `Apenas ~${Math.round(clamped * 100)}% dos eventos serão registrados.`
+          : "Capturando 100% dos eventos.",
+    });
+  };
+
+  // Build CSV from a generic array of records.
+  function toCsv(rows: Array<Record<string, unknown>>): string {
+    if (rows.length === 0) return "";
+    const headers = Array.from(
+      rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>())
+    );
+    const escape = (v: unknown) => {
+      const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const r of rows) lines.push(headers.map((h) => escape(r[h])).join(","));
+    return lines.join("\n");
+  }
+
+  function download(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const exportDebug = (format: "json" | "csv") => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    if (format === "json") {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        ttlHours,
+        sampleRate,
+        rejectedCount,
+        buckets,
+        rejected,
+      };
+      download(`ui-rejected-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
+    } else {
+      const csvBuckets = toCsv(buckets.map((b) => ({
+        category: b.category, code: b.code ?? "", reason: b.reason,
+        count: b.count, lastAt: b.lastAt, lastPayload: b.lastPayload,
+      })));
+      const csvRejected = toCsv(rejected.map((r) => ({
+        at: r.at, name: r.name, category: r.category,
+        code: r.code ?? "", reason: r.reason, payload: r.payload,
+      })));
+      const combined = `# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      download(`ui-rejected-${stamp}.csv`, combined, "text/csv");
+    }
+    toast.success(`Exportado (${format.toUpperCase()})`, {
+      description: `${rejected.length} evento(s) e ${buckets.length} bucket(s).`,
+    });
+  };
+
+  // Apply drilldown filter to the raw rejected list shown below.
+  const filteredRejected = useMemo(() => {
+    if (!bucketFilter) return rejected;
+    return rejected.filter((r) =>
+      r.category === bucketFilter.category &&
+      (r.code ?? null) === (bucketFilter.code ?? null) &&
+      r.reason === bucketFilter.reason
+    );
+  }, [rejected, bucketFilter]);
 
   // Health-check state
   const [healthLoading, setHealthLoading] = useState(false);
