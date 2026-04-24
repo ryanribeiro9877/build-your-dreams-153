@@ -9,6 +9,8 @@ import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useUiPreferences } from "@/hooks/useUiPreferences";
+import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
   Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
