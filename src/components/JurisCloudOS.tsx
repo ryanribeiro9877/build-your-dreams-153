@@ -1091,13 +1091,33 @@ export default function JurisCloudOS() {
                   onClick={() => activate("click")}
                   role="button"
                   tabIndex={0}
+                  onFocus={(e) => {
+                    if (e.target.matches(":focus-visible")) {
+                      trackUiEvent("tab_navigate", {
+                        surface: "left_sidebar",
+                        target_id: item.id,
+                        target_label: item.label,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate("keyboard"); }
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      trackUiEvent("key_activate", {
+                        surface: "left_sidebar",
+                        target_id: item.id,
+                        target_label: item.label,
+                        source: "keyboard",
+                      });
+                      activate("keyboard");
+                    }
                   }}
                 >
                   <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{item.label}</span>
-                </div>
+                </div>,
+                item.id
               );
             })}
           </nav>
