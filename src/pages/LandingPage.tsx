@@ -164,16 +164,16 @@ export default function LandingPage() {
       <nav className={`lp-nav ${scrollY > 50 ? "lp-nav--scrolled" : ""}`}>
         <div className="lp-nav__brand">
           <div className="lp-nav__logo">⚖️</div>
-          <span className="lp-nav__name">Agent Jus IA</span>
+          <span className="lp-nav__name">LexForce</span>
         </div>
 
         {/* Desktop links */}
         <div className="lp-nav__links">
-          <a href="#pilares">Soluções</a>
-          <a href="#como-funciona">Como Funciona</a>
+          <a href="#pilares">Como funciona</a>
+          <a href="#como-funciona">Seu novo dia</a>
           <a href="#planos">Planos</a>
-          <a href="#depoimentos">Depoimentos</a>
-          <button className="lp-btn-gold lp-btn-sm" onClick={() => navigate("/auth")}>🔐 Acessar Sistema</button>
+          <a href="#depoimentos">Quem usa</a>
+          <button className="lp-btn-gold lp-btn-sm" onClick={() => navigate("/auth")}>Comandar agora</button>
         </div>
 
         {/* Mobile hamburger */}
@@ -186,11 +186,11 @@ export default function LandingPage() {
       {mobileMenu && (
         <div className="lp-mobile-menu" onClick={() => setMobileMenu(false)}>
           <div className="lp-mobile-menu__inner" onClick={e => e.stopPropagation()}>
-            <a href="#pilares" onClick={() => setMobileMenu(false)}>Soluções</a>
-            <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Como Funciona</a>
+            <a href="#pilares" onClick={() => setMobileMenu(false)}>Como funciona</a>
+            <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Seu novo dia</a>
             <a href="#planos" onClick={() => setMobileMenu(false)}>Planos</a>
-            <a href="#depoimentos" onClick={() => setMobileMenu(false)}>Depoimentos</a>
-            <button className="lp-btn-gold" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>🔐 Acessar Sistema</button>
+            <a href="#depoimentos" onClick={() => setMobileMenu(false)}>Quem usa</a>
+            <button className="lp-btn-gold" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>Comandar agora</button>
           </div>
         </div>
       )}
@@ -207,24 +207,23 @@ export default function LandingPage() {
         <div className="lp-hero__content">
           <div className="lp-badge-pulse">
             <span className="lp-badge-dot" />
-            SISTEMA OPERACIONAL JURÍDICO ATIVO
+            SUA FORÇA DE IA JURÍDICA · ATIVA 24/7
           </div>
 
           <h1 className="lp-hero__h1">
-            <span>Seu escritório com um</span><br />
-            <span className="lp-gold-text">exército de IA</span>
+            <span>Seus agentes trabalham.</span><br />
+            <span className="lp-gold-text">Você decide.</span>
           </h1>
 
           <p className="lp-hero__sub">
-            <strong>Marketing</strong> que atrai clientes.{" "}
-            <strong>Gestão</strong> de milhares de processos.{" "}
-            <strong>91+ agentes de IA</strong> trabalhando para seu time.{" "}
-            <strong className="lp-gold-text">Triplique seu faturamento.</strong>
+            Pare de executar tarefas. Comece a <strong>comandar resultados</strong>.{" "}
+            Uma força de <strong>91+ agentes de IA jurídica</strong> que protocola, redige, calcula e monitora{" "}
+            <strong className="lp-gold-text">enquanto você vive sua vida</strong>.
           </p>
 
           <div className="lp-hero__btns">
-            <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>🚀 Começar Agora — Grátis</button>
-            <button className="lp-btn-ghost lp-btn-lg" onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })}>Descubra o Poder ↓</button>
+            <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>👑 Assumir o comando — Grátis</button>
+            <button className="lp-btn-ghost lp-btn-lg" onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })}>Ver como funciona ↓</button>
           </div>
 
           <div className="lp-scroll-indicator">
