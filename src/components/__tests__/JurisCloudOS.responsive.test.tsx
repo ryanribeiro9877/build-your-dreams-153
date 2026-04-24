@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { MemoryRouter } from "react-router-dom";
+
+const Wrap = ({ children }: { children: React.ReactNode }) => (
+  <MemoryRouter>
+    <TooltipProvider>{children}</TooltipProvider>
+  </MemoryRouter>
+);
 
 // Mock Supabase + auth so JurisCloudOS hooks don't try to hit the network.
 vi.mock("@/integrations/supabase/client", () => ({
