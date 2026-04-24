@@ -812,6 +812,9 @@ export default function AdminUiEvents() {
                                 <span className="text-muted-foreground ml-1">/ {b.count}</span>
                               )}
                             </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs text-muted-foreground">
+                              {(b.sampleRateAtRead * 100).toFixed(0)}%
+                            </td>
                             <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(b.lastAt).toLocaleString()}
                             </td>
