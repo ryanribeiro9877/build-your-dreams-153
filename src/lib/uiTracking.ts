@@ -341,9 +341,10 @@ export async function runTrackingHealthCheck(
         code: error.code,
         category: classifyRejection(error.message, error.code),
         durationMs,
+        sampleRateOverride: override,
       };
     }
-    return { ok: true, at: startedAt, durationMs };
+    return { ok: true, at: startedAt, durationMs, sampleRateOverride: override };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     return {
@@ -352,8 +353,98 @@ export async function runTrackingHealthCheck(
       reason,
       category: classifyRejection(reason),
       durationMs: Math.round(performance.now() - t0),
+      sampleRateOverride: override,
     };
   }
+}
+
+/**
+ * Validates a parsed JSON export payload (from `exportDebug("json")`) against
+ * the expected schema. Returns missing top-level fields and bucket-level
+ * issues so admins can spot schema drift before comparing files.
+ */
+export interface ExportValidationResult {
+  ok: boolean;
+  schemaVersion?: string;
+  expectedSchemaVersion: string;
+  versionMatches: boolean;
+  missingFields: string[];
+  bucketIssues: Array<{ index: number; missing: string[] }>;
+  rejectedIssues: Array<{ index: number; missing: string[] }>;
+  notes: string[];
+}
+
+export function validateExportPayload(input: unknown): ExportValidationResult {
+  const required = [
+    "schema",
+    "schemaVersion",
+    "exportedAt",
+    "userId",
+    "dateRange",
+    "sampleRate",
+    "ttlHours",
+    "rejectedCount",
+    "rejected",
+  ];
+  const result: ExportValidationResult = {
+    ok: false,
+    expectedSchemaVersion: EXPORT_SCHEMA_VERSION,
+    versionMatches: false,
+    missingFields: [],
+    bucketIssues: [],
+    rejectedIssues: [],
+    notes: [],
+  };
+  if (!input || typeof input !== "object") {
+    result.notes.push("Payload não é um objeto JSON válido.");
+    return result;
+  }
+  const obj = input as Record<string, unknown>;
+  for (const k of required) if (!(k in obj)) result.missingFields.push(k);
+
+  const sv = typeof obj.schemaVersion === "string" ? obj.schemaVersion : undefined;
+  result.schemaVersion = sv;
+  result.versionMatches = sv === EXPORT_SCHEMA_VERSION;
+  if (sv && !result.versionMatches) {
+    result.notes.push(`Versão diferente: export=${sv} esperado=${EXPORT_SCHEMA_VERSION}`);
+  }
+
+  const buckets = Array.isArray(obj.buckets) ? obj.buckets : null;
+  if (buckets) {
+    const bucketRequired = ["category", "reason", "count", "estimatedCaptured", "sampleRateAtRead", "lastAt"];
+    buckets.forEach((b, i) => {
+      if (!b || typeof b !== "object") {
+        result.bucketIssues.push({ index: i, missing: bucketRequired });
+        return;
+      }
+      const bo = b as Record<string, unknown>;
+      const missing = bucketRequired.filter((k) => !(k in bo));
+      if (missing.length) result.bucketIssues.push({ index: i, missing });
+    });
+  } else if (obj.includeBuckets === true) {
+    result.notes.push("includeBuckets=true mas array `buckets` ausente.");
+  }
+
+  const rejected = Array.isArray(obj.rejected) ? obj.rejected : null;
+  if (rejected) {
+    const rejRequired = ["at", "name", "reason", "category", "payload"];
+    rejected.forEach((r, i) => {
+      if (!r || typeof r !== "object") {
+        result.rejectedIssues.push({ index: i, missing: rejRequired });
+        return;
+      }
+      const ro = r as Record<string, unknown>;
+      const missing = rejRequired.filter((k) => !(k in ro));
+      if (missing.length) result.rejectedIssues.push({ index: i, missing });
+    });
+  }
+
+  result.ok =
+    result.missingFields.length === 0 &&
+    result.versionMatches &&
+    result.bucketIssues.length === 0 &&
+    result.rejectedIssues.length === 0;
+  return result;
 }
 
 function getSessionId(): string {
