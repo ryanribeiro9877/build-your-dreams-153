@@ -53,6 +53,7 @@ const App = () => (
             <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
             <Route path="/admin/tokens" element={<ProtectedRoute><AdminTokens /></ProtectedRoute>} />
             <Route path="/admin/ui" element={<ProtectedRoute><AdminUiEvents /></ProtectedRoute>} />
+            <Route path="/admin/master" element={<ProtectedRoute><AdminMaster /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
