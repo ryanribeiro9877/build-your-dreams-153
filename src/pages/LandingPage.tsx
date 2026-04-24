@@ -633,6 +633,66 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════ FAQ — SEGURANÇA & CONTROLE ═══════ */}
+      <section id="faq" className="lf-section lf-section--alt">
+        <div className="lf-container lf-container--narrow">
+          <div className="lf-section-header">
+            <div className="lf-tag">PERGUNTAS FREQUENTES</div>
+            <h2 className="lf-section-title">
+              Tudo que você quer saber sobre<br />
+              <span className="lf-gradient-text">segurança e controle.</span>
+            </h2>
+            <p className="lf-section-sub">
+              LGPD, OAB, auditoria, aprovação humana. As respostas que importam antes de assinar.
+            </p>
+          </div>
+
+          <div className="lf-faq">
+            {FAQ.map((item, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <div key={item.q} className={`lf-faq__item ${isOpen ? "lf-faq__item--open" : ""}`}>
+                  <button
+                    type="button"
+                    className="lf-faq__q"
+                    onClick={() => toggleFaq(i)}
+                    aria-expanded={isOpen}
+                    aria-controls={`faq-${i}`}
+                  >
+                    <span>{item.q}</span>
+                    <span className="lf-faq__icon" aria-hidden>
+                      {isOpen ? <Minus size={18} /> : <Plus size={18} />}
+                    </span>
+                  </button>
+                  <div
+                    id={`faq-${i}`}
+                    className="lf-faq__a"
+                    role="region"
+                    aria-hidden={!isOpen}
+                  >
+                    <p>{item.a}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="lf-faq__footer">
+            <Shield size={18} />
+            <p>
+              Tem outra dúvida sobre segurança ou compliance?{" "}
+              <button
+                type="button"
+                className="lf-faq__contact"
+                onClick={() => goToAuth("faq_contact", "Falar com nosso time", "faq")}
+              >
+                Falar com nosso time →
+              </button>
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ═══════ PLANOS ═══════ */}
       <section id="planos" className="lf-section lf-section--alt">
         <div className="lf-container">
