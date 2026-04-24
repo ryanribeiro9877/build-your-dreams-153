@@ -400,6 +400,65 @@ export default function AdminUiEvents() {
           </CardContent>
         </Card>
 
+        {/* Sessions (group-by-session view) */}
+        {groupBySession && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Sessões ({sessionGroups.length}) — possíveis gargalos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left border-b border-border">
+                  <tr>
+                    <th className="py-2 pr-3">Sessão</th>
+                    <th className="py-2 pr-3">Eventos</th>
+                    <th className="py-2 pr-3">Duração</th>
+                    <th className="py-2 pr-3">Início → Fim</th>
+                    <th className="py-2 pr-3">Último alvo</th>
+                    <th className="py-2 pr-3">Usuário</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionGroups.map((g) => {
+                    const mins = Math.round(g.durationMs / 60000);
+                    const secs = Math.round((g.durationMs % 60000) / 1000);
+                    return (
+                      <tr key={g.sessionId} className="border-b border-border/50 align-top">
+                        <td className="py-1.5 pr-3 font-mono text-[11px]">{g.sessionId.slice(0, 18)}…</td>
+                        <td className="py-1.5 pr-3">
+                          <div className="font-semibold">{g.total}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {Object.entries(g.eventCounts).map(([k, v]) => `${k}:${v}`).join(" · ")}
+                          </div>
+                        </td>
+                        <td className="py-1.5 pr-3 whitespace-nowrap">
+                          {mins > 0 ? `${mins}m ` : ""}{secs}s
+                        </td>
+                        <td className="py-1.5 pr-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(g.start).toLocaleTimeString()} → {new Date(g.end).toLocaleTimeString()}
+                        </td>
+                        <td className="py-1.5 pr-3">{g.lastTarget}</td>
+                        <td className="py-1.5 pr-3 font-mono text-xs">
+                          {g.user_id ? g.user_id.slice(0, 8) : "anon"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sessionGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                        Nenhuma sessão no período.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Recent rows */}
         <Card>
           <CardHeader>
