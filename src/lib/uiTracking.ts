@@ -14,7 +14,9 @@ export type UiEventName =
   | "right_panel_toggle"
   | "nav_click"
   | "tooltip_open"
-  | "shortcut_used";
+  | "shortcut_used"
+  | "tab_navigate"
+  | "key_activate";
 
 export interface UiEventPayload {
   surface?: string; // "left_sidebar" | "right_panel" | "topbar" | ...
