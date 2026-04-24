@@ -108,13 +108,89 @@ describe("Sidebar responsive behavior", () => {
     // The mobile overlay element exists for closing
     expect(container.querySelector(".jc-sidebar-overlay")).toBeTruthy();
   });
+
+
+  it("Escape on right-panel toggle keeps focus on the trigger button (desktop)", async () => {
+    setViewport(1280);
+    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
+    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
+
+    const rightToggle = container.querySelector(
+      ".jc-right-toggle-desk"
+    ) as HTMLButtonElement | null;
+    expect(rightToggle).toBeTruthy();
+    rightToggle!.focus();
+    expect(document.activeElement).toBe(rightToggle);
+    // Scroll position should not change to top after Escape.
+    const beforeY = window.scrollY;
+    fireEvent.keyDown(rightToggle!, { key: "Escape" });
+    expect(document.activeElement).toBe(rightToggle);
+    expect(window.scrollY).toBe(beforeY);
+  });
+
+  it("Escape on right-panel toggle keeps focus also on mobile viewport", async () => {
+    setViewport(375, 812);
+    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
+    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
+
+    const rightToggle = container.querySelector(
+      ".jc-right-toggle-desk"
+    ) as HTMLButtonElement | null;
+    if (rightToggle) {
+      rightToggle.focus();
+      const beforeY = window.scrollY;
+      fireEvent.keyDown(rightToggle, { key: "Escape" });
+      expect(document.activeElement).toBe(rightToggle);
+      expect(window.scrollY).toBe(beforeY);
+    }
+  });
+
+  it("Ctrl+O toggles the right panel collapsed state", async () => {
+    setViewport(1280);
+    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
+    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
+
+    const right = container.querySelector("#jc-right-panel");
+    expect(right).toBeTruthy();
+    const initial = right!.classList.contains("collapsed");
+    fireEvent.keyDown(window, { key: "o", ctrlKey: true });
+    const after = container.querySelector("#jc-right-panel");
+    expect(after!.classList.contains("collapsed")).toBe(!initial);
+  });
 });
 
-describe("UI tracking event names", () => {
+describe("UI tracking", () => {
+  beforeEach(() => {
+    cleanup();
+    sessionStorage.clear();
+  });
+
   it("exports the expanded event vocabulary", async () => {
     const { trackUiEvent } = await import("@/lib/uiTracking");
-    // tab_navigate and key_activate must be acceptable to the lib without throwing.
     await expect(trackUiEvent("tab_navigate", { surface: "left_sidebar" })).resolves.not.toThrow();
     await expect(trackUiEvent("key_activate", { surface: "left_sidebar" })).resolves.not.toThrow();
+  });
+
+  it("captures rejected events into the debug buffer when insert fails", async () => {
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: {
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+        from: vi.fn(() => ({
+          insert: vi.fn().mockResolvedValue({
+            error: { message: "row violates row-level security policy", code: "42501" },
+          }),
+        })),
+      },
+    }));
+    const tracking = await import("@/lib/uiTracking");
+    tracking.clearRejectedEvents();
+    await tracking.trackUiEvent("nav_click", { surface: "left_sidebar", target_id: "civel" });
+    // Allow microtask flush
+    await new Promise((r) => setTimeout(r, 5));
+    expect(tracking.getRejectedCount()).toBeGreaterThanOrEqual(1);
+    const last = tracking.getRejectedEvents().at(-1)!;
+    expect(last.name).toBe("nav_click");
+    expect(last.code).toBe("42501");
   });
 });
