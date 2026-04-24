@@ -353,10 +353,14 @@ export default function LandingPage() {
 
         <div className="lf-nav__links">
           <a href="#fluxo">Como funciona</a>
-          <a href="#pilares">Por que LexForce</a>
+          <a href="#casos">Casos de uso</a>
           <a href="#seguranca">Segurança</a>
+          <a href="#faq">FAQ</a>
           <a href="#planos">Planos</a>
-          <button className="lf-btn-primary lf-btn-sm" onClick={() => navigate("/auth")}>
+          <button
+            className="lf-btn-primary lf-btn-sm"
+            onClick={() => goToAuth("nav_primary", "Assumir o comando", "navbar")}
+          >
             Assumir o comando
             <ArrowRight size={14} />
           </button>
@@ -371,10 +375,14 @@ export default function LandingPage() {
         <div className="lf-mobile-menu" onClick={() => setMobileMenu(false)}>
           <div className="lf-mobile-menu__inner" onClick={e => e.stopPropagation()}>
             <a href="#fluxo" onClick={() => setMobileMenu(false)}>Como funciona</a>
-            <a href="#pilares" onClick={() => setMobileMenu(false)}>Por que LexForce</a>
+            <a href="#casos" onClick={() => setMobileMenu(false)}>Casos de uso</a>
             <a href="#seguranca" onClick={() => setMobileMenu(false)}>Segurança</a>
+            <a href="#faq" onClick={() => setMobileMenu(false)}>FAQ</a>
             <a href="#planos" onClick={() => setMobileMenu(false)}>Planos</a>
-            <button className="lf-btn-primary" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>
+            <button
+              className="lf-btn-primary"
+              onClick={() => { setMobileMenu(false); goToAuth("mobile_nav_primary", "Assumir o comando", "mobile_menu"); }}
+            >
               Assumir o comando
             </button>
           </div>
@@ -409,14 +417,20 @@ export default function LandingPage() {
           </p>
 
           <div className="lf-hero__btns">
-            <button className="lf-btn-primary lf-btn-lg" onClick={() => navigate("/auth")}>
+            <button
+              className="lf-btn-primary lf-btn-lg"
+              onClick={() => goToAuth("hero_primary", "Assumir o comando", "hero")}
+            >
               <Crown size={18} />
               Assumir o comando
               <ArrowRight size={18} />
             </button>
             <button
               className="lf-btn-ghost lf-btn-lg"
-              onClick={() => document.getElementById("fluxo")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={() => {
+                onCtaClick("hero_secondary", "Ver como funciona", "hero", "#fluxo");
+                document.getElementById("fluxo")?.scrollIntoView({ behavior: "smooth" });
+              }}
             >
               Ver como funciona
             </button>
@@ -602,7 +616,7 @@ export default function LandingPage() {
                 </ul>
                 <button
                   className={plan.highlight ? "lf-btn-primary lf-btn-full" : "lf-btn-ghost lf-btn-full"}
-                  onClick={() => navigate("/auth")}
+                  onClick={() => goToAuth(`plan_${plan.name.toLowerCase()}`, plan.cta, "planos")}
                 >{plan.cta}</button>
               </div>
             ))}
@@ -653,7 +667,13 @@ export default function LandingPage() {
             Você é advogado, não operador. Deixe sua força de IA executar — e{" "}
             <strong>recupere seu tempo, sua família e seu lucro</strong>.
           </p>
-          <button className="lf-btn-primary lf-btn-lg" onClick={() => navigate("/auth")}>
+          <button
+            className="lf-btn-primary lf-btn-lg"
+            onClick={() => {
+              trackEvent("cta_conversion", { cta_id: "cta_final", cta_label: "Assumir o comando agora", section: "cta_final" });
+              goToAuth("cta_final", "Assumir o comando agora", "cta_final");
+            }}
+          >
             <Crown size={18} />
             Assumir o comando agora
             <ArrowRight size={18} />
