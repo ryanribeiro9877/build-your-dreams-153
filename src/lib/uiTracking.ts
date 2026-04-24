@@ -235,12 +235,21 @@ export interface RejectionBucket {
   code?: string;
   reason: string;
   count: number;
+  /**
+   * Approximate number of events that *would* have been captured at the
+   * current sample rate. Useful to estimate sampling impact per bucket.
+   * Equal to `count` when sampleRate=1; ~`count*sampleRate` otherwise (min 1).
+   */
+  estimatedCaptured: number;
+  /** Sample rate used to compute `estimatedCaptured` at read time. */
+  sampleRateAtRead: number;
   lastAt: string;
   lastPayload: Record<string, unknown>;
 }
 
 export function getRejectionBuckets(): RejectionBucket[] {
   const events = readBuffer();
+  const rate = getSampleRate();
   const map = new Map<string, RejectionBucket>();
   for (const e of events) {
     const key = `${e.category}::${e.code ?? "-"}::${e.reason.slice(0, 80)}`;
@@ -252,6 +261,8 @@ export function getRejectionBuckets(): RejectionBucket[] {
         code: e.code,
         reason: e.reason,
         count: 1,
+        estimatedCaptured: 0, // filled below
+        sampleRateAtRead: rate,
         lastAt: e.at,
         lastPayload: e.payload,
       });
@@ -262,6 +273,10 @@ export function getRejectionBuckets(): RejectionBucket[] {
         cur.lastPayload = e.payload;
       }
     }
+  }
+  // Compute estimatedCaptured: floor(count * rate) but at least 1 if count>0
+  for (const b of map.values()) {
+    b.estimatedCaptured = rate >= 1 ? b.count : Math.max(1, Math.floor(b.count * rate));
   }
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
