@@ -769,6 +769,66 @@ export default function JurisCloudOS() {
 
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
+  // Toggle helpers with tracking + a11y live-region announcement.
+  const announce = (msg: string) => {
+    setShortcutAnnouncement(msg);
+    window.setTimeout(() => setShortcutAnnouncement(""), 1500);
+  };
+
+  const handleSidebarToggle = (source: "click" | "keyboard" = "click") => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      trackUiEvent("sidebar_toggle", {
+        surface: "left_sidebar",
+        collapsed: next,
+        source,
+      });
+      announce(next ? "Menu lateral recolhido" : "Menu lateral expandido");
+      return next;
+    });
+  };
+
+  const handleRightToggle = (source: "click" | "keyboard" = "click") => {
+    setRightCollapsed(prev => {
+      const next = !prev;
+      trackUiEvent("right_panel_toggle", {
+        surface: "right_panel",
+        collapsed: next,
+        source,
+      });
+      announce(next ? "Painel de operações recolhido" : "Painel de operações expandido");
+      return next;
+    });
+  };
+
+  // Keyboard shortcuts: Ctrl/Cmd+B (sidebar), Ctrl/Cmd+O (right panel).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Skip when typing in inputs/textareas/contenteditable
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "b") {
+        e.preventDefault();
+        trackUiEvent("shortcut_used", { target_id: "ctrl+b", surface: "left_sidebar" });
+        handleSidebarToggle("keyboard");
+      } else if (key === "o") {
+        e.preventDefault();
+        trackUiEvent("shortcut_used", { target_id: "ctrl+o", surface: "right_panel" });
+        handleRightToggle("keyboard");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
   // Voice input
   const toggleRecording = () => {
     if (isRecording) {
