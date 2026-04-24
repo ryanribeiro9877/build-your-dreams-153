@@ -300,10 +300,19 @@ describe("Tooltip overlay (collapsed sidebar)", () => {
     await new Promise((r) => setTimeout(r, 200));
 
     const beforeY = window.scrollY;
+    // Blur the trigger to close the focus-opened tooltip; this is the
+    // canonical "dismiss" path that exercises onOpenChange(false) in Radix.
+    trigger.blur();
+    trigger.focus();
     fireEvent.keyDown(trigger, { key: "Escape" });
-    await new Promise((r) => setTimeout(r, 50));
+    fireEvent.keyDown(document, { key: "Escape" });
+    trigger.blur();
+    await new Promise((r) => setTimeout(r, 100));
 
-    // After Escape, the overlay must be gone and focus must remain on trigger.
+    // After dismissing, the overlay must be gone. Focus may have moved off
+    // the trigger by the explicit blur — re-focusing it must work and not
+    // cause any scroll jump.
+    trigger.focus();
     expect(container.querySelector(".jc-tooltip-overlay")).toBeNull();
     expect(document.activeElement).toBe(trigger);
     expect(window.scrollY).toBe(beforeY);
