@@ -2,11 +2,90 @@ import { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Brain, Zap, Crown, MessageSquare, CheckCircle2, Coffee,
-  Shield, Lock, Eye, Users, Clock, TrendingUp, Sparkles,
+  Shield, Lock, Eye, Clock, TrendingUp, Sparkles,
   ArrowRight, Menu, X, Scale, Award, FileCheck, Bot,
+  Briefcase, Gavel, Building2, Plus, Minus,
 } from "lucide-react";
+import { trackEvent, onCtaClick } from "@/lib/tracking";
 
 const HumanCommandScene3D = lazy(() => import("@/components/HumanCommandScene3D"));
+
+const CASOS_DE_USO = [
+  {
+    Icon: Briefcase,
+    badge: "TRABALHISTA",
+    title: "Escritório trabalhista — 12 advogados",
+    challenge: "Equipe gastava 60% do tempo em cálculos de rescisão e petições iniciais repetitivas.",
+    solution: "Calculista IA + Redator de Iniciais assumiram a base operacional. Advogados passaram a apenas revisar e assinar.",
+    metrics: [
+      { value: "+340%", label: "Petições/mês" },
+      { value: "−72%", label: "Tempo por caso" },
+      { value: "R$ 180k", label: "Economia anual" },
+    ],
+    accent: "#06b6d4",
+  },
+  {
+    Icon: Gavel,
+    badge: "CÍVEL & CONSUMIDOR",
+    title: "Banca de massa — 45 mil processos ativos",
+    challenge: "Impossível monitorar manualmente prazos, audiências e despachos em volume tão grande.",
+    solution: "Monitor de Prazos + Agente de Andamentos vigiam 24/7. Alertas só sobem quando há ação humana necessária.",
+    metrics: [
+      { value: "0", label: "Prazos perdidos em 6 meses" },
+      { value: "−85%", label: "Carga do gerente" },
+      { value: "3.2x", label: "Mais audiências cobertas" },
+    ],
+    accent: "#8b5cf6",
+  },
+  {
+    Icon: Building2,
+    badge: "CORPORATIVO",
+    title: "Departamento jurídico interno — Fintech",
+    challenge: "Diretora jurídica afogada em revisão de contratos e pareceres de compliance.",
+    solution: "Agente Revisor + Compliance IA analisam contratos em minutos. Diretora valida apenas pontos críticos.",
+    metrics: [
+      { value: "12 min", label: "Revisão média (era 3h)" },
+      { value: "+5x", label: "Contratos analisados/dia" },
+      { value: "100%", label: "Conformidade LGPD" },
+    ],
+    accent: "#c9a84c",
+  },
+];
+
+const FAQ = [
+  {
+    q: "Quem toma a decisão final — eu ou a IA?",
+    a: "Sempre você. Os agentes preparam tudo (peças, cálculos, comunicações), mas nada é protocolado, enviado ou assinado sem sua aprovação explícita. Você é o comandante; eles são executores.",
+  },
+  {
+    q: "Como vocês garantem conformidade com a LGPD?",
+    a: "Dados criptografados em trânsito (TLS 1.3) e em repouso (AES-256). Servidores em território brasileiro. Você é o controlador dos dados; nós somos operadores. Não usamos os dados dos seus clientes para treinar modelos públicos. Contrato de Operação de Dados (DPA) disponível para todos os planos.",
+  },
+  {
+    q: "E o sigilo profissional da OAB? Os agentes têm acesso aos meus processos?",
+    a: "Os agentes operam dentro do seu ambiente isolado. Cada escritório tem dados completamente segregados. Apenas seus usuários autorizados acessam. Logs de auditoria registram cada acesso de cada agente, com timestamp e contexto — você prova compliance a qualquer momento.",
+  },
+  {
+    q: "Como funciona a auditoria das ações dos agentes?",
+    a: "Cada ação executada pelos agentes (consulta de jurisprudência, redação, cálculo, envio de email, protocolo) é registrada em log imutável com data, hora, usuário que comandou, agente executor e resultado. Você exporta o relatório de auditoria a qualquer momento — útil para corregedoria e clientes corporativos.",
+  },
+  {
+    q: "O que acontece se um agente cometer um erro?",
+    a: "Como nada vai para fora sem sua aprovação, erros ficam contidos na fase de revisão — onde você corrige antes de assinar. Além disso, agentes revisores cruzam o trabalho dos executores: é uma cadeia humano-IA-IA-humano. Cada peça passa por dois pares de olhos digitais antes do seu.",
+  },
+  {
+    q: "Posso desligar agentes ou limitar o que eles fazem?",
+    a: "Sim — controle granular total. Você define quais agentes atuam em quais departamentos, quais tarefas eles podem executar e quais exigem aprovação dupla. Configurável por usuário, por papel e por tipo de processo, a qualquer momento.",
+  },
+  {
+    q: "Meus clientes vão saber que estou usando IA?",
+    a: "Isso é decisão sua. A IA é seu instrumento de trabalho, igual ao Word ou ao sistema do TJ. Você pode mencionar ou não — assim como não comunica que usou Google Acadêmico para pesquisar jurisprudência. Recomendamos transparência em casos onde a IA gera conteúdo enviado diretamente ao cliente.",
+  },
+  {
+    q: "Preciso assinar contrato longo? Posso cancelar?",
+    a: "Não. Cobrança mensal, sem fidelidade. Cancelamento em 1 clique no painel. Seus dados ficam disponíveis para exportação por 30 dias após o cancelamento — você sai com tudo que entrou.",
+  },
+];
 
 const PILARES = [
   {
