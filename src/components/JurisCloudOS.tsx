@@ -937,12 +937,35 @@ export default function JurisCloudOS() {
   };
 
   // Wrap in tooltip when sidebar is collapsed (desktop). Plain element otherwise.
-  const withTooltip = (label: string, node: React.ReactElement) => {
+  // - Tracks tooltip_open
+  // - Closes on Escape (Radix default behavior when trigger has focus)
+  // - Returns focus to the trigger automatically (Radix default), so Tab order is preserved.
+  const withTooltip = (label: string, node: React.ReactElement, targetId?: string) => {
     if (!sidebarCollapsed) return node;
     return (
-      <Tooltip delayDuration={150}>
+      <Tooltip
+        delayDuration={150}
+        onOpenChange={(open) => {
+          if (open) {
+            trackUiEvent("tooltip_open", {
+              surface: "left_sidebar",
+              target_id: targetId,
+              target_label: label,
+            });
+          }
+        }}
+      >
         <TooltipTrigger asChild>{node}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          onEscapeKeyDown={(e) => {
+            // Radix already closes the tooltip; we keep focus on the trigger.
+            e.preventDefault();
+          }}
+        >
+          {label}
+        </TooltipContent>
       </Tooltip>
     );
   };
