@@ -746,23 +746,21 @@ export default function JurisCloudOS() {
   });
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("jc-sidebar-collapsed") === "1";
-    return true;
-  });
-  const [rightCollapsed, setRightCollapsed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("jc-right-collapsed") === "1";
-    return true;
-  });
+  // Persisted per-user UI preferences (synced via Lovable Cloud).
+  const {
+    sidebarCollapsed,
+    rightCollapsed,
+    setSidebarCollapsed,
+    setRightCollapsed,
+  } = useUiPreferences();
   const [isRecording, setIsRecording]     = useState(false);
+  const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
   useEffect(() => { localStorage.setItem("jc-theme", theme); }, [theme]);
-  useEffect(() => { localStorage.setItem("jc-sidebar-collapsed", sidebarCollapsed ? "1" : "0"); }, [sidebarCollapsed]);
-  useEffect(() => { localStorage.setItem("jc-right-collapsed", rightCollapsed ? "1" : "0"); }, [rightCollapsed]);
 
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
