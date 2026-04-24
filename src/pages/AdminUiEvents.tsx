@@ -86,6 +86,12 @@ export default function AdminUiEvents() {
   const [sampleRate, setSampleRateState] = useState<number>(getSampleRate());
   // Drilldown filter for the raw rejected-events table (set from a bucket row).
   const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
+  // Whether export should include only the raw rejected events (skip buckets).
+  const [exportRejectedOnly, setExportRejectedOnly] = useState<boolean>(false);
+  // Last TTL prune result for the inline summary on the admin panel.
+  const [lastPrune, setLastPrune] = useState<{
+    pruned: number; bucketed: number; remaining: number; at: string; ttlHours: number;
+  } | null>(null);
 
   useEffect(() => {
     const off = onDebugChange(() => {
