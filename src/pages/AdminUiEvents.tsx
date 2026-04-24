@@ -67,8 +67,21 @@ export default function AdminUiEvents() {
   const [to, setTo] = useState<string>(isoDaysAgo(0));
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [userFilter, setUserFilter] = useState<string>("");
+  const [labelFilter, setLabelFilter] = useState<string>("");
+  const [groupBySession, setGroupBySession] = useState<boolean>(false);
   const [rows, setRows] = useState<UiEventRow[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Debug panel state
+  const [rejected, setRejected] = useState<RejectedEvent[]>(getRejectedEvents());
+  const [rejectedCount, setRejectedCount] = useState<number>(getRejectedCount());
+  useEffect(() => {
+    const off = onDebugChange(() => {
+      setRejected(getRejectedEvents());
+      setRejectedCount(getRejectedCount());
+    });
+    return () => { off(); };
+  }, []);
 
   const isAdmin = hasRole("admin");
 
@@ -87,7 +100,7 @@ export default function AdminUiEvents() {
     if (!isAdmin) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, from, to, eventFilter, userFilter]);
+  }, [isAdmin, from, to, eventFilter, userFilter, labelFilter]);
 
   async function load() {
     setLoading(true);
@@ -101,6 +114,8 @@ export default function AdminUiEvents() {
 
     if (eventFilter !== "all") query = query.eq("event_name", eventFilter);
     if (userFilter.trim()) query = query.eq("user_id", userFilter.trim());
+    const lbl = labelFilter.trim();
+    if (lbl) query = query.ilike("target_label", `%${lbl}%`);
 
     const { data, error } = await query;
     if (!error && data) setRows(data as UiEventRow[]);
