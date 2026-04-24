@@ -17,7 +17,7 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge, FileCheck2, GitCompareArrows, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
@@ -25,7 +25,9 @@ import {
   getRejectedTtlHours, setRejectedTtlHours,
   getSampleRate, setSampleRate,
   EXPORT_SCHEMA_VERSION,
+  validateExportPayload,
   type RejectedEvent, type RejectionBucket, type HealthCheckResult,
+  type ExportValidationResult,
 } from "@/lib/uiTracking";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -88,10 +90,23 @@ export default function AdminUiEvents() {
   const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
   // Whether export should include only the raw rejected events (skip buckets).
   const [exportRejectedOnly, setExportRejectedOnly] = useState<boolean>(false);
+  // Whether CSV export should additionally skip the bucket section. Independent
+  // from `exportRejectedOnly` so admins can still see buckets in JSON.
+  const [csvSkipBuckets, setCsvSkipBuckets] = useState<boolean>(false);
   // Last TTL prune result for the inline summary on the admin panel.
   const [lastPrune, setLastPrune] = useState<{
     pruned: number; bucketed: number; remaining: number; at: string; ttlHours: number;
   } | null>(null);
+  // Schema validation result (from "Validar export" action).
+  const [validation, setValidation] = useState<(ExportValidationResult & { fileName: string }) | null>(null);
+  // Healthcheck temporary sample-rate override (UI state only — doesn't persist).
+  const [healthOverrideEnabled, setHealthOverrideEnabled] = useState<boolean>(false);
+  const [healthOverridePct, setHealthOverridePct] = useState<number>(100);
+  // Bucket table sort key.
+  const [bucketSort, setBucketSort] = useState<"count" | "category" | "code" | "sampleRateAtRead">("count");
+  // Compare view state — two parsed exports + diff.
+  const [compareA, setCompareA] = useState<{ name: string; data: Record<string, unknown> } | null>(null);
+  const [compareB, setCompareB] = useState<{ name: string; data: Record<string, unknown> } | null>(null);
 
   useEffect(() => {
     const off = onDebugChange(() => {
@@ -178,9 +193,11 @@ export default function AdminUiEvents() {
 
   const exportDebug = (format: "json" | "csv") => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const includeBuckets = !exportRejectedOnly;
-    // Standardized context block — embedded in JSON exports so consumers can
-    // reliably compare snapshots taken across sessions/environments.
+    // JSON honors `exportRejectedOnly`; CSV honors `csvSkipBuckets` (separate
+    // checkbox for faster CSV-only debugging when there are many bucket rows).
+    const includeBucketsJson = !exportRejectedOnly;
+    const includeBucketsCsv = !csvSkipBuckets;
+    const includeBuckets = format === "csv" ? includeBucketsCsv : includeBucketsJson;
     const context = {
       schema: "lf.ui-tracking.debug-export",
       schemaVersion: EXPORT_SCHEMA_VERSION,
@@ -224,6 +241,32 @@ export default function AdminUiEvents() {
     });
   };
 
+  // Validates a JSON file picked by the admin against the expected schema.
+  const handleValidateExport = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const result = validateExportPayload(parsed);
+      setValidation({ ...result, fileName: file.name });
+      if (result.ok) {
+        toast.success(`Schema válido — ${file.name}`, {
+          description: `Versão ${result.schemaVersion}, todos os campos presentes.`,
+        });
+      } else {
+        const issues = [
+          result.missingFields.length && `${result.missingFields.length} campo(s) faltando`,
+          result.bucketIssues.length && `${result.bucketIssues.length} bucket(s) com problema`,
+          result.rejectedIssues.length && `${result.rejectedIssues.length} evento(s) com problema`,
+          !result.versionMatches && "versão divergente",
+        ].filter(Boolean).join(" · ");
+        toast.error(`Schema inválido — ${file.name}`, { description: issues || "Verifique o painel." });
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      toast.error("Falha ao ler JSON", { description: reason });
+    }
+  };
+
   // Apply drilldown filter to the raw rejected list shown below.
   const filteredRejected = useMemo(() => {
     if (!bucketFilter) return rejected;
@@ -234,15 +277,124 @@ export default function AdminUiEvents() {
     );
   }, [rejected, bucketFilter]);
 
+  // Sorted view of buckets (for the table headers).
+  const sortedBuckets = useMemo(() => {
+    const arr = [...buckets];
+    arr.sort((a, b) => {
+      switch (bucketSort) {
+        case "category": return a.category.localeCompare(b.category);
+        case "code": return (a.code ?? "").localeCompare(b.code ?? "");
+        case "sampleRateAtRead": return b.sampleRateAtRead - a.sampleRateAtRead;
+        default: return b.count - a.count;
+      }
+    });
+    return arr;
+  }, [buckets, bucketSort]);
+
   // Health-check state
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthHistory, setHealthHistory] = useState<HealthCheckResult[]>([]);
   const handleHealthCheck = async () => {
     setHealthLoading(true);
-    const result = await runTrackingHealthCheck();
+    const override = healthOverrideEnabled
+      ? Math.max(0, Math.min(1, healthOverridePct / 100))
+      : undefined;
+    const result = await runTrackingHealthCheck({ sampleRateOverride: override });
     setHealthHistory((prev) => [result, ...prev].slice(0, 5));
     setHealthLoading(false);
   };
+
+  // Compare exports — load a JSON file into slot A or B.
+  const loadCompareFile = async (slot: "A" | "B", file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      if (slot === "A") setCompareA({ name: file.name, data: parsed });
+      else setCompareB({ name: file.name, data: parsed });
+    } catch (err) {
+      toast.error("Falha ao ler JSON", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  // Diff two exports across the metrics admins care about.
+  type CompareDiff = {
+    schemaVersion: { a?: string; b?: string };
+    ttlHours: { a?: number; b?: number; delta: number };
+    rejectedCount: { a: number; b: number; delta: number };
+    sampleRate: { a?: number; b?: number };
+    buckets: Array<{
+      key: string; category: string; code?: string; reason: string;
+      countA: number; countB: number; deltaCount: number;
+      capturedA: number; capturedB: number; deltaCaptured: number;
+      onlyIn?: "A" | "B";
+    }>;
+  };
+  const compareDiff = useMemo<CompareDiff | null>(() => {
+    if (!compareA || !compareB) return null;
+    const a = compareA.data; const b = compareB.data;
+    const ba = Array.isArray(a.buckets) ? (a.buckets as Array<Record<string, unknown>>) : [];
+    const bb = Array.isArray(b.buckets) ? (b.buckets as Array<Record<string, unknown>>) : [];
+    const keyOf = (x: Record<string, unknown>) =>
+      `${String(x.category ?? "-")}::${String(x.code ?? "-")}::${String(x.reason ?? "-").slice(0, 80)}`;
+    const map = new Map<string, CompareDiff["buckets"][number]>();
+    for (const x of ba) {
+      const k = keyOf(x);
+      map.set(k, {
+        key: k,
+        category: String(x.category ?? "-"),
+        code: x.code as string | undefined,
+        reason: String(x.reason ?? ""),
+        countA: Number(x.count ?? 0), countB: 0, deltaCount: -Number(x.count ?? 0),
+        capturedA: Number(x.estimatedCaptured ?? 0), capturedB: 0,
+        deltaCaptured: -Number(x.estimatedCaptured ?? 0),
+        onlyIn: "A",
+      });
+    }
+    for (const x of bb) {
+      const k = keyOf(x);
+      const existing = map.get(k);
+      const cb = Number(x.count ?? 0);
+      const capb = Number(x.estimatedCaptured ?? 0);
+      if (existing) {
+        existing.countB = cb;
+        existing.capturedB = capb;
+        existing.deltaCount = cb - existing.countA;
+        existing.deltaCaptured = capb - existing.capturedA;
+        existing.onlyIn = undefined;
+      } else {
+        map.set(k, {
+          key: k,
+          category: String(x.category ?? "-"),
+          code: x.code as string | undefined,
+          reason: String(x.reason ?? ""),
+          countA: 0, countB: cb, deltaCount: cb,
+          capturedA: 0, capturedB: capb, deltaCaptured: capb,
+          onlyIn: "B",
+        });
+      }
+    }
+    const ttlA = typeof a.ttlHours === "number" ? a.ttlHours : undefined;
+    const ttlB = typeof b.ttlHours === "number" ? b.ttlHours : undefined;
+    return {
+      schemaVersion: {
+        a: typeof a.schemaVersion === "string" ? a.schemaVersion : undefined,
+        b: typeof b.schemaVersion === "string" ? b.schemaVersion : undefined,
+      },
+      ttlHours: { a: ttlA, b: ttlB, delta: (ttlB ?? 0) - (ttlA ?? 0) },
+      rejectedCount: {
+        a: Number(a.rejectedCount ?? 0),
+        b: Number(b.rejectedCount ?? 0),
+        delta: Number(b.rejectedCount ?? 0) - Number(a.rejectedCount ?? 0),
+      },
+      sampleRate: {
+        a: typeof a.sampleRate === "number" ? a.sampleRate : undefined,
+        b: typeof b.sampleRate === "number" ? b.sampleRate : undefined,
+      },
+      buckets: Array.from(map.values()).sort((x, y) => Math.abs(y.deltaCount) - Math.abs(x.deltaCount)),
+    };
+  }, [compareA, compareB]);
 
   const categoryLabel: Record<string, string> = {
     rls: "RLS", payload: "Validação payload", network: "Rede", unknown: "Desconhecido",
@@ -452,6 +604,35 @@ export default function AdminUiEvents() {
               Insere um evento sintético em <code className="font-mono">ui_events</code> para validar
               que o tracking está funcionando antes de você testar mudanças.
             </p>
+            {/* Temporary sample-rate override — not persisted to localStorage. */}
+            <div className="flex flex-wrap items-center gap-3 mb-4 p-2 rounded-md border border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="health-override"
+                  checked={healthOverrideEnabled}
+                  onCheckedChange={setHealthOverrideEnabled}
+                />
+                <Label htmlFor="health-override" className="text-xs cursor-pointer">
+                  Override sampleRate (apenas neste teste)
+                </Label>
+              </div>
+              <div className={`flex items-center gap-2 ${healthOverrideEnabled ? "" : "opacity-50 pointer-events-none"}`}>
+                <Input
+                  id="health-override-pct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={healthOverridePct}
+                  onChange={(e) => setHealthOverridePct(Math.max(0, Math.min(100, Number(e.target.value))))}
+                  className="h-7 w-20 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">% para esta execução</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                Atual: <span className="font-mono">{Math.round(sampleRate * 100)}%</span> · não altera localStorage
+              </span>
+            </div>
             {healthHistory.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhuma verificação executada nesta sessão.</p>
             ) : (
@@ -470,6 +651,11 @@ export default function AdminUiEvents() {
                         <span className="ml-2 text-xs text-muted-foreground font-mono">
                           {h.durationMs}ms · {new Date(h.at).toLocaleTimeString()}
                         </span>
+                        {typeof h.sampleRateOverride === "number" && (
+                          <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono">
+                            override {Math.round(h.sampleRateOverride * 100)}%
+                          </span>
+                        )}
                       </div>
                       {!h.ok && (
                         <div className="mt-1 text-xs text-destructive">
@@ -543,15 +729,27 @@ export default function AdminUiEvents() {
                   className="h-7 w-16 text-xs"
                 />
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-l border-border pl-2 ml-1">
-                <Checkbox
-                  id="export-rejected-only"
-                  checked={exportRejectedOnly}
-                  onCheckedChange={(c) => setExportRejectedOnly(c === true)}
-                />
-                <Label htmlFor="export-rejected-only" className="text-xs cursor-pointer">
-                  Só rejeitados
-                </Label>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground border-l border-border pl-2 ml-1">
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="export-rejected-only"
+                    checked={exportRejectedOnly}
+                    onCheckedChange={(c) => setExportRejectedOnly(c === true)}
+                  />
+                  <Label htmlFor="export-rejected-only" className="text-xs cursor-pointer" title="JSON: omitir buckets">
+                    JSON só rejeitados
+                  </Label>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="export-csv-skip-buckets"
+                    checked={csvSkipBuckets}
+                    onCheckedChange={(c) => setCsvSkipBuckets(c === true)}
+                  />
+                  <Label htmlFor="export-csv-skip-buckets" className="text-xs cursor-pointer" title="CSV: omitir seção buckets para depuração rápida">
+                    CSV sem buckets
+                  </Label>
+                </div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => exportDebug("json")} disabled={rejectedCount === 0 && buckets.length === 0}>
                 <Download className="h-3.5 w-3.5 mr-1" /> JSON
@@ -600,12 +798,29 @@ export default function AdminUiEvents() {
                   <table className="w-full text-sm">
                     <thead className="text-left border-b border-border">
                       <tr>
-                        <th className="py-2 pr-3">Categoria</th>
-                        <th className="py-2 pr-3">Código</th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("category")}>
+                            Categoria <ArrowUpDown className={`h-3 w-3 ${bucketSort === "category" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("code")}>
+                            Código <ArrowUpDown className={`h-3 w-3 ${bucketSort === "code" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
                         <th className="py-2 pr-3">Motivo</th>
-                        <th className="py-2 pr-3">Ocorrências</th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("count")}>
+                            Ocorrências <ArrowUpDown className={`h-3 w-3 ${bucketSort === "count" ? "text-primary" : "opacity-40"}`} />
+                          </button>
+                        </th>
                         <th className="py-2 pr-3" title="Eventos estimados capturados pela amostragem atual">
                           Capturados (~{Math.round(sampleRate * 100)}%)
+                        </th>
+                        <th className="py-2 pr-3">
+                          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setBucketSort("sampleRateAtRead")} title="Taxa de amostragem no momento da leitura">
+                            sampleRateAtRead <ArrowUpDown className={`h-3 w-3 ${bucketSort === "sampleRateAtRead" ? "text-primary" : "opacity-40"}`} />
+                          </button>
                         </th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
@@ -613,7 +828,7 @@ export default function AdminUiEvents() {
                       </tr>
                     </thead>
                     <tbody>
-                      {buckets.map((b) => {
+                      {sortedBuckets.map((b) => {
                         const isActive = bucketFilter?.key === b.key;
                         return (
                           <tr key={b.key} className={`border-b border-border/50 align-top ${isActive ? "bg-muted/40" : ""}`}>
@@ -630,6 +845,9 @@ export default function AdminUiEvents() {
                               {b.sampleRateAtRead < 1 && (
                                 <span className="text-muted-foreground ml-1">/ {b.count}</span>
                               )}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs text-muted-foreground">
+                              {(b.sampleRateAtRead * 100).toFixed(0)}%
                             </td>
                             <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(b.lastAt).toLocaleString()}
@@ -725,6 +943,230 @@ export default function AdminUiEvents() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Validate export schema */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileCheck2 className="h-4 w-4 text-muted-foreground" />
+              Validar export
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                schema esperado <code className="font-mono">{EXPORT_SCHEMA_VERSION}</code>
+              </span>
+            </CardTitle>
+            <Label className="cursor-pointer">
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleValidateExport(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                <FileCheck2 className="h-3.5 w-3.5" /> Selecionar JSON
+              </span>
+            </Label>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Carrega um JSON exportado e verifica <code className="font-mono">schemaVersion</code> e
+              campos obrigatórios antes de você comparar arquivos.
+            </p>
+            {!validation ? (
+              <p className="text-xs text-muted-foreground">Nenhum arquivo validado nesta sessão.</p>
+            ) : (
+              <div className={`rounded-md border p-3 text-sm ${validation.ok ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"}`}>
+                <div className="font-medium mb-1 flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${validation.ok ? "bg-emerald-500" : "bg-destructive"}`} />
+                  {validation.fileName}
+                  <span className="text-xs text-muted-foreground font-mono">
+                    schema {validation.schemaVersion ?? "—"} {validation.versionMatches ? "✓" : "✗"}
+                  </span>
+                </div>
+                {validation.missingFields.length > 0 && (
+                  <div className="text-xs text-destructive">
+                    Campos faltando: <span className="font-mono">{validation.missingFields.join(", ")}</span>
+                  </div>
+                )}
+                {validation.bucketIssues.length > 0 && (
+                  <div className="text-xs text-destructive mt-1">
+                    {validation.bucketIssues.length} bucket(s) com campos faltando (ex.: índice {validation.bucketIssues[0].index} → {validation.bucketIssues[0].missing.join(", ")})
+                  </div>
+                )}
+                {validation.rejectedIssues.length > 0 && (
+                  <div className="text-xs text-destructive mt-1">
+                    {validation.rejectedIssues.length} evento(s) rejeitado(s) com campos faltando (ex.: índice {validation.rejectedIssues[0].index} → {validation.rejectedIssues[0].missing.join(", ")})
+                  </div>
+                )}
+                {validation.notes.length > 0 && (
+                  <ul className="text-xs text-muted-foreground mt-2 list-disc list-inside">
+                    {validation.notes.map((n, i) => (<li key={i}>{n}</li>))}
+                  </ul>
+                )}
+                {validation.ok && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    Tudo certo — pronto para comparar.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Compare two exports */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <GitCompareArrows className="h-4 w-4 text-muted-foreground" />
+              Comparar dois exports
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Carregue dois JSONs exportados para ver diffs em TTL, contagem de rejeitados e
+              <code className="font-mono"> estimatedCaptured</code> por bucket.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(["A", "B"] as const).map((slot) => {
+                const current = slot === "A" ? compareA : compareB;
+                return (
+                  <div key={slot} className="rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm">Arquivo {slot}</span>
+                      {current && (
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => slot === "A" ? setCompareA(null) : setCompareB(null)}>
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                    <Label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void loadCompareFile(slot, f);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                        Selecionar JSON
+                      </span>
+                    </Label>
+                    {current && (
+                      <div className="mt-2 text-xs text-muted-foreground font-mono truncate" title={current.name}>
+                        {current.name}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {compareDiff && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">schemaVersion</div>
+                    <div className="font-mono">
+                      {compareDiff.schemaVersion.a ?? "—"} → {compareDiff.schemaVersion.b ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">TTL (h)</div>
+                    <div className="font-mono">
+                      {compareDiff.ttlHours.a ?? "—"} → {compareDiff.ttlHours.b ?? "—"}
+                      {compareDiff.ttlHours.delta !== 0 && (
+                        <span className={`ml-2 ${compareDiff.ttlHours.delta > 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          ({compareDiff.ttlHours.delta > 0 ? "+" : ""}{compareDiff.ttlHours.delta})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">rejectedCount</div>
+                    <div className="font-mono">
+                      {compareDiff.rejectedCount.a} → {compareDiff.rejectedCount.b}
+                      {compareDiff.rejectedCount.delta !== 0 && (
+                        <span className={`ml-2 ${compareDiff.rejectedCount.delta < 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          ({compareDiff.rejectedCount.delta > 0 ? "+" : ""}{compareDiff.rejectedCount.delta})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      {compareDiff.rejectedCount.delta < 0 ? "TTL pruning provável" : compareDiff.rejectedCount.delta > 0 ? "Mais falhas em B" : "Sem mudança"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <div className="text-muted-foreground">sampleRate</div>
+                    <div className="font-mono">
+                      {compareDiff.sampleRate.a !== undefined ? `${Math.round(compareDiff.sampleRate.a * 100)}%` : "—"}
+                      {" → "}
+                      {compareDiff.sampleRate.b !== undefined ? `${Math.round(compareDiff.sampleRate.b * 100)}%` : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Diffs por bucket ({compareDiff.buckets.length})</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left border-b border-border">
+                        <tr>
+                          <th className="py-2 pr-3">Categoria</th>
+                          <th className="py-2 pr-3">Código</th>
+                          <th className="py-2 pr-3">Motivo</th>
+                          <th className="py-2 pr-3">count A → B</th>
+                          <th className="py-2 pr-3">Δ count</th>
+                          <th className="py-2 pr-3">captured A → B</th>
+                          <th className="py-2 pr-3">Δ captured</th>
+                          <th className="py-2 pr-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {compareDiff.buckets.map((b) => (
+                          <tr key={b.key} className="border-b border-border/50 align-top">
+                            <td className="py-1.5 pr-3">
+                              <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category] ?? ""}`}>
+                                {categoryLabel[b.category] ?? b.category}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
+                            <td className="py-1.5 pr-3 max-w-xs truncate" title={b.reason}>{b.reason}</td>
+                            <td className="py-1.5 pr-3 font-mono">{b.countA} → {b.countB}</td>
+                            <td className={`py-1.5 pr-3 font-mono ${b.deltaCount > 0 ? "text-destructive" : b.deltaCount < 0 ? "text-emerald-600" : ""}`}>
+                              {b.deltaCount > 0 ? "+" : ""}{b.deltaCount}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono">{b.capturedA} → {b.capturedB}</td>
+                            <td className={`py-1.5 pr-3 font-mono ${b.deltaCaptured > 0 ? "text-destructive" : b.deltaCaptured < 0 ? "text-emerald-600" : ""}`}>
+                              {b.deltaCaptured > 0 ? "+" : ""}{b.deltaCaptured}
+                            </td>
+                            <td className="py-1.5 pr-3 text-xs">
+                              {b.onlyIn === "A" ? <span className="text-amber-600">Só em A (pruned)</span>
+                                : b.onlyIn === "B" ? <span className="text-blue-600">Novo em B</span>
+                                : <span className="text-muted-foreground">Em ambos</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {compareDiff.buckets.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="py-6 text-center text-muted-foreground text-xs">
+                              Sem buckets em nenhum dos arquivos.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
