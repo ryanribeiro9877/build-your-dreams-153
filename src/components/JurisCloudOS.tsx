@@ -936,19 +936,36 @@ export default function JurisCloudOS() {
     specialist: "Especialista", reviewer: "Revisor", executor: "Executor", monitor: "Monitor",
   };
 
+  // Optional dim overlay when tooltips open on collapsed sidebar — improves
+  // contrast/legibility. Opt-in via localStorage flag (`jc-tooltip-overlay`).
+  const [openTooltipCount, setOpenTooltipCount] = useState(0);
+  const [tooltipOverlay] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("jc-tooltip-overlay") === "1";
+  });
+
   // Wrap in tooltip when sidebar is collapsed (desktop). Plain element otherwise.
   // - Tracks tooltip_open
   // - Closes on Escape (Radix default behavior when trigger has focus)
   // - Returns focus to the trigger automatically (Radix default), so Tab order is preserved.
-  const withTooltip = (label: string, node: React.ReactElement, targetId?: string) => {
-    if (!sidebarCollapsed) return node;
+  const withTooltip = (
+    label: string,
+    node: React.ReactElement,
+    targetId?: string,
+    opts?: { side?: "right" | "left" | "top" | "bottom"; surface?: string; alwaysOn?: boolean }
+  ) => {
+    const enabled = opts?.alwaysOn || sidebarCollapsed;
+    if (!enabled) return node;
+    const side = opts?.side ?? "right";
+    const surface = opts?.surface ?? "left_sidebar";
     return (
       <Tooltip
         delayDuration={150}
         onOpenChange={(open) => {
+          setOpenTooltipCount((n) => Math.max(0, n + (open ? 1 : -1)));
           if (open) {
             trackUiEvent("tooltip_open", {
-              surface: "left_sidebar",
+              surface,
               target_id: targetId,
               target_label: label,
             });
@@ -957,7 +974,7 @@ export default function JurisCloudOS() {
       >
         <TooltipTrigger asChild>{node}</TooltipTrigger>
         <TooltipContent
-          side="right"
+          side={side}
           sideOffset={8}
           onEscapeKeyDown={(e) => {
             // Radix already closes the tooltip; we keep focus on the trigger.
