@@ -552,6 +552,60 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════ CASOS DE USO ═══════ */}
+      <section id="casos" className="lf-section">
+        <div className="lf-container">
+          <div className="lf-section-header">
+            <div className="lf-tag">ESTUDOS DE CASO</div>
+            <h2 className="lf-section-title">
+              Resultados reais.<br />
+              <span className="lf-gradient-text">Por tipo de processo.</span>
+            </h2>
+            <p className="lf-section-sub">
+              Três escritórios. Três realidades diferentes. Mesma transformação:
+              o humano deixou de executar e passou a comandar.
+            </p>
+          </div>
+
+          <div className="lf-casos">
+            {CASOS_DE_USO.map((c) => (
+              <article
+                key={c.badge}
+                className="lf-caso"
+                style={{ "--accent": c.accent } as React.CSSProperties}
+              >
+                <header className="lf-caso__head">
+                  <div className="lf-caso__icon">
+                    <c.Icon size={22} strokeWidth={1.8} />
+                  </div>
+                  <span className="lf-caso__badge">{c.badge}</span>
+                </header>
+
+                <h3 className="lf-caso__title">{c.title}</h3>
+
+                <div className="lf-caso__block">
+                  <span className="lf-caso__label">Desafio</span>
+                  <p>{c.challenge}</p>
+                </div>
+                <div className="lf-caso__block">
+                  <span className="lf-caso__label">Solução LexForce</span>
+                  <p>{c.solution}</p>
+                </div>
+
+                <div className="lf-caso__metrics">
+                  {c.metrics.map((m) => (
+                    <div key={m.label} className="lf-caso__metric">
+                      <div className="lf-caso__metric-value">{m.value}</div>
+                      <div className="lf-caso__metric-label">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ═══════ SEGURANÇA & CONTROLE ═══════ */}
       <section id="seguranca" className="lf-section">
         <div className="lf-container">
