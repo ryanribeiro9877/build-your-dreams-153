@@ -570,6 +570,28 @@ export default function AdminUiEvents() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Last TTL prune summary — instant feedback after TTL changes. */}
+            {lastPrune && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-semibold text-foreground">Último prune:</span>
+                <span>
+                  TTL <span className="font-mono">{lastPrune.ttlHours}h</span>
+                </span>
+                <span>
+                  Removidos: <span className="font-mono text-destructive">{lastPrune.pruned}</span>
+                </span>
+                <span>
+                  Buckets eliminados: <span className="font-mono">{lastPrune.bucketed}</span>
+                </span>
+                <span>
+                  Restantes: <span className="font-mono">{lastPrune.remaining}</span>
+                </span>
+                <span className="text-muted-foreground ml-auto">
+                  {new Date(lastPrune.at).toLocaleString()}
+                </span>
+              </div>
+            )}
+
             {/* Buckets aggregated by reason/code */}
             {buckets.length > 0 && (
               <div>
@@ -582,6 +604,9 @@ export default function AdminUiEvents() {
                         <th className="py-2 pr-3">Código</th>
                         <th className="py-2 pr-3">Motivo</th>
                         <th className="py-2 pr-3">Ocorrências</th>
+                        <th className="py-2 pr-3" title="Eventos estimados capturados pela amostragem atual">
+                          Capturados (~{Math.round(sampleRate * 100)}%)
+                        </th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
                         <th className="py-2 pr-3">Ação</th>
@@ -600,6 +625,12 @@ export default function AdminUiEvents() {
                             <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
                             <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
                             <td className="py-1.5 pr-3 font-mono">{b.count}</td>
+                            <td className="py-1.5 pr-3 font-mono text-xs" title={`Sample rate ${Math.round(b.sampleRateAtRead * 100)}%`}>
+                              {b.estimatedCaptured}
+                              {b.sampleRateAtRead < 1 && (
+                                <span className="text-muted-foreground ml-1">/ {b.count}</span>
+                              )}
+                            </td>
                             <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(b.lastAt).toLocaleString()}
                             </td>
