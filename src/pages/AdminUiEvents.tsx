@@ -299,6 +299,60 @@ export default function AdminUiEvents() {
           </CardContent>
         </Card>
 
+        {/* Health-check */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Stethoscope className="h-4 w-4 text-muted-foreground" />
+              Verificação de saúde do tracking
+            </CardTitle>
+            <Button size="sm" variant="default" onClick={handleHealthCheck} disabled={healthLoading}>
+              <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+              {healthLoading ? "Testando…" : "Executar verificação"}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Insere um evento sintético em <code className="font-mono">ui_events</code> para validar
+              que o tracking está funcionando antes de você testar mudanças.
+            </p>
+            {healthHistory.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma verificação executada nesta sessão.</p>
+            ) : (
+              <div className="space-y-2">
+                {healthHistory.map((h, i) => (
+                  <div
+                    key={`${h.at}-${i}`}
+                    className={`flex items-start gap-3 rounded-md border p-3 text-sm ${
+                      h.ok ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"
+                    }`}
+                  >
+                    <span className={`mt-0.5 h-2 w-2 rounded-full ${h.ok ? "bg-emerald-500" : "bg-destructive"}`} />
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {h.ok ? "OK — inserção aceita" : "Falha — inserção rejeitada"}
+                        <span className="ml-2 text-xs text-muted-foreground font-mono">
+                          {h.durationMs}ms · {new Date(h.at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      {!h.ok && (
+                        <div className="mt-1 text-xs text-destructive">
+                          {h.category && (
+                            <span className={`inline-block mr-2 px-1.5 py-0.5 rounded ${categoryClass[h.category]}`}>
+                              {categoryLabel[h.category]}
+                            </span>
+                          )}
+                          {h.reason} {h.code ? `(${h.code})` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Debug panel */}
         <Card className={rejectedCount > 0 ? "border-destructive/50" : ""}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -309,9 +363,26 @@ export default function AdminUiEvents() {
                 {rejectedCount}
               </span>
             </CardTitle>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <Label htmlFor="ttl" className="text-xs">TTL (h)</Label>
+                <Input
+                  id="ttl"
+                  type="number"
+                  min={1}
+                  max={72}
+                  value={ttlHours}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setTtlHours(v);
+                    if (v > 0) setRejectedTtlHours(v);
+                  }}
+                  className="h-7 w-16 text-xs"
+                />
+              </div>
               <Button size="sm" variant="ghost" onClick={() => {
-                setRejected(getRejectedEvents()); setRejectedCount(getRejectedCount());
+                setRejected(getRejectedEvents()); setRejectedCount(getRejectedCount()); setBuckets(getRejectionBuckets());
               }}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1" /> Atualizar
               </Button>
@@ -320,39 +391,89 @@ export default function AdminUiEvents() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            {/* Buckets aggregated by reason/code */}
+            {buckets.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Falhas agrupadas por motivo</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b border-border">
+                      <tr>
+                        <th className="py-2 pr-3">Categoria</th>
+                        <th className="py-2 pr-3">Código</th>
+                        <th className="py-2 pr-3">Motivo</th>
+                        <th className="py-2 pr-3">Ocorrências</th>
+                        <th className="py-2 pr-3">Última</th>
+                        <th className="py-2 pr-3">Último payload</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buckets.map((b) => (
+                        <tr key={b.key} className="border-b border-border/50 align-top">
+                          <td className="py-1.5 pr-3">
+                            <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[b.category]}`}>
+                              {categoryLabel[b.category]}
+                            </span>
+                          </td>
+                          <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
+                          <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
+                          <td className="py-1.5 pr-3 font-mono">{b.count}</td>
+                          <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
+                            {new Date(b.lastAt).toLocaleString()}
+                          </td>
+                          <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(b.lastPayload)}>
+                            {JSON.stringify(b.lastPayload)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {rejected.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhuma falha registrada nesta sessão. RLS, payload e rede estão OK.
+                Nenhuma falha registrada nesta sessão (ou expirada pelo TTL de {ttlHours}h). RLS, payload e rede estão OK.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left border-b border-border">
-                    <tr>
-                      <th className="py-2 pr-3">Quando</th>
-                      <th className="py-2 pr-3">Evento</th>
-                      <th className="py-2 pr-3">Motivo</th>
-                      <th className="py-2 pr-3">Código</th>
-                      <th className="py-2 pr-3">Payload</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rejected.slice().reverse().slice(0, 20).map((r, i) => (
-                      <tr key={`${r.at}-${i}`} className="border-b border-border/50 align-top">
-                        <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
-                          {new Date(r.at).toLocaleString()}
-                        </td>
-                        <td className="py-1.5 pr-3 font-mono text-xs">{r.name}</td>
-                        <td className="py-1.5 pr-3 text-destructive">{r.reason}</td>
-                        <td className="py-1.5 pr-3 font-mono text-xs">{r.code ?? "—"}</td>
-                        <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(r.payload)}>
-                          {JSON.stringify(r.payload)}
-                        </td>
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Eventos brutos recentes</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b border-border">
+                      <tr>
+                        <th className="py-2 pr-3">Quando</th>
+                        <th className="py-2 pr-3">Evento</th>
+                        <th className="py-2 pr-3">Categoria</th>
+                        <th className="py-2 pr-3">Motivo</th>
+                        <th className="py-2 pr-3">Código</th>
+                        <th className="py-2 pr-3">Payload</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {rejected.slice().reverse().slice(0, 20).map((r, i) => (
+                        <tr key={`${r.at}-${i}`} className="border-b border-border/50 align-top">
+                          <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
+                            {new Date(r.at).toLocaleString()}
+                          </td>
+                          <td className="py-1.5 pr-3 font-mono text-xs">{r.name}</td>
+                          <td className="py-1.5 pr-3">
+                            <span className={`px-1.5 py-0.5 rounded text-xs ${categoryClass[r.category]}`}>
+                              {categoryLabel[r.category]}
+                            </span>
+                          </td>
+                          <td className="py-1.5 pr-3 text-destructive">{r.reason}</td>
+                          <td className="py-1.5 pr-3 font-mono text-xs">{r.code ?? "—"}</td>
+                          <td className="py-1.5 pr-3 font-mono text-[11px] max-w-md truncate" title={JSON.stringify(r.payload)}>
+                            {JSON.stringify(r.payload)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </CardContent>
