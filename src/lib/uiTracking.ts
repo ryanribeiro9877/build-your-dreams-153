@@ -52,7 +52,9 @@ const SAMPLE_RATE_KEY = "lf_ui_sample_rate";
  */
 export function getSampleRate(): number {
   if (typeof window === "undefined") return 1;
-  const v = Number(localStorage.getItem(SAMPLE_RATE_KEY));
+  const raw = localStorage.getItem(SAMPLE_RATE_KEY);
+  if (raw === null || raw === "") return 1;
+  const v = Number(raw);
   if (!Number.isFinite(v) || v < 0 || v > 1) return 1;
   return v;
 }
