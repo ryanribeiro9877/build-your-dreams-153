@@ -6,7 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
  * shortcuts) so we can analyze where users get stuck and what impacts
  * conversion. Fails silently — never breaks the UI.
  *
- * Keep the event vocabulary in sync with the RLS policy on `ui_events`.
+ * Failures (RLS rejections, network errors, payload validation) are captured
+ * into an in-memory ring buffer so the admin debug panel can surface them.
  */
 
 export type UiEventName =
@@ -19,12 +20,99 @@ export type UiEventName =
   | "key_activate";
 
 export interface UiEventPayload {
-  surface?: string; // "left_sidebar" | "right_panel" | "topbar" | ...
-  target_id?: string; // e.g. "civel", "perfil", "ctrl+b"
+  surface?: string;
+  target_id?: string;
   target_label?: string;
   collapsed?: boolean;
   source?: "click" | "keyboard" | "auto";
   [key: string]: string | number | boolean | undefined;
+}
+
+export interface RejectedEvent {
+  at: string; // ISO timestamp
+  name: string;
+  reason: string;
+  code?: string;
+  payload: Record<string, unknown>;
+}
+
+const REJECT_BUFFER_MAX = 50;
+const REJECT_KEY = "lf_ui_rejected_events";
+const COUNT_KEY = "lf_ui_rejected_count";
+
+function readBuffer(): RejectedEvent[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(sessionStorage.getItem(REJECT_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeBuffer(buf: RejectedEvent[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(REJECT_KEY, JSON.stringify(buf.slice(-REJECT_BUFFER_MAX)));
+  } catch {
+    // ignore storage quota
+  }
+}
+
+function bumpCount() {
+  if (typeof window === "undefined") return;
+  const n = Number(sessionStorage.getItem(COUNT_KEY) ?? "0") + 1;
+  sessionStorage.setItem(COUNT_KEY, String(n));
+}
+
+export function getRejectedEvents(): RejectedEvent[] {
+  return readBuffer();
+}
+
+export function getRejectedCount(): number {
+  if (typeof window === "undefined") return 0;
+  return Number(sessionStorage.getItem(COUNT_KEY) ?? "0");
+}
+
+export function clearRejectedEvents() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(REJECT_KEY);
+  sessionStorage.removeItem(COUNT_KEY);
+  notifyDebugListeners();
+}
+
+type DebugListener = () => void;
+const listeners = new Set<DebugListener>();
+export function onDebugChange(fn: DebugListener) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function notifyDebugListeners() {
+  listeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      // noop
+    }
+  });
+}
+
+function recordFailure(name: string, payload: Record<string, unknown>, reason: string, code?: string) {
+  const entry: RejectedEvent = {
+    at: new Date().toISOString(),
+    name,
+    reason,
+    code,
+    payload,
+  };
+  const buf = readBuffer();
+  buf.push(entry);
+  writeBuffer(buf);
+  bumpCount();
+  notifyDebugListeners();
+  if (typeof window !== "undefined" && (import.meta as ImportMeta & { env: { DEV?: boolean } }).env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.warn("[ui-track:rejected]", name, reason, entry);
+  }
 }
 
 function getSessionId(): string {
@@ -53,15 +141,22 @@ export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = 
       metadata: payload as Record<string, unknown>,
     };
 
-    if (import.meta.env.DEV) {
+    if ((import.meta as ImportMeta & { env: { DEV?: boolean } }).env?.DEV) {
       // eslint-disable-next-line no-console
       console.debug("[ui-track]", name, event);
     }
 
-    void (supabase.from as unknown as (t: string) => { insert: (v: unknown) => Promise<unknown> })(
-      "ui_events"
-    ).insert(event);
-  } catch {
-    // Tracking must never break the UI.
+    const { error } = await (
+      supabase.from as unknown as (t: string) => {
+        insert: (v: unknown) => Promise<{ error: { message: string; code?: string } | null }>;
+      }
+    )("ui_events").insert(event);
+
+    if (error) {
+      recordFailure(name, event as unknown as Record<string, unknown>, error.message, error.code);
+    }
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    recordFailure(name, { ...payload, event_name: name }, reason);
   }
 }
