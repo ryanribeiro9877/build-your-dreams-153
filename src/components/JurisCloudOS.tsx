@@ -1274,24 +1274,22 @@ export default function JurisCloudOS() {
           className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}
           aria-label="Central de operações"
         >
-          <Tooltip delayDuration={150}>
-            <TooltipTrigger asChild>
-              <button
-                className="jc-right-toggle-desk"
-                onClick={() => handleRightToggle("click")}
-                aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
-                aria-expanded={!rightCollapsed}
-                aria-controls="jc-right-panel"
-                aria-keyshortcuts="Control+O Meta+O"
-                type="button"
-              >
-                {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8}>
-              {rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)"}
-            </TooltipContent>
-          </Tooltip>
+          {withTooltip(
+            rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)",
+            <button
+              className="jc-right-toggle-desk"
+              onClick={() => handleRightToggle("click")}
+              aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+              aria-expanded={!rightCollapsed}
+              aria-controls="jc-right-panel"
+              aria-keyshortcuts="Control+O Meta+O"
+              type="button"
+            >
+              {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+            </button>,
+            "right_panel_toggle_btn",
+            { side: "left", surface: "right_panel", alwaysOn: true }
+          )}
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
