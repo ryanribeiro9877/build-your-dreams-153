@@ -695,15 +695,27 @@ export default function AdminUiEvents() {
                   className="h-7 w-16 text-xs"
                 />
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-l border-border pl-2 ml-1">
-                <Checkbox
-                  id="export-rejected-only"
-                  checked={exportRejectedOnly}
-                  onCheckedChange={(c) => setExportRejectedOnly(c === true)}
-                />
-                <Label htmlFor="export-rejected-only" className="text-xs cursor-pointer">
-                  Só rejeitados
-                </Label>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground border-l border-border pl-2 ml-1">
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="export-rejected-only"
+                    checked={exportRejectedOnly}
+                    onCheckedChange={(c) => setExportRejectedOnly(c === true)}
+                  />
+                  <Label htmlFor="export-rejected-only" className="text-xs cursor-pointer" title="JSON: omitir buckets">
+                    JSON só rejeitados
+                  </Label>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="export-csv-skip-buckets"
+                    checked={csvSkipBuckets}
+                    onCheckedChange={(c) => setCsvSkipBuckets(c === true)}
+                  />
+                  <Label htmlFor="export-csv-skip-buckets" className="text-xs cursor-pointer" title="CSV: omitir seção buckets para depuração rápida">
+                    CSV sem buckets
+                  </Label>
+                </div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => exportDebug("json")} disabled={rejectedCount === 0 && buckets.length === 0}>
                 <Download className="h-3.5 w-3.5 mr-1" /> JSON
