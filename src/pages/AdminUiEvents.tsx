@@ -651,6 +651,11 @@ export default function AdminUiEvents() {
                         <span className="ml-2 text-xs text-muted-foreground font-mono">
                           {h.durationMs}ms · {new Date(h.at).toLocaleTimeString()}
                         </span>
+                        {typeof h.sampleRateOverride === "number" && (
+                          <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono">
+                            override {Math.round(h.sampleRateOverride * 100)}%
+                          </span>
+                        )}
                       </div>
                       {!h.ok && (
                         <div className="mt-1 text-xs text-destructive">
