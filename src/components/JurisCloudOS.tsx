@@ -576,6 +576,14 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     .jc-sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.5); }
     .jc-sidebar-overlay.visible { display: block; }
+    .jc-tooltip-overlay {
+      position: fixed; inset: 0; z-index: 45;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(1px);
+      pointer-events: none;
+      animation: jcTooltipFade 120ms ease-out;
+    }
+    @keyframes jcTooltipFade { from { opacity: 0 } to { opacity: 1 } }
     .jc-hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text1); padding: 4px; }
     .jc-right-toggle {
       display: none; background: var(--bg3); border: 1px solid var(--border);
