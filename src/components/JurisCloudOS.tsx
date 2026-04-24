@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
-   AGENT JUS IA  –  Sistema Operacional Empresarial
+   LEXFORCE  –  Sua força de trabalho de IA jurídica
 ───────────────────────────────────────────────────────────── */
 
 // ── Icon map for departments ──
@@ -73,7 +73,7 @@ interface Agent {
 
 // Agents — avatars are now initials computed from name, no emojis
 const AGENTS: Agent[] = [
-  { id: 0, name: "CEO Agent Jus IA", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
+  { id: 0, name: "CEO LexForce", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
   { id: 1, name: "Diretor de Recepção", status: "active", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
   { id: 2, name: "Gerente de Atendimento", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 1 },
   { id: 100, name: "Gerente de Intake", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","contact_client","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 1 },
@@ -147,7 +147,7 @@ const INITIAL_MESSAGES = [
     content: null,
     card: {
       type: "briefing",
-      title: "Bom dia, Dr. Agent Jus IA",
+      title: "Bom dia, Doutor(a)",
       summary: "Aqui está sua visão operacional de hoje",
       items: [
         { label: "Prazos críticos",      value: "3", accent: "#ef4444" },
@@ -791,10 +791,10 @@ export default function JurisCloudOS() {
         {/* SIDEBAR */}
         <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
           <div className="jc-logo">
-            <div className="jc-logo-mark">A</div>
+            <div className="jc-logo-mark">L</div>
             <div>
-              <div className="jc-logo-text">Agent Jus IA</div>
-              <div className="jc-logo-sub">Sistema Inteligente · OAB/BA 12.345</div>
+              <div className="jc-logo-text">LexForce</div>
+              <div className="jc-logo-sub">Sua força de IA jurídica · 24/7</div>
             </div>
           </div>
 
