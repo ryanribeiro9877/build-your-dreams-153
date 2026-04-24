@@ -5,37 +5,37 @@ const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
 const PILARES = [
   {
-    icon: "📣",
-    tag: "MARKETING JURÍDICO",
-    title: "Atraia clientes no piloto automático",
-    desc: "Marketing simplificado que leva o cliente certo para o seu escritório. Campanhas inteligentes, presença digital impactante e captação automatizada — sem complicação.",
+    icon: "🧠",
+    tag: "VOCÊ É O ESTRATEGISTA",
+    title: "Você pensa. Eles executam.",
+    desc: "Chega de afogar advogados em tarefas repetitivas. Você define o caso, a estratégia e o resultado esperado — sua força de IA cuida de petições, prazos, cálculos, protocolos e comunicação. Seu tempo volta a ser seu.",
     stats: [
-      { value: "5x", label: "mais leads qualificados" },
-      { value: "70%", label: "menos custo por cliente" },
+      { value: "8h", label: "devolvidas por dia" },
+      { value: "0", label: "tarefas operacionais" },
     ],
     gradient: "linear-gradient(135deg, #06b6d4, #0891b2)",
     glow: "rgba(6,182,212,0.3)",
   },
   {
-    icon: "⚖️",
-    tag: "GESTÃO PROCESSUAL",
-    title: "Gerencie milhares de processos com facilidade",
-    desc: "Seu time ganha superpoderes. Cada advogado, estagiário e assistente trabalha com um exército de agentes de IA dedicados. Prazos monitorados 24/7, tarefas distribuídas automaticamente.",
+    icon: "🤖",
+    tag: "SUA EQUIPE INVISÍVEL",
+    title: "91 agentes. Trabalhando para você. Sempre.",
+    desc: "Enquanto você dorme, jantar com a família ou descansa, sua força de IA está protocolando, calculando, redigindo e monitorando prazos. Eles não cansam, não esquecem, não pedem férias. Você comanda — eles entregam.",
     stats: [
-      { value: "0", label: "prazos perdidos" },
-      { value: "24/7", label: "monitoramento contínuo" },
+      { value: "24/7", label: "ativos por você" },
+      { value: "91+", label: "agentes ao seu serviço" },
     ],
     gradient: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
     glow: "rgba(139,92,246,0.3)",
   },
   {
-    icon: "🚀",
-    tag: "RESULTADOS 3X",
-    title: "Triplique o faturamento do seu escritório",
-    desc: "91+ agentes de IA especializados formam um exército digital para seu time. O que antes levava dias, agora é feito em minutos. Mais processos, mais clientes, mais receita.",
+    icon: "👑",
+    tag: "VOCÊ NO COMANDO",
+    title: "Você dá a ordem. O resultado chega pronto.",
+    desc: "Cada decisão importante volta para suas mãos com tudo preparado: análise feita, peça redigida, cálculo conferido. Você só aprova e assina. Pare de executar tarefas — comece a comandar resultados.",
     stats: [
-      { value: "3x", label: "mais faturamento" },
-      { value: "91+", label: "agentes IA dedicados" },
+      { value: "3x", label: "mais clientes atendidos" },
+      { value: "100%", label: "decisão sua" },
     ],
     gradient: "linear-gradient(135deg, #c9a84c, #e8c96a)",
     glow: "rgba(201,168,76,0.3)",
@@ -43,24 +43,24 @@ const PILARES = [
 ];
 
 const COMO_FUNCIONA = [
-  { step: "01", icon: "🔗", title: "Conecte seu Time", desc: "Cadastre advogados, estagiários e assistentes. Cada um recebe permissões personalizadas e seus próprios agentes de IA." },
-  { step: "02", icon: "🤖", title: "Exército de IA Ativado", desc: "91+ agentes especializados em 13 departamentos — petições, cálculos, prazos, audiências, marketing — tudo automatizado." },
-  { step: "03", icon: "📊", title: "Monitore e Escale", desc: "Dashboard em tempo real com KPIs, alertas inteligentes e visão 360° de todos os processos e clientes." },
-  { step: "04", icon: "💰", title: "Triplique Resultados", desc: "Mais capacidade = mais clientes atendidos = mais faturamento. Sem precisar contratar mais pessoas." },
+  { step: "01", icon: "💬", title: "Você dá a ordem", desc: "Em linguagem natural, no chat. 'Faça a inicial trabalhista do cliente Silva' — só isso. Como falar com um assistente de elite." },
+  { step: "02", icon: "⚡", title: "Sua força de IA mobiliza", desc: "O agente certo é acionado. Ele consulta, redige, calcula, protocola. Outros agentes revisam. Tudo em minutos, sem você mexer um dedo." },
+  { step: "03", icon: "✅", title: "O resultado chega para você", desc: "Peça pronta para revisão, prazo registrado, cliente comunicado. Você aprova com um clique e segue para o próximo caso." },
+  { step: "04", icon: "🌴", title: "Você recupera sua vida", desc: "Mais tempo com a família. Mais foco no que importa. Mais clientes atendidos sem contratar ninguém. Você vira o estrategista — não o executor." },
 ];
 
 const TESTIMONIALS = [
-  { name: "Dr. Marcos Oliveira", role: "Sócio Fundador — Oliveira & Associados", text: "Reduzimos 70% do tempo de confecção de peças. Nossos advogados agora focam em estratégia, não em burocracia. O faturamento triplicou em 8 meses.", avatar: "👨‍⚖️", metric: "+300% faturamento" },
-  { name: "Dra. Ana Carolina Souza", role: "Diretora Jurídica — TechLaw SP", text: "Zero prazos perdidos desde que adotamos. Os agentes de IA monitoram tudo 24/7. É como ter uma equipe extra que nunca dorme.", avatar: "👩‍⚖️", metric: "0 prazos perdidos" },
-  { name: "Dr. Rafael Lima", role: "Advogado Trabalhista — Lima Advocacia", text: "A orquestração inteligente distribui tarefas perfeitamente. Triplicamos a capacidade de atendimento sem contratar ninguém.", avatar: "👨‍💼", metric: "3x mais clientes" },
+  { name: "Dr. Marcos Oliveira", role: "Sócio Fundador — Oliveira & Associados", text: "Antes eu trabalhava 14h por dia. Hoje saio às 18h e meus agentes continuam protocolando peças. Voltei a jantar com minha família.", avatar: "👨‍⚖️", metric: "8h/dia recuperadas" },
+  { name: "Dra. Ana Carolina Souza", role: "Diretora Jurídica — TechLaw SP", text: "Eu não executo mais nada operacional. Minha função virou estratégica: defino, aprovo, assino. Os agentes fazem o resto. Triplicamos a banca em 6 meses.", avatar: "👩‍⚖️", metric: "0 tarefas operacionais" },
+  { name: "Dr. Rafael Lima", role: "Advogado Trabalhista — Lima Advocacia", text: "É como ter 90 estagiários de elite que nunca dormem. Eu só comando. Eles entregam tudo pronto para minha assinatura. Inacreditável.", avatar: "👨‍💼", metric: "3x mais casos por mês" },
 ];
 
 const STATS_BANNER = [
-  { value: "91+", label: "Agentes IA" },
-  { value: "13", label: "Departamentos" },
-  { value: "3x", label: "Produtividade" },
-  { value: "24/7", label: "Monitoramento" },
-  { value: "0", label: "Prazos Perdidos" },
+  { value: "91+", label: "Agentes ao seu serviço" },
+  { value: "8h", label: "Devolvidas por dia" },
+  { value: "3x", label: "Mais casos atendidos" },
+  { value: "24/7", label: "Trabalhando por você" },
+  { value: "0", label: "Tarefas operacionais" },
 ];
 
 const PLANOS = [
@@ -164,16 +164,16 @@ export default function LandingPage() {
       <nav className={`lp-nav ${scrollY > 50 ? "lp-nav--scrolled" : ""}`}>
         <div className="lp-nav__brand">
           <div className="lp-nav__logo">⚖️</div>
-          <span className="lp-nav__name">Agent Jus IA</span>
+          <span className="lp-nav__name">LexForce</span>
         </div>
 
         {/* Desktop links */}
         <div className="lp-nav__links">
-          <a href="#pilares">Soluções</a>
-          <a href="#como-funciona">Como Funciona</a>
+          <a href="#pilares">Como funciona</a>
+          <a href="#como-funciona">Seu novo dia</a>
           <a href="#planos">Planos</a>
-          <a href="#depoimentos">Depoimentos</a>
-          <button className="lp-btn-gold lp-btn-sm" onClick={() => navigate("/auth")}>🔐 Acessar Sistema</button>
+          <a href="#depoimentos">Quem usa</a>
+          <button className="lp-btn-gold lp-btn-sm" onClick={() => navigate("/auth")}>Comandar agora</button>
         </div>
 
         {/* Mobile hamburger */}
@@ -186,11 +186,11 @@ export default function LandingPage() {
       {mobileMenu && (
         <div className="lp-mobile-menu" onClick={() => setMobileMenu(false)}>
           <div className="lp-mobile-menu__inner" onClick={e => e.stopPropagation()}>
-            <a href="#pilares" onClick={() => setMobileMenu(false)}>Soluções</a>
-            <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Como Funciona</a>
+            <a href="#pilares" onClick={() => setMobileMenu(false)}>Como funciona</a>
+            <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Seu novo dia</a>
             <a href="#planos" onClick={() => setMobileMenu(false)}>Planos</a>
-            <a href="#depoimentos" onClick={() => setMobileMenu(false)}>Depoimentos</a>
-            <button className="lp-btn-gold" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>🔐 Acessar Sistema</button>
+            <a href="#depoimentos" onClick={() => setMobileMenu(false)}>Quem usa</a>
+            <button className="lp-btn-gold" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>Comandar agora</button>
           </div>
         </div>
       )}
@@ -207,24 +207,23 @@ export default function LandingPage() {
         <div className="lp-hero__content">
           <div className="lp-badge-pulse">
             <span className="lp-badge-dot" />
-            SISTEMA OPERACIONAL JURÍDICO ATIVO
+            SUA FORÇA DE IA JURÍDICA · ATIVA 24/7
           </div>
 
           <h1 className="lp-hero__h1">
-            <span>Seu escritório com um</span><br />
-            <span className="lp-gold-text">exército de IA</span>
+            <span>Seus agentes trabalham.</span><br />
+            <span className="lp-gold-text">Você decide.</span>
           </h1>
 
           <p className="lp-hero__sub">
-            <strong>Marketing</strong> que atrai clientes.{" "}
-            <strong>Gestão</strong> de milhares de processos.{" "}
-            <strong>91+ agentes de IA</strong> trabalhando para seu time.{" "}
-            <strong className="lp-gold-text">Triplique seu faturamento.</strong>
+            Pare de executar tarefas. Comece a <strong>comandar resultados</strong>.{" "}
+            Uma força de <strong>91+ agentes de IA jurídica</strong> que protocola, redige, calcula e monitora{" "}
+            <strong className="lp-gold-text">enquanto você vive sua vida</strong>.
           </p>
 
           <div className="lp-hero__btns">
-            <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>🚀 Começar Agora — Grátis</button>
-            <button className="lp-btn-ghost lp-btn-lg" onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })}>Descubra o Poder ↓</button>
+            <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>👑 Assumir o comando — Grátis</button>
+            <button className="lp-btn-ghost lp-btn-lg" onClick={() => document.getElementById("pilares")?.scrollIntoView({ behavior: "smooth" })}>Ver como funciona ↓</button>
           </div>
 
           <div className="lp-scroll-indicator">
@@ -249,10 +248,10 @@ export default function LandingPage() {
       <section id="pilares" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">OS 3 PILARES</div>
+            <div className="lp-tag">A NOVA ORDEM</div>
             <h2 className="lp-section-title">
-              <span>Tudo que seu escritório precisa</span><br />
-              <span className="lp-gold-text">em uma plataforma</span>
+              <span>Você no comando.</span><br />
+              <span className="lp-gold-text">Eles no trabalho pesado.</span>
             </h2>
           </div>
 
@@ -288,9 +287,9 @@ export default function LandingPage() {
       <section id="como-funciona" className="lp-section lp-section--alt">
         <div className="lp-container lp-container--narrow">
           <div className="lp-section-header">
-            <div className="lp-tag">PASSO A PASSO</div>
+            <div className="lp-tag">SEU NOVO DIA</div>
             <h2 className="lp-section-title">
-              Simples de começar,<br /><span className="lp-gold-text">impossível de largar</span>
+              Um comando seu.<br /><span className="lp-gold-text">Um exército em ação.</span>
             </h2>
           </div>
 
@@ -311,9 +310,9 @@ export default function LandingPage() {
       <section id="planos" className="lp-section">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">PLANOS & PREÇOS</div>
+            <div className="lp-tag">SUA FORÇA DE TRABALHO</div>
             <h2 className="lp-section-title">
-              Escolha o plano ideal<br /><span className="lp-gold-text">para seu escritório</span>
+              Quantos agentes<br /><span className="lp-gold-text">vão trabalhar para você?</span>
             </h2>
           </div>
 
@@ -353,9 +352,9 @@ export default function LandingPage() {
       <section id="depoimentos" className="lp-section lp-section--alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <div className="lp-tag">CASOS DE SUCESSO</div>
+            <div className="lp-tag">QUEM JÁ COMANDA</div>
             <h2 className="lp-section-title">
-              Escritórios que já<br /><span className="lp-gold-text">revolucionaram sua gestão</span>
+              Advogados que pararam de executar<br /><span className="lp-gold-text">e começaram a comandar</span>
             </h2>
           </div>
 
@@ -381,15 +380,15 @@ export default function LandingPage() {
       <section className="lp-cta-final">
         <div className="lp-cta-final__glow" />
         <div className="lp-cta-final__box">
-          <div style={{ fontSize: 60, marginBottom: 20 }}>⚡</div>
+          <div style={{ fontSize: 60, marginBottom: 20 }}>👑</div>
           <h2 className="lp-cta-final__title">
-            Pronto para <span className="lp-gold-text">triplicar</span> seus resultados?
+            Está na hora de <span className="lp-gold-text">comandar</span>.
           </h2>
           <p className="lp-cta-final__sub">
-            Junte-se aos escritórios que já transformaram sua operação com a parceria <strong>Humano + IA</strong>.
+            Você é advogado, não operador. Deixe sua força de IA executar — e <strong>recupere seu tempo, sua família e seu lucro</strong>.
           </p>
-          <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>⚖️ Começar Agora — É Grátis</button>
-          <p className="lp-cta-final__note">Sem cartão de crédito • Setup em 2 minutos • Suporte dedicado</p>
+          <button className="lp-btn-gold lp-btn-lg" onClick={() => navigate("/auth")}>👑 Assumir o comando agora</button>
+          <p className="lp-cta-final__note">Sem cartão de crédito • Setup em 2 minutos • Cancele quando quiser</p>
         </div>
       </section>
 
@@ -397,9 +396,9 @@ export default function LandingPage() {
       <footer className="lp-footer">
         <div className="lp-footer__brand">
           <span>⚖️</span>
-          <span>Agent Jus IA</span>
+          <span>LexForce</span>
         </div>
-        <p className="lp-footer__copy">© {new Date().getFullYear()} Agent Jus IA — Humano + IA revolucionando a gestão jurídica.</p>
+        <p className="lp-footer__copy">© {new Date().getFullYear()} LexForce — Sua força de trabalho de IA jurídica. Você comanda. Eles executam.</p>
       </footer>
 
       <style>{`
