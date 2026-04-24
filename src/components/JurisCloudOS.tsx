@@ -1168,17 +1168,18 @@ export default function JurisCloudOS() {
             <TooltipTrigger asChild>
               <button
                 className="jc-right-toggle-desk"
-                onClick={() => setRightCollapsed(c => !c)}
+                onClick={() => handleRightToggle("click")}
                 aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
                 aria-expanded={!rightCollapsed}
                 aria-controls="jc-right-panel"
+                aria-keyshortcuts="Control+O Meta+O"
                 type="button"
               >
                 {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="left" sideOffset={8}>
-              {rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
+              {rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)"}
             </TooltipContent>
           </Tooltip>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
