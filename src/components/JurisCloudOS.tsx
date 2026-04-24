@@ -501,7 +501,25 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-right-panel {
       width: 320px; min-width: 320px; background: var(--bg2);
       border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+      transition: width 0.25s ease, min-width 0.25s ease;
+      position: relative;
     }
+    .jc-right-panel.collapsed { width: 0; min-width: 0; border-left: none; }
+    .jc-right-panel.collapsed > *:not(.jc-right-toggle-desk) { display: none; }
+
+    .jc-right-toggle-desk {
+      position: absolute; top: 14px; left: -12px; z-index: 10;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--bg3); border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text2); transition: all 0.15s;
+      box-shadow: -2px 2px 6px rgba(0,0,0,0.18);
+    }
+    .jc-right-panel.collapsed .jc-right-toggle-desk {
+      left: auto; right: 8px; position: fixed; top: 64px;
+    }
+    .jc-right-toggle-desk:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
+
     .jc-right-header {
       padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
       font-family: var(--font-disp); font-size: 16px; font-weight: 600; color: var(--text1);
@@ -517,11 +535,14 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-right-body::-webkit-scrollbar { width: 3px; }
     .jc-right-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    .jc-case-card {
-      background: var(--bg3); border: 1px solid var(--border);
+    /* Cards inside right panel — lighter outline for separation in dark mode */
+    .jc-case-card, .jc-agent-card-rp {
+      background: var(--bg3); border: 1px solid var(--card-border);
       border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;
     }
-    .jc-case-card:hover { border-color: var(--border2); background: var(--bg4); }
+    .jc-case-card:hover, .jc-agent-card-rp:hover {
+      border-color: var(--card-border-hover); background: var(--bg4);
+    }
     .jc-case-num { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-bottom: 4px; }
     .jc-case-name { font-size: 13px; font-weight: 500; color: var(--text1); margin-bottom: 6px; }
     .jc-case-row { display: flex; justify-content: space-between; align-items: center; }
