@@ -305,6 +305,10 @@ export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = 
   try {
     if (typeof window === "undefined") return;
 
+    // Apply sampling — admins can throttle volume while testing features.
+    const rate = getSampleRate();
+    if (rate < 1 && Math.random() >= rate) return;
+
     const { data: auth } = await supabase.auth.getUser();
     const event = {
       event_name: name,
