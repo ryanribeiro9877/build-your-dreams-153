@@ -752,6 +752,11 @@ export default function JurisCloudOS() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
   useEffect(() => { localStorage.setItem("jc-theme", theme); }, [theme]);
+  useEffect(() => { localStorage.setItem("jc-sidebar-collapsed", sidebarCollapsed ? "1" : "0"); }, [sidebarCollapsed]);
+  useEffect(() => { localStorage.setItem("jc-right-collapsed", rightCollapsed ? "1" : "0"); }, [rightCollapsed]);
+
+  // System health: online if no agents in alert state and no fatal alerts
+  const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
