@@ -1221,6 +1221,7 @@ export default function JurisCloudOS() {
           <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} />
         )}
       </div>
+      </TooltipProvider>
     </div>
   );
 }
