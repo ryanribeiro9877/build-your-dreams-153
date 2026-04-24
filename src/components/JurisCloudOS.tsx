@@ -1076,15 +1076,28 @@ export default function JurisCloudOS() {
         </main>
 
         {/* RIGHT PANEL */}
-        <aside className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}>
-          <button
-            className="jc-right-toggle-desk"
-            onClick={() => setRightCollapsed(c => !c)}
-            title={rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
-            aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
-          >
-            {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
-          </button>
+        <aside
+          id="jc-right-panel"
+          className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}
+          aria-label="Central de operações"
+        >
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                className="jc-right-toggle-desk"
+                onClick={() => setRightCollapsed(c => !c)}
+                aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+                aria-expanded={!rightCollapsed}
+                aria-controls="jc-right-panel"
+                type="button"
+              >
+                {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" sideOffset={8}>
+              {rightCollapsed ? "Expandir Operações" : "Recolher Operações"}
+            </TooltipContent>
+          </Tooltip>
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
