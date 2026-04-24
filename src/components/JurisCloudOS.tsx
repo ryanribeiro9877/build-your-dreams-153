@@ -737,6 +737,14 @@ export default function JurisCloudOS() {
   });
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("jc-sidebar-collapsed") === "1";
+    return true;
+  });
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("jc-right-collapsed") === "1";
+    return true;
+  });
   const [isRecording, setIsRecording]     = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
