@@ -857,12 +857,21 @@ export default function JurisCloudOS() {
         <div className={`jc-sidebar-overlay ${sidebarOpen ? "visible" : ""}`} onClick={() => setSidebarOpen(false)} />
 
         {/* SIDEBAR */}
-        <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
-          <div className="jc-logo">
+        <aside className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
+          <button
+            className="jc-sidebar-toggle"
+            onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
+          </button>
+
+          <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
-            <div>
-              <div className="jc-logo-text">LexForce</div>
-              <div className="jc-logo-sub">Sua força de IA jurídica · 24/7</div>
+            <div className="jc-logo-info">
+              <div className={`jc-logo-text ${systemOnline ? "online" : "offline"}`}>LexForce</div>
+              <div className="jc-logo-sub">{systemOnline ? "Operacional · 24/7" : "Atenção · alertas ativos"}</div>
             </div>
           </div>
 
@@ -877,6 +886,7 @@ export default function JurisCloudOS() {
               const Icon = DEPT_ICONS[dept.id] || Sparkles;
               return (
                 <div key={dept.id} className={`jc-nav-item ${activeDept === dept.id ? "active" : ""}`}
+                  title={sidebarCollapsed ? dept.label : undefined}
                   onClick={() => { setActiveDept(dept.id); setSidebarOpen(false); }}>
                   <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
                   <span className="jc-nav-label">{dept.label}</span>
@@ -887,7 +897,7 @@ export default function JurisCloudOS() {
 
             <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
             {MENU_ITEMS.filter(m => m.show).map(item => (
-              <div key={item.id} className="jc-nav-item" onClick={item.action}>
+              <div key={item.id} className="jc-nav-item" title={sidebarCollapsed ? item.label : undefined} onClick={item.action}>
                 <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
                 <span className="jc-nav-label">{item.label}</span>
               </div>
@@ -900,12 +910,13 @@ export default function JurisCloudOS() {
             {visibleAgents.map(agent => {
               const RoleIcon = ROLE_ICONS[agent.role] || Zap;
               return (
-                <div className="jc-agent-item" key={agent.id}>
+                <div className="jc-agent-item" key={agent.id} title={sidebarCollapsed ? agent.name : undefined}>
                   <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
                     {getInitials(agent.name)}
                   </div>
                   <div className="jc-agent-name">{agent.name}</div>
-                  <Circle size={6} fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
+                  <Circle size={6} className="jc-agent-status-dot"
+                    fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
                     style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
                 </div>
               );
