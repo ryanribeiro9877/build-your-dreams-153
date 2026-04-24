@@ -178,30 +178,49 @@ export default function AdminUiEvents() {
 
   const exportDebug = (format: "json" | "csv") => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const includeBuckets = !exportRejectedOnly;
+    // Standardized context block — embedded in JSON exports so consumers can
+    // reliably compare snapshots taken across sessions/environments.
+    const context = {
+      schema: "lf.ui-tracking.debug-export",
+      schemaVersion: EXPORT_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      userId: user?.id ?? null,
+      dateRange: { from, to },
+      filters: { event: eventFilter, user: userFilter || null, label: labelFilter || null },
+      sampleRate,
+      ttlHours,
+      rejectedCount,
+      includeBuckets,
+    };
     if (format === "json") {
       const payload = {
-        exportedAt: new Date().toISOString(),
-        ttlHours,
-        sampleRate,
-        rejectedCount,
-        buckets,
+        ...context,
+        buckets: includeBuckets ? buckets : undefined,
         rejected,
       };
       download(`ui-rejected-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
     } else {
-      const csvBuckets = toCsv(buckets.map((b) => ({
-        category: b.category, code: b.code ?? "", reason: b.reason,
-        count: b.count, lastAt: b.lastAt, lastPayload: b.lastPayload,
-      })));
       const csvRejected = toCsv(rejected.map((r) => ({
         at: r.at, name: r.name, category: r.category,
         code: r.code ?? "", reason: r.reason, payload: r.payload,
       })));
-      const combined = `# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      let combined = `# context\n${toCsv([context as unknown as Record<string, unknown>])}\n\n# rejected\n${csvRejected}\n`;
+      if (includeBuckets) {
+        const csvBuckets = toCsv(buckets.map((b) => ({
+          category: b.category, code: b.code ?? "", reason: b.reason,
+          count: b.count, estimatedCaptured: b.estimatedCaptured,
+          sampleRateAtRead: b.sampleRateAtRead,
+          lastAt: b.lastAt, lastPayload: b.lastPayload,
+        })));
+        combined = `# context\n${toCsv([context as unknown as Record<string, unknown>])}\n\n# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      }
       download(`ui-rejected-${stamp}.csv`, combined, "text/csv");
     }
     toast.success(`Exportado (${format.toUpperCase()})`, {
-      description: `${rejected.length} evento(s) e ${buckets.length} bucket(s).`,
+      description: includeBuckets
+        ? `${rejected.length} evento(s) e ${buckets.length} bucket(s).`
+        : `${rejected.length} evento(s) brutos (sem buckets).`,
     });
   };
 
