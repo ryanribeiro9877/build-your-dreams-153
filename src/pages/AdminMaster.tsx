@@ -90,11 +90,35 @@ export default function AdminMaster() {
 
   async function handleApplyAdjustment() {
     if (!target) return;
-    if (!confirm(`Confirmar crédito de ${ADJUSTMENT_AMOUNT.toLocaleString("pt-BR")} tokens para ${target.display_name ?? "admin master"}?`)) return;
+    const expectedBalance = target.balance;
+
     setApplying(true);
-    setBalanceBefore(target.balance);
-    setBalanceAfter(null);
     try {
+      // Re-check current balance to detect concurrent changes
+      const { data: fresh, error: freshErr } = await supabase
+        .from("token_balances")
+        .select("balance")
+        .eq("user_id", target.user_id)
+        .maybeSingle();
+
+      if (freshErr) throw freshErr;
+      const currentBalance = fresh?.balance ?? 0;
+
+      if (currentBalance !== expectedBalance) {
+        toast.error(
+          `Saldo mudou desde o último refresh (era ${expectedBalance.toLocaleString("pt-BR")}, agora é ${currentBalance.toLocaleString("pt-BR")}). Atualize e tente novamente.`
+        );
+        await fetchBalance(true);
+        return;
+      }
+
+      if (!confirm(`Confirmar crédito de ${ADJUSTMENT_AMOUNT.toLocaleString("pt-BR")} tokens para ${target.display_name ?? "admin master"}?\n\nSaldo atual: ${currentBalance.toLocaleString("pt-BR")}`)) {
+        return;
+      }
+
+      setBalanceBefore(currentBalance);
+      setBalanceAfter(null);
+
       const { error } = await supabase.rpc("add_tokens", {
         p_user_id: target.user_id,
         p_amount: ADJUSTMENT_AMOUNT,
