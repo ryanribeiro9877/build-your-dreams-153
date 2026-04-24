@@ -294,9 +294,24 @@ export interface HealthCheckResult {
   durationMs: number;
 }
 
-export async function runTrackingHealthCheck(): Promise<HealthCheckResult> {
+export interface HealthCheckOptions {
+  /**
+   * Temporary sample-rate override applied **only** to this health check run.
+   * Does not touch localStorage or affect subsequent `trackUiEvent` calls.
+   * Useful to reproduce sampling impacts without changing global state.
+   */
+  sampleRateOverride?: number;
+}
+
+export async function runTrackingHealthCheck(
+  options: HealthCheckOptions = {}
+): Promise<HealthCheckResult & { sampleRateOverride?: number }> {
   const startedAt = new Date().toISOString();
   const t0 = performance.now();
+  const override =
+    typeof options.sampleRateOverride === "number" && Number.isFinite(options.sampleRateOverride)
+      ? Math.max(0, Math.min(1, options.sampleRateOverride))
+      : undefined;
   try {
     const { data: auth } = await supabase.auth.getUser();
     const event = {
@@ -306,7 +321,11 @@ export async function runTrackingHealthCheck(): Promise<HealthCheckResult> {
       surface: "healthcheck",
       target_id: "healthcheck",
       target_label: "tracking_healthcheck",
-      metadata: { healthcheck: true, at: startedAt } as Record<string, unknown>,
+      metadata: {
+        healthcheck: true,
+        at: startedAt,
+        sampleRateOverride: override ?? null,
+      } as Record<string, unknown>,
     };
     const { error } = await (
       supabase.from as unknown as (t: string) => {
