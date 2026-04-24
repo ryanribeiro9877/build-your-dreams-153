@@ -17,10 +17,12 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
   ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft, AlertTriangle, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock } from "lucide-react";
 import {
   getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
-  type RejectedEvent,
+  getRejectionBuckets, runTrackingHealthCheck,
+  getRejectedTtlHours, setRejectedTtlHours,
+  type RejectedEvent, type RejectionBucket, type HealthCheckResult,
 } from "@/lib/uiTracking";
 
 /**
