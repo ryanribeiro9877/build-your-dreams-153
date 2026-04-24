@@ -462,6 +462,45 @@ export type Database = {
         }
         Relationships: []
       }
+      landing_events: {
+        Row: {
+          created_at: string
+          cta_id: string | null
+          cta_label: string | null
+          event_name: string
+          id: string
+          metadata: Json | null
+          page_path: string | null
+          referrer: string | null
+          section: string | null
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          cta_id?: string | null
+          cta_label?: string | null
+          event_name: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          referrer?: string | null
+          section?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          cta_id?: string | null
+          cta_label?: string | null
+          event_name?: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          referrer?: string | null
+          section?: string | null
+          session_id?: string | null
+        }
+        Relationships: []
+      }
       processes: {
         Row: {
           client_name: string

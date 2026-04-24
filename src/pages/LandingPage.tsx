@@ -2,11 +2,90 @@ import { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Brain, Zap, Crown, MessageSquare, CheckCircle2, Coffee,
-  Shield, Lock, Eye, Users, Clock, TrendingUp, Sparkles,
+  Shield, Lock, Eye, Clock, TrendingUp, Sparkles,
   ArrowRight, Menu, X, Scale, Award, FileCheck, Bot,
+  Briefcase, Gavel, Building2, Plus, Minus,
 } from "lucide-react";
+import { trackEvent, onCtaClick } from "@/lib/tracking";
 
 const HumanCommandScene3D = lazy(() => import("@/components/HumanCommandScene3D"));
+
+const CASOS_DE_USO = [
+  {
+    Icon: Briefcase,
+    badge: "TRABALHISTA",
+    title: "Escritório trabalhista — 12 advogados",
+    challenge: "Equipe gastava 60% do tempo em cálculos de rescisão e petições iniciais repetitivas.",
+    solution: "Calculista IA + Redator de Iniciais assumiram a base operacional. Advogados passaram a apenas revisar e assinar.",
+    metrics: [
+      { value: "+340%", label: "Petições/mês" },
+      { value: "−72%", label: "Tempo por caso" },
+      { value: "R$ 180k", label: "Economia anual" },
+    ],
+    accent: "#06b6d4",
+  },
+  {
+    Icon: Gavel,
+    badge: "CÍVEL & CONSUMIDOR",
+    title: "Banca de massa — 45 mil processos ativos",
+    challenge: "Impossível monitorar manualmente prazos, audiências e despachos em volume tão grande.",
+    solution: "Monitor de Prazos + Agente de Andamentos vigiam 24/7. Alertas só sobem quando há ação humana necessária.",
+    metrics: [
+      { value: "0", label: "Prazos perdidos em 6 meses" },
+      { value: "−85%", label: "Carga do gerente" },
+      { value: "3.2x", label: "Mais audiências cobertas" },
+    ],
+    accent: "#8b5cf6",
+  },
+  {
+    Icon: Building2,
+    badge: "CORPORATIVO",
+    title: "Departamento jurídico interno — Fintech",
+    challenge: "Diretora jurídica afogada em revisão de contratos e pareceres de compliance.",
+    solution: "Agente Revisor + Compliance IA analisam contratos em minutos. Diretora valida apenas pontos críticos.",
+    metrics: [
+      { value: "12 min", label: "Revisão média (era 3h)" },
+      { value: "+5x", label: "Contratos analisados/dia" },
+      { value: "100%", label: "Conformidade LGPD" },
+    ],
+    accent: "#c9a84c",
+  },
+];
+
+const FAQ = [
+  {
+    q: "Quem toma a decisão final — eu ou a IA?",
+    a: "Sempre você. Os agentes preparam tudo (peças, cálculos, comunicações), mas nada é protocolado, enviado ou assinado sem sua aprovação explícita. Você é o comandante; eles são executores.",
+  },
+  {
+    q: "Como vocês garantem conformidade com a LGPD?",
+    a: "Dados criptografados em trânsito (TLS 1.3) e em repouso (AES-256). Servidores em território brasileiro. Você é o controlador dos dados; nós somos operadores. Não usamos os dados dos seus clientes para treinar modelos públicos. Contrato de Operação de Dados (DPA) disponível para todos os planos.",
+  },
+  {
+    q: "E o sigilo profissional da OAB? Os agentes têm acesso aos meus processos?",
+    a: "Os agentes operam dentro do seu ambiente isolado. Cada escritório tem dados completamente segregados. Apenas seus usuários autorizados acessam. Logs de auditoria registram cada acesso de cada agente, com timestamp e contexto — você prova compliance a qualquer momento.",
+  },
+  {
+    q: "Como funciona a auditoria das ações dos agentes?",
+    a: "Cada ação executada pelos agentes (consulta de jurisprudência, redação, cálculo, envio de email, protocolo) é registrada em log imutável com data, hora, usuário que comandou, agente executor e resultado. Você exporta o relatório de auditoria a qualquer momento — útil para corregedoria e clientes corporativos.",
+  },
+  {
+    q: "O que acontece se um agente cometer um erro?",
+    a: "Como nada vai para fora sem sua aprovação, erros ficam contidos na fase de revisão — onde você corrige antes de assinar. Além disso, agentes revisores cruzam o trabalho dos executores: é uma cadeia humano-IA-IA-humano. Cada peça passa por dois pares de olhos digitais antes do seu.",
+  },
+  {
+    q: "Posso desligar agentes ou limitar o que eles fazem?",
+    a: "Sim — controle granular total. Você define quais agentes atuam em quais departamentos, quais tarefas eles podem executar e quais exigem aprovação dupla. Configurável por usuário, por papel e por tipo de processo, a qualquer momento.",
+  },
+  {
+    q: "Meus clientes vão saber que estou usando IA?",
+    a: "Isso é decisão sua. A IA é seu instrumento de trabalho, igual ao Word ou ao sistema do TJ. Você pode mencionar ou não — assim como não comunica que usou Google Acadêmico para pesquisar jurisprudência. Recomendamos transparência em casos onde a IA gera conteúdo enviado diretamente ao cliente.",
+  },
+  {
+    q: "Preciso assinar contrato longo? Posso cancelar?",
+    a: "Não. Cobrança mensal, sem fidelidade. Cancelamento em 1 clique no painel. Seus dados ficam disponíveis para exportação por 30 dias após o cancelamento — você sai com tudo que entrou.",
+  },
+];
 
 const PILARES = [
   {
@@ -210,12 +289,52 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Track initial landing page view (once per session per path).
+  useEffect(() => {
+    trackEvent("page_view", { section: "landing" });
+  }, []);
+
+  // Track when key sections come into view.
+  useEffect(() => {
+    const seen = new Set<string>();
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          const id = (e.target as HTMLElement).id;
+          if (e.isIntersecting && id && !seen.has(id)) {
+            seen.add(id);
+            trackEvent("section_view", { section: id });
+          }
+        });
+      },
+      { threshold: 0.4 }
+    );
+    document.querySelectorAll("section[id]").forEach((s) => obs.observe(s));
+    return () => obs.disconnect();
+  }, []);
+
+  /** Centralized handler for every CTA → tracks then navigates. */
+  const goToAuth = (ctaId: string, ctaLabel: string, section: string) => {
+    onCtaClick(ctaId, ctaLabel, section, "/auth");
+    navigate("/auth");
+  };
+
+  const toggleFaq = (i: number) => {
+    const next = openFaq === i ? null : i;
+    setOpenFaq(next);
+    if (next !== null) {
+      trackEvent("faq_open", { section: "faq", cta_id: `faq_${i}`, cta_label: FAQ[i].q });
+    }
+  };
+
 
   return (
     <div className="lf-root">
@@ -234,10 +353,14 @@ export default function LandingPage() {
 
         <div className="lf-nav__links">
           <a href="#fluxo">Como funciona</a>
-          <a href="#pilares">Por que LexForce</a>
+          <a href="#casos">Casos de uso</a>
           <a href="#seguranca">Segurança</a>
+          <a href="#faq">FAQ</a>
           <a href="#planos">Planos</a>
-          <button className="lf-btn-primary lf-btn-sm" onClick={() => navigate("/auth")}>
+          <button
+            className="lf-btn-primary lf-btn-sm"
+            onClick={() => goToAuth("nav_primary", "Assumir o comando", "navbar")}
+          >
             Assumir o comando
             <ArrowRight size={14} />
           </button>
@@ -252,10 +375,14 @@ export default function LandingPage() {
         <div className="lf-mobile-menu" onClick={() => setMobileMenu(false)}>
           <div className="lf-mobile-menu__inner" onClick={e => e.stopPropagation()}>
             <a href="#fluxo" onClick={() => setMobileMenu(false)}>Como funciona</a>
-            <a href="#pilares" onClick={() => setMobileMenu(false)}>Por que LexForce</a>
+            <a href="#casos" onClick={() => setMobileMenu(false)}>Casos de uso</a>
             <a href="#seguranca" onClick={() => setMobileMenu(false)}>Segurança</a>
+            <a href="#faq" onClick={() => setMobileMenu(false)}>FAQ</a>
             <a href="#planos" onClick={() => setMobileMenu(false)}>Planos</a>
-            <button className="lf-btn-primary" onClick={() => { setMobileMenu(false); navigate("/auth"); }}>
+            <button
+              className="lf-btn-primary"
+              onClick={() => { setMobileMenu(false); goToAuth("mobile_nav_primary", "Assumir o comando", "mobile_menu"); }}
+            >
               Assumir o comando
             </button>
           </div>
@@ -290,14 +417,20 @@ export default function LandingPage() {
           </p>
 
           <div className="lf-hero__btns">
-            <button className="lf-btn-primary lf-btn-lg" onClick={() => navigate("/auth")}>
+            <button
+              className="lf-btn-primary lf-btn-lg"
+              onClick={() => goToAuth("hero_primary", "Assumir o comando", "hero")}
+            >
               <Crown size={18} />
               Assumir o comando
               <ArrowRight size={18} />
             </button>
             <button
               className="lf-btn-ghost lf-btn-lg"
-              onClick={() => document.getElementById("fluxo")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={() => {
+                onCtaClick("hero_secondary", "Ver como funciona", "hero", "#fluxo");
+                document.getElementById("fluxo")?.scrollIntoView({ behavior: "smooth" });
+              }}
             >
               Ver como funciona
             </button>
@@ -419,6 +552,60 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════ CASOS DE USO ═══════ */}
+      <section id="casos" className="lf-section">
+        <div className="lf-container">
+          <div className="lf-section-header">
+            <div className="lf-tag">ESTUDOS DE CASO</div>
+            <h2 className="lf-section-title">
+              Resultados reais.<br />
+              <span className="lf-gradient-text">Por tipo de processo.</span>
+            </h2>
+            <p className="lf-section-sub">
+              Três escritórios. Três realidades diferentes. Mesma transformação:
+              o humano deixou de executar e passou a comandar.
+            </p>
+          </div>
+
+          <div className="lf-casos">
+            {CASOS_DE_USO.map((c) => (
+              <article
+                key={c.badge}
+                className="lf-caso"
+                style={{ "--accent": c.accent } as React.CSSProperties}
+              >
+                <header className="lf-caso__head">
+                  <div className="lf-caso__icon">
+                    <c.Icon size={22} strokeWidth={1.8} />
+                  </div>
+                  <span className="lf-caso__badge">{c.badge}</span>
+                </header>
+
+                <h3 className="lf-caso__title">{c.title}</h3>
+
+                <div className="lf-caso__block">
+                  <span className="lf-caso__label">Desafio</span>
+                  <p>{c.challenge}</p>
+                </div>
+                <div className="lf-caso__block">
+                  <span className="lf-caso__label">Solução LexForce</span>
+                  <p>{c.solution}</p>
+                </div>
+
+                <div className="lf-caso__metrics">
+                  {c.metrics.map((m) => (
+                    <div key={m.label} className="lf-caso__metric">
+                      <div className="lf-caso__metric-value">{m.value}</div>
+                      <div className="lf-caso__metric-label">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ═══════ SEGURANÇA & CONTROLE ═══════ */}
       <section id="seguranca" className="lf-section">
         <div className="lf-container">
@@ -442,6 +629,66 @@ export default function LandingPage() {
                 <p className="lf-seguranca__desc">{s.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════ FAQ — SEGURANÇA & CONTROLE ═══════ */}
+      <section id="faq" className="lf-section lf-section--alt">
+        <div className="lf-container lf-container--narrow">
+          <div className="lf-section-header">
+            <div className="lf-tag">PERGUNTAS FREQUENTES</div>
+            <h2 className="lf-section-title">
+              Tudo que você quer saber sobre<br />
+              <span className="lf-gradient-text">segurança e controle.</span>
+            </h2>
+            <p className="lf-section-sub">
+              LGPD, OAB, auditoria, aprovação humana. As respostas que importam antes de assinar.
+            </p>
+          </div>
+
+          <div className="lf-faq">
+            {FAQ.map((item, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <div key={item.q} className={`lf-faq__item ${isOpen ? "lf-faq__item--open" : ""}`}>
+                  <button
+                    type="button"
+                    className="lf-faq__q"
+                    onClick={() => toggleFaq(i)}
+                    aria-expanded={isOpen}
+                    aria-controls={`faq-${i}`}
+                  >
+                    <span>{item.q}</span>
+                    <span className="lf-faq__icon" aria-hidden>
+                      {isOpen ? <Minus size={18} /> : <Plus size={18} />}
+                    </span>
+                  </button>
+                  <div
+                    id={`faq-${i}`}
+                    className="lf-faq__a"
+                    role="region"
+                    aria-hidden={!isOpen}
+                  >
+                    <p>{item.a}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="lf-faq__footer">
+            <Shield size={18} />
+            <p>
+              Tem outra dúvida sobre segurança ou compliance?{" "}
+              <button
+                type="button"
+                className="lf-faq__contact"
+                onClick={() => goToAuth("faq_contact", "Falar com nosso time", "faq")}
+              >
+                Falar com nosso time →
+              </button>
+            </p>
           </div>
         </div>
       </section>
@@ -483,7 +730,7 @@ export default function LandingPage() {
                 </ul>
                 <button
                   className={plan.highlight ? "lf-btn-primary lf-btn-full" : "lf-btn-ghost lf-btn-full"}
-                  onClick={() => navigate("/auth")}
+                  onClick={() => goToAuth(`plan_${plan.name.toLowerCase()}`, plan.cta, "planos")}
                 >{plan.cta}</button>
               </div>
             ))}
@@ -534,7 +781,13 @@ export default function LandingPage() {
             Você é advogado, não operador. Deixe sua força de IA executar — e{" "}
             <strong>recupere seu tempo, sua família e seu lucro</strong>.
           </p>
-          <button className="lf-btn-primary lf-btn-lg" onClick={() => navigate("/auth")}>
+          <button
+            className="lf-btn-primary lf-btn-lg"
+            onClick={() => {
+              trackEvent("cta_conversion", { cta_id: "cta_final", cta_label: "Assumir o comando agora", section: "cta_final" });
+              goToAuth("cta_final", "Assumir o comando agora", "cta_final");
+            }}
+          >
             <Crown size={18} />
             Assumir o comando agora
             <ArrowRight size={18} />
@@ -1203,6 +1456,215 @@ export default function LandingPage() {
           margin: 0;
         }
 
+        /* ───── CASOS DE USO ───── */
+        .lf-casos {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 24px;
+        }
+        .lf-caso {
+          --accent: #c9a84c;
+          padding: 32px 28px;
+          border-radius: 24px;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%);
+          border: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          flex-direction: column;
+          transition: all 0.3s;
+          position: relative;
+          overflow: hidden;
+        }
+        .lf-caso::before {
+          content: "";
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, transparent, var(--accent), transparent);
+          opacity: 0.6;
+        }
+        .lf-caso:hover {
+          transform: translateY(-4px);
+          border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+          box-shadow: 0 24px 60px -24px color-mix(in srgb, var(--accent) 28%, transparent);
+        }
+        .lf-caso__head {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 18px;
+        }
+        .lf-caso__icon {
+          width: 44px; height: 44px;
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--accent) 12%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+          color: var(--accent);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .lf-caso__badge {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.16em;
+          color: var(--accent);
+          padding: 4px 10px;
+          border-radius: 100px;
+          background: color-mix(in srgb, var(--accent) 10%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+        }
+        .lf-caso__title {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 22px;
+          font-weight: 600;
+          color: #f0ead6;
+          margin: 0 0 22px;
+          line-height: 1.25;
+          letter-spacing: -0.005em;
+        }
+        .lf-caso__block { margin-bottom: 18px; }
+        .lf-caso__label {
+          display: block;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #64748b;
+          margin-bottom: 6px;
+        }
+        .lf-caso__block p {
+          font-size: 13.5px;
+          color: #b8bcc8;
+          line-height: 1.65;
+          margin: 0;
+        }
+        .lf-caso__metrics {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-top: auto;
+          padding-top: 22px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .lf-caso__metric {
+          text-align: center;
+          padding: 10px 6px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.025);
+        }
+        .lf-caso__metric-value {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--accent);
+          line-height: 1;
+        }
+        .lf-caso__metric-label {
+          font-size: 9.5px;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 600;
+          margin-top: 6px;
+          line-height: 1.3;
+        }
+
+        /* ───── FAQ ───── */
+        .lf-faq {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .lf-faq__item {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          overflow: hidden;
+          transition: all 0.3s;
+        }
+        .lf-faq__item:hover {
+          border-color: rgba(201,168,76,0.2);
+        }
+        .lf-faq__item--open {
+          background: rgba(201,168,76,0.04);
+          border-color: rgba(201,168,76,0.28);
+        }
+        .lf-faq__q {
+          width: 100%;
+          background: none;
+          border: none;
+          padding: 22px 24px;
+          color: #f0ead6;
+          font-family: 'Inter', sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          line-height: 1.4;
+          transition: color 0.2s;
+        }
+        .lf-faq__q:hover { color: #c9a84c; }
+        .lf-faq__icon {
+          flex-shrink: 0;
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          background: rgba(201,168,76,0.1);
+          border: 1px solid rgba(201,168,76,0.25);
+          color: #c9a84c;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform 0.3s;
+        }
+        .lf-faq__item--open .lf-faq__icon {
+          background: rgba(201,168,76,0.2);
+        }
+        .lf-faq__a {
+          max-height: 0;
+          overflow: hidden;
+          transition: max-height 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .lf-faq__item--open .lf-faq__a {
+          max-height: 480px;
+        }
+        .lf-faq__a p {
+          padding: 0 24px 24px;
+          margin: 0;
+          color: #b8bcc8;
+          font-size: 14.5px;
+          line-height: 1.75;
+        }
+        .lf-faq__footer {
+          margin-top: 36px;
+          padding: 22px 28px;
+          border-radius: 16px;
+          background: linear-gradient(135deg, rgba(201,168,76,0.06), rgba(201,168,76,0.015));
+          border: 1px solid rgba(201,168,76,0.18);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .lf-faq__footer svg { color: #c9a84c; flex-shrink: 0; }
+        .lf-faq__footer p {
+          margin: 0;
+          color: #b8bcc8;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        .lf-faq__contact {
+          background: none;
+          border: none;
+          color: #c9a84c;
+          font-weight: 700;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          padding: 0;
+          transition: color 0.2s;
+        }
+        .lf-faq__contact:hover { color: #f0d97a; }
+
         /* ───── PLANS ───── */
         .lf-plans {
           display: grid;
@@ -1510,6 +1972,10 @@ export default function LandingPage() {
           .lf-fluxo { grid-template-columns: 1fr; gap: 20px; }
           .lf-fluxo__connector { display: none; }
           .lf-seguranca { grid-template-columns: 1fr; }
+          .lf-casos { grid-template-columns: 1fr; }
+          .lf-faq__q { font-size: 15px; padding: 18px 20px; }
+          .lf-faq__a p { padding: 0 20px 20px; }
+          .lf-faq__footer { flex-direction: column; text-align: center; }
         }
 
         /* ───── RESPONSIVE — MOBILE ───── */
