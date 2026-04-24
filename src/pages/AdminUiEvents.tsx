@@ -154,6 +154,42 @@ export default function AdminUiEvents() {
       .map(([label, total]) => ({ label, total }));
   }, [rows]);
 
+  // Group by session — surfaces journeys/funnels and possible navigation jams.
+  const sessionGroups = useMemo(() => {
+    const map = new Map<string, UiEventRow[]>();
+    for (const r of rows) {
+      const key = r.session_id ?? "(sem sessão)";
+      const arr = map.get(key) ?? [];
+      arr.push(r);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries())
+      .map(([sessionId, evs]) => {
+        const sorted = [...evs].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const durationMs = new Date(last.created_at).getTime() - new Date(first.created_at).getTime();
+        const eventCounts: Record<string, number> = {};
+        for (const e of sorted) eventCounts[e.event_name] = (eventCounts[e.event_name] ?? 0) + 1;
+        return {
+          sessionId,
+          total: sorted.length,
+          start: first.created_at,
+          end: last.created_at,
+          durationMs,
+          user_id: first.user_id,
+          eventCounts,
+          firstEvent: first.event_name,
+          lastEvent: last.event_name,
+          lastTarget: last.target_label ?? last.target_id ?? "—",
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 50);
+  }, [rows]);
+
   if (authLoading || !isAdmin) {
     return (
       <div className="flex h-screen items-center justify-center bg-background text-foreground">
