@@ -24,8 +24,10 @@ import {
   getRejectionBuckets, runTrackingHealthCheck,
   getRejectedTtlHours, setRejectedTtlHours,
   getSampleRate, setSampleRate,
+  EXPORT_SCHEMA_VERSION,
   type RejectedEvent, type RejectionBucket, type HealthCheckResult,
 } from "@/lib/uiTracking";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Admin dashboard for ui_events: lets admins filter by date range, event type,
@@ -84,6 +86,12 @@ export default function AdminUiEvents() {
   const [sampleRate, setSampleRateState] = useState<number>(getSampleRate());
   // Drilldown filter for the raw rejected-events table (set from a bucket row).
   const [bucketFilter, setBucketFilter] = useState<RejectionBucket | null>(null);
+  // Whether export should include only the raw rejected events (skip buckets).
+  const [exportRejectedOnly, setExportRejectedOnly] = useState<boolean>(false);
+  // Last TTL prune result for the inline summary on the admin panel.
+  const [lastPrune, setLastPrune] = useState<{
+    pruned: number; bucketed: number; remaining: number; at: string; ttlHours: number;
+  } | null>(null);
 
   useEffect(() => {
     const off = onDebugChange(() => {
@@ -107,17 +115,23 @@ export default function AdminUiEvents() {
   // Apply TTL change with confirmation + instant prune so admins can verify.
   const applyTtl = (hours: number) => {
     if (!Number.isFinite(hours) || hours <= 0) return;
-    setRejectedTtlHours(hours);
-    const before = getRejectedCount();
-    // setRejectedTtlHours triggers a prune internally; pull the fresh state.
-    const after = getRejectedCount();
+    const bucketsBefore = getRejectionBuckets().length;
+    const result = setRejectedTtlHours(hours);
+    const freshBuckets = getRejectionBuckets();
     setRejected(getRejectedEvents());
-    setRejectedCount(after);
-    setBuckets(getRejectionBuckets());
-    const pruned = Math.max(0, before - after);
+    setRejectedCount(result.remaining);
+    setBuckets(freshBuckets);
+    const bucketed = Math.max(0, bucketsBefore - freshBuckets.length);
+    setLastPrune({
+      pruned: result.pruned,
+      bucketed,
+      remaining: result.remaining,
+      at: result.at,
+      ttlHours: hours,
+    });
     toast.success(`TTL atualizado para ${hours}h`, {
-      description: pruned > 0
-        ? `${pruned} evento(s) expirado(s) foram removidos imediatamente.`
+      description: result.pruned > 0
+        ? `${result.pruned} evento(s) expirado(s) removido(s) · ${bucketed} bucket(s) eliminado(s) · ${result.remaining} restante(s).`
         : "Nenhum evento expirado a remover agora.",
     });
   };
@@ -164,30 +178,49 @@ export default function AdminUiEvents() {
 
   const exportDebug = (format: "json" | "csv") => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const includeBuckets = !exportRejectedOnly;
+    // Standardized context block — embedded in JSON exports so consumers can
+    // reliably compare snapshots taken across sessions/environments.
+    const context = {
+      schema: "lf.ui-tracking.debug-export",
+      schemaVersion: EXPORT_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      userId: user?.id ?? null,
+      dateRange: { from, to },
+      filters: { event: eventFilter, user: userFilter || null, label: labelFilter || null },
+      sampleRate,
+      ttlHours,
+      rejectedCount,
+      includeBuckets,
+    };
     if (format === "json") {
       const payload = {
-        exportedAt: new Date().toISOString(),
-        ttlHours,
-        sampleRate,
-        rejectedCount,
-        buckets,
+        ...context,
+        buckets: includeBuckets ? buckets : undefined,
         rejected,
       };
       download(`ui-rejected-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
     } else {
-      const csvBuckets = toCsv(buckets.map((b) => ({
-        category: b.category, code: b.code ?? "", reason: b.reason,
-        count: b.count, lastAt: b.lastAt, lastPayload: b.lastPayload,
-      })));
       const csvRejected = toCsv(rejected.map((r) => ({
         at: r.at, name: r.name, category: r.category,
         code: r.code ?? "", reason: r.reason, payload: r.payload,
       })));
-      const combined = `# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      let combined = `# context\n${toCsv([context as unknown as Record<string, unknown>])}\n\n# rejected\n${csvRejected}\n`;
+      if (includeBuckets) {
+        const csvBuckets = toCsv(buckets.map((b) => ({
+          category: b.category, code: b.code ?? "", reason: b.reason,
+          count: b.count, estimatedCaptured: b.estimatedCaptured,
+          sampleRateAtRead: b.sampleRateAtRead,
+          lastAt: b.lastAt, lastPayload: b.lastPayload,
+        })));
+        combined = `# context\n${toCsv([context as unknown as Record<string, unknown>])}\n\n# buckets\n${csvBuckets}\n\n# rejected\n${csvRejected}\n`;
+      }
       download(`ui-rejected-${stamp}.csv`, combined, "text/csv");
     }
     toast.success(`Exportado (${format.toUpperCase()})`, {
-      description: `${rejected.length} evento(s) e ${buckets.length} bucket(s).`,
+      description: includeBuckets
+        ? `${rejected.length} evento(s) e ${buckets.length} bucket(s).`
+        : `${rejected.length} evento(s) brutos (sem buckets).`,
     });
   };
 
@@ -510,6 +543,16 @@ export default function AdminUiEvents() {
                   className="h-7 w-16 text-xs"
                 />
               </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-l border-border pl-2 ml-1">
+                <Checkbox
+                  id="export-rejected-only"
+                  checked={exportRejectedOnly}
+                  onCheckedChange={(c) => setExportRejectedOnly(c === true)}
+                />
+                <Label htmlFor="export-rejected-only" className="text-xs cursor-pointer">
+                  Só rejeitados
+                </Label>
+              </div>
               <Button size="sm" variant="ghost" onClick={() => exportDebug("json")} disabled={rejectedCount === 0 && buckets.length === 0}>
                 <Download className="h-3.5 w-3.5 mr-1" /> JSON
               </Button>
@@ -527,6 +570,28 @@ export default function AdminUiEvents() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Last TTL prune summary — instant feedback after TTL changes. */}
+            {lastPrune && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-semibold text-foreground">Último prune:</span>
+                <span>
+                  TTL <span className="font-mono">{lastPrune.ttlHours}h</span>
+                </span>
+                <span>
+                  Removidos: <span className="font-mono text-destructive">{lastPrune.pruned}</span>
+                </span>
+                <span>
+                  Buckets eliminados: <span className="font-mono">{lastPrune.bucketed}</span>
+                </span>
+                <span>
+                  Restantes: <span className="font-mono">{lastPrune.remaining}</span>
+                </span>
+                <span className="text-muted-foreground ml-auto">
+                  {new Date(lastPrune.at).toLocaleString()}
+                </span>
+              </div>
+            )}
+
             {/* Buckets aggregated by reason/code */}
             {buckets.length > 0 && (
               <div>
@@ -539,6 +604,9 @@ export default function AdminUiEvents() {
                         <th className="py-2 pr-3">Código</th>
                         <th className="py-2 pr-3">Motivo</th>
                         <th className="py-2 pr-3">Ocorrências</th>
+                        <th className="py-2 pr-3" title="Eventos estimados capturados pela amostragem atual">
+                          Capturados (~{Math.round(sampleRate * 100)}%)
+                        </th>
                         <th className="py-2 pr-3">Última</th>
                         <th className="py-2 pr-3">Último payload</th>
                         <th className="py-2 pr-3">Ação</th>
@@ -557,6 +625,12 @@ export default function AdminUiEvents() {
                             <td className="py-1.5 pr-3 font-mono text-xs">{b.code ?? "—"}</td>
                             <td className="py-1.5 pr-3 text-destructive max-w-sm truncate" title={b.reason}>{b.reason}</td>
                             <td className="py-1.5 pr-3 font-mono">{b.count}</td>
+                            <td className="py-1.5 pr-3 font-mono text-xs" title={`Sample rate ${Math.round(b.sampleRateAtRead * 100)}%`}>
+                              {b.estimatedCaptured}
+                              {b.sampleRateAtRead < 1 && (
+                                <span className="text-muted-foreground ml-1">/ {b.count}</span>
+                              )}
+                            </td>
                             <td className="py-1.5 pr-3 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(b.lastAt).toLocaleString()}
                             </td>

@@ -267,6 +267,96 @@ describe("UI tracking", () => {
     expect(rls.lastPayload).toEqual({ a: 2 });
     expect(buckets.find((b) => b.category === "network")?.count).toBe(1);
   });
+
+  it("force-capture mode bypasses sampling so events are captured deterministically", async () => {
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: {
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+        from: vi.fn(() => ({
+          insert: vi.fn().mockResolvedValue({
+            error: { message: "row violates row-level security policy", code: "42501" },
+          }),
+        })),
+      },
+    }));
+    const tracking = await import("@/lib/uiTracking");
+    tracking.clearRejectedEvents();
+    // Sample rate 0 would normally block everything — force-capture overrides it.
+    tracking.setSampleRate(0);
+    tracking.__setForceCapture(true);
+    await tracking.trackUiEvent("nav_click", { surface: "left_sidebar", target_id: "civel" });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(tracking.getRejectedCount()).toBeGreaterThanOrEqual(1);
+    tracking.__setForceCapture(false);
+    tracking.setSampleRate(1);
+  });
+
+  it("injectable RNG makes sampling deterministic for tests", async () => {
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: {
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+        from: vi.fn(() => ({
+          insert: vi.fn().mockResolvedValue({
+            error: { message: "row violates row-level security policy", code: "42501" },
+          }),
+        })),
+      },
+    }));
+    const tracking = await import("@/lib/uiTracking");
+    tracking.clearRejectedEvents();
+    tracking.setSampleRate(0.5);
+    // RNG always returns 0.9 → 0.9 >= 0.5 → event dropped
+    tracking.__setRandomForTests(() => 0.9);
+    await tracking.trackUiEvent("nav_click", { surface: "left_sidebar" });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(tracking.getRejectedCount()).toBe(0);
+    // RNG always returns 0.1 → 0.1 < 0.5 → event captured
+    tracking.__setRandomForTests(() => 0.1);
+    await tracking.trackUiEvent("nav_click", { surface: "left_sidebar" });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(tracking.getRejectedCount()).toBe(1);
+    tracking.__setRandomForTests(null);
+    tracking.setSampleRate(1);
+  });
+
+  it("setRejectedTtlHours returns a prune delta with timestamp", async () => {
+    vi.resetModules();
+    const { setRejectedTtlHours, clearRejectedEvents } = await import("@/lib/uiTracking");
+    clearRejectedEvents();
+    const stale = [{
+      at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
+      name: "nav_click", reason: "old", code: "42501", category: "rls", payload: {},
+    }];
+    sessionStorage.setItem("lf_ui_rejected_events", JSON.stringify(stale));
+    sessionStorage.setItem("lf_ui_rejected_count", "1");
+    const result = setRejectedTtlHours(6);
+    expect(result.pruned).toBe(1);
+    expect(result.remaining).toBe(0);
+    expect(typeof result.at).toBe("string");
+    expect(new Date(result.at).getTime()).not.toBeNaN();
+  });
+
+  it("buckets include estimatedCaptured based on current sample rate", async () => {
+    vi.resetModules();
+    const { getRejectionBuckets, setSampleRate, EXPORT_SCHEMA_VERSION } = await import("@/lib/uiTracking");
+    expect(EXPORT_SCHEMA_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    const events = Array.from({ length: 10 }).map(() => ({
+      at: new Date().toISOString(), name: "nav_click",
+      reason: "rls fail", code: "42501", category: "rls", payload: {},
+    }));
+    sessionStorage.setItem("lf_ui_rejected_events", JSON.stringify(events));
+    sessionStorage.setItem("lf_ui_rejected_count", "10");
+    setSampleRate(0.25);
+    const buckets = getRejectionBuckets();
+    expect(buckets[0].count).toBe(10);
+    expect(buckets[0].estimatedCaptured).toBe(2); // floor(10*0.25)
+    expect(buckets[0].sampleRateAtRead).toBe(0.25);
+    setSampleRate(1);
+    const buckets2 = getRejectionBuckets();
+    expect(buckets2[0].estimatedCaptured).toBe(10);
+  });
 });
 
 describe("Tooltip overlay (collapsed sidebar)", () => {

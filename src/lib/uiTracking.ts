@@ -47,6 +47,30 @@ const DEFAULT_TTL_HOURS = 6;
 const SAMPLE_RATE_KEY = "lf_ui_sample_rate";
 
 /**
+ * Schema version for exported debug payloads. Bump whenever the JSON shape
+ * (top-level keys, bucket fields, rejected event fields) changes so that
+ * downstream consumers can detect incompatible exports.
+ */
+export const EXPORT_SCHEMA_VERSION = "1.0.0";
+
+/**
+ * Deterministic test hooks. In production these are no-ops; tests can inject
+ * a seeded RNG (`__setRandomForTests`) or force every event through sampling
+ * (`__setForceCapture`) so flaky `Math.random` paths become deterministic.
+ */
+let __rng: (() => number) | null = null;
+let __forceCapture = false;
+export function __setRandomForTests(fn: (() => number) | null) {
+  __rng = fn;
+}
+export function __setForceCapture(force: boolean) {
+  __forceCapture = force;
+}
+function rand(): number {
+  return __rng ? __rng() : Math.random();
+}
+
+/**
  * Sampling rate (0..1). 1 = capture all events, 0 = capture none.
  * Persisted in localStorage so it survives reloads while admins iterate.
  */
@@ -73,13 +97,19 @@ export function getRejectedTtlHours(): number {
   return Number.isFinite(v) && v > 0 ? v : DEFAULT_TTL_HOURS;
 }
 
-export function setRejectedTtlHours(hours: number) {
-  if (typeof window === "undefined") return;
-  if (!Number.isFinite(hours) || hours <= 0) return;
+export function setRejectedTtlHours(hours: number): { pruned: number; remaining: number; at: string } {
+  const at = new Date().toISOString();
+  if (typeof window === "undefined") return { pruned: 0, remaining: 0, at };
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return { pruned: 0, remaining: getRejectedCount(), at };
+  }
+  const before = getRejectedCount();
   sessionStorage.setItem(TTL_KEY, String(hours));
-  // Trigger pruning on next read
-  pruneExpired();
+  // Trigger pruning with the new TTL applied
+  const kept = pruneExpired();
+  const remaining = kept.length;
   notifyDebugListeners();
+  return { pruned: Math.max(0, before - remaining), remaining, at };
 }
 
 export function classifyRejection(reason: string, code?: string): RejectionCategory {
@@ -205,12 +235,21 @@ export interface RejectionBucket {
   code?: string;
   reason: string;
   count: number;
+  /**
+   * Approximate number of events that *would* have been captured at the
+   * current sample rate. Useful to estimate sampling impact per bucket.
+   * Equal to `count` when sampleRate=1; ~`count*sampleRate` otherwise (min 1).
+   */
+  estimatedCaptured: number;
+  /** Sample rate used to compute `estimatedCaptured` at read time. */
+  sampleRateAtRead: number;
   lastAt: string;
   lastPayload: Record<string, unknown>;
 }
 
 export function getRejectionBuckets(): RejectionBucket[] {
   const events = readBuffer();
+  const rate = getSampleRate();
   const map = new Map<string, RejectionBucket>();
   for (const e of events) {
     const key = `${e.category}::${e.code ?? "-"}::${e.reason.slice(0, 80)}`;
@@ -222,6 +261,8 @@ export function getRejectionBuckets(): RejectionBucket[] {
         code: e.code,
         reason: e.reason,
         count: 1,
+        estimatedCaptured: 0, // filled below
+        sampleRateAtRead: rate,
         lastAt: e.at,
         lastPayload: e.payload,
       });
@@ -232,6 +273,10 @@ export function getRejectionBuckets(): RejectionBucket[] {
         cur.lastPayload = e.payload;
       }
     }
+  }
+  // Compute estimatedCaptured: floor(count * rate) but at least 1 if count>0
+  for (const b of map.values()) {
+    b.estimatedCaptured = rate >= 1 ? b.count : Math.max(1, Math.floor(b.count * rate));
   }
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
@@ -308,8 +353,10 @@ export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = 
     if (typeof window === "undefined") return;
 
     // Apply sampling — admins can throttle volume while testing features.
+    // Tests can opt into deterministic capture via __setForceCapture(true) or
+    // inject a seeded RNG via __setRandomForTests(fn).
     const rate = getSampleRate();
-    if (rate < 1 && Math.random() >= rate) return;
+    if (!__forceCapture && rate < 1 && rand() >= rate) return;
 
     const { data: auth } = await supabase.auth.getUser();
     const event = {
