@@ -1,0 +1,321 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  ChartContainer, ChartTooltip, ChartTooltipContent,
+} from "@/components/ui/chart";
+import {
+  Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
+  ResponsiveContainer, XAxis, YAxis,
+} from "recharts";
+import { ArrowLeft } from "lucide-react";
+
+/**
+ * Admin dashboard for ui_events: lets admins filter by date range, event type,
+ * and user, and visualize sidebar/right_panel toggles, shortcut usage,
+ * tooltip openings and nav clicks over time.
+ *
+ * Access is restricted both at the route level and via the SELECT RLS policy
+ * (only admins can read ui_events).
+ */
+
+type UiEventRow = {
+  id: string;
+  event_name: string;
+  surface: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  user_id: string | null;
+  session_id: string | null;
+  created_at: string;
+};
+
+const ALL_EVENTS = [
+  "sidebar_toggle",
+  "right_panel_toggle",
+  "nav_click",
+  "tooltip_open",
+  "shortcut_used",
+  "tab_navigate",
+  "key_activate",
+] as const;
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+export default function AdminUiEvents() {
+  const { user, hasRole, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  const [from, setFrom] = useState<string>(isoDaysAgo(7));
+  const [to, setTo] = useState<string>(isoDaysAgo(0));
+  const [eventFilter, setEventFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<string>("");
+  const [rows, setRows] = useState<UiEventRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const isAdmin = hasRole("admin");
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    if (!isAdmin) {
+      navigate("/sistema");
+    }
+  }, [authLoading, user, isAdmin, navigate]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, from, to, eventFilter, userFilter]);
+
+  async function load() {
+    setLoading(true);
+    let query = supabase
+      .from("ui_events")
+      .select("id,event_name,surface,target_id,target_label,user_id,session_id,created_at")
+      .gte("created_at", `${from}T00:00:00.000Z`)
+      .lte("created_at", `${to}T23:59:59.999Z`)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+
+    if (eventFilter !== "all") query = query.eq("event_name", eventFilter);
+    if (userFilter.trim()) query = query.eq("user_id", userFilter.trim());
+
+    const { data, error } = await query;
+    if (!error && data) setRows(data as UiEventRow[]);
+    setLoading(false);
+  }
+
+  // Aggregations
+  const totalsByEvent = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const r of rows) acc[r.event_name] = (acc[r.event_name] ?? 0) + 1;
+    return ALL_EVENTS.map((name) => ({ name, total: acc[name] ?? 0 }));
+  }, [rows]);
+
+  const dailySeries = useMemo(() => {
+    const map = new Map<string, Record<string, number>>();
+    for (const r of rows) {
+      const day = r.created_at.slice(0, 10);
+      const bucket = map.get(day) ?? {};
+      bucket[r.event_name] = (bucket[r.event_name] ?? 0) + 1;
+      map.set(day, bucket);
+    }
+    const days = Array.from(map.keys()).sort();
+    return days.map((day) => ({ day, ...(map.get(day) ?? {}) }));
+  }, [rows]);
+
+  const topTargets = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const r of rows) {
+      if (!r.target_label && !r.target_id) continue;
+      const key = r.target_label || r.target_id || "—";
+      acc[key] = (acc[key] ?? 0) + 1;
+    }
+    return Object.entries(acc)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([label, total]) => ({ label, total }));
+  }, [rows]);
+
+  if (authLoading || !isAdmin) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        Carregando…
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border px-6 py-4 flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/sistema")}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        </Button>
+        <h1 className="text-xl font-semibold">Analytics de UI</h1>
+        <span className="text-sm text-muted-foreground ml-2">
+          {rows.length} eventos no período
+        </span>
+      </header>
+
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filtros</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <Label htmlFor="from">De</Label>
+              <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="to">Até</Label>
+              <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            <div>
+              <Label>Tipo de evento</Label>
+              <Select value={eventFilter} onValueChange={setEventFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {ALL_EVENTS.map((e) => (
+                    <SelectItem key={e} value={e}>{e}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="user">User ID</Label>
+              <Input
+                id="user"
+                placeholder="UUID do usuário (opcional)"
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Totals by event */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Totais por evento</CardTitle>
+          </CardHeader>
+          <CardContent className="h-72">
+            <ChartContainer config={{ total: { label: "Total", color: "hsl(var(--primary))" } }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={totalsByEvent}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Time series */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Evolução diária</CardTitle>
+          </CardHeader>
+          <CardContent className="h-80">
+            <ChartContainer
+              config={Object.fromEntries(
+                ALL_EVENTS.map((e, i) => [
+                  e,
+                  { label: e, color: `hsl(${(i * 47) % 360} 70% 55%)` },
+                ])
+              )}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailySeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend />
+                  {ALL_EVENTS.map((e, i) => (
+                    <Line
+                      key={e}
+                      type="monotone"
+                      dataKey={e}
+                      stroke={`hsl(${(i * 47) % 360} 70% 55%)`}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Top targets */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top alvos clicados/focados</CardTitle>
+          </CardHeader>
+          <CardContent className="h-72">
+            <ChartContainer config={{ total: { label: "Interações", color: "hsl(var(--primary))" } }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topTargets} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" width={160} tick={{ fontSize: 11 }} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Recent rows */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Últimos eventos {loading && <span className="text-muted-foreground text-xs">(carregando…)</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left border-b border-border">
+                <tr>
+                  <th className="py-2 pr-3">Quando</th>
+                  <th className="py-2 pr-3">Evento</th>
+                  <th className="py-2 pr-3">Surface</th>
+                  <th className="py-2 pr-3">Alvo</th>
+                  <th className="py-2 pr-3">Usuário</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 100).map((r) => (
+                  <tr key={r.id} className="border-b border-border/50">
+                    <td className="py-1.5 pr-3 whitespace-nowrap text-muted-foreground">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-1.5 pr-3 font-mono text-xs">{r.event_name}</td>
+                    <td className="py-1.5 pr-3">{r.surface ?? "—"}</td>
+                    <td className="py-1.5 pr-3">{r.target_label ?? r.target_id ?? "—"}</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs">
+                      {r.user_id ? r.user_id.slice(0, 8) : "anon"}
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                      Nenhum evento no período selecionado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
