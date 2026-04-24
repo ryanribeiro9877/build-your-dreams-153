@@ -4,7 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, User, Save } from "lucide-react";
+import { ArrowLeft, User, Save, Bell } from "lucide-react";
+import { getLowBalanceThreshold, setLowBalanceThreshold } from "@/hooks/useTokenBalance";
 
 export default function Profile() {
   const navigate = useNavigate();
