@@ -24,8 +24,10 @@ import {
   getRejectionBuckets, runTrackingHealthCheck,
   getRejectedTtlHours, setRejectedTtlHours,
   getSampleRate, setSampleRate,
+  EXPORT_SCHEMA_VERSION,
   type RejectedEvent, type RejectionBucket, type HealthCheckResult,
 } from "@/lib/uiTracking";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Admin dashboard for ui_events: lets admins filter by date range, event type,
