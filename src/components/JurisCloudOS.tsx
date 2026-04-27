@@ -221,25 +221,16 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --red: #ef4444; --amber: #f59e0b;
       --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    [data-theme="dark"] {
-      --bg: #09090f; --bg2: #111118; --bg3: #16161f; --bg4: #1d1d28;
-      --border: #252534; --border2: #2e2e42;
-      --card-border: rgba(255,255,255,0.14);
-      --card-border-hover: rgba(255,255,255,0.24);
-      --text1: #eeeef5; --text2: #9898b0; --text3: #5a5a72;
-      --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.08); --user-bubble-border: rgba(201,168,76,0.2);
-      --badge-bg: rgba(255,255,255,0.07);
-    }
-    [data-theme="light"] {
-      --bg: #f5f5f7; --bg2: #ffffff; --bg3: #f0f0f4; --bg4: #e8e8ee;
-      --border: #d8d8e0; --border2: #c8c8d4;
-      --card-border: #d8d8e0;
-      --card-border-hover: #b8b8c8;
-      --text1: #1a1a2e; --text2: #5a5a72; --text3: #8888a0;
-      --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.06); --user-bubble-border: rgba(201,168,76,0.25);
-      --badge-bg: rgba(0,0,0,0.06);
+    /* ChatGPT-inspired palette: pure white surfaces, black text, neutral grays. */
+    [data-theme="dark"], [data-theme="light"] {
+      --bg: #ffffff; --bg2: #f9f9f9; --bg3: #ececec; --bg4: #e5e5e5;
+      --border: #e5e5e5; --border2: #d9d9d9;
+      --card-border: #e5e5e5;
+      --card-border-hover: #d0d0d0;
+      --text1: #0d0d0d; --text2: #0d0d0d; --text3: #5d5d5d;
+      --logo-text: #ffffff;
+      --user-bubble-bg: #f4f4f4; --user-bubble-border: #e5e5e5;
+      --badge-bg: #ececec;
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
     .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
