@@ -759,10 +759,8 @@ export default function JurisCloudOS() {
   const [thinking, setThinking]           = useState(false);
   const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const [theme, setTheme]                 = useState<Theme>(() => {
-    if (typeof window !== "undefined") return (localStorage.getItem("jc-theme") as Theme) || "dark";
-    return "dark";
-  });
+  // Theme is locked to ChatGPT-style light palette across the system.
+  const [theme, setTheme] = useState<Theme>("light");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   // Persisted per-user UI preferences (synced via Lovable Cloud).
