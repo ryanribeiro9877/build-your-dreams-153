@@ -17,7 +17,7 @@ export function useRealtimeNotifications() {
       .channel("notify_clients")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "clients" }, (payload) => {
         const client = payload.new as { full_name: string };
-        toast.info(`👤 Novo cliente cadastrado: ${client.full_name}`, { duration: 5000 });
+        toast.info(` Novo cliente cadastrado: ${client.full_name}`, { duration: 5000 });
       })
       .subscribe();
 
@@ -26,7 +26,7 @@ export function useRealtimeNotifications() {
       .channel("notify_documents")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "client_documents" }, (payload) => {
         const doc = payload.new as { document_name: string; document_type: string };
-        toast.info(`📎 Novo documento: ${doc.document_name} (${doc.document_type})`, { duration: 5000 });
+        toast.info(` Novo documento: ${doc.document_name} (${doc.document_type})`, { duration: 5000 });
       })
       .subscribe();
 
@@ -36,17 +36,17 @@ export function useRealtimeNotifications() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "agent_tasks" }, (payload) => {
         const task = payload.new as { title: string; priority: string; client_name?: string };
         if (task.priority === "critical") {
-          toast.error(`🚨 TAREFA CRÍTICA: ${task.title}${task.client_name ? ` — ${task.client_name}` : ""}`, {
+          toast.error(` TAREFA CRÍTICA: ${task.title}${task.client_name ? ` — ${task.client_name}` : ""}`, {
             duration: 10000,
           });
         } else if (task.priority === "high") {
-          toast.warning(`⚠️ Tarefa alta prioridade: ${task.title}`, { duration: 7000 });
+          toast.warning(`️ Tarefa alta prioridade: ${task.title}`, { duration: 7000 });
         }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agent_tasks" }, (payload) => {
         const task = payload.new as { title: string; priority: string; status: string };
         if (task.priority === "critical" && task.status === "completed") {
-          toast.success(`✅ Tarefa crítica concluída: ${task.title}`, { duration: 5000 });
+          toast.success(` Tarefa crítica concluída: ${task.title}`, { duration: 5000 });
         }
       })
       .subscribe();
@@ -69,7 +69,7 @@ export function useRealtimeNotifications() {
         data.forEach((task) => {
           const dueDate = new Date(task.due_date!);
           const hoursLeft = Math.round((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60));
-          const label = hoursLeft <= 1 ? "⏰ URGENTE" : `⏳ ${hoursLeft}h restantes`;
+          const label = hoursLeft <= 1 ? " URGENTE" : ` ${hoursLeft}h restantes`;
           toast.warning(`${label}: ${task.title}${task.client_name ? ` — ${task.client_name}` : ""}`, {
             duration: 8000,
             id: `deadline-${task.title}`,

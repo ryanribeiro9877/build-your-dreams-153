@@ -94,14 +94,14 @@ export function useBottleneckDetection() {
             type: "deadline",
             severity: "critical",
             department: "eficiencia",
-            message: `🚨 ${overdue.length} tarefas vencidas detectadas! Ação imediata necessária.`,
+            message: ` ${overdue.length} tarefas vencidas detectadas! Ação imediata necessária.`,
           });
         } else if (overdue.length > 0) {
           alerts.push({
             type: "deadline",
             severity: "warning",
             department: "eficiencia",
-            message: `⏰ ${overdue.length} tarefa(s) com prazo vencido.`,
+            message: ` ${overdue.length} tarefa(s) com prazo vencido.`,
           });
         }
 
@@ -145,7 +145,7 @@ export function useBottleneckDetection() {
       const groupSize = getGroupSize();
       if (alerts.length > groupSize) {
         const critical = alerts.filter(a => a.severity === "critical").length;
-        toast.error(`🧠 Eficiência: ${alerts.length} alertas (${critical} crítico${critical === 1 ? "" : "s"})`, {
+        toast.error(` Eficiência: ${alerts.length} alertas (${critical} crítico${critical === 1 ? "" : "s"})`, {
           id: "bottleneck-summary",
           duration: 15000,
           description: "Clique para abrir a Central de Eficiência",
@@ -160,9 +160,9 @@ export function useBottleneckDetection() {
             description: `Departamento: ${DEPT_LABELS[alert.department] || alert.department}`,
             action: { label: "Abrir", onClick: openEfficiency },
           };
-          if (alert.severity === "critical") toast.error(`🧠 ${alert.message}`, opts);
-          else if (alert.severity === "warning") toast.warning(`🧠 ${alert.message}`, opts);
-          else toast.info(`🧠 ${alert.message}`, { id, duration: 15000 });
+          if (alert.severity === "critical") toast.error(` ${alert.message}`, opts);
+          else if (alert.severity === "warning") toast.warning(` ${alert.message}`, opts);
+          else toast.info(` ${alert.message}`, { id, duration: 15000 });
         });
       }
 
@@ -196,7 +196,7 @@ export function useBottleneckDetection() {
         const overdue = task.due_date && new Date(task.due_date) < new Date()
           && task.status !== "completed" && task.status !== "cancelled";
         if (overdue && passesUrgencyFilter(task.priority) && !isMuted(task.id)) {
-          toast.error(`🧠 Prazo vencido: ${task.title}`, {
+          toast.error(` Prazo vencido: ${task.title}`, {
             duration: 15000,
             id: `overdue-${task.id}`,
             action: {

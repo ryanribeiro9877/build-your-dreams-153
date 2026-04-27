@@ -139,9 +139,9 @@ const PROCESSES = [
 
 const ALERTS = [
   { type: "fatal",   text: "Prazo fatal: caso #0023847 – Bancário",  time: "HOJE 17h" },
-  { type: "warning", text: "4 clientes sem retorno há +48h",          time: "2h atrás"  },
-  { type: "info",    text: "12 iniciais aguardam aprovação",          time: "Hoje"      },
-  { type: "success", text: "Protocolo #0029991 confirmado no TJBA",  time: "09:42"     },
+  { type: "warning", text: "4 clientes sem retorno há +48h",          time: "2h atrás" },
+  { type: "info",    text: "12 iniciais aguardam aprovação",          time: "Hoje" },
+  { type: "success", text: "Protocolo #0029991 confirmado no TJBA",  time: "09:42" },
 ];
 
 const INITIAL_MESSAGES = [
@@ -221,25 +221,16 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --red: #ef4444; --amber: #f59e0b;
       --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    [data-theme="dark"] {
-      --bg: #09090f; --bg2: #111118; --bg3: #16161f; --bg4: #1d1d28;
-      --border: #252534; --border2: #2e2e42;
-      --card-border: rgba(255,255,255,0.14);
-      --card-border-hover: rgba(255,255,255,0.24);
-      --text1: #eeeef5; --text2: #9898b0; --text3: #5a5a72;
-      --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.08); --user-bubble-border: rgba(201,168,76,0.2);
-      --badge-bg: rgba(255,255,255,0.07);
-    }
-    [data-theme="light"] {
-      --bg: #f5f5f7; --bg2: #ffffff; --bg3: #f0f0f4; --bg4: #e8e8ee;
-      --border: #d8d8e0; --border2: #c8c8d4;
-      --card-border: #d8d8e0;
-      --card-border-hover: #b8b8c8;
-      --text1: #1a1a2e; --text2: #5a5a72; --text3: #8888a0;
-      --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.06); --user-bubble-border: rgba(201,168,76,0.25);
-      --badge-bg: rgba(0,0,0,0.06);
+    /* ChatGPT-inspired palette: pure white surfaces, black text, neutral grays. */
+    [data-theme="dark"], [data-theme="light"] {
+      --bg: #ffffff; --bg2: #f9f9f9; --bg3: #ececec; --bg4: #e5e5e5;
+      --border: #e5e5e5; --border2: #d9d9d9;
+      --card-border: #e5e5e5;
+      --card-border-hover: #d0d0d0;
+      --text1: #0d0d0d; --text2: #0d0d0d; --text3: #5d5d5d;
+      --logo-text: #ffffff;
+      --user-bubble-bg: #f4f4f4; --user-bubble-border: #e5e5e5;
+      --badge-bg: #ececec;
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
     .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
@@ -768,10 +759,8 @@ export default function JurisCloudOS() {
   const [thinking, setThinking]           = useState(false);
   const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const [theme, setTheme]                 = useState<Theme>(() => {
-    if (typeof window !== "undefined") return (localStorage.getItem("jc-theme") as Theme) || "dark";
-    return "dark";
-  });
+  // Theme is locked to ChatGPT-style light palette across the system.
+  const [theme, setTheme] = useState<Theme>("light");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   // Persisted per-user UI preferences (synced via Lovable Cloud).
@@ -793,7 +782,7 @@ export default function JurisCloudOS() {
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
-  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+  const toggleTheme = () => {/* theme locked to light */};
 
   // Toggle helpers with tracking + a11y live-region announcement.
   const announce = (msg: string) => {
@@ -885,7 +874,7 @@ export default function JurisCloudOS() {
     const { cost, label } = getTokenCost(val);
     const success = await consumeTokens(cost, `${label}: ${val.slice(0, 50)}`);
     if (!success) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `⚠️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
+      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
       return;
     }
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };

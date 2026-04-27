@@ -154,7 +154,7 @@ export default function AdminMaster() {
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
         }}>← Voltar</button>
         <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#c9a84c", margin: 0 }}>
-          🪙 Admin Master · Ajuste de Saldo
+           Admin Master · Ajuste de Saldo
         </h1>
         <div style={{ flex: 1 }} />
         <button onClick={() => fetchBalance()} disabled={loading} style={{
