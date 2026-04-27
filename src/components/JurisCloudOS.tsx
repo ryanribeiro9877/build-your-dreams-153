@@ -782,7 +782,7 @@ export default function JurisCloudOS() {
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
-  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+  const toggleTheme = () => {/* theme locked to light */};
 
   // Toggle helpers with tracking + a11y live-region announcement.
   const announce = (msg: string) => {
