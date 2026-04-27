@@ -19,6 +19,7 @@ import Tokens from "./pages/Tokens.tsx";
 import AdminTokens from "./pages/AdminTokens.tsx";
 import AdminUiEvents from "./pages/AdminUiEvents.tsx";
 import AdminMaster from "./pages/AdminMaster.tsx";
+import AdminNotifications from "./pages/AdminNotifications.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
             <Route path="/admin/tokens" element={<ProtectedRoute><AdminTokens /></ProtectedRoute>} />
             <Route path="/admin/ui" element={<ProtectedRoute><AdminUiEvents /></ProtectedRoute>} />
             <Route path="/admin/master" element={<ProtectedRoute><AdminMaster /></ProtectedRoute>} />
+            <Route path="/admin/notificacoes" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
