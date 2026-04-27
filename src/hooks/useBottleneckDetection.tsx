@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { isMuted, getGroupSize, passesUrgencyFilter } from "@/lib/notificationPrefs";
 
 interface BottleneckAlert {
   type: "overload" | "deadline" | "stalled" | "cost" | "marketing";
@@ -19,6 +20,10 @@ const DEPT_LABELS: Record<string, string> = {
   familia: "Família", conversao: "Conversão", criacao: "Criação", tech: "Tech",
   eficiencia: "Eficiência", cobrancas: "Cobranças",
 };
+
+function openEfficiency() {
+  if (typeof window !== "undefined") window.location.assign("/eficiencia");
+}
 
 export function useBottleneckDetection() {
   const { user } = useAuth();
@@ -45,7 +50,7 @@ export function useBottleneckDetection() {
 
       const { data: tasks } = await supabase
         .from("agent_tasks")
-        .select("task_category, status, priority, agent_name, due_date, title")
+        .select("id, task_category, status, priority, agent_name, due_date, title")
         .eq("user_id", user.id)
         .not("status", "in", '("completed","cancelled")');
 
@@ -80,7 +85,10 @@ export function useBottleneckDetection() {
         }
 
         const now = new Date();
-        const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < now);
+        // Apply urgency filter + mute when counting overdue
+        const overdueAll = tasks.filter(t => t.due_date && new Date(t.due_date) < now);
+        const overdue = overdueAll.filter(t => passesUrgencyFilter(t.priority) && !isMuted((t as any).id));
+
         if (overdue.length > 5) {
           alerts.push({
             type: "deadline",
@@ -116,7 +124,7 @@ export function useBottleneckDetection() {
         });
       }
 
-      // Log to orchestration + save persistent notifications
+      // Persist to history (always)
       for (const alert of alerts) {
         await supabase.from("agent_orchestration_log").insert({
           action: `bottleneck_${alert.type}`,
@@ -131,23 +139,32 @@ export function useBottleneckDetection() {
         await saveNotification(alert);
       }
 
-      // Display toasts
-      alerts.forEach(alert => {
-        const id = `bottleneck-${alert.type}-${alert.department}`;
-        if (alert.severity === "critical") {
-          toast.error(`🧠 Central de Eficiência: ${alert.message}`, {
-            duration: 12000, id,
+      // Group toasts: show one summary toast (clickable) when alerts exceed group size
+      if (alerts.length === 0) return alerts;
+
+      const groupSize = getGroupSize();
+      if (alerts.length > groupSize) {
+        const critical = alerts.filter(a => a.severity === "critical").length;
+        toast.error(`🧠 Eficiência: ${alerts.length} alertas (${critical} crítico${critical === 1 ? "" : "s"})`, {
+          id: "bottleneck-summary",
+          duration: 15000,
+          description: "Clique para abrir a Central de Eficiência",
+          action: { label: "Ver lista", onClick: openEfficiency },
+        });
+      } else {
+        alerts.forEach(alert => {
+          const id = `bottleneck-${alert.type}-${alert.department}`;
+          const opts = {
+            id,
+            duration: 15000,
             description: `Departamento: ${DEPT_LABELS[alert.department] || alert.department}`,
-          });
-        } else if (alert.severity === "warning") {
-          toast.warning(`🧠 Eficiência: ${alert.message}`, {
-            duration: 8000, id,
-            description: `Detectado em: ${DEPT_LABELS[alert.department] || alert.department}`,
-          });
-        } else {
-          toast.info(`🧠 ${alert.message}`, { duration: 5000, id });
-        }
-      });
+            action: { label: "Abrir", onClick: openEfficiency },
+          };
+          if (alert.severity === "critical") toast.error(`🧠 ${alert.message}`, opts);
+          else if (alert.severity === "warning") toast.warning(`🧠 ${alert.message}`, opts);
+          else toast.info(`🧠 ${alert.message}`, { id, duration: 15000 });
+        });
+      }
 
       return alerts;
     };
@@ -176,10 +193,19 @@ export function useBottleneckDetection() {
           });
         }
 
-        if (task.due_date && new Date(task.due_date) < new Date() && task.status !== "completed" && task.status !== "cancelled") {
-          toast.error(`🧠 Eficiência detectou prazo vencido: ${task.title}`, {
-            duration: 10000,
+        const overdue = task.due_date && new Date(task.due_date) < new Date()
+          && task.status !== "completed" && task.status !== "cancelled";
+        if (overdue && passesUrgencyFilter(task.priority) && !isMuted(task.id)) {
+          toast.error(`🧠 Prazo vencido: ${task.title}`, {
+            duration: 15000,
             id: `overdue-${task.id}`,
+            action: {
+              label: "Silenciar 1h",
+              onClick: () => {
+                import("@/lib/notificationPrefs").then(m => m.muteTask(task.id));
+                toast.success("Tarefa silenciada por 1 hora", { duration: 4000 });
+              },
+            },
           });
         }
       })
