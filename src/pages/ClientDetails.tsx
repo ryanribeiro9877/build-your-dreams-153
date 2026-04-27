@@ -88,9 +88,9 @@ export default function ClientDetails() {
   if (!client) return null;
 
   const tabs = [
-    { key: "tasks" as const, label: "Tarefas", count: tasks.length, icon: "📋" },
-    { key: "processes" as const, label: "Processos", count: processes.length, icon: "⚖️" },
-    { key: "documents" as const, label: "Documentos", count: documents.length, icon: "📄" },
+    { key: "tasks" as const, label: "Tarefas", count: tasks.length, icon: "" },
+    { key: "processes" as const, label: "Processos", count: processes.length, icon: "️" },
+    { key: "documents" as const, label: "Documentos", count: documents.length, icon: "" },
   ];
 
   return (
@@ -177,10 +177,10 @@ export default function ClientDetails() {
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 4 }}>{task.title}</div>
                     {task.description && <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>{task.description}</div>}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      {task.agent_name && <span style={{ fontSize: 10, color: "var(--text3)" }}>🤖 {task.agent_name}</span>}
+                      {task.agent_name && <span style={{ fontSize: 10, color: "var(--text3)" }}> {task.agent_name}</span>}
                       {task.due_date && (
                         <span style={{ fontSize: 10, color: new Date(task.due_date) < new Date() ? "#ef4444" : "var(--text3)" }}>
-                          📅 {new Date(task.due_date).toLocaleDateString("pt-BR")}
+                           {new Date(task.due_date).toLocaleDateString("pt-BR")}
                         </span>
                       )}
                     </div>
@@ -217,10 +217,10 @@ export default function ClientDetails() {
                     </div>
                     {proc.description && <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>{proc.description}</div>}
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--text3)" }}>
-                      {proc.responsible_lawyer && <span>👨‍⚖️ {proc.responsible_lawyer}</span>}
+                      {proc.responsible_lawyer && <span>‍️ {proc.responsible_lawyer}</span>}
                       {proc.next_hearing_date && (
                         <span style={{ color: new Date(proc.next_hearing_date) < new Date() ? "#ef4444" : "var(--text3)" }}>
-                          📅 Audiência: {new Date(proc.next_hearing_date).toLocaleDateString("pt-BR")}
+                           Audiência: {new Date(proc.next_hearing_date).toLocaleDateString("pt-BR")}
                         </span>
                       )}
                     </div>
@@ -253,7 +253,7 @@ export default function ClientDetails() {
                   </div>
                   {doc.notes && <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>{doc.notes}</div>}
                 </div>
-                <span style={badgeStyle("rgba(59,130,246,0.15)", "#3b82f6")}>📄 {DOCUMENT_TYPES[doc.document_type] || "Outro"}</span>
+                <span style={badgeStyle("rgba(59,130,246,0.15)", "#3b82f6")}> {DOCUMENT_TYPES[doc.document_type] || "Outro"}</span>
               </div>
             ))}
           </div>

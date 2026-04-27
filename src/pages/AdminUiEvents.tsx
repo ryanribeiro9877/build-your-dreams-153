@@ -988,7 +988,7 @@ export default function AdminUiEvents() {
                   <span className={`h-2 w-2 rounded-full ${validation.ok ? "bg-emerald-500" : "bg-destructive"}`} />
                   {validation.fileName}
                   <span className="text-xs text-muted-foreground font-mono">
-                    schema {validation.schemaVersion ?? "—"} {validation.versionMatches ? "✓" : "✗"}
+                    schema {validation.schemaVersion ?? "—"} {validation.versionMatches ? "" : ""}
                   </span>
                 </div>
                 {validation.missingFields.length > 0 && (

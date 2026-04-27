@@ -139,9 +139,9 @@ const PROCESSES = [
 
 const ALERTS = [
   { type: "fatal",   text: "Prazo fatal: caso #0023847 – Bancário",  time: "HOJE 17h" },
-  { type: "warning", text: "4 clientes sem retorno há +48h",          time: "2h atrás"  },
-  { type: "info",    text: "12 iniciais aguardam aprovação",          time: "Hoje"      },
-  { type: "success", text: "Protocolo #0029991 confirmado no TJBA",  time: "09:42"     },
+  { type: "warning", text: "4 clientes sem retorno há +48h",          time: "2h atrás" },
+  { type: "info",    text: "12 iniciais aguardam aprovação",          time: "Hoje" },
+  { type: "success", text: "Protocolo #0029991 confirmado no TJBA",  time: "09:42" },
 ];
 
 const INITIAL_MESSAGES = [
@@ -874,7 +874,7 @@ export default function JurisCloudOS() {
     const { cost, label } = getTokenCost(val);
     const success = await consumeTokens(cost, `${label}: ${val.slice(0, 50)}`);
     if (!success) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `⚠️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
+      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
       return;
     }
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };

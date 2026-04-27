@@ -204,7 +204,7 @@ export default function Clients() {
           background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
           fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
         }}>
-          {showForm ? "✕ Fechar" : "+ Novo Cliente"}
+          {showForm ? " Fechar" : "+ Novo Cliente"}
         </button>
       </div>
 
@@ -247,7 +247,7 @@ export default function Clients() {
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input
           style={{ ...inputStyle, maxWidth: 320, flex: "1 1 200px" }}
-          placeholder="🔍 Buscar nome, CPF, email, telefone, cidade..."
+          placeholder=" Buscar nome, CPF, email, telefone, cidade..."
           value={search} onChange={e => setSearch(e.target.value)}
         />
         <select style={{ ...inputStyle, maxWidth: 160 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
@@ -290,16 +290,16 @@ export default function Clients() {
                 </div>
                 <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap", alignItems: "center" }}>
                   {client.cpf && <span>CPF: {client.cpf}</span>}
-                  {client.phone && <span>📞 {client.phone}</span>}
-                  {client.city && <span>📍 {client.city}/{client.state}</span>}
+                  {client.phone && <span> {client.phone}</span>}
+                  {client.city && <span> {client.city}/{client.state}</span>}
                   {(taskCounts[client.full_name] || 0) > 0 && (
                     <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>
-                      📋 {taskCounts[client.full_name]} tarefa{taskCounts[client.full_name] > 1 ? "s" : ""}
+                       {taskCounts[client.full_name]} tarefa{taskCounts[client.full_name] > 1 ? "s" : ""}
                     </span>
                   )}
                   {(processCounts[client.full_name] || 0) > 0 && (
                     <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(168,85,247,0.15)", color: "#a855f7", fontWeight: 600 }}>
-                      ⚖️ {processCounts[client.full_name]} processo{processCounts[client.full_name] > 1 ? "s" : ""}
+                      ️ {processCounts[client.full_name]} processo{processCounts[client.full_name] > 1 ? "s" : ""}
                     </span>
                   )}
                   <span style={{
@@ -396,7 +396,7 @@ export default function Clients() {
               background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12,
               padding: 20, marginBottom: 16,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>📎 Anexar Documento</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}> Anexar Documento</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <label style={labelStyle}>Tipo do Documento</label>
@@ -431,7 +431,7 @@ export default function Clients() {
               padding: 20,
             }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>
-                📄 Documentos ({documents.length})
+                 Documentos ({documents.length})
               </div>
               {documents.length === 0 ? (
                 <div style={{ color: "var(--text3)", fontSize: 12, padding: 12, textAlign: "center" }}>Nenhum documento anexado</div>
@@ -444,7 +444,7 @@ export default function Clients() {
                       background: "var(--bg3)", borderRadius: 8, marginBottom: 6,
                       border: "1px solid var(--border)",
                     }}>
-                      <div style={{ fontSize: 20 }}>📄</div>
+                      <div style={{ fontSize: 20 }}></div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {doc.document_name}
@@ -458,7 +458,7 @@ export default function Clients() {
                         padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)",
                         background: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer",
                         fontSize: 10, fontFamily: "'DM Sans', sans-serif",
-                      }}>✕</button>
+                      }}></button>
                     </div>
                   );
                 })

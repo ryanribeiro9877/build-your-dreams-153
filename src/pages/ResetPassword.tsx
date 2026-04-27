@@ -53,7 +53,7 @@ export default function ResetPassword() {
         boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
       }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 20, fontWeight: 600, color: "#eeeef5" }}>🔐 Nova Senha</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: "#eeeef5" }}> Nova Senha</div>
           <div style={{ fontSize: 12, color: "#5a5a72", marginTop: 8 }}>
             {ready ? "Digite sua nova senha abaixo." : "Verificando link de recuperação..."}
           </div>

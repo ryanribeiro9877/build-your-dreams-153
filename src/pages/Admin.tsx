@@ -5,17 +5,17 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 const ROLES = [
-  { value: "admin", label: "Administrador", icon: "👑" },
-  { value: "director", label: "Diretor", icon: "👔" },
-  { value: "manager", label: "Gerente", icon: "📋" },
-  { value: "lawyer", label: "Advogado", icon: "⚖️" },
-  { value: "receptionist", label: "Recepcionista", icon: "🏢" },
-  { value: "intern", label: "Estagiário", icon: "📚" },
-  { value: "financial", label: "Financeiro", icon: "💳" },
-  { value: "marketing", label: "Marketing", icon: "📢" },
-  { value: "protocol", label: "Protocolo", icon: "📋" },
-  { value: "calculator", label: "Calculista", icon: "🔢" },
-  { value: "compliance", label: "Compliance", icon: "🛡️" },
+  { value: "admin", label: "Administrador", icon: "" },
+  { value: "director", label: "Diretor", icon: "" },
+  { value: "manager", label: "Gerente", icon: "" },
+  { value: "lawyer", label: "Advogado", icon: "️" },
+  { value: "receptionist", label: "Recepcionista", icon: "" },
+  { value: "intern", label: "Estagiário", icon: "" },
+  { value: "financial", label: "Financeiro", icon: "" },
+  { value: "marketing", label: "Marketing", icon: "" },
+  { value: "protocol", label: "Protocolo", icon: "" },
+  { value: "calculator", label: "Calculista", icon: "" },
+  { value: "compliance", label: "Compliance", icon: "️" },
 ];
 
 interface UserWithRoles {
@@ -75,19 +75,19 @@ export default function Admin() {
           fontFamily: "'DM Sans', sans-serif",
         }}>← Voltar</button>
         <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#c9a84c", margin: 0 }}>
-          👑 Painel de Administração
+           Painel de Administração
         </h1>
         <div style={{ flex: 1 }} />
         <button onClick={() => navigate("/admin/notificacoes")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
           fontFamily: "'DM Sans', sans-serif",
-        }}>🔔 Histórico de avisos</button>
+        }}> Histórico de avisos</button>
         <button onClick={() => navigate("/admin/tokens")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid #c9a84c",
           background: "rgba(201,168,76,0.15)", color: "#c9a84c", cursor: "pointer", fontSize: 13,
           fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
-        }}>🪙 Dashboard de Tokens</button>
+        }}> Dashboard de Tokens</button>
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>
@@ -113,7 +113,7 @@ export default function Admin() {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)" }}>{u.display_name || "Sem nome"}</div>
                   <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                    {u.user_id === user?.id ? "📌 Você" : ""} {u.job_title || ""}
+                    {u.user_id === user?.id ? " Você" : ""} {u.job_title || ""}
                   </div>
                 </div>
               </div>
@@ -136,7 +136,7 @@ export default function Admin() {
                     >
                       <span>{role.icon}</span>
                       <span>{role.label}</span>
-                      {hasIt && <span style={{ marginLeft: 2 }}>✓</span>}
+                      {hasIt && <span style={{ marginLeft: 2 }}></span>}
                     </button>
                   );
                 })}

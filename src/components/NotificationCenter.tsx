@@ -81,7 +81,7 @@ export function NotificationCenter() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button className="relative p-2 rounded-lg hover:bg-muted/20 transition-colors" title="Notificações">
-          <span className="text-xl">🔔</span>
+          <span className="text-xl"></span>
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -91,7 +91,7 @@ export function NotificationCenter() {
       </SheetTrigger>
       <SheetContent className="w-[400px] bg-background border-border">
         <SheetHeader className="flex flex-row items-center justify-between pr-4">
-          <SheetTitle className="text-foreground">🧠 Central de Alertas</SheetTitle>
+          <SheetTitle className="text-foreground"> Central de Alertas</SheetTitle>
           {unreadCount > 0 && (
             <Button variant="ghost" size="sm" onClick={markAllRead} className="text-xs text-muted-foreground">
               Marcar todas como lidas
@@ -101,7 +101,7 @@ export function NotificationCenter() {
         <ScrollArea className="h-[calc(100vh-100px)] mt-4 pr-2">
           {notifications.length === 0 ? (
             <div className="text-center text-muted-foreground py-12">
-              <p className="text-4xl mb-2">✅</p>
+              <p className="text-4xl mb-2"></p>
               <p>Nenhuma notificação</p>
             </div>
           ) : (
@@ -120,8 +120,8 @@ export function NotificationCenter() {
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2 mt-2 text-xs opacity-70">
-                    {n.department && <span>📍 {n.department}</span>}
-                    <span>⏱ {formatTime(n.created_at)}</span>
+                    {n.department && <span> {n.department}</span>}
+                    <span> {formatTime(n.created_at)}</span>
                     {!n.is_read && <span className="ml-auto text-primary">● novo</span>}
                   </div>
                 </div>

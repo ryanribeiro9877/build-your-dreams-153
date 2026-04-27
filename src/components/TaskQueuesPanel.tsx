@@ -16,12 +16,12 @@ interface TaskItem {
 }
 
 const QUEUE_CONFIG = [
-  { id: "confeccao", label: "📝 Confecção de Peças", color: "#8b5cf6" },
-  { id: "protocolar", label: "📋 A Protocolar", color: "#6366f1" },
-  { id: "revisao", label: "🔍 Em Revisão", color: "#f59e0b" },
-  { id: "comunicacao", label: "💬 Comunicação ao Cliente", color: "#06b6d4" },
-  { id: "audiencias_fila", label: "🏛️ Preparação de Audiências", color: "#14b8a6" },
-  { id: "monitoramento_fila", label: "🔍 Monitoramento de Resultados", color: "#f97316" },
+  { id: "confeccao", label: " Confecção de Peças", color: "#8b5cf6" },
+  { id: "protocolar", label: " A Protocolar", color: "#6366f1" },
+  { id: "revisao", label: " Em Revisão", color: "#f59e0b" },
+  { id: "comunicacao", label: " Comunicação ao Cliente", color: "#06b6d4" },
+  { id: "audiencias_fila", label: "️ Preparação de Audiências", color: "#14b8a6" },
+  { id: "monitoramento_fila", label: " Monitoramento de Resultados", color: "#f97316" },
 ];
 
 const prioColors: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280" };
@@ -164,13 +164,13 @@ export default function TaskQueuesPanel() {
       {/* Header with count */}
       <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
         {filteredTasks.length} tarefas {filteredTasks.length !== tasks.length && `(de ${tasks.length})`}
-        {!canEdit && <span style={{ color: "#f59e0b" }}> · 🔒 Leitura</span>}
+        {!canEdit && <span style={{ color: "#f59e0b" }}> ·  Leitura</span>}
       </div>
 
       {/* Search & Filters */}
       <div style={{ marginBottom: 10 }}>
         <input
-          placeholder="🔍 Buscar tarefa, cliente, agente..."
+          placeholder=" Buscar tarefa, cliente, agente..."
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
           style={{ ...inputStyle, marginBottom: 6 }}
@@ -242,7 +242,7 @@ export default function TaskQueuesPanel() {
                     fontSize: 11, fontFamily: "var(--font-body)",
                   }}
                 >
-                  ✕
+                  
                 </button>
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function TaskQueuesPanel() {
                             {item.title}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, color: "var(--text3)" }}>👤 {item.client_name || "—"}</span>
+                            <span style={{ fontSize: 9, color: "var(--text3)" }}> {item.client_name || "—"}</span>
                             <span style={{
                               fontSize: 7, padding: "1px 5px", borderRadius: 3,
                               background: `${prioColors[item.priority]}18`, color: prioColors[item.priority],
@@ -310,7 +310,7 @@ export default function TaskQueuesPanel() {
                             }}>{prioLabels[item.priority]}</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 8, color: "var(--text3)" }}>🤖 {item.agent_name || "—"}</span>
+                            <span style={{ fontSize: 8, color: "var(--text3)" }}> {item.agent_name || "—"}</span>
                             <span style={{
                               fontSize: 8, padding: "2px 6px", borderRadius: 4,
                               background: item.status === "completed" ? "rgba(45,212,160,0.15)" : item.status === "in_progress" ? "rgba(59,130,246,0.15)" : "var(--badge-bg)",
@@ -363,7 +363,7 @@ export default function TaskQueuesPanel() {
                                 onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
                                 onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
                               >
-                                🗑️
+                                ️
                               </button>
                             )
                           )}

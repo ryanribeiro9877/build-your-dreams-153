@@ -113,7 +113,7 @@ export default function Dashboard() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--gold, #c9a84c)", margin: 0 }}>
-            📊 Dashboard de Tarefas
+             Dashboard de Tarefas
           </h1>
           <p style={{ fontSize: 12, color: "var(--text3, #888)", marginTop: 4 }}>
             Visão geral em tempo real · {tasks.length} tarefas
@@ -143,7 +143,7 @@ export default function Dashboard() {
 
       {/* Temporal Trend - full width */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={titleStyle}>📈 Tendência — Tarefas Criadas (últimos 14 dias)</div>
+        <div style={titleStyle}> Tendência — Tarefas Criadas (últimos 14 dias)</div>
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={trendData}>
             <defs>
