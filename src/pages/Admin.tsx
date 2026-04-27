@@ -78,6 +78,11 @@ export default function Admin() {
           👑 Painel de Administração
         </h1>
         <div style={{ flex: 1 }} />
+        <button onClick={() => navigate("/admin/notificacoes")} style={{
+          padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
+          background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>🔔 Histórico de avisos</button>
         <button onClick={() => navigate("/admin/tokens")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid #c9a84c",
           background: "rgba(201,168,76,0.15)", color: "#c9a84c", cursor: "pointer", fontSize: 13,
