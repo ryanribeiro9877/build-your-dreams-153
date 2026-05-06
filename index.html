@@ -39,6 +39,18 @@
       "offers": { "@type": "Offer", "price": "297", "priceCurrency": "BRL" },
       "operatingSystem": "Web"
     }
+    <!-- Apply persisted theme before paint to avoid flash on every route. -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("jc-theme");
+          var theme = saved === "dark" ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+          if (theme === "dark") document.documentElement.classList.add("dark");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
     </script>
   </head>
 

@@ -113,15 +113,30 @@
 }
 
 /* ============================================================
-   Global icon removal — hide every Lucide SVG and any other
-   inline icon SVG used as decoration. Lucide adds the `.lucide`
-   class to all its icons, so this single rule strips them
-   from the entire UI without touching component code.
+   Global icon removal — hide ONLY Lucide SVG icons.
+   Lucide adds the `.lucide` class (and a `data-lucide` attr on
+   some builds) to every icon it renders. Recharts SVGs, R3F
+   canvases, inline brand SVGs and form controls do NOT carry
+   these markers and remain untouched.
 ============================================================ */
 @layer utilities {
   svg.lucide,
   [data-lucide],
-  .lucide {
+  .lucide-icon {
     display: none !important;
   }
+
+  /* Fallback for icon-only buttons: when a button's only visible
+     content was a Lucide icon, surface its accessible label as
+     text so the control is not visually empty. */
+  button:empty[aria-label]::after,
+  button:has(> svg.lucide:only-child)[aria-label]::after,
+  a:empty[aria-label]::after {
+    content: attr(aria-label);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: currentColor;
+  }
 }
+
