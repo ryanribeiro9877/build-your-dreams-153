@@ -1204,9 +1204,11 @@ export default function JurisCloudOS() {
             </button>
 
             <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
-                background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)" }}>
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              aria-label={`Alternar para tema ${theme === "dark" ? "claro" : "escuro"}`}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20,
+                background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)",
+                fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              {theme === "dark" ? "Claro" : "Escuro"}
             </button>
 
             <button className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
