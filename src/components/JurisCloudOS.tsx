@@ -759,8 +759,12 @@ export default function JurisCloudOS() {
   const [thinking, setThinking]           = useState(false);
   const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  // Theme is locked to ChatGPT-style light palette across the system.
-  const [theme, setTheme] = useState<Theme>("light");
+  // Theme: ChatGPT-style light/dark, persisted in localStorage.
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "light";
+    const saved = window.localStorage.getItem("jc-theme");
+    return saved === "dark" ? "dark" : "light";
+  });
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   // Persisted per-user UI preferences (synced via Lovable Cloud).
@@ -777,12 +781,18 @@ export default function JurisCloudOS() {
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
-  useEffect(() => { localStorage.setItem("jc-theme", theme); }, [theme]);
+  useEffect(() => {
+    localStorage.setItem("jc-theme", theme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    }
+  }, [theme]);
 
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
-  const toggleTheme = () => {/* theme locked to light */};
+  const toggleTheme = () => setTheme(t => (t === "dark" ? "light" : "dark"));
 
   // Toggle helpers with tracking + a11y live-region announcement.
   const announce = (msg: string) => {
