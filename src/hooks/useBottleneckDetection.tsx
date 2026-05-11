@@ -127,6 +127,7 @@ export function useBottleneckDetection() {
       // Persist to history (always)
       for (const alert of alerts) {
         await supabase.from("agent_orchestration_log").insert({
+          user_id: user.id,
           action: `bottleneck_${alert.type}`,
           details: {
             severity: alert.severity,
@@ -177,6 +178,7 @@ export function useBottleneckDetection() {
 
         if (payload.eventType === "INSERT" && task.priority === "critical") {
           await supabase.from("agent_orchestration_log").insert({
+            user_id: user.id,
             action: "bottleneck_realtime_critical",
             details: {
               severity: "critical",

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Brain, Zap, Crown, MessageSquare, CheckCircle2, Coffee,
-  Shield, Lock, Eye, Clock, TrendingUp, Sparkles,
+  Shield, ShieldCheck, Lock, Eye, Clock, TrendingUp, Sparkles,
   ArrowRight, Menu, X, Scale, Award, FileCheck, Bot,
   Briefcase, Gavel, Building2, Plus, Minus,
 } from "lucide-react";
@@ -14,39 +14,39 @@ const CASOS_DE_USO = [
   {
     Icon: Briefcase,
     badge: "TRABALHISTA",
-    title: "Escritório trabalhista — 12 advogados",
-    challenge: "Equipe gastava 60% do tempo em cálculos de rescisão e petições iniciais repetitivas.",
-    solution: "Calculista IA + Redator de Iniciais assumiram a base operacional. Advogados passaram a apenas revisar e assinar.",
+    title: "Perfil de escritório trabalhista",
+    challenge: "Equipes que gastam grande parte do tempo em cálculos de rescisão e petições iniciais repetitivas.",
+    solution: "Calculista IA e Redator de Iniciais preparam minutas e cálculos. O advogado mantém a análise, a revisão e a assinatura.",
     metrics: [
-      { value: "+340%", label: "Petições/mês" },
-      { value: "−72%", label: "Tempo por caso" },
-      { value: "R$ 180k", label: "Economia anual" },
+      { value: "Cálculos", label: "Pré-preparados pelo agente" },
+      { value: "Minutas", label: "Em formato editável" },
+      { value: "Revisão", label: "Humana e final" },
     ],
     accent: "#06b6d4",
   },
   {
     Icon: Gavel,
     badge: "CÍVEL & CONSUMIDOR",
-    title: "Banca de massa — 45 mil processos ativos",
-    challenge: "Impossível monitorar manualmente prazos, audiências e despachos em volume tão grande.",
-    solution: "Monitor de Prazos + Agente de Andamentos vigiam 24/7. Alertas só sobem quando há ação humana necessária.",
+    title: "Perfil de banca de alto volume",
+    challenge: "Dificuldade de acompanhar manualmente prazos, audiências e despachos em grande volume processual.",
+    solution: "Monitor de Prazos e Agente de Andamentos consolidam movimentações e organizam alertas para revisão humana.",
     metrics: [
-      { value: "0", label: "Prazos perdidos em 6 meses" },
-      { value: "−85%", label: "Carga do gerente" },
-      { value: "3.2x", label: "Mais audiências cobertas" },
+      { value: "Monitoramento", label: "Contínuo de andamentos" },
+      { value: "Alertas", label: "Priorizados para revisão" },
+      { value: "Fila", label: "Organizada por prazo" },
     ],
     accent: "#8b5cf6",
   },
   {
     Icon: Building2,
     badge: "CORPORATIVO",
-    title: "Departamento jurídico interno — Fintech",
-    challenge: "Diretora jurídica afogada em revisão de contratos e pareceres de compliance.",
-    solution: "Agente Revisor + Compliance IA analisam contratos em minutos. Diretora valida apenas pontos críticos.",
+    title: "Perfil de departamento jurídico interno",
+    challenge: "Diretoria jurídica sobrecarregada com triagem de contratos e pareceres recorrentes.",
+    solution: "Agente Revisor e módulo de Compliance organizam pontos de atenção e checklists. A validação final permanece humana.",
     metrics: [
-      { value: "12 min", label: "Revisão média (era 3h)" },
-      { value: "+5x", label: "Contratos analisados/dia" },
-      { value: "100%", label: "Conformidade LGPD" },
+      { value: "Triagem", label: "Automática de pontos" },
+      { value: "Checklist", label: "LGPD configurável" },
+      { value: "Decisão", label: "Sempre do advogado" },
     ],
     accent: "#c9a84c",
   },
@@ -172,34 +172,34 @@ const SEGURANCA = [
 
 const TESTIMONIALS = [
   {
-    name: "Dr. Marcos Oliveira",
-    role: "Sócio Fundador — Oliveira & Associados",
-    text: "Antes eu trabalhava 14h por dia. Hoje saio às 18h e meus agentes continuam protocolando peças. Voltei a jantar com minha família.",
-    initial: "MO",
-    metric: "8h/dia recuperadas",
+    name: "Foco no que é estratégico",
+    role: "Princípio do produto",
+    text: "A plataforma libera o tempo do advogado das tarefas operacionais e repetitivas — quem decide, quem assina e quem responde tecnicamente continua sendo você.",
+    initial: "1",
+    metric: "Comando humano",
   },
   {
-    name: "Dra. Ana Carolina Souza",
-    role: "Diretora Jurídica — TechLaw SP",
-    text: "Eu não executo mais nada operacional. Minha função virou estratégica: defino, aprovo, assino. Os agentes fazem o resto. Triplicamos a banca em 6 meses.",
-    initial: "AS",
-    metric: "0 tarefas operacionais",
+    name: "Aprovação humana sempre",
+    role: "Princípio do produto",
+    text: "Nenhuma petição é protocolada, nenhuma comunicação é enviada e nenhum cálculo é entregue ao cliente sem aprovação explícita do profissional responsável.",
+    initial: "2",
+    metric: "Sem ação autônoma",
   },
   {
-    name: "Dr. Rafael Lima",
-    role: "Advogado Trabalhista — Lima Advocacia",
-    text: "É como ter 90 estagiários de elite que nunca dormem. Eu só comando. Eles entregam tudo pronto para minha assinatura. Inacreditável.",
-    initial: "RL",
-    metric: "3x mais casos por mês",
+    name: "Sigilo e LGPD",
+    role: "Princípio do produto",
+    text: "Os dados de cada escritório são isolados por RLS no banco, não saem para treinamento de modelos públicos e ficam armazenados em território brasileiro.",
+    initial: "3",
+    metric: "Dados protegidos",
   },
 ];
 
 const STATS_BANNER = [
-  { value: "91+", label: "Agentes ao seu serviço", Icon: Bot },
-  { value: "8h", label: "Devolvidas por dia", Icon: Clock },
-  { value: "3x", label: "Mais casos atendidos", Icon: TrendingUp },
-  { value: "24/7", label: "Trabalhando por você", Icon: Sparkles },
-  { value: "100%", label: "Controle humano", Icon: Shield },
+  { value: "91+", label: "Agentes disponíveis", Icon: Bot },
+  { value: "24/7", label: "Monitoramento de prazos", Icon: Clock },
+  { value: "100%", label: "Decisão humana final", Icon: Shield },
+  { value: "LGPD", label: "Em conformidade", Icon: Lock },
+  { value: "BR", label: "Dados em território nacional", Icon: ShieldCheck },
 ];
 
 const PLANOS = [
@@ -406,14 +406,13 @@ export default function LandingPage() {
           </div>
 
           <h1 className="lf-hero__h1">
-            <span className="lf-hero__h1-line">Seus agentes trabalham.</span>
+            <span className="lf-hero__h1-line">Seus agentes preparam.</span>
             <span className="lf-hero__h1-line lf-gradient-text">Você decide.</span>
           </h1>
 
           <p className="lf-hero__sub">
-            Pare de executar. Comece a <strong>comandar</strong>. Uma força de{" "}
-            <strong>91+ agentes de IA jurídica</strong> que protocola, redige, calcula e monitora —{" "}
-            <strong className="lf-gradient-text">enquanto você vive sua vida</strong>.
+            Uma força de <strong>91+ agentes de IA jurídica</strong> que auxilia em pesquisa, redação, cálculos e monitoramento processual.{" "}
+            <strong className="lf-gradient-text">A análise técnica e a decisão final permanecem com o advogado responsável.</strong>
           </p>
 
           <div className="lf-hero__btns">
@@ -775,11 +774,11 @@ export default function LandingPage() {
             <Crown size={32} strokeWidth={1.8} />
           </div>
           <h2 className="lf-cta-final__title">
-            Está na hora de <span className="lf-gradient-text">comandar</span>.
+            Conheça a plataforma <span className="lf-gradient-text">LexForce</span>.
           </h2>
           <p className="lf-cta-final__sub">
-            Você é advogado, não operador. Deixe sua força de IA executar — e{" "}
-            <strong>recupere seu tempo, sua família e seu lucro</strong>.
+            Uma ferramenta de produtividade para o profissional do Direito.{" "}
+            <strong>A decisão técnica e a responsabilidade profissional permanecem do advogado</strong>.
           </p>
           <button
             className="lf-btn-primary lf-btn-lg"

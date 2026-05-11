@@ -58,7 +58,7 @@ export default function EfficiencyKPIs() {
     if (!user) return;
     const [tasksRes, logsRes] = await Promise.all([
       supabase.from("agent_tasks").select("*").eq("user_id", user.id),
-      supabase.from("agent_orchestration_log").select("*").order("created_at", { ascending: false }).limit(50),
+      supabase.from("agent_orchestration_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50),
     ]);
     setTasks(tasksRes.data || []);
     setOrchLogs(logsRes.data || []);

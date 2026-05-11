@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAgents } from "@/hooks/useAgents";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import TaskQueuesPanel from "@/components/TaskQueuesPanel";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUiPreferences } from "@/hooks/useUiPreferences";
 import { trackUiEvent } from "@/lib/uiTracking";
@@ -74,8 +77,10 @@ interface Agent {
   description?: string; maxProcessesMonitored?: number; reportsTo?: number;
 }
 
-// Agents — avatars are now initials computed from name, no emojis
-const AGENTS: Agent[] = [
+// AGENTS_FALLBACK — usado enquanto useAgents() carrega do banco.
+// Fonte de verdade canonica esta em public.agents (migration 20260511122000_seed_agents.sql).
+// Mantemos esse array apenas para evitar flash de tela vazia no primeiro render.
+const AGENTS_FALLBACK: Agent[] = [
   { id: 0, name: "CEO LexForce", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
   { id: 1, name: "Diretor de Recepção", status: "active", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
   { id: 2, name: "Gerente de Atendimento", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 1 },
@@ -112,19 +117,19 @@ const AGENTS: Agent[] = [
   { id: 406, name: "Monitor de KPIs Global", status: "active", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400 },
 ];
 
-function getAgentsForDepartment(deptId: string): Agent[] {
-  return AGENTS.filter(a => a.department.includes("*") || a.department.includes(deptId));
+function getAgentsForDepartment(agents: Agent[], deptId: string): Agent[] {
+  return agents.filter(a => a.department.includes("*") || a.department.includes(deptId));
 }
 function getAgentLoad(agent: Agent): number {
   return Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
 }
-function getAgentsByRole(role: AgentRole): Agent[] {
-  return AGENTS.filter(a => a.role === role);
+function getAgentsByRole(agents: Agent[], role: AgentRole): Agent[] {
+  return agents.filter(a => a.role === role);
 }
-function getTotalCapacity() {
-  const used = AGENTS.reduce((s, a) => s + a.currentTasks, 0);
-  const total = AGENTS.reduce((s, a) => s + a.maxConcurrentTasks, 0);
-  return { used, total, percentage: Math.round((used / total) * 100) };
+function getTotalCapacity(agents: Agent[]) {
+  const used = agents.reduce((s, a) => s + a.currentTasks, 0);
+  const total = agents.reduce((s, a) => s + a.maxConcurrentTasks, 0);
+  return { used, total, percentage: total > 0 ? Math.round((used / total) * 100) : 0 };
 }
 function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -221,16 +226,27 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --red: #ef4444; --amber: #f59e0b;
       --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    /* ChatGPT-inspired palette: pure white surfaces, black text, neutral grays. */
-    [data-theme="dark"], [data-theme="light"] {
+    /* Light: ChatGPT-inspired palette — pure white surfaces, black text. */
+    [data-theme="light"] {
       --bg: #ffffff; --bg2: #f9f9f9; --bg3: #ececec; --bg4: #e5e5e5;
       --border: #e5e5e5; --border2: #d9d9d9;
       --card-border: #e5e5e5;
       --card-border-hover: #d0d0d0;
-      --text1: #0d0d0d; --text2: #0d0d0d; --text3: #5d5d5d;
+      --text1: #0d0d0d; --text2: #1f1f1f; --text3: #5d5d5d;
       --logo-text: #ffffff;
       --user-bubble-bg: #f4f4f4; --user-bubble-border: #e5e5e5;
       --badge-bg: #ececec;
+    }
+    /* Dark: deep neutral surfaces with warm gold accents. */
+    [data-theme="dark"] {
+      --bg: #09090f; --bg2: #11111a; --bg3: #16161f; --bg4: #1c1c28;
+      --border: #25253a; --border2: #34344d;
+      --card-border: #25253a;
+      --card-border-hover: #3a3a55;
+      --text1: #eeeef5; --text2: #c4c4d4; --text3: #7a7a92;
+      --logo-text: #0a0a12;
+      --user-bubble-bg: rgba(201,168,76,0.10); --user-bubble-border: rgba(201,168,76,0.25);
+      --badge-bg: rgba(255,255,255,0.06);
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
     .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
@@ -706,9 +722,7 @@ function MessageBubble({ msg }: { msg: any }) {
         {isUser && <div className="jc-msg-meta" style={{ justifyContent: "flex-end" }}>{msg.timestamp}</div>}
         <div className="jc-msg-bubble">
           {msg.content && (
-            <div className="jc-msg-text" dangerouslySetInnerHTML={{
-              __html: msg.content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-            }} />
+            <SafeMarkdown className="jc-msg-text">{msg.content}</SafeMarkdown>
           )}
           {msg.card?.type === "briefing" && <BriefingCard card={msg.card} />}
           {msg.card?.type === "process-list" && <ProcessListCard processes={msg.card.processes} />}
@@ -750,7 +764,26 @@ export default function JurisCloudOS() {
   const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection();
-  const { tokenBalance, consumeTokens } = useTokenBalance();
+  const { tokenBalance, consumeTokensWithRef, refundTokens } = useTokenBalance();
+
+  // Agentes do banco. Enquanto carrega usa AGENTS_FALLBACK pra evitar flash de tela vazia.
+  const { agents: dbAgents, loading: agentsLoading } = useAgents();
+  const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
+    ? AGENTS_FALLBACK
+    : dbAgents.map(a => ({
+        id: a.externalId ?? 0,
+        name: a.name,
+        status: (a.status === "offline" ? "idle" : a.status) as "active" | "idle" | "alert",
+        color: a.color,
+        role: a.role,
+        permissions: a.permissions as any,
+        department: a.departmentName === "diretoria" ? [a.departmentName] : [a.departmentName, ...(a.role === "ceo" ? ["*","diretoria"] : a.role === "director" ? ["diretoria"] : [])],
+        canOrchestrate: a.canOrchestrate,
+        maxConcurrentTasks: a.maxConcurrentTasks,
+        currentTasks: a.currentTasks,
+        description: a.description ?? undefined,
+        reportsTo: a.reportsTo ?? undefined,
+      }));
 
   const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
@@ -882,29 +915,69 @@ export default function JurisCloudOS() {
     const val = (text || inputVal).trim();
     if (!val) return;
     const { cost, label } = getTokenCost(val);
-    const success = await consumeTokens(cost, `${label}: ${val.slice(0, 50)}`);
-    if (!success) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", agent: "Sistema", content: `️ **Saldo insuficiente.** Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }]);
+
+    // Idempotency reference for this request — used to tie charge and refund.
+    const requestId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    const charged = await consumeTokensWithRef(cost, `${label}: ${val.slice(0, 50)}`, requestId);
+    if (!charged) {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        role: "assistant",
+        agent: "Sistema",
+        content: `Saldo insuficiente. Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`,
+        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
       return;
     }
+
     const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
     setMessages(prev => [...prev, userMsg]);
     setInputVal("");
     setThinking(true);
-    setTimeout(() => {
+
+    // Helper: refund + show a friendly system message.
+    const refundAndNotify = async (reason: string) => {
+      await refundTokens(cost, requestId, `Estorno automatico: ${reason}`);
       setThinking(false);
-      const responses = [
-        { agent: "Pesquisador Jurídico", content: "Encontrei **3 precedentes relevantes** no TJBA. O mais recente fortalece a tese de revisão contratual." },
-        { agent: "Controlador de Prazos", content: "Detectei **2 prazos críticos** nos próximos 3 dias úteis. O caso #0023847 vence **hoje às 17h**." },
-        { agent: "Redator Processual", content: "Posso gerar a **petição inicial** com base nos documentos. Qual a vara e tribunal de destino?" },
-        { agent: "Meu Assistente", content: "Estou **orquestrando os agentes** para atender sua solicitação. Pesquisador mapeando jurisprudência." },
-      ];
-      const r = responses[Math.floor(Math.random() * responses.length)];
       setMessages(prev => [...prev, {
-        id: Date.now() + 1, role: "assistant", agent: r.agent, content: r.content,
+        id: Date.now() + 1,
+        role: "assistant",
+        agent: "Sistema",
+        content: `Nao consegui processar sua solicitacao agora (${reason}). Os **${cost} token(s)** foram estornados ao seu saldo.`,
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
-    }, 1800 + Math.random() * 600);
+    };
+
+    try {
+      const { data, error } = await supabase.functions.invoke("chat-with-agent", {
+        body: {
+          requestId,
+          deptId: activeDept,
+          message: val,
+          history: messages.slice(-8).map(m => ({ role: m.role, content: m.content, agent: m.agent })),
+        },
+      });
+
+      if (error || !data || !data.content) {
+        await refundAndNotify(error?.message || "agente nao respondeu");
+        return;
+      }
+
+      setThinking(false);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "assistant",
+        agent: data.agent || "Assistente",
+        content: data.content,
+        meta: { requestId, tokensCost: cost, orchestration: data.orchestration },
+        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } catch (e: any) {
+      await refundAndNotify(e?.message || "erro de rede");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -920,7 +993,7 @@ export default function JurisCloudOS() {
   const visibleCommands = ALL_COMMANDS.filter(c => canSeeCommand(c));
   // Filter agents by role + department
   const visibleAgents = (() => {
-    const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(activeDept);
+    const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(AGENTS, activeDept);
     return deptAgents.filter(a => canSeeAgentRole(a.role)).slice(0, visibility.maxAgentsShown);
   })();
 
@@ -1355,7 +1428,7 @@ export default function JurisCloudOS() {
             )}
 
             {rightTab === "agentes" && (() => {
-              const capacity = getTotalCapacity();
+              const capacity = getTotalCapacity(AGENTS);
               return (
                 <>
                   {visibility.showCapacityPanel && (

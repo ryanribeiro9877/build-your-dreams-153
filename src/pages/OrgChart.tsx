@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAgents } from "@/hooks/useAgents";
 import {
   Crown, Briefcase, Target, Scale, HardHat, Coins, ClipboardList, Hash,
   Landmark, Search, DollarSign, ShieldCheck, Users, Mail, RefreshCw, Palette,
@@ -240,11 +241,37 @@ function StatsBar({ agents }: { agents: Agent[] }) {
 /* ─── PAGE ─── */
 export default function OrgChart() {
   const navigate = useNavigate();
+  const { agents: dbAgents } = useAgents();
+
+  // Merge: dados do banco (status, current_tasks, max) sobre Icon/role do hardcoded.
+  // Migracao completa para uuid + DB so na Onda 4.
+  const initialMerged = useMemo<Agent[]>(() => {
+    if (!dbAgents.length) return INITIAL_AGENTS;
+    const byExt = new Map(dbAgents.filter(a => a.externalId !== null).map(a => [a.externalId!, a]));
+    return INITIAL_AGENTS.map(a => {
+      const db = byExt.get(a.id);
+      if (!db) return a;
+      return {
+        ...a,
+        status: db.status === "offline" ? "idle" : db.status,
+        currentTasks: db.currentTasks,
+        maxConcurrentTasks: db.maxConcurrentTasks,
+        color: db.color || a.color,
+      };
+    });
+  }, [dbAgents]);
+
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [tree, setTree] = useState(() => buildTree(INITIAL_AGENTS));
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
   const [moveLog, setMoveLog] = useState<string[]>([]);
+
+  // Quando dbAgents chega, sincroniza estado local.
+  useEffect(() => {
+    setAgents(initialMerged);
+    setTree(buildTree(initialMerged));
+  }, [initialMerged]);
 
   const rebuildTree = useCallback((newAgents: Agent[]) => {
     setAgents(newAgents);
