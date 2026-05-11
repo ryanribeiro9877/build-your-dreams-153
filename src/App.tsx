@@ -22,6 +22,7 @@ import AdminMaster from "./pages/AdminMaster.tsx";
 import AdminNotifications from "./pages/AdminNotifications.tsx";
 import ProvidersConfig from "./pages/ProvidersConfig.tsx";
 import AgentsAdmin from "./pages/AgentsAdmin.tsx";
+import AgentDetail from "./pages/AgentDetail.tsx";
 import ChatWithAgent from "./pages/ChatWithAgent.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/admin/master" element={<ProtectedRoute><AdminMaster /></ProtectedRoute>} />
             <Route path="/admin/notificacoes" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
             <Route path="/admin/agentes" element={<ProtectedRoute><AgentsAdmin /></ProtectedRoute>} />
+            <Route path="/admin/agentes/:id" element={<ProtectedRoute><AgentDetail /></ProtectedRoute>} />
             <Route path="/configuracoes/providers" element={<ProtectedRoute><ProvidersConfig /></ProtectedRoute>} />
             <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

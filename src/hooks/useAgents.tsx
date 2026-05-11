@@ -30,6 +30,7 @@ export interface AgentRecord {
   reportsTo: number | null;   // external_id do superior
   description: string | null;
   permissions: string[];
+  level: number;              // 1-4 nivel hierarquico
 }
 
 interface AgentRow {
@@ -45,6 +46,7 @@ interface AgentRow {
   current_tasks: number;
   reports_to: number | null;
   description: string | null;
+  level: number;
   departments: { name: string } | null;
   agent_permissions: { permission: string }[] | null;
 }
@@ -60,7 +62,7 @@ export function useAgents() {
       .select(`
         id, external_id, name, color, role, status,
         department_id, can_orchestrate, max_concurrent_tasks,
-        current_tasks, reports_to, description,
+        current_tasks, reports_to, description, level,
         departments ( name ),
         agent_permissions ( permission )
       `)
@@ -89,6 +91,7 @@ export function useAgents() {
       reportsTo: r.reports_to,
       description: r.description,
       permissions: (r.agent_permissions ?? []).map(p => p.permission),
+      level: r.level ?? 4,
     })));
     setLoading(false);
   }, []);
