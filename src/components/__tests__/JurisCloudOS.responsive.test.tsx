@@ -9,6 +9,24 @@ const Wrap = ({ children }: { children: React.ReactNode }) => (
   </MemoryRouter>
 );
 
+const { createQueryChain } = vi.hoisted(() => {
+  function createQueryChain() {
+    return {
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      limit: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      delete: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+  }
+  return { createQueryChain };
+});
+
 // Mock Supabase + auth so JurisCloudOS hooks don't try to hit the network.
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -19,13 +37,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         data: { subscription: { unsubscribe: vi.fn() } },
       }),
     },
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
-    })),
+    from: vi.fn(() => createQueryChain()),
     channel: vi.fn(() => ({
       on: vi.fn().mockReturnThis(),
       subscribe: vi.fn().mockReturnValue({}),
@@ -360,9 +372,28 @@ describe("UI tracking", () => {
 });
 
 describe("Tooltip overlay (collapsed sidebar)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     cleanup();
     localStorage.clear();
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: {
+        auth: {
+          getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+          onAuthStateChange: vi.fn().mockReturnValue({
+            data: { subscription: { unsubscribe: vi.fn() } },
+          }),
+        },
+        from: vi.fn(() => createQueryChain()),
+        channel: vi.fn(() => ({
+          on: vi.fn().mockReturnThis(),
+          subscribe: vi.fn().mockReturnValue({}),
+        })),
+        removeChannel: vi.fn(),
+      },
+    }));
+    await import("@/integrations/supabase/client");
   });
 
   it("does not render the dim overlay when no tooltips are open", async () => {
