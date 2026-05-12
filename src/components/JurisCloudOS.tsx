@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +12,15 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { useUiPreferences } from "@/hooks/useUiPreferences";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
@@ -22,7 +31,7 @@ import {
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
   MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
-  PanelLeftOpen, PanelLeftClose, Circle,
+  PanelLeftOpen, Circle, Minimize2,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
@@ -44,33 +53,38 @@ const ROLE_ICONS: Record<string, React.ComponentType<any>> = {
   specialist: Microscope, reviewer: CheckCircle, executor: Zap, monitor: Radio,
 };
 
+const ACCENT = "#EAB308";
+const ACCENT_SOFT = "#CA8A04";
 const DEPARTMENTS = [
-  { id: "assistente",    label: "Meu Assistente",          color: "#c9a84c", badge: 8  },
-  { id: "diretoria",     label: "Diretoria / CEO",         color: "#c9a84c", badge: 0  },
-  { id: "eficiencia",    label: "Central de Eficiência",    color: "#ff6b6b", badge: 5  },
-  { id: "conversao",     label: "Conversão",                color: "#e74c3c", badge: 7  },
-  { id: "recepcao",      label: "Recepção",                 color: "#3b82f6", badge: 6  },
-  { id: "marketing",     label: "Marketing",                color: "#f59e0b", badge: 5  },
-  { id: "criacao",       label: "Criação",                  color: "#e67e22", badge: 4  },
-  { id: "civel",         label: "Contencioso Cível",        color: "#8b5cf6", badge: 12 },
-  { id: "trabalhista",   label: "Contencioso Trabalhista",  color: "#ef4444", badge: 7  },
-  { id: "tributario",    label: "Contencioso Tributário",    color: "#10b981", badge: 4  },
-  { id: "protocolo",     label: "Protocolo",                color: "#6366f1", badge: 9  },
-  { id: "calculos",      label: "Cálculos Jurídicos",       color: "#ec4899", badge: 3  },
-  { id: "audiencias",    label: "Audiências",               color: "#14b8a6", badge: 11 },
-  { id: "monitoramento", label: "Monitoramento Processual", color: "#f97316", badge: 15 },
-  { id: "financeiro",    label: "Financeiro",               color: "#2ecc71", badge: 6  },
-  { id: "cobrancas",     label: "Cobranças",                color: "#84cc16", badge: 2  },
-  { id: "tech",          label: "Tecnologia",               color: "#9b59b6", badge: 3  },
-  { id: "compliance",    label: "Compliance",               color: "#0ea5e9", badge: 1  },
-  { id: "familia",       label: "Família e Sucessões",      color: "#a855f7", badge: 3  },
+  { id: "assistente",    label: "Meu Assistente",          color: ACCENT, badge: 8  },
+  { id: "diretoria",     label: "Diretoria / CEO",         color: ACCENT_SOFT, badge: 0  },
+  { id: "eficiencia",    label: "Central de Eficiência",    color: ACCENT, badge: 5  },
+  { id: "conversao",     label: "Conversão",                color: ACCENT_SOFT, badge: 7  },
+  { id: "recepcao",      label: "Recepção",                 color: ACCENT, badge: 6  },
+  { id: "marketing",     label: "Marketing",                color: ACCENT_SOFT, badge: 5  },
+  { id: "criacao",       label: "Criação",                  color: ACCENT, badge: 4  },
+  { id: "civel",         label: "Contencioso Cível",        color: ACCENT_SOFT, badge: 12 },
+  { id: "trabalhista",   label: "Contencioso Trabalhista",  color: ACCENT, badge: 7  },
+  { id: "tributario",    label: "Contencioso Tributário",    color: ACCENT_SOFT, badge: 4  },
+  { id: "protocolo",     label: "Protocolo",                color: ACCENT, badge: 9  },
+  { id: "calculos",      label: "Cálculos Jurídicos",       color: ACCENT_SOFT, badge: 3  },
+  { id: "audiencias",    label: "Audiências",               color: ACCENT, badge: 11 },
+  { id: "monitoramento", label: "Monitoramento Processual", color: ACCENT_SOFT, badge: 15 },
+  { id: "financeiro",    label: "Financeiro",               color: ACCENT, badge: 6  },
+  { id: "cobrancas",     label: "Cobranças",                color: ACCENT_SOFT, badge: 2  },
+  { id: "tech",          label: "Tecnologia",               color: ACCENT, badge: 3  },
+  { id: "compliance",    label: "Compliance",               color: ACCENT_SOFT, badge: 1  },
+  { id: "familia",       label: "Família e Sucessões",      color: ACCENT, badge: 3  },
 ];
 
 type AgentRole = "ceo" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
 
 interface Agent {
-  id: number; name: string; status: "active" | "idle" | "alert";
+  id: number;
+  /** UUID em `public.agents` — necessário para abrir `/admin/agentes/:id`. */
+  uuid?: string;
+  name: string; status: "active" | "idle" | "alert";
   color: string; role: AgentRole; permissions: AgentPermission[];
   department: string[]; canOrchestrate: boolean;
   maxConcurrentTasks: number; currentTasks: number;
@@ -142,6 +156,18 @@ const PROCESSES = [
   { id: "0041887", client: "Clínica São Lucas",   area: "Contratos", status: "normal",    prazo: "7 dias",  tribunal: "—",    value: "R$ 135.000"},
 ];
 
+/** Chips de área — apenas tons de amarelo + texto preto/branco. */
+function getCaseAreaChip(area: string) {
+  const m: Record<string, { background: string; color: string; border: string }> = {
+    "Bancário": { background: "rgba(234,179,8,0.32)", color: "#FFFBEB", border: "1px solid rgba(234,179,8,0.5)" },
+    "Cível": { background: "rgba(234,179,8,0.18)", color: "#FEFCE8", border: "1px solid rgba(234,179,8,0.38)" },
+    "Previdência": { background: "rgba(250,204,21,0.28)", color: "#171717", border: "1px solid rgba(250,204,21,0.48)" },
+    "Previdenciário": { background: "rgba(250,204,21,0.28)", color: "#171717", border: "1px solid rgba(250,204,21,0.48)" },
+    "Contratos": { background: "rgba(202,138,4,0.28)", color: "#FFFBEB", border: "1px solid rgba(202,138,4,0.45)" },
+  };
+  return m[area] || { background: "rgba(234,179,8,0.2)", color: "#FFFBEB", border: "1px solid rgba(234,179,8,0.4)" };
+}
+
 const ALERTS = [
   { type: "fatal",   text: "Prazo fatal: caso #0023847 – Bancário",  time: "HOJE 17h" },
   { type: "warning", text: "4 clientes sem retorno há +48h",          time: "2h atrás" },
@@ -158,12 +184,12 @@ const INITIAL_MESSAGES = [
       title: "Bom dia, Doutor(a)",
       summary: "Aqui está sua visão operacional de hoje",
       items: [
-        { label: "Prazos críticos",      value: "3", accent: "#ef4444" },
-        { label: "Revisões pendentes",    value: "12", accent: "#f59e0b" },
-        { label: "Novos contratos",       value: "2", accent: "#2dd4a0" },
-        { label: "Audiências esta semana",value: "7", accent: "#4f8ef7" },
-        { label: "Leads qualificados",    value: "5", accent: "#c9a84c" },
-        { label: "Protocolos em fila",   value: "9", accent: "#a78bfa" },
+        { label: "Prazos críticos",      value: "3", accent: "#EAB308" },
+        { label: "Revisões pendentes",    value: "12", accent: "#CA8A04" },
+        { label: "Novos contratos",       value: "2", accent: "#FDE047" },
+        { label: "Audiências esta semana",value: "7", accent: "#EAB308" },
+        { label: "Leads qualificados",    value: "5", accent: "#CA8A04" },
+        { label: "Protocolos em fila",   value: "9", accent: "#FACC15" },
       ],
     },
     timestamp: "08:00",
@@ -215,16 +241,15 @@ type Theme = "dark" | "light";
 // ── STYLE INJECTION ──────────────────────────────────────────
 const GlobalStyles = ({ theme }: { theme: Theme }) => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --font-disp: 'Cormorant Garamond', Georgia, serif;
-      --font-body: 'DM Sans', sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
-      --gold: #c9a84c; --gold2: #e8c96a;
-      --blue: #4f8ef7; --teal: #2dd4a0; --purple: #a78bfa;
-      --red: #ef4444; --amber: #f59e0b;
-      --theme-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      --font-disp: 'Literata', Georgia, 'Times New Roman', serif;
+      --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;
+      --gold: #EAB308; --gold2: #FACC15;
+      --theme-transition: 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+      --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
     /* Light: ChatGPT-inspired palette — pure white surfaces, black text. */
     [data-theme="light"] {
@@ -245,7 +270,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --card-border-hover: #3a3a55;
       --text1: #eeeef5; --text2: #c4c4d4; --text3: #7a7a92;
       --logo-text: #0a0a12;
-      --user-bubble-bg: rgba(201,168,76,0.10); --user-bubble-border: rgba(201,168,76,0.25);
+      --user-bubble-bg: rgba(234,179,8,0.08); --user-bubble-border: rgba(234,179,8,0.22);
       --badge-bg: rgba(255,255,255,0.06);
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
@@ -262,9 +287,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-sidebar {
       width: 184px; min-width: 184px; background: var(--bg2);
       border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
-      transition: width 0.25s ease, min-width 0.25s ease, transform 0.3s ease;
+      display: flex; flex-direction: column;
+      overflow-x: visible;
+      overflow-y: hidden;
+      transition: width 0.38s var(--panel-ease), min-width 0.38s var(--panel-ease), transform 0.35s ease;
       position: relative;
+    }
+    .jc-sidebar-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .jc-sidebar.collapsed { width: 52px; min-width: 52px; }
     .jc-sidebar.collapsed .jc-logo-info,
@@ -280,21 +314,26 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-sidebar.collapsed .jc-agent-status-dot { display: none; }
 
     .jc-sidebar-toggle {
-      position: absolute; top: 18px; right: -12px; z-index: 10;
-      width: 22px; height: 22px; border-radius: 50%;
+      position: absolute; top: 16px; right: -16px; z-index: 30;
+      width: 34px; height: 34px; border-radius: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text2); transition: all 0.15s;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+      cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.35);
     }
-    .jc-sidebar-toggle:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
+    .jc-sidebar-toggle:hover {
+      color: var(--gold2);
+      border-color: rgba(234,179,8,0.55);
+      transform: scale(1.06);
+      box-shadow: 0 6px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(234,179,8,0.15);
+    }
     .jc-sidebar-toggle:focus-visible,
     .jc-right-toggle-desk:focus-visible,
     .jc-nav-item:focus-visible,
     .jc-agent-item:focus-visible {
       outline: 2px solid var(--gold);
       outline-offset: 2px;
-      box-shadow: 0 0 0 4px rgba(201,168,76,0.18);
+      box-shadow: 0 0 0 4px rgba(234,179,8,0.18);
     }
     .jc-sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -310,15 +349,15 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       background: linear-gradient(135deg, var(--gold), var(--gold2));
       border-radius: 8px; display: flex; align-items: center; justify-content: center;
       font-size: 15px; font-weight: 700; color: var(--logo-text);
-      font-family: var(--font-disp); box-shadow: 0 0 14px rgba(201,168,76,0.3);
+      font-family: var(--font-disp); box-shadow: 0 0 14px rgba(234,179,8,0.3);
       flex-shrink: 0;
     }
     .jc-logo-text {
       font-family: var(--font-disp); font-size: 17px; font-weight: 600;
       transition: color var(--theme-transition);
     }
-    .jc-logo-text.online { color: #2dd4a0; text-shadow: 0 0 10px rgba(45,212,160,0.35); }
-    .jc-logo-text.offline { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.35); }
+    .jc-logo-text.online { color: #FACC15; text-shadow: 0 0 14px rgba(234,179,8,0.35); }
+    .jc-logo-text.offline { color: #FEF9C3; text-shadow: 0 0 12px rgba(250,204,21,0.25); opacity: 0.95; }
     .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
 
     .jc-search {
@@ -346,25 +385,41 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       transition: background 0.15s; margin-bottom: 1px;
     }
     .jc-nav-item:hover { background: var(--bg4); }
-    .jc-nav-item.active { background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.15); }
+    .jc-nav-item.active { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.15); }
     .jc-nav-label { font-size: 13px; font-weight: 400; color: var(--text1); flex: 1; }
     .jc-nav-badge {
       font-size: 10px; font-family: var(--font-mono);
       background: var(--badge-bg); border-radius: 10px;
       padding: 1px 7px; color: var(--text2); min-width: 22px; text-align: center;
     }
-    .jc-nav-badge.alert { background: rgba(239,68,68,0.18); color: #ff8080; }
+    .jc-nav-badge.alert { background: rgba(234,179,8,0.16); color: #FEF08A; border: 1px solid rgba(234,179,8,0.35); }
 
-    .jc-agents-section { padding: 8px; border-top: 1px solid var(--border); }
+    .jc-agents-section {
+      padding: 8px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      max-height: 38vh;
+      overflow-x: visible;
+      overflow-y: auto;
+    }
     .jc-agent-item {
       display: flex; align-items: center; gap: 8px;
-      padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s;
+      width: 100%;
+      border: none; background: transparent; font: inherit; color: inherit; text-align: left;
+      padding: 6px 8px; border-radius: 8px; cursor: pointer;
+      position: relative; z-index: 0;
+      transition: transform 0.22s ease, background 0.2s ease, box-shadow 0.22s ease;
     }
-    .jc-agent-item:hover { background: var(--bg3); }
+    .jc-agents-section .jc-agent-item:hover {
+      background: var(--bg3);
+      transform: scale(1.045);
+      z-index: 2;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.38);
+    }
     .jc-agent-avatar {
       width: 26px; height: 26px; border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 9px; font-weight: 700; font-family: var(--font-mono); flex-shrink: 0;
+      font-size: 9px; font-weight: 700; font-family: var(--font-body); flex-shrink: 0;
     }
     .jc-agent-name { font-size: 11px; color: var(--text2); flex: 1; line-height: 1.2; }
 
@@ -386,8 +441,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       font-size: 11px; font-weight: 500; border: 1px solid; transition: opacity 0.15s;
     }
     .jc-alert-chip:hover { opacity: 0.8; }
-    .jc-alert-chip.fatal { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ff8080; }
-    .jc-alert-chip.warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #fbbf24; }
+    .jc-alert-chip.fatal { background: rgba(234,179,8,0.12); border-color: rgba(250,204,21,0.45); color: #FEF9C3; }
+    .jc-alert-chip.warning { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.35); color: #FACC15; }
     .jc-user-chip {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 12px 4px 4px; background: var(--bg3);
@@ -414,7 +469,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-msg-avatar {
       width: 32px; height: 32px; min-width: 32px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; font-family: var(--font-mono);
+      font-size: 11px; font-weight: 700; font-family: var(--font-body);
     }
     .jc-msg-bubble {
       max-width: 75%; background: var(--bg3); border: 1px solid var(--border);
@@ -423,19 +478,19 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-msg-wrap.user .jc-msg-bubble { background: var(--user-bubble-bg); border-color: var(--user-bubble-border); }
     .jc-msg-meta {
       font-size: 10px; color: var(--text3); margin-bottom: 4px;
-      font-family: var(--font-mono); display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-body); display: flex; align-items: center; gap: 6px;
     }
     .jc-msg-meta .agent-tag {
       font-size: 9px; padding: 2px 7px; border-radius: 4px;
-      background: rgba(201,168,76,0.12); color: var(--gold); border: 1px solid rgba(201,168,76,0.2);
+      background: rgba(234,179,8,0.12); color: var(--gold); border: 1px solid rgba(234,179,8,0.28);
       font-family: var(--font-body); font-weight: 500;
     }
     .jc-msg-text b, .jc-msg-text strong { color: var(--gold2); font-weight: 600; }
 
     /* BRIEFING */
     .jc-card-briefing {
-      background: linear-gradient(135deg, rgba(201,168,76,0.06), rgba(79,142,247,0.04));
-      border: 1px solid rgba(201,168,76,0.2); border-radius: 14px; padding: 20px; margin-top: 2px;
+      background: linear-gradient(135deg, rgba(234,179,8,0.08), rgba(0,0,0,0.12));
+      border: 1px solid rgba(234,179,8,0.28); border-radius: 14px; padding: 20px; margin-top: 2px;
     }
     .jc-card-briefing-title { font-family: var(--font-disp); font-size: 22px; font-weight: 600; color: var(--gold2); margin-bottom: 4px; }
     .jc-card-briefing-sub { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
@@ -456,18 +511,18 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s;
     }
     .jc-process-row:hover { border-color: var(--border2); background: var(--bg3); }
-    .jc-process-id { font-family: var(--font-mono); font-size: 10px; color: var(--text3); min-width: 72px; }
+    .jc-process-id { font-family: var(--font-body); font-size: 10px; color: var(--text3); min-width: 72px; }
     .jc-process-client { font-size: 12.5px; font-weight: 500; flex: 1; color: var(--text1); }
     .jc-process-area { font-size: 10px; padding: 2px 8px; border-radius: 5px; }
-    .jc-process-prazo { font-family: var(--font-mono); font-size: 10px; }
+    .jc-process-prazo { font-family: var(--font-body); font-size: 10px; }
     .jc-process-badge {
       font-size: 9px; padding: 3px 8px; border-radius: 5px; font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.06em;
     }
-    .jc-process-badge.urgente { background: rgba(239,68,68,0.15); color: #ff8080; border: 1px solid rgba(239,68,68,0.25); }
-    .jc-process-badge.normal { background: rgba(79,142,247,0.12); color: #93c5fd; border: 1px solid rgba(79,142,247,0.2); }
-    .jc-process-badge.revisar { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
-    .jc-process-value { font-family: var(--font-mono); font-size: 11px; color: var(--teal); min-width: 80px; text-align: right; }
+    .jc-process-badge.urgente { background: rgba(234,179,8,0.18); color: #FEF08A; border: 1px solid rgba(250,204,21,0.45); }
+    .jc-process-badge.normal { background: rgba(255,255,255,0.06); color: #e4e4e7; border: 1px solid rgba(255,255,255,0.14); }
+    .jc-process-badge.revisar { background: rgba(250,204,21,0.12); color: #FACC15; border: 1px solid rgba(250,204,21,0.35); }
+    .jc-process-value { font-family: var(--font-body); font-size: 11px; color: #FACC15; min-width: 80px; text-align: right; font-weight: 600; }
 
     /* THINKING */
     .jc-thinking { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
@@ -488,13 +543,13 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       color: var(--text2); cursor: pointer; white-space: nowrap; transition: all 0.15s;
       font-family: var(--font-body); display: flex; align-items: center; gap: 4px;
     }
-    .jc-cmd:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.25); color: var(--gold2); }
+    .jc-cmd:hover { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.25); color: var(--gold2); }
     .jc-input-row {
       display: flex; align-items: flex-end; gap: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
       border-radius: 14px; padding: 10px 14px; transition: border-color 0.2s;
     }
-    .jc-input-row:focus-within { border-color: rgba(201,168,76,0.4); }
+    .jc-input-row:focus-within { border-color: rgba(234,179,8,0.4); }
     .jc-textarea {
       flex: 1; background: none; border: none; outline: none; resize: none;
       font-family: var(--font-body); font-size: 14px; color: var(--text1);
@@ -510,37 +565,42 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       background: linear-gradient(135deg, var(--gold), var(--gold2));
       color: #0a0a12;
     }
-    .jc-send-btn:hover { transform: scale(1.05); box-shadow: 0 0 16px rgba(201,168,76,0.4); }
+    .jc-send-btn:hover { transform: scale(1.05); box-shadow: 0 0 16px rgba(234,179,8,0.4); }
     .jc-send-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
     .jc-mic-btn {
       background: var(--bg4); color: var(--text2); border: 1px solid var(--border);
     }
     .jc-mic-btn:hover { border-color: var(--gold); color: var(--gold); }
-    .jc-mic-btn.recording { background: rgba(239,68,68,0.15); border-color: var(--red); color: var(--red); animation: pulse 1s infinite; }
+    .jc-mic-btn.recording { background: rgba(234,179,8,0.18); border-color: #EAB308; color: #FEF9C3; animation: pulse 1s infinite; }
     .jc-input-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; }
 
     /* RIGHT PANEL */
     .jc-right-panel {
       width: 320px; min-width: 320px; background: var(--bg2);
       border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
-      transition: width 0.25s ease, min-width 0.25s ease;
+      transition: width 0.38s var(--panel-ease), min-width 0.38s var(--panel-ease), opacity 0.3s ease;
       position: relative;
     }
     .jc-right-panel.collapsed { width: 0; min-width: 0; border-left: none; }
     .jc-right-panel.collapsed > *:not(.jc-right-toggle-desk) { display: none; }
 
     .jc-right-toggle-desk {
-      position: absolute; top: 14px; left: -12px; z-index: 10;
-      width: 22px; height: 22px; border-radius: 50%;
+      position: absolute; top: 14px; left: -16px; z-index: 30;
+      width: 34px; height: 34px; border-radius: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text2); transition: all 0.15s;
-      box-shadow: -2px 2px 6px rgba(0,0,0,0.18);
+      cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
+      box-shadow: -4px 4px 18px rgba(0,0,0,0.35);
     }
     .jc-right-panel.collapsed .jc-right-toggle-desk {
       left: auto; right: 8px; position: fixed; top: 64px;
     }
-    .jc-right-toggle-desk:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
+    .jc-right-toggle-desk:hover {
+      color: var(--gold2);
+      border-color: rgba(234,179,8,0.55);
+      transform: scale(1.06);
+      box-shadow: -6px 6px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(234,179,8,0.12);
+    }
 
     .jc-right-header {
       padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
@@ -565,7 +625,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-case-card:hover, .jc-agent-card-rp:hover {
       border-color: var(--card-border-hover); background: var(--bg4);
     }
-    .jc-case-num { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-bottom: 4px; }
+    .jc-case-num { font-family: var(--font-body); font-size: 10px; color: var(--text3); margin-bottom: 4px; }
     .jc-case-name { font-size: 13px; font-weight: 500; color: var(--text1); margin-bottom: 6px; }
     .jc-case-row { display: flex; justify-content: space-between; align-items: center; }
     .jc-case-prazo-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text3); margin-top: 6px; }
@@ -574,12 +634,12 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       display: flex; gap: 10px; align-items: flex-start;
       padding: 10px; border-radius: 8px; margin-bottom: 6px; border: 1px solid; cursor: pointer;
     }
-    .jc-alert-item.fatal { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.2); }
-    .jc-alert-item.warning { background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.2); }
-    .jc-alert-item.info { background: rgba(79,142,247,0.07); border-color: rgba(79,142,247,0.2); }
-    .jc-alert-item.success { background: rgba(45,212,160,0.07); border-color: rgba(45,212,160,0.2); }
+    .jc-alert-item.fatal { background: rgba(234,179,8,0.06); border-color: rgba(250,204,21,0.35); }
+    .jc-alert-item.warning { background: rgba(234,179,8,0.05); border-color: rgba(234,179,8,0.28); }
+    .jc-alert-item.info { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
+    .jc-alert-item.success { background: rgba(250,204,21,0.06); border-color: rgba(250,204,21,0.3); }
     .jc-alert-text { font-size: 11.5px; color: var(--text1); line-height: 1.4; flex: 1; }
-    .jc-alert-time { font-size: 9px; color: var(--text3); font-family: var(--font-mono); white-space: nowrap; }
+    .jc-alert-time { font-size: 9px; color: var(--text3); font-family: var(--font-body); white-space: nowrap; }
 
     .jc-sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.5); }
     .jc-sidebar-overlay.visible { display: block; }
@@ -666,19 +726,14 @@ function BriefingCard({ card }: { card: any }) {
 }
 
 function ProcessListCard({ processes }: { processes: any[] }) {
-  const areaColors: Record<string, string> = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdência": "#f59e0b", "Contratos": "#4f8ef7" };
   return (
     <div className="jc-card-processes">
       {processes.map((p: any) => (
         <div className="jc-process-row" key={p.id}>
           <div className="jc-process-id">#{p.id}</div>
           <div className="jc-process-client">{p.client}</div>
-          <div className="jc-process-area" style={{
-            background: `${areaColors[p.area] || "#4f8ef7"}18`,
-            color: areaColors[p.area] || "#4f8ef7",
-            border: `1px solid ${areaColors[p.area] || "#4f8ef7"}30`
-          }}>{p.area}</div>
-          <div className="jc-process-prazo" style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text2)" }}>
+          <div className="jc-process-area" style={getCaseAreaChip(p.area)}>{p.area}</div>
+          <div className="jc-process-prazo" style={{ color: p.prazo === "HOJE" ? "#FACC15" : "var(--text2)" }}>
             {p.prazo === "HOJE" ? (
               <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
                 <AlertTriangle size={10} /> HOJE
@@ -695,19 +750,21 @@ function ProcessListCard({ processes }: { processes: any[] }) {
 
 function MessageBubble({ msg }: { msg: any }) {
   const agentColors: Record<string, string> = {
-    "Meu Assistente": "#c9a84c", "Pesquisador Jurídico": "#2dd4a0",
-    "Redator Processual": "#a78bfa", "Controlador de Prazos": "#ef4444",
+    "Meu Assistente": "#EAB308",
+    "Pesquisador Jurídico": "#CA8A04",
+    "Redator Processual": "#FACC15",
+    "Controlador de Prazos": "#A16207",
   };
   const isUser = msg.role === "user";
-  const color = agentColors[msg.agent] || "#4f8ef7";
+  const color = agentColors[msg.agent] || "#EAB308";
 
   return (
     <div className={`jc-msg-wrap ${isUser ? "user" : ""}`}>
       <div className="jc-msg-avatar" style={{
-        background: isUser ? "rgba(201,168,76,0.15)" : `${color}20`,
-        color: isUser ? "#c9a84c" : color,
-        border: `1px solid ${isUser ? "rgba(201,168,76,0.25)" : `${color}30`}`,
-        fontFamily: isUser ? "'Cormorant Garamond', serif" : "var(--font-mono)",
+        background: isUser ? "rgba(234,179,8,0.15)" : `${color}20`,
+        color: isUser ? "#EAB308" : color,
+        border: `1px solid ${isUser ? "rgba(234,179,8,0.25)" : `${color}30`}`,
+        fontFamily: isUser ? "var(--font-disp)" : "var(--font-body)",
         fontSize: isUser ? 14 : 11,
       }}>
         {isUser ? "U" : (msg.agent ? getInitials(msg.agent) : "AI")}
@@ -735,7 +792,7 @@ function MessageBubble({ msg }: { msg: any }) {
 function ThinkingBubble({ agent }: { agent: string }) {
   return (
     <div className="jc-msg-wrap">
-      <div className="jc-msg-avatar" style={{ background: "rgba(201,168,76,0.1)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.2)", fontSize: 11 }}>
+      <div className="jc-msg-avatar" style={{ background: "rgba(234,179,8,0.12)", color: "#EAB308", border: "1px solid rgba(234,179,8,0.28)", fontSize: 11 }}>
         {getInitials(agent)}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -751,16 +808,16 @@ function ThinkingBubble({ agent }: { agent: string }) {
 // ── ALERT ICON HELPER ───────────────────────────────────────
 function AlertIcon({ type }: { type: string }) {
   const size = 14;
-  if (type === "fatal") return <AlertTriangle size={size} style={{ color: "#ff8080" }} />;
-  if (type === "warning") return <AlertCircle size={size} style={{ color: "#fbbf24" }} />;
-  if (type === "success") return <CheckCircle size={size} style={{ color: "#6ee7b7" }} />;
-  return <Info size={size} style={{ color: "#93c5fd" }} />;
+  if (type === "fatal") return <AlertTriangle size={size} style={{ color: "#FACC15" }} />;
+  if (type === "warning") return <AlertCircle size={size} style={{ color: "#EAB308" }} />;
+  if (type === "success") return <CheckCircle size={size} style={{ color: "#FEF9C3" }} />;
+  return <Info size={size} style={{ color: "#FDE047" }} />;
 }
 
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
   const navigate = useNavigate();
-  const { user, userRoles, signOut } = useAuth();
+  const { user, userRoles, signOut, hasRole } = useAuth();
   const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection();
@@ -772,6 +829,7 @@ export default function JurisCloudOS() {
     ? AGENTS_FALLBACK
     : dbAgents.map(a => ({
         id: a.externalId ?? 0,
+        uuid: a.id,
         name: a.name,
         status: (a.status === "offline" ? "idle" : a.status) as "active" | "idle" | "alert",
         color: a.color,
@@ -985,7 +1043,6 @@ export default function JurisCloudOS() {
   };
 
   const activeDeptData = DEPARTMENTS.find(d => d.id === activeDept);
-  const areaColors: Record<string, string> = { "Bancário": "#2dd4a0", "Cível": "#a78bfa", "Previdenciário": "#f59e0b", "Contratos": "#4f8ef7" };
 
   // Filter departments by role
   const visibleDepts = DEPARTMENTS.filter(d => canAccessDepartment(d.id));
@@ -1001,14 +1058,14 @@ export default function JurisCloudOS() {
 
   // Menu items config
   const MENU_ITEMS = [
-    { id: "clientes", label: "Clientes", icon: Users, color: "#2dd4a0", action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
-    { id: "admin", label: "Administração", icon: Crown, color: "#c9a84c", action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
-    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: "#c9a84c", action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
-    { id: "organograma", label: "Organograma", icon: Network, color: "#a78bfa", action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") },
-    { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: "#ff6b6b", action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
-    { id: "perfil", label: "Meu Perfil", icon: User, color: "#a78bfa", action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
-    { id: "site", label: "Voltar ao Site", icon: Globe, color: "#06b6d4", action: () => navigate("/"), show: canSeeMenuItem("site") },
-    { id: "sair", label: "Sair", icon: LogOut, color: "#ef4444", action: () => signOut(), show: canSeeMenuItem("sair") },
+    { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
+    { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
+    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
+    { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") },
+    { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
+    { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
+    { id: "site", label: "Voltar ao Site", icon: Globe, color: ACCENT, action: () => navigate("/"), show: canSeeMenuItem("site") },
+    { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
 
   const roleLabelsMap: Record<string, string> = {
@@ -1040,6 +1097,7 @@ export default function JurisCloudOS() {
     const surface = opts?.surface ?? "left_sidebar";
     return (
       <Tooltip
+        key={targetId}
         delayDuration={150}
         onOpenChange={(open) => {
           setOpenTooltipCount((n) => Math.max(0, n + (open ? 1 : -1)));
@@ -1095,10 +1153,11 @@ export default function JurisCloudOS() {
               aria-keyshortcuts="Control+B Meta+B"
               type="button"
             >
-              {sidebarCollapsed ? <PanelLeftOpen size={12} /> : <PanelLeftClose size={12} />}
+              {sidebarCollapsed ? <PanelLeftOpen size={16} strokeWidth={2} /> : <Minimize2 size={16} strokeWidth={2} />}
             </button>
           , "sidebar_toggle_btn")}
 
+          <div className="jc-sidebar-body">
           <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
             <div className="jc-logo-info">
@@ -1227,21 +1286,82 @@ export default function JurisCloudOS() {
           <div className="jc-agents-section" aria-label="Agentes ativos">
             <div className="jc-section-label">Agentes ({visibleAgents.length})</div>
             {visibleAgents.map(agent => {
-              const RoleIcon = ROLE_ICONS[agent.role] || Zap;
               const statusLabel = agent.status === "active" ? "ativo" : agent.status === "alert" ? "em alerta" : "inativo";
-              return withTooltip(`${agent.name} — ${statusLabel}`,
-                <div className="jc-agent-item" key={agent.id} aria-label={`${agent.name} (${statusLabel})`}>
-                  <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
-                    {getInitials(agent.name)}
-                  </div>
-                  <div className="jc-agent-name">{agent.name}</div>
-                  <Circle size={6} className="jc-agent-status-dot"
-                    fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
-                    style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
-                </div>,
-                `agent_${agent.id}`
+              const dotActive = "#EAB308";
+              const dotAlert = "#FACC15";
+              const dotIdle = "rgba(255,255,255,0.28)";
+              const fill = agent.status === "active" ? dotActive : agent.status === "alert" ? dotAlert : dotIdle;
+              return (
+                <DropdownMenu
+                  key={agent.uuid ?? `ext-${agent.id}`}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      trackUiEvent("nav_click", {
+                        surface: "left_sidebar",
+                        target_id: `agent_menu_${agent.id}`,
+                        target_label: agent.name,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
+                >
+                  {withTooltip(
+                    `${agent.name} — ${statusLabel}`,
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="jc-agent-item"
+                        aria-label={`${agent.name} (${statusLabel}). Abrir opções.`}
+                      >
+                        <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
+                          {getInitials(agent.name)}
+                        </div>
+                        <div className="jc-agent-name">{agent.name}</div>
+                        <Circle size={6} className="jc-agent-status-dot" fill={fill} style={{ color: fill }} />
+                      </button>
+                    </DropdownMenuTrigger>,
+                    `agent_${agent.id}`
+                  )}
+                  <DropdownMenuContent
+                    side="right"
+                    align="start"
+                    sideOffset={10}
+                    className={cn(
+                      "min-w-[220px] border border-neutral-800 bg-neutral-950 text-neutral-100 shadow-2xl",
+                      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+                      "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=right]:slide-in-from-left-2"
+                    )}
+                  >
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2 focus:bg-yellow-500/15 focus:text-yellow-50"
+                      onSelect={() => {
+                        if (!hasRole("admin")) {
+                          toast.error("Apenas administradores podem configurar agentes.");
+                          return;
+                        }
+                        if (!agent.uuid) {
+                          toast.error("Aguarde a sincronização dos agentes com o servidor.");
+                          return;
+                        }
+                        navigate(`/admin/agentes/${agent.uuid}`);
+                      }}
+                    >
+                      <Settings size={14} className="opacity-80 shrink-0" />
+                      Configurar agente
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-neutral-800" />
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2 focus:bg-yellow-500/15 focus:text-yellow-50"
+                      onSelect={() => navigate("/organograma")}
+                    >
+                      <Network size={14} className="opacity-80 shrink-0" />
+                      Ver no organograma
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               );
             })}
+          </div>
           </div>
         </aside>
 
@@ -1271,7 +1391,7 @@ export default function JurisCloudOS() {
 
             <button onClick={() => navigate("/tokens")} title="Meus Tokens"
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
-                background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", cursor: "pointer", color: "#c9a84c", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)" }}>
+                background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)" }}>
               <Coins size={14} />
               {tokenBalance.balance.toLocaleString()}
             </button>
@@ -1292,7 +1412,7 @@ export default function JurisCloudOS() {
               <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
               <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
               {userRoles.length > 0 && (
-                <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(201,168,76,0.15)", color: "#c9a84c", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(234,179,8,0.15)", color: "#FACC15", textTransform: "uppercase", fontFamily: "var(--font-body)" }}>
                   {userRoles[0]}
                 </span>
               )}
@@ -1336,7 +1456,7 @@ export default function JurisCloudOS() {
               </button>
             </div>
             <div className="jc-input-hint">
-              {isReadOnly && <span style={{ color: "#f59e0b", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
+              {isReadOnly && <span style={{ color: "#EAB308", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
               Enter para enviar · Shift+Enter para nova linha
             </div>
           </div>
@@ -1359,7 +1479,7 @@ export default function JurisCloudOS() {
               aria-keyshortcuts="Control+O Meta+O"
               type="button"
             >
-              {rightCollapsed ? <PanelRightOpen size={12} /> : <PanelRightClose size={12} />}
+              {rightCollapsed ? <PanelRightOpen size={16} strokeWidth={2} /> : <Minimize2 size={16} strokeWidth={2} />}
             </button>,
             "right_panel_toggle_btn",
             { side: "left", surface: "right_panel", alwaysOn: true }
@@ -1394,14 +1514,12 @@ export default function JurisCloudOS() {
                     <div className="jc-case-row">
                       <span style={{
                         fontSize: 10, padding: "2px 7px", borderRadius: 4,
-                        background: `${areaColors[p.area] || "#4f8ef7"}18`,
-                        color: areaColors[p.area] || "#4f8ef7",
-                        border: `1px solid ${areaColors[p.area] || "#4f8ef7"}30`
+                        ...getCaseAreaChip(p.area),
                       }}>{p.area}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--teal)" }}>{p.value}</span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#FACC15", fontWeight: 600 }}>{p.value}</span>
                     </div>
                     <div className="jc-case-prazo-row">
-                      <span style={{ color: p.prazo === "HOJE" ? "#ff8080" : "var(--text3)", display: "flex", alignItems: "center", gap: 3 }}>
+                      <span style={{ color: p.prazo === "HOJE" ? "#FACC15" : "var(--text3)", display: "flex", alignItems: "center", gap: 3 }}>
                         {p.prazo === "HOJE" ? <><AlertTriangle size={10} /> Prazo HOJE</> : <>Prazo em {p.prazo}</>}
                       </span>
                       <div style={{ flex: 1 }} />
@@ -1437,7 +1555,7 @@ export default function JurisCloudOS() {
                         <BarChart3 size={12} /> Capacidade: {capacity.used}/{capacity.total} ({capacity.percentage}%)
                       </div>
                       <div style={{ background: "var(--bg)", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                        <div style={{ width: `${capacity.percentage}%`, height: "100%", borderRadius: 4, background: capacity.percentage > 80 ? "var(--red)" : capacity.percentage > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
+                        <div style={{ width: `${capacity.percentage}%`, height: "100%", borderRadius: 4, background: capacity.percentage > 80 ? "#CA8A04" : capacity.percentage > 50 ? "#EAB308" : "#FACC15", transition: "width 0.55s var(--panel-ease)" }} />
                       </div>
                     </div>
                   )}
@@ -1456,7 +1574,7 @@ export default function JurisCloudOS() {
                             background: `${agent.color}18`, color: agent.color,
                             border: `1px solid ${agent.color}25`,
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 11, fontWeight: 700, fontFamily: "var(--font-mono)", flexShrink: 0
+                            fontSize: 11, fontWeight: 700, fontFamily: "var(--font-body)", flexShrink: 0
                           }}>{getInitials(agent.name)}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.name}</div>
@@ -1465,11 +1583,11 @@ export default function JurisCloudOS() {
                             </div>
                           </div>
                           <Circle size={8}
-                            fill={agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72"}
-                            style={{ color: agent.status === "active" ? "#2dd4a0" : agent.status === "alert" ? "#ef4444" : "#5a5a72" }} />
+                            fill={agent.status === "active" ? "#EAB308" : agent.status === "alert" ? "#FACC15" : "rgba(255,255,255,0.28)"}
+                            style={{ color: agent.status === "active" ? "#EAB308" : agent.status === "alert" ? "#FACC15" : "rgba(255,255,255,0.28)" }} />
                         </div>
                         <div style={{ background: "var(--bg)", borderRadius: 4, height: 4, marginBottom: 6, overflow: "hidden" }}>
-                          <div style={{ width: `${load}%`, height: "100%", borderRadius: 4, background: load > 80 ? "var(--red)" : load > 50 ? "var(--amber)" : "var(--teal)", transition: "width 0.5s" }} />
+                          <div style={{ width: `${load}%`, height: "100%", borderRadius: 4, background: load > 80 ? "#CA8A04" : load > 50 ? "#EAB308" : "#FACC15", transition: "width 0.55s var(--panel-ease)" }} />
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: 9, color: "var(--text3)" }}>Carga: {load}% · {agent.currentTasks}/{agent.maxConcurrentTasks}</span>
