@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
+import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
@@ -958,6 +959,12 @@ export default function JurisCloudOS() {
 
   // Agentes do banco. Enquanto carrega usa AGENTS_FALLBACK pra evitar flash de tela vazia.
   const { agents: dbAgents, loading: agentsLoading } = useAgents();
+  // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO LexForce
+  // (ou o primeiro agente com IA configurada) como entrada. A sessão é criada
+  // sob demanda na primeira mensagem.
+  const { startSession, sendMessage: orchestratorSend } = useChatOrchestrator();
+  const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
+  const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
   const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
     ? AGENTS_FALLBACK
     : dbAgents.map(a => ({
@@ -976,7 +983,28 @@ export default function JurisCloudOS() {
         reportsTo: a.reportsTo ?? undefined,
       }));
 
-  const [showWelcome, setShowWelcome]     = useState(true);
+  // Descobre o agente de entrada: prefere o CEO; se não existir, qualquer agente
+  // com provider+model configurados. Sem isso, o chat exibe um aviso amigável.
+  useEffect(() => {
+    if (agentsLoading || dbAgents.length === 0) return;
+    (async () => {
+      // 1) preferência: agente com role === "ceo"
+      const ceo = dbAgents.find((a) => a.role === "ceo");
+      // 2) Verifica no banco quais agentes têm IA configurada (provider+model)
+      const { data: configured } = await supabase
+        .from("agents")
+        .select("id")
+        .not("provider" as never, "is", null)
+        .not("model" as never, "is", null);
+      const configuredIds = new Set(((configured as unknown as { id: string }[]) || []).map((r) => r.id));
+      const pick = ceo && configuredIds.has(ceo.id)
+        ? ceo
+        : dbAgents.find((a) => configuredIds.has(a.id));
+      if (pick) setEntryAgentId(pick.id);
+    })();
+  }, [agentsLoading, dbAgents]);
+
+    const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
   const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
@@ -1147,17 +1175,29 @@ export default function JurisCloudOS() {
     };
 
     try {
-      const { data, error } = await supabase.functions.invoke("chat-with-agent", {
-        body: {
-          requestId,
-          deptId: activeDept,
-          message: val,
-          history: messages.slice(-8).map(m => ({ role: m.role, content: m.content, agent: m.agent })),
-        },
-      });
+      // 1. Garante que há um agente configurado pra responder
+      if (!entryAgentId) {
+        await refundAndNotify(
+          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o CEO LexForce (ou outro), na aba Modelo configure provedor + modelo, e salve",
+        );
+        return;
+      }
 
-      if (error || !data || !data.content) {
-        await refundAndNotify(error?.message || "agente nao respondeu");
+      // 2. Cria sessão sob demanda na primeira mensagem do "Meu Assistente"
+      let sid = assistantSessionId;
+      if (!sid) {
+        sid = await startSession(entryAgentId, { title: "Meu Assistente" });
+        if (!sid) {
+          await refundAndNotify("falha ao iniciar sessão");
+          return;
+        }
+        setAssistantSessionId(sid);
+      }
+
+      // 3. Envia ao chat-orchestrator (mesmo backend de /sistema/chat)
+      const response = await orchestratorSend(sid, val);
+      if (!response || !response.content) {
+        await refundAndNotify(friendlyError({ error: "request_failed", message: "agente nao respondeu" }));
         return;
       }
 
@@ -1165,9 +1205,19 @@ export default function JurisCloudOS() {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: "assistant",
-        agent: data.agent || "Assistente",
-        content: data.content,
-        meta: { requestId, tokensCost: cost, orchestration: data.orchestration },
+        agent: response.agent?.name || "Assistente",
+        content: response.content,
+        meta: {
+          requestId,
+          tokensCost: cost,
+          orchestration: {
+            agent: response.agent?.name,
+            model: response.model,
+            provider: response.provider,
+            durationMs: response.durationMs,
+            costUsd: response.usage?.costUsd,
+          },
+        },
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
     } catch (e: unknown) {
