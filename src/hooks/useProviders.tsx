@@ -39,7 +39,7 @@ export function useProviders() {
       // @ts-expect-error - tabela criada na Onda 2
       .from("model_pricing")
       .select("*")
-      .eq("is_active", true)
+      .eq("is_active" as never, true)
       .order("provider", { ascending: true });
     if (!error) {
       setModels((data || []) as unknown as ModelPricingRow[]);
@@ -106,13 +106,13 @@ export function useProviders() {
       await supabase
         // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
         .from("llm_provider_configs")
-        .update({ is_default: false })
+        .update({ is_default: false } as never)
         .eq("id", o.id);
     }
     const { error } = await supabase
       // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
       .from("llm_provider_configs")
-      .update({ is_default: true })
+      .update({ is_default: true } as never)
       .eq("id", configId);
     if (error) {
       setError(error.message);

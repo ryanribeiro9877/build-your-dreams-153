@@ -4,16 +4,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAgents } from "@/hooks/useAgents";
 import { useProviders } from "@/hooks/useProviders";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Bot, Search, ChevronRight, CheckCircle2, AlertTriangle, Lock, Server } from "lucide-react";
-import { LfPage, LfInput, LfGhostBtn, LfCard, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
 
 /**
  * /admin/agentes
  *
- * Lista de agentes. Cada linha eh inteira clicavel: navega pra
- * /admin/agentes/:id (AgentDetail), onde tudo eh configurado em abas.
+ * Listagem de agentes — estilo "Meus Agentes" (bot.zanetti).
+ * Cabeçalho com KPIs, busca, filtros e grid de cards clicáveis.
+ * Toda a configuração acontece em /admin/agentes/:id (AgentDetail).
  *
- * Sem modal. Sem state de edicao aqui. Pagina e somente listagem.
+ * IMPORTANTE: lógica/hooks/queries permanecem idênticas. Só o visual
+ * foi reorganizado para usar as classes utilitárias `.lf-*` definidas
+ * em `src/styles/lexforce-modern.css`.
  */
 export default function AgentsAdmin() {
   const navigate = useNavigate();
@@ -23,11 +24,14 @@ export default function AgentsAdmin() {
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "configured" | "unconfigured">("all");
-  const [agentLLMStatus, setAgentLLMStatus] = useState<Record<string, { configured: boolean; model: string | null }>>({});
+  const [filterDepartment, setFilterDepartment] = useState<string>("all");
+  const [agentLLMStatus, setAgentLLMStatus] = useState<
+    Record<string, { configured: boolean; model: string | null; provider: string | null }>
+  >({});
 
   const isAdmin = hasRole("admin");
 
-  // Buscar provider/model de todos os agentes em uma so query
+  // Buscar provider/model de todos os agentes em uma única query
   useEffect(() => {
     if (!isAdmin || agents.length === 0) return;
     (async () => {
@@ -35,11 +39,14 @@ export default function AgentsAdmin() {
         .from("agents")
         .select("id, provider, model");
       if (data) {
-        const map: Record<string, { configured: boolean; model: string | null }> = {};
-        for (const row of data as { id: string; provider: string | null; model: string | null }[]) {
+        const map: Record<string, { configured: boolean; model: string | null; provider: string | null }> = {};
+        // Supabase generated types não incluem `provider`/`model` na tabela `agents`,
+        // mas as colunas existem no banco — cast via `unknown` para o tipo real.
+        for (const row of data as unknown as { id: string; provider: string | null; model: string | null }[]) {
           map[row.id] = {
             configured: !!(row.provider && row.model),
             model: row.model,
+            provider: row.provider,
           };
         }
         setAgentLLMStatus(map);
@@ -47,22 +54,29 @@ export default function AgentsAdmin() {
     })();
   }, [isAdmin, agents.length]);
 
+  const departments = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of agents) {
+      if (a.departmentName) set.add(a.departmentName);
+    }
+    return Array.from(set).sort();
+  }, [agents]);
+
   const visibleAgents = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return agents
-      .filter(a => {
-        if (search && !a.name.toLowerCase().includes(search.toLowerCase()) && !a.role.toLowerCase().includes(search.toLowerCase())) return false;
-        return true;
-      })
-      .filter(a => {
-        if (filterStatus === "all") return true;
+      .filter((a) => {
+        if (q && !a.name.toLowerCase().includes(q) && !a.role.toLowerCase().includes(q)) return false;
+        if (filterDepartment !== "all" && a.departmentName !== filterDepartment) return false;
         const status = agentLLMStatus[a.id];
         if (filterStatus === "configured") return status?.configured === true;
         if (filterStatus === "unconfigured") return !status?.configured;
         return true;
       });
-  }, [agents, search, filterStatus, agentLLMStatus]);
+  }, [agents, search, filterStatus, filterDepartment, agentLLMStatus]);
 
-  const configuredCount = Object.values(agentLLMStatus).filter(s => s.configured).length;
+  const configuredCount = Object.values(agentLLMStatus).filter((s) => s.configured).length;
+  const unconfiguredCount = agents.length - configuredCount;
 
   const exit = () => navigate("/sistema");
 
@@ -73,171 +87,210 @@ export default function AgentsAdmin() {
 
   if (!isAdmin) {
     return (
-      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
-        <Lock size={32} style={{ color: "hsl(var(--muted-foreground))" }} />
-        <h2>Acesso restrito</h2>
-        <p style={{ color: "hsl(var(--muted-foreground))" }}>Apenas administradores podem acessar esta pagina.</p>
-        <button type="button" onClick={exit} style={LfGhostBtn}>Voltar</button>
+      <div className="lf-modern lf-page">
+        <div className="lf-container" style={{ textAlign: "center", paddingTop: 64 }}>
+          <div className="lf-panel" style={{ maxWidth: 420, margin: "0 auto" }}>
+            <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>Acesso restrito</h2>
+            <p className="lf-panel__hint" style={{ marginBottom: 18 }}>
+              Apenas administradores podem acessar esta página.
+            </p>
+            <button type="button" onClick={exit} className="lf-btn lf-btn--ghost">
+              Voltar ao sistema
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={LfPage}>
-      <header style={{
-        padding: "20px 32px", borderBottom: "1px solid hsl(var(--border))",
-        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
-      }}
-      >
-        <button type="button" onClick={exit} style={LfHeaderBackBtn} aria-label="Voltar">
-          <ArrowLeft size={18} aria-hidden />
-          {" "}
-          Voltar
+    <div className="lf-modern lf-page">
+      <header className="lf-header">
+        <button
+          type="button"
+          onClick={exit}
+          className="lf-btn lf-btn--ghost"
+          aria-label="Voltar ao sistema"
+        >
+          ← Voltar
         </button>
-        <Bot size={22} color="#c9a84c" />
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-          <h1 style={{ fontSize: 20, margin: 0 }}>Agentes do sistema</h1>
-          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
-            {agents.length} agentes · {configuredCount} com IA configurada · Clique numa linha para configurar.
+          <h1>Agentes do sistema</h1>
+          <p className="lf-header__subtitle">
+            {agents.length} agentes · {configuredCount} com IA configurada · clique num card para configurar
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
-          <button type="button" onClick={() => navigate("/configuracoes/providers")} style={LfGhostBtn} title="Gestao centralizada de provedores (acessivel tambem pela aba Provedor dentro de cada agente)">
-            <Server size={14} style={{ display: "inline", marginRight: 6 }} />
+        <div className="lf-row" style={{ marginLeft: "auto" }}>
+          <button
+            type="button"
+            onClick={() => navigate("/configuracoes/providers")}
+            className="lf-btn lf-btn--ghost"
+            title="Gestão centralizada de provedores (também acessível pela aba Provedor dentro de cada agente)"
+          >
             Provedores
           </button>
         </div>
       </header>
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 32 }}>
+      <main className="lf-container">
+        {/* KPIs */}
+        <section className="lf-stats">
+          <div className="lf-stat">
+            <div className="lf-stat__label">Total</div>
+            <div className="lf-stat__value">{agents.length}</div>
+            <div className="lf-stat__hint">Agentes cadastrados</div>
+          </div>
+          <div className="lf-stat lf-stat--success">
+            <div className="lf-stat__label">Configurados</div>
+            <div className="lf-stat__value">{configuredCount}</div>
+            <div className="lf-stat__hint">Com provedor + modelo</div>
+          </div>
+          <div className="lf-stat lf-stat--warn">
+            <div className="lf-stat__label">Sem IA</div>
+            <div className="lf-stat__value">{unconfiguredCount}</div>
+            <div className="lf-stat__hint">Aguardando configuração</div>
+          </div>
+          <div className="lf-stat lf-stat--gold">
+            <div className="lf-stat__label">Departamentos</div>
+            <div className="lf-stat__value">{departments.length}</div>
+            <div className="lf-stat__hint">Áreas com agentes ativos</div>
+          </div>
+        </section>
+
+        {/* Alerta se nenhum provedor cadastrado */}
         {!loadingProviders && configs.length === 0 && (
-          <div style={{
-            background: "rgba(255, 107, 107, 0.08)", border: "1px solid rgba(255, 107, 107, 0.3)",
-            borderRadius: 8, padding: 14, marginBottom: 20, display: "flex", gap: 12, alignItems: "center",
-          }}>
-            <AlertTriangle size={20} color="#ff6b6b" style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, fontSize: 13, color: "#ffb8b8" }}>
-              <strong>Voce ainda nao cadastrou nenhuma chave de provedor.</strong>{" "}
-              Clique num agente abaixo, va na aba <strong>Provedor</strong> e cadastre la mesmo.
-            </div>
+          <div className="lf-panel" style={{ borderColor: "rgba(255, 107, 107, 0.35)", background: "rgba(255, 107, 107, 0.06)", marginBottom: 18 }}>
+            <h3 className="lf-panel__title" style={{ color: "#ff6b6b", fontSize: 13 }}>
+              <span className="lf-row" style={{ gap: 8 }}>
+                <span className="lf-dot lf-dot--danger" />
+                Nenhuma chave de provedor cadastrada
+              </span>
+            </h3>
+            <p className="lf-panel__hint" style={{ marginBottom: 0 }}>
+              Clique em qualquer agente abaixo e use a aba <strong>Provedor</strong> para cadastrar
+              sua chave de API (OpenAI, OpenRouter, Anthropic, etc.).
+            </p>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "hsl(var(--muted-foreground))" }} />
+        {/* Toolbar */}
+        <section className="lf-toolbar">
+          <div className="lf-search">
+            <span className="lf-search__icon" />
             <input
+              className="lf-input"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome ou papel..."
-              style={{ ...LfInput, paddingLeft: 36 }}
             />
           </div>
           <select
+            className="lf-select"
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value as "all" | "configured" | "unconfigured")}
-            style={{ ...LfInput, width: 240 }}
+            onChange={(e) => setFilterStatus(e.target.value as "all" | "configured" | "unconfigured")}
+            style={{ minWidth: 180 }}
           >
             <option value="all">Todos ({agents.length})</option>
-            <option value="configured">Apenas configurados</option>
-            <option value="unconfigured">Apenas nao configurados</option>
+            <option value="configured">Configurados ({configuredCount})</option>
+            <option value="unconfigured">Sem IA ({unconfiguredCount})</option>
           </select>
-        </div>
+          <select
+            className="lf-select"
+            value={filterDepartment}
+            onChange={(e) => setFilterDepartment(e.target.value)}
+            style={{ minWidth: 200 }}
+          >
+            <option value="all">Todos os departamentos</option>
+            {departments.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </section>
 
+        {/* Lista de agentes */}
         {loadingAgents ? (
-          <div style={{ ...LfCard, borderRadius: 12, padding: 40, textAlign: "center", color: "hsl(var(--muted-foreground))" }}>
-            Carregando agentes...
-          </div>
+          <div className="lf-loading">Carregando agentes...</div>
         ) : visibleAgents.length === 0 ? (
-          <div style={{ ...LfCard, borderRadius: 12, padding: 40, textAlign: "center", color: "hsl(var(--muted-foreground))" }}>
-            Nenhum agente corresponde aos filtros.
+          <div className="lf-empty">
+            Nenhum agente corresponde aos filtros.<br />
+            Tente limpar a busca ou trocar de departamento.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {visibleAgents.map(agent => {
-              const status = agentLLMStatus[agent.id];
-              return (
+          <>
+            <p className="lf-header__subtitle" style={{ margin: "0 0 10px" }}>
+              Exibindo {visibleAgents.length} de {agents.length} agentes
+            </p>
+            <div className="lf-grid lf-stagger">
+              {visibleAgents.map((agent) => (
                 <AgentCard
                   key={agent.id}
                   agent={agent}
-                  status={status}
+                  status={agentLLMStatus[agent.id]}
                   onClick={() => navigate(`/admin/agentes/${agent.id}`)}
                 />
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </main>
     </div>
   );
 }
 
-/** Card clicavel de agente. Linha inteira eh um botao. */
+/* ------------------------------------------------------------------ */
+
 function AgentCard({
   agent,
   status,
   onClick,
 }: {
   agent: { id: string; name: string; departmentName: string; role: string; level: number; color: string };
-  status?: { configured: boolean; model: string | null };
+  status?: { configured: boolean; model: string | null; provider: string | null };
   onClick: () => void;
 }) {
-  const [hover, setHover] = useState(false);
+  const initials = agent.name
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        width: "100%", textAlign: "left",
-        background: hover ? "hsl(var(--accent))" : "hsl(var(--card))",
-        border: `1px solid ${hover ? "rgba(201, 168, 76, 0.45)" : "hsl(var(--border))"}`,
-        borderRadius: 10, padding: "14px 18px",
-        display: "flex", alignItems: "center", gap: 14,
-        cursor: "pointer", color: "hsl(var(--foreground))",
-        fontFamily: "'DM Sans', sans-serif",
-        transition: "background 0.12s, border-color 0.12s",
-      }}
-    >
-      <div style={{
-        width: 38, height: 38, borderRadius: "50%",
-        background: agent.color || "#252534",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#09090f", fontWeight: 700, fontSize: 13, flexShrink: 0,
-      }}>
-        {agent.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
-          <strong style={{ fontSize: 14, color: "hsl(var(--foreground))" }}>{agent.name}</strong>
-          <span style={{
-            background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))",
-            padding: "2px 8px", borderRadius: 10, fontSize: 10,
-            fontFamily: "monospace",
-          }}>
-            N{agent.level}
-          </span>
-        </div>
-        <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
-          {agent.role}{agent.departmentName ? ` · ${agent.departmentName}` : ""}
+    <button type="button" onClick={onClick} className="lf-card" aria-label={`Configurar ${agent.name}`}>
+      <div className="lf-card__head">
+        <div
+          className="lf-avatar"
+          style={agent.color ? { background: agent.color } : undefined}
+          aria-hidden
+        >
+          {initials}
+          </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 className="lf-card__title">{agent.name}</h3>
+          <p className="lf-card__subtitle">
+            {agent.role}
+            {agent.departmentName ? ` · ${agent.departmentName}` : ""}
+          </p>
         </div>
       </div>
 
-      <div style={{ fontSize: 11, textAlign: "right", minWidth: 180 }}>
+      <div className="lf-card__meta">
+        <span className="lf-badge lf-badge--neutral lf-badge--mono">N{agent.level}</span>
         {status?.configured ? (
-          <span style={{ color: "#2dd4a0", display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <CheckCircle2 size={11} />
-            <code style={{ fontFamily: "monospace", color: "#2dd4a0" }}>{status.model}</code>
+          <span className="lf-badge lf-badge--success">
+            <span className="lf-dot lf-dot--success" />
+            {status.model}
           </span>
         ) : (
-          <span style={{ color: "#6b6b80", fontStyle: "italic" }}>
-            Sem IA configurada
+          <span className="lf-badge lf-badge--warn">
+            <span className="lf-dot lf-dot--warn" />
+            Sem IA
           </span>
-        )}
+         )}
+        <span className="lf-spacer" />
+        <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Configurar →</span>
       </div>
-
-      <ChevronRight size={16} color={hover ? "#c9a84c" : "hsl(var(--muted-foreground))"} style={{ flexShrink: 0, transition: "color 0.12s" }} />
     </button>
   );
 }

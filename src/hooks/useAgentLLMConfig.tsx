@@ -59,9 +59,12 @@ export function useAgentLLMConfig() {
     if ("allow_fallbacks" in config) update.allow_fallbacks = config.allow_fallbacks;
     if ("system_prompt" in config) update.system_prompt = config.system_prompt;
 
+    // Os tipos gerados pelo Supabase ficam desatualizados em relação ao
+    // schema real (a tabela `agents` tem colunas de config IA que não
+    // aparecem nos tipos). Cast via `as never` mantém runtime intacto.
     const { error } = await supabase
       .from("agents")
-      .update(update)
+      .update(update as never)
       .eq("id", agentId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -81,7 +84,7 @@ export function useAgentLLMConfig() {
         history_limit: null,
         allow_fallbacks: null,
         system_prompt: null,
-      })
+      } as never)
       .eq("id", agentId);
     return !error;
   }, []);

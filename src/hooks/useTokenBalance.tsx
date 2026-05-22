@@ -139,12 +139,12 @@ export function useTokenBalance() {
   // Charge with a reference_id so a later refund can be tied to this request.
   const consumeTokensWithRef = useCallback(async (amount: number, description: string, referenceId: string) => {
     if (!user) return false;
-    const { data, error } = await supabase.rpc("consume_tokens_with_ref", {
+    const { data, error } = await supabase.rpc("consume_tokens_with_ref" as never, {
       p_user_id: user.id,
       p_amount: amount,
       p_description: description,
       p_reference_id: referenceId,
-    });
+    } as never);
     if (error || !data) return false;
     await fetchBalance();
     return true;
@@ -153,11 +153,11 @@ export function useTokenBalance() {
   // Refund tokens for a failed/placeholder response. Idempotent on referenceId.
   const refundTokens = useCallback(async (amount: number, referenceId: string, description: string = "Estorno: resposta nao entregue") => {
     if (!user) return false;
-    const { data, error } = await supabase.rpc("refund_own_tokens", {
+    const { data, error } = await supabase.rpc("refund_own_tokens" as never, {
       p_amount: amount,
       p_reference_id: referenceId,
       p_description: description,
-    });
+    } as never);
     if (error || !data) return false;
     await fetchBalance();
     return true;

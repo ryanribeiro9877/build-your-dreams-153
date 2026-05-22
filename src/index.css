@@ -1,3 +1,6 @@
+/* LexForce — camada utilitária moderna (cards, badges, tabs, grid, animações) */
+@import "./styles/lexforce-modern.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -210,4 +213,3 @@
   outline: 2px solid #eab308;
   outline-offset: 3px;
 }
-

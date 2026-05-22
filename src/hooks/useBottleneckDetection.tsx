@@ -126,6 +126,8 @@ export function useBottleneckDetection() {
 
       // Persist to history (always)
       for (const alert of alerts) {
+        // Tipos do Supabase consideram `user_id`/`details` em `agent_orchestration_log`
+        // como `never` — a tabela existe no banco. Cast via `as never` no payload.
         await supabase.from("agent_orchestration_log").insert({
           user_id: user.id,
           action: `bottleneck_${alert.type}`,
@@ -136,7 +138,7 @@ export function useBottleneckDetection() {
             detected_at: new Date().toISOString(),
             agent_name: alert.agentName,
           },
-        });
+        } as never);
         await saveNotification(alert);
       }
 
@@ -173,7 +175,7 @@ export function useBottleneckDetection() {
     const channel = supabase
       .channel("bottleneck_monitor")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, async (payload) => {
-        const task = payload.new as { id?: string; priority?: string; title?: string } | null;
+        const task = payload.new as { id?: string; priority?: string; title?: string; due_date?: string; status?: string } | null;
         if (!task) return;
 
         if (payload.eventType === "INSERT" && task.priority === "critical") {
@@ -186,7 +188,7 @@ export function useBottleneckDetection() {
               task_id: task.id,
               detected_at: new Date().toISOString(),
             },
-          });
+          } as never);
           await saveNotification({
             type: "overload",
             severity: "critical",

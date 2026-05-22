@@ -7,40 +7,27 @@ import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProvid
 import { useAgentLLMConfig, SUGGESTED_BY_LEVEL } from "@/hooks/useAgentLLMConfig";
 import type { ProviderCode, AgentLLMConfig } from "@/types/lexforce";
 import { toast } from "sonner";
-import {
-  ArrowLeft, Bot, Save, Sparkles, AlertTriangle, CheckCircle2, Lock, Key,
-  Cpu, FileText, Brain, Server, Trash2, Plus, Star, DollarSign,
-} from "lucide-react";
-import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
 
 /**
  * /admin/agentes/:id
  *
- * Tela completa de configuracao do agente, estilo bot.zanetti.
- * Abas: Identidade, Modelo, Prompt, Memoria, Provedor.
+ * Página completa de configuração do agente, estilo "Meus Agentes" do bot.zanetti.
+ * Abas: Identidade · Modelo · Prompt · Memória · Provedor.
  *
- * Diferenciais vs versao com modal:
- *  - Tudo numa pagina dedicada, sem perder contexto
- *  - Aba "Provedor" permite cadastrar/gerenciar chave do provider AQUI
- *    sem precisar sair para /configuracoes/providers
- *  - Aba "Modelo" alerta inline se o provider escolhido nao tem chave
- *    e oferece link direto pra aba "Provedor"
+ * Refatorada para usar as classes utilitárias `.lf-*` definidas em
+ * `src/styles/lexforce-modern.css` — mantém toda a lógica de hooks,
+ * estado, queries e callbacks intactos. Só o visual foi reorganizado.
  */
 
 type TabKey = "identidade" | "modelo" | "prompt" | "memoria" | "provedor";
 
-const TABS: Array<{ key: TabKey; label: string; icon: typeof Bot }> = [
-  { key: "identidade", label: "Identidade", icon: Bot },
-  { key: "modelo", label: "Modelo", icon: Cpu },
-  { key: "prompt", label: "Prompt", icon: FileText },
-  { key: "memoria", label: "Memória", icon: Brain },
-  { key: "provedor", label: "Provedor", icon: Server },
+const TABS: Array<{ key: TabKey; label: string; hint: string }> = [
+  { key: "identidade", label: "Identidade", hint: "Nome, papel, departamento" },
+  { key: "modelo", label: "Modelo", hint: "Provedor e modelo de IA" },
+  { key: "prompt", label: "Prompt", hint: "Persona e tom" },
+  { key: "memoria", label: "Memória", hint: "Contexto e long-term" },
+  { key: "provedor", label: "Provedor", hint: "Chaves de API" },
 ];
-
-const inputStyle: React.CSSProperties = { ...LfInput, fontFamily: "'DM Sans', sans-serif" };
-const labelStyle: React.CSSProperties = { ...LfLabel, fontFamily: "'DM Sans', sans-serif" };
-const buttonPrimary: React.CSSProperties = { ...LfPrimaryBtn, fontFamily: "'DM Sans', sans-serif" };
-const buttonGhost: React.CSSProperties = { ...LfGhostBtn, fontFamily: "'DM Sans', sans-serif" };
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -58,22 +45,31 @@ export default function AgentDetail() {
 
   const isAdmin = hasRole("admin");
 
-  const agent = agents.find(a => a.id === agentId);
-  const configuredProviders = useMemo(() => new Set(configs.map(c => c.provider)), [configs]);
+  const agent = agents.find((a) => a.id === agentId);
+  const configuredProviders = useMemo(
+    () => new Set(configs.map((c) => c.provider)),
+    [configs],
+  );
 
-  // Carregar config do agente
+  // Carrega config do agente
   useEffect(() => {
     if (!agentId) return;
     setLoadingConfig(true);
     (async () => {
       const cfg = await getConfig(agentId);
-      // Sempre inicializa imediatamente com objeto (mesmo se vazio), evita
-      // tela em branco esperando promise.
-      setEditConfig(cfg || {
-        provider: null, model: null, temperature: null, top_p: null,
-        max_tokens: null, memory_enabled: null, history_limit: null,
-        allow_fallbacks: null, system_prompt: null,
-      });
+      setEditConfig(
+        cfg || {
+          provider: null,
+          model: null,
+          temperature: null,
+          top_p: null,
+          max_tokens: null,
+          memory_enabled: null,
+          history_limit: null,
+          allow_fallbacks: null,
+          system_prompt: null,
+        },
+      );
       setLoadingConfig(false);
       setDirty(false);
     })();
@@ -85,7 +81,6 @@ export default function AgentDetail() {
     setDirty(true);
   };
 
-  /** Troca provedor e zera modelo num único update (evita race entre dois updateField). */
   const applyProviderSelection = (newProvider: ProviderCode | null) => {
     setEditConfig((prev) => {
       if (!prev) return prev;
@@ -107,12 +102,14 @@ export default function AgentDetail() {
   const handleSave = async () => {
     if (!agentId || !editConfig) return;
     if (!editConfig.provider || !editConfig.model) {
-      toast.error("Provedor e modelo sao obrigatorios na aba Modelo.");
+      toast.error("Provedor e modelo são obrigatórios na aba Modelo.");
       setActiveTab("modelo");
       return;
     }
     if (!configuredProviders.has(editConfig.provider)) {
-      toast.error(`Chave do ${PROVIDER_LABELS[editConfig.provider]} nao cadastrada. Va na aba Provedor.`);
+      toast.error(
+        `Chave do ${PROVIDER_LABELS[editConfig.provider]} não cadastrada. Vá na aba Provedor.`,
+      );
       setActiveTab("provedor");
       return;
     }
@@ -120,7 +117,7 @@ export default function AgentDetail() {
     const result = await updateConfig(agentId, editConfig);
     setSaving(false);
     if (result.ok) {
-      toast.success("Configuracao salva.");
+      toast.success("Configuração salva.");
       setDirty(false);
       await reloadAgents();
     } else {
@@ -130,16 +127,22 @@ export default function AgentDetail() {
 
   const handleClear = async () => {
     if (!agentId) return;
-    if (!confirm("Limpar toda configuracao de IA deste agente?")) return;
+    if (!confirm("Limpar toda configuração de IA deste agente?")) return;
     setSaving(true);
     const ok = await clearConfig(agentId);
     setSaving(false);
     if (ok) {
-      toast.success("Configuracao limpa.");
+      toast.success("Configuração limpa.");
       setEditConfig({
-        provider: null, model: null, temperature: null, top_p: null,
-        max_tokens: null, memory_enabled: null, history_limit: null,
-        allow_fallbacks: null, system_prompt: null,
+        provider: null,
+        model: null,
+        temperature: null,
+        top_p: null,
+        max_tokens: null,
+        memory_enabled: null,
+        history_limit: null,
+        allow_fallbacks: null,
+        system_prompt: null,
       });
       setDirty(false);
       await reloadAgents();
@@ -155,22 +158,36 @@ export default function AgentDetail() {
 
   if (!isAdmin) {
     return (
-      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
-        <Lock size={32} style={{ color: "hsl(var(--muted-foreground))" }} />
-        <h2>Acesso restrito</h2>
-        <p style={{ color: "hsl(var(--muted-foreground))" }}>Apenas administradores.</p>
-        <button type="button" onClick={() => navigate(-1)} style={buttonGhost}>Voltar</button>
+      <div className="lf-modern lf-page">
+        <div className="lf-container" style={{ textAlign: "center", paddingTop: 64 }}>
+          <div className="lf-panel" style={{ maxWidth: 420, margin: "0 auto" }}>
+            <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>Acesso restrito</h2>
+            <p className="lf-panel__hint">Apenas administradores podem editar agentes.</p>
+            <button type="button" onClick={() => navigate(-1)} className="lf-btn lf-btn--ghost">
+              Voltar
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!agent) {
     return (
-      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
-        <Bot size={48} style={{ color: "hsl(var(--border))" }} />
-        <h2>Agente nao encontrado</h2>
-        <p style={{ color: "hsl(var(--muted-foreground))" }}>O agente solicitado nao existe ou foi removido.</p>
-        <button type="button" onClick={() => navigate("/admin/agentes")} style={buttonGhost}>Voltar para lista</button>
+      <div className="lf-modern lf-page">
+        <div className="lf-container" style={{ textAlign: "center", paddingTop: 64 }}>
+          <div className="lf-panel" style={{ maxWidth: 420, margin: "0 auto" }}>
+            <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>Agente não encontrado</h2>
+            <p className="lf-panel__hint">O agente solicitado não existe ou foi removido.</p>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/agentes")}
+              className="lf-btn lf-btn--ghost"
+            >
+              Voltar para a lista
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -178,99 +195,90 @@ export default function AgentDetail() {
   const isConfigured = !!(editConfig?.provider && editConfig?.model);
   const providerHasKey = editConfig?.provider ? configuredProviders.has(editConfig.provider) : false;
 
-  const exitAgent = () => navigate("/admin/agentes");
+  const initials = agent.name
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Evita warning de "supabase importado mas não usado" — preserva o import para
+  // continuar disponível caso alguma query direta seja necessária no futuro.
+  void supabase;
 
   return (
-    <div style={LfPage}>
+    <div className="lf-modern lf-page">
       {/* Header */}
-      <header style={{ padding: "16px 32px", borderBottom: "1px solid hsl(var(--border))", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <button type="button" onClick={exitAgent} style={{ ...LfHeaderBackBtn, fontFamily: "'DM Sans', sans-serif" }} aria-label="Voltar">
-          <ArrowLeft size={18} aria-hidden />
-          {" "}
-          Voltar
+      <header className="lf-header">
+        <button
+          type="button"
+          onClick={() => navigate("/admin/agentes")}
+          className="lf-btn lf-btn--ghost"
+          aria-label="Voltar para a lista de agentes"
+        >
+          ← Voltar
         </button>
-        <div style={{
-          width: 40, height: 40, borderRadius: "50%",
-          background: agent.color || "#252534", display: "flex",
-          alignItems: "center", justifyContent: "center", color: "#09090f", fontWeight: 700,
-        }}>
-          {agent.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+
+        <div
+          className="lf-avatar"
+          style={agent.color ? { background: agent.color } : undefined}
+          aria-hidden
+        >
+          {initials}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ fontSize: 18, margin: 0 }}>{agent.name}</h1>
-          <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>
+
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <h1>{agent.name}</h1>
+          <p className="lf-header__subtitle">
             {agent.role} · N{agent.level} · {agent.departmentName || "Sem departamento"}
             {isConfigured && editConfig?.model && (
-              <span style={{ color: "#2dd4a0", marginLeft: 8 }}>
-                <CheckCircle2 size={10} style={{ display: "inline", marginRight: 3 }} />
-                {editConfig.model}
-              </span>
+              <>
+                {" · "}
+                <span style={{ color: "var(--lf-success)" }}>{editConfig.model}</span>
+              </>
             )}
-          </div>
+          </p>
         </div>
+
         {dirty && (
-          <span style={{
-            background: "rgba(201, 168, 76, 0.12)", color: "#c9a84c",
-            padding: "4px 10px", borderRadius: 12, fontSize: 11,
-            textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600,
-          }}>
-            Alteracoes nao salvas
+          <span className="lf-badge lf-badge--gold">
+            <span className="lf-dot" style={{ background: "var(--lf-gold)" }} />
+            Alterações não salvas
           </span>
         )}
+
         <button
           type="button"
           onClick={handleSave}
-          style={{ ...buttonPrimary, opacity: saving ? 0.6 : 1 }}
+          className="lf-btn lf-btn--primary"
           disabled={saving || !dirty}
         >
-          <Save size={14} />
           {saving ? "Salvando..." : "Salvar"}
         </button>
       </header>
 
-      {/* Layout: sidebar de tabs + conteudo */}
-      <div style={{ display: "flex", minHeight: "calc(100vh - 73px)" }}>
-        {/* Sidebar de tabs */}
-        <nav style={{
-          width: 220, background: "hsl(var(--muted))", borderRight: "1px solid hsl(var(--border))",
-          padding: "20px 0", display: "flex", flexDirection: "column", gap: 2,
-        }}>
-          {TABS.map(t => {
-            const Icon = t.icon;
-            const active = t.key === activeTab;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-                style={{
-                  width: "100%", textAlign: "left",
-                  padding: "10px 22px",
-                  background: active ? "rgba(201, 168, 76, 0.08)" : "transparent",
-                  borderLeft: active ? "3px solid #c9a84c" : "3px solid transparent",
-                  border: "none",
-                  color: active ? "#c9a84c" : "hsl(var(--muted-foreground))",
-                  fontSize: 13, fontWeight: active ? 600 : 400,
-                  cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                <Icon size={14} />
-                {t.label}
-              </button>
-            );
-          })}
-          <div style={{ marginTop: "auto", padding: 20 }}>
-            <button onClick={handleClear} style={{ ...buttonGhost, width: "100%", color: "#ff6b6b", fontSize: 11 }} disabled={saving}>
-              <Trash2 size={11} style={{ display: "inline", marginRight: 6 }} />
-              Limpar config IA
+      <main className="lf-container lf-fade-in">
+        {/* Tabs horizontais (pill) */}
+        <nav className="lf-tabs" aria-label="Seções do agente">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.key}
+              className={`lf-tab ${activeTab === t.key ? "is-active" : ""}`}
+              onClick={() => setActiveTab(t.key)}
+            >
+              {t.label}
             </button>
-          </div>
+          ))}
         </nav>
 
-        {/* Conteudo */}
-        <main style={{ flex: 1, padding: "28px 36px", maxWidth: 720 }}>
+        {/* Conteúdo da aba ativa */}
+        <section className="lf-fade-in" key={activeTab}>
           {loadingConfig ? (
-            <div style={{ color: "hsl(var(--muted-foreground))" }}>Carregando configuracao...</div>
+            <div className="lf-loading">Carregando configuração...</div>
           ) : !editConfig ? null : (
             <>
               {activeTab === "identidade" && <TabIdentidade agent={agent} />}
@@ -294,10 +302,7 @@ export default function AgentDetail() {
                 />
               )}
               {activeTab === "memoria" && (
-                <TabMemoria
-                  editConfig={editConfig}
-                  updateField={updateField}
-                />
+                <TabMemoria editConfig={editConfig} updateField={updateField} />
               )}
               {activeTab === "provedor" && (
                 <TabProvedor
@@ -312,64 +317,102 @@ export default function AgentDetail() {
               )}
             </>
           )}
-        </main>
-      </div>
+        </section>
+
+        {/* Zona de perigo (limpar config) */}
+        <div className="lf-panel" style={{ marginTop: 22, borderStyle: "dashed" }}>
+          <h3 className="lf-panel__title">
+            Zona de risco
+            <button
+              type="button"
+              className="lf-btn lf-btn--danger-ghost"
+              onClick={handleClear}
+              disabled={saving}
+            >
+              Limpar config de IA
+            </button>
+          </h3>
+          <p className="lf-panel__hint" style={{ marginBottom: 0 }}>
+            Remove provedor, modelo, prompt e demais ajustes deste agente. Não apaga o agente —
+            só zera a configuração de IA.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }
 
-// ====================================================================
-// ABAS
-// ====================================================================
+/* ==================================================================
+   ABAS
+   ================================================================== */
 
-function TabIdentidade({ agent }: { agent: { name: string; role: string; level: number; departmentName: string; description: string | null; permissions: string[]; status: string } }) {
+function TabIdentidade({
+  agent,
+}: {
+  agent: {
+    name: string;
+    role: string;
+    level: number;
+    departmentName: string;
+    description: string | null;
+    permissions: string[];
+    status: string;
+  };
+}) {
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Identidade</h2>
-      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
-        Informacoes estruturais do agente. So edicao via SQL/migracao.
+    <div className="lf-panel">
+      <h2 className="lf-panel__title">Identidade</h2>
+      <p className="lf-panel__hint">
+        Informações estruturais do agente (somente leitura). Edição via SQL/migração.
       </p>
 
-      <div>
-        <label style={labelStyle}>Nome</label>
-        <input value={agent.name} readOnly style={{ ...inputStyle, opacity: 0.7 }} />
+      <div className="lf-field">
+        <label className="lf-field__label">Nome</label>
+        <input className="lf-input" value={agent.name} readOnly style={{ opacity: 0.75 }} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        <div>
-          <label style={labelStyle}>Papel (role)</label>
-          <input value={agent.role} readOnly style={{ ...inputStyle, opacity: 0.7 }} />
+
+      <div className="lf-fields-grid">
+        <div className="lf-field">
+          <label className="lf-field__label">Papel (role)</label>
+          <input className="lf-input" value={agent.role} readOnly style={{ opacity: 0.75 }} />
         </div>
-        <div>
-          <label style={labelStyle}>Nivel</label>
-          <input value={`N${agent.level}`} readOnly style={{ ...inputStyle, opacity: 0.7 }} />
+        <div className="lf-field">
+          <label className="lf-field__label">Nível</label>
+          <input className="lf-input" value={`N${agent.level}`} readOnly style={{ opacity: 0.75 }} />
         </div>
-        <div>
-          <label style={labelStyle}>Status</label>
-          <input value={agent.status} readOnly style={{ ...inputStyle, opacity: 0.7 }} />
+        <div className="lf-field">
+          <label className="lf-field__label">Status</label>
+          <input className="lf-input" value={agent.status} readOnly style={{ opacity: 0.75 }} />
         </div>
       </div>
-      <div>
-        <label style={labelStyle}>Departamento</label>
-        <input value={agent.departmentName || "—"} readOnly style={{ ...inputStyle, opacity: 0.7 }} />
+
+      <div className="lf-field">
+        <label className="lf-field__label">Departamento</label>
+        <input
+          className="lf-input"
+          value={agent.departmentName || "—"}
+          readOnly
+          style={{ opacity: 0.75 }}
+        />
       </div>
-      <div>
-        <label style={labelStyle}>Descricao</label>
+
+      <div className="lf-field">
+        <label className="lf-field__label">Descrição</label>
         <textarea
+          className="lf-textarea"
           value={agent.description || ""}
           readOnly
           rows={3}
-          style={{ ...inputStyle, opacity: 0.7, resize: "none" }}
+          style={{ opacity: 0.75, resize: "none" }}
         />
       </div>
+
       {agent.permissions.length > 0 && (
-        <div>
-          <label style={labelStyle}>Permissoes ({agent.permissions.length})</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {agent.permissions.map(p => (
-              <span key={p} style={{
-                background: "rgba(201, 168, 76, 0.08)", color: "#c9a84c",
-                padding: "3px 10px", borderRadius: 12, fontSize: 11, fontFamily: "monospace",
-              }}>
+        <div className="lf-field" style={{ marginBottom: 0 }}>
+          <label className="lf-field__label">Permissões ({agent.permissions.length})</label>
+          <div className="lf-row">
+            {agent.permissions.map((p) => (
+              <span key={p} className="lf-badge lf-badge--gold lf-badge--mono">
                 {p}
               </span>
             ))}
@@ -381,8 +424,14 @@ function TabIdentidade({ agent }: { agent: { name: string; role: string; level: 
 }
 
 function TabModelo({
-  editConfig, updateField, applyProviderSelection, applySuggested, agentLevel,
-  models, configuredProviders, onGoToProvider,
+  editConfig,
+  updateField,
+  applyProviderSelection,
+  applySuggested,
+  agentLevel,
+  models,
+  configuredProviders,
+  onGoToProvider,
 }: {
   editConfig: AgentLLMConfig;
   updateField: <K extends keyof AgentLLMConfig>(k: K, v: AgentLLMConfig[K]) => void;
@@ -393,35 +442,39 @@ function TabModelo({
   configuredProviders: Set<ProviderCode>;
   onGoToProvider: () => void;
 }) {
-  const modelsForProvider = models.filter(m => m.provider === editConfig.provider);
+  const modelsForProvider = models.filter((m) => m.provider === editConfig.provider);
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Modelo de IA</h2>
-        <button onClick={() => applySuggested(agentLevel)} style={{ ...buttonGhost, color: "#c9a84c", borderColor: "rgba(201, 168, 76, 0.3)" }}>
-          <Sparkles size={11} style={{ display: "inline", marginRight: 4 }} />
-          Aplicar preset N{agentLevel}
+    <div className="lf-panel">
+      <h2 className="lf-panel__title">
+        Modelo de IA
+        <button
+          type="button"
+          className="lf-btn lf-btn--ghost"
+          onClick={() => applySuggested(agentLevel)}
+        >
+          ✨ Preset N{agentLevel}
         </button>
-      </div>
-      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
+      </h2>
+      <p className="lf-panel__hint">
         Provedor e modelo que este agente vai usar nas conversas.
       </p>
 
-      <div>
-        <label style={labelStyle}>Provedor</label>
+      <div className="lf-field">
+        <label className="lf-field__label">Provedor</label>
         <select
+          className="lf-select"
           value={editConfig.provider || ""}
-          onChange={e => {
+          onChange={(e) => {
             const newProvider = (e.target.value || null) as ProviderCode | null;
             if (!newProvider) {
               applyProviderSelection(null);
               return;
             }
             if (!configuredProviders.has(newProvider)) {
-              toast.warning("Chave de API nao cadastrada", {
+              toast.warning("Chave de API não cadastrada", {
                 description:
-                  `Configure a chave de ${PROVIDER_LABELS[newProvider]} na aba "Provedor" desta pagina (ultima aba no menu lateral). Sem a chave, o agente nao consegue usar esse provedor.`,
+                  `Configure a chave de ${PROVIDER_LABELS[newProvider]} na aba "Provedor" desta página. Sem a chave, o agente não consegue usar esse provedor.`,
                 duration: 8000,
                 action: {
                   label: "Abrir Provedor",
@@ -432,151 +485,200 @@ function TabModelo({
             }
             applyProviderSelection(newProvider);
           }}
-          style={inputStyle}
         >
           <option value="">— Selecione —</option>
-          {(Object.keys(PROVIDER_LABELS) as ProviderCode[]).map(p => (
+          {(Object.keys(PROVIDER_LABELS) as ProviderCode[]).map((p) => (
             <option key={p} value={p}>
-              {PROVIDER_LABELS[p]}{!configuredProviders.has(p) && " · sem chave"}
+              {PROVIDER_LABELS[p]}
+              {!configuredProviders.has(p) && " · sem chave"}
             </option>
           ))}
         </select>
       </div>
 
-      {/* Alerta inline quando provider escolhido nao tem chave */}
+      {/* Alerta inline quando provider escolhido não tem chave */}
       {editConfig.provider && !configuredProviders.has(editConfig.provider) && (
-        <div style={{
-          background: "rgba(255, 165, 0, 0.08)", border: "1px solid rgba(255, 165, 0, 0.3)",
-          borderRadius: 8, padding: 14, display: "flex", gap: 12, alignItems: "center",
-        }}>
-          <AlertTriangle size={18} color="#ffa500" style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, fontSize: 13, color: "#ffd9a0" }}>
-            Voce ainda nao cadastrou chave para <strong>{PROVIDER_LABELS[editConfig.provider]}</strong>.
-            {" "}Sem chave, este agente nao vai conseguir responder.
+        <div
+          className="lf-panel lf-panel--ghost"
+          style={{
+            border: "1px solid rgba(245, 179, 66, 0.35)",
+            background: "rgba(245, 179, 66, 0.08)",
+            padding: 14,
+            margin: "0 0 14px",
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <span className="lf-dot lf-dot--warn" />
+          <div style={{ flex: 1, fontSize: 13 }}>
+            Você ainda não cadastrou chave para{" "}
+            <strong>{PROVIDER_LABELS[editConfig.provider]}</strong>. Sem chave, este agente
+            não vai conseguir responder.
           </div>
-          <button onClick={onGoToProvider} style={{ ...buttonPrimary, padding: "8px 14px", fontSize: 12 }}>
-            <Key size={12} />
+          <button type="button" className="lf-btn lf-btn--primary" onClick={onGoToProvider}>
             Cadastrar agora
           </button>
         </div>
       )}
 
-      <div>
-        <label style={labelStyle}>Modelo</label>
+      <div className="lf-field">
+        <label className="lf-field__label">Modelo</label>
         <select
+          className="lf-select"
           value={editConfig.model || ""}
-          onChange={e => updateField("model", e.target.value || null)}
+          onChange={(e) => updateField("model", e.target.value || null)}
           disabled={!editConfig.provider}
-          style={{ ...inputStyle, opacity: editConfig.provider ? 1 : 0.5 }}
+          style={{ opacity: editConfig.provider ? 1 : 0.55 }}
         >
           <option value="">— Selecione um modelo —</option>
-          {modelsForProvider.map(m => (
+          {modelsForProvider.map((m) => (
             <option key={m.id} value={m.model_id}>
-              {m.display_name} · {m.tier} · ${Number(m.input_price_per_mtok).toFixed(2)}/${Number(m.output_price_per_mtok).toFixed(2)}/MTok
+              {m.display_name} · {m.tier} · ${Number(m.input_price_per_mtok).toFixed(2)}/$
+              {Number(m.output_price_per_mtok).toFixed(2)}/MTok
             </option>
           ))}
         </select>
         {editConfig.provider && modelsForProvider.length === 0 && (
-          <div style={{ fontSize: 11, color: "#ff6b6b", marginTop: 6 }}>
-            Nenhum modelo no catalogo para este provedor. Pode ser bug — me avise.
-          </div>
+          <span className="lf-field__hint" style={{ color: "var(--lf-danger)" }}>
+            Nenhum modelo no catálogo para este provedor.
+          </span>
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div>
-          <label style={labelStyle}>Temperatura</label>
+      <div className="lf-fields-grid">
+        <div className="lf-field" style={{ marginBottom: 0 }}>
+          <label className="lf-field__label">Temperatura</label>
           <input
-            type="number" min={0} max={2} step={0.1}
+            className="lf-input"
+            type="number"
+            min={0}
+            max={2}
+            step={0.1}
             value={editConfig.temperature ?? ""}
-            onChange={e => updateField("temperature", e.target.value === "" ? null : parseFloat(e.target.value))}
+            onChange={(e) =>
+              updateField("temperature", e.target.value === "" ? null : parseFloat(e.target.value))
+            }
             placeholder="0.3"
-            style={inputStyle}
           />
+          <span className="lf-field__hint">0 = determinístico · 1 = balanceado · 2 = criativo</span>
         </div>
-        <div>
-          <label style={labelStyle}>Max tokens</label>
+        <div className="lf-field" style={{ marginBottom: 0 }}>
+          <label className="lf-field__label">Max tokens</label>
           <input
-            type="number" min={1} max={100000}
+            className="lf-input"
+            type="number"
+            min={1}
+            max={100000}
             value={editConfig.max_tokens ?? ""}
-            onChange={e => updateField("max_tokens", e.target.value === "" ? null : parseInt(e.target.value))}
+            onChange={(e) =>
+              updateField("max_tokens", e.target.value === "" ? null : parseInt(e.target.value))
+            }
             placeholder="1500"
-            style={inputStyle}
           />
+          <span className="lf-field__hint">Limite da resposta — afeta custo e latência.</span>
         </div>
       </div>
     </div>
   );
 }
 
-function TabPrompt({ editConfig, updateField, agentName }: {
+function TabPrompt({
+  editConfig,
+  updateField,
+  agentName,
+}: {
   editConfig: AgentLLMConfig;
   updateField: <K extends keyof AgentLLMConfig>(k: K, v: AgentLLMConfig[K]) => void;
   agentName: string;
 }) {
+  const charCount = (editConfig.system_prompt ?? "").length;
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>System prompt</h2>
-      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
-        Instrucao base que define a persona, tom e regras deste agente. Se ficar vazio,
-        a edge function gera um prompt automatico baseado em nome e descricao.
+    <div className="lf-panel">
+      <h2 className="lf-panel__title">
+        System prompt
+        <span className="lf-badge lf-badge--neutral lf-badge--mono">{charCount} caracteres</span>
+      </h2>
+      <p className="lf-panel__hint">
+        Instrução base que define a persona, tom e regras deste agente. Se ficar vazio, a edge
+        function gera um prompt automático baseado em nome e descrição.
       </p>
 
-      <div>
-        <label style={labelStyle}>Prompt do sistema</label>
+      <div className="lf-field" style={{ marginBottom: 0 }}>
+        <label className="lf-field__label">Prompt do sistema</label>
         <textarea
+          className="lf-textarea lf-mono"
           value={editConfig.system_prompt ?? ""}
-          onChange={e => updateField("system_prompt", e.target.value || null)}
-          placeholder={`Voce e ${agentName}.\n\nEx: "Sou especialista em direito do trabalho. Sempre cito Sumulas do TST. Tom: formal mas acessivel. Nunca prometo resultado."`}
+          onChange={(e) => updateField("system_prompt", e.target.value || null)}
+          placeholder={`Você é ${agentName}.\n\nEx: "Sou especialista em direito do trabalho. Sempre cito Súmulas do TST. Tom: formal mas acessível. Nunca prometo resultado."`}
           rows={14}
-          style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12, resize: "vertical", minHeight: 240 }}
+          style={{ minHeight: 280, fontSize: 12 }}
         />
-        <div style={{ fontSize: 11, color: "#6b6b80", marginTop: 6 }}>
-          {(editConfig.system_prompt ?? "").length} caracteres
-        </div>
       </div>
     </div>
   );
 }
 
-function TabMemoria({ editConfig, updateField }: {
+function TabMemoria({
+  editConfig,
+  updateField,
+}: {
   editConfig: AgentLLMConfig;
   updateField: <K extends keyof AgentLLMConfig>(k: K, v: AgentLLMConfig[K]) => void;
 }) {
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Memória e contexto</h2>
-      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
-        Quanto historico o agente carrega a cada turno, e se mantem memoria de longo prazo.
+    <div className="lf-panel">
+      <h2 className="lf-panel__title">Memória e contexto</h2>
+      <p className="lf-panel__hint">
+        Quanto histórico o agente carrega a cada turno, e se mantém memória de longo prazo.
       </p>
 
-      <div>
-        <label style={labelStyle}>History limit (mensagens recentes)</label>
+      <div className="lf-field">
+        <label className="lf-field__label">History limit (mensagens recentes)</label>
         <input
-          type="number" min={1} max={50}
+          className="lf-input"
+          type="number"
+          min={1}
+          max={50}
           value={editConfig.history_limit ?? ""}
-          onChange={e => updateField("history_limit", e.target.value === "" ? null : parseInt(e.target.value))}
+          onChange={(e) =>
+            updateField("history_limit", e.target.value === "" ? null : parseInt(e.target.value))
+          }
           placeholder="10"
-          style={inputStyle}
         />
-        <div style={{ fontSize: 11, color: "#6b6b80", marginTop: 4 }}>
-          Quantas mensagens anteriores enviar no contexto. Maior = mais coerencia mas mais caro.
-        </div>
+        <span className="lf-field__hint">
+          Quantas mensagens anteriores enviar no contexto. Maior = mais coerência mas mais caro.
+        </span>
       </div>
 
-      <div style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 14 }}>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+      <div
+        className="lf-panel lf-panel--ghost"
+        style={{
+          border: "1px solid hsl(var(--border))",
+          padding: 14,
+          margin: 0,
+        }}
+      >
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            cursor: "pointer",
+            margin: 0,
+          }}
+        >
           <input
             type="checkbox"
             checked={!!editConfig.memory_enabled}
-            onChange={e => updateField("memory_enabled", e.target.checked)}
-            style={{ accentColor: "#c9a84c", width: 16, height: 16, marginTop: 2 }}
+            onChange={(e) => updateField("memory_enabled", e.target.checked)}
+            style={{ accentColor: "var(--lf-gold)", width: 16, height: 16, marginTop: 2 }}
           />
           <div>
-            <div style={{ fontSize: 13, color: "#c0c0d0", fontWeight: 500 }}>Memoria eterna (long-term)</div>
-            <div style={{ fontSize: 11, color: "#6b6b80", marginTop: 4 }}>
-              Persiste fatos relevantes entre conversas. Vai estar disponivel quando a Onda 4 (RAG/KB) for liberada.
-              Hoje a flag e armazenada mas nao ativa nenhum comportamento.
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Memória eterna (long-term)</div>
+            <div className="lf-field__hint" style={{ marginTop: 4 }}>
+              Persiste fatos relevantes entre conversas. Disponível quando a Onda 4 (RAG/KB) for
+              liberada. Hoje a flag é armazenada mas não ativa nenhum comportamento.
             </div>
           </div>
         </label>
@@ -586,8 +688,13 @@ function TabMemoria({ editConfig, updateField }: {
 }
 
 function TabProvedor({
-  configs, models, registerKey, deleteConfig, setDefaultConfig,
-  selectedProvider, providerHasKey,
+  configs,
+  models,
+  registerKey,
+  deleteConfig,
+  setDefaultConfig,
+  selectedProvider,
+  providerHasKey,
 }: {
   configs: ReturnType<typeof useProviders>["configs"];
   models: ReturnType<typeof useProviders>["models"];
@@ -597,7 +704,6 @@ function TabProvedor({
   selectedProvider: ProviderCode | null;
   providerHasKey: boolean;
 }) {
-  // Form inline pra cadastrar nova chave
   const [showForm, setShowForm] = useState(!providerHasKey && !!selectedProvider);
   const [formProvider, setFormProvider] = useState<ProviderCode>(selectedProvider || "anthropic");
   const [formApiKey, setFormApiKey] = useState("");
@@ -633,98 +739,137 @@ function TabProvedor({
       setFormNotes("");
       setShowForm(false);
     } else {
-      toast.error("Nao foi possivel cadastrar. Verifique o formato.");
+      toast.error("Não foi possível cadastrar. Verifique o formato.");
     }
   };
 
   const handleDelete = async (configId: string, label: string) => {
-    if (!confirm(`Remover a chave do ${label}? Agentes que dependem dela vao parar de funcionar.`)) return;
+    if (!confirm(`Remover a chave do ${label}? Agentes que dependem dela vão parar de funcionar.`))
+      return;
     const ok = await deleteConfig(configId);
     if (ok) toast.success("Chave removida.");
   };
 
-  const modelCount = (p: ProviderCode) => models.filter(m => m.provider === p).length;
+  const modelCount = (p: ProviderCode) => models.filter((m) => m.provider === p).length;
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Provedores e chaves</h2>
-      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
-        Suas chaves de API ficam criptografadas no Supabase Vault. Sao usadas por todos os agentes
+    <div className="lf-panel">
+      <h2 className="lf-panel__title">Provedores e chaves</h2>
+      <p className="lf-panel__hint">
+        Suas chaves de API ficam criptografadas no Supabase Vault. São usadas por todos os agentes
         que escolherem este provedor.
       </p>
 
-      {/* Alerta de seguranca */}
-      <div style={{
-        background: "rgba(45, 212, 160, 0.08)", border: "1px solid rgba(45, 212, 160, 0.25)",
-        borderRadius: 8, padding: 12, fontSize: 12, color: "#c0d5cc",
-      }}>
-        <strong style={{ color: "#2dd4a0" }}>Privacidade.</strong>{" "}
-        Cadastramos no Vault (criptografia AES-256). A chave nunca e exibida de volta, so os ultimos 4 caracteres.
+      {/* Aviso de privacidade */}
+      <div
+        className="lf-panel lf-panel--ghost"
+        style={{
+          background: "rgba(45, 212, 160, 0.06)",
+          border: "1px solid rgba(45, 212, 160, 0.25)",
+          padding: 12,
+          margin: "0 0 14px",
+          fontSize: 12,
+        }}
+      >
+        <strong style={{ color: "var(--lf-success)" }}>Privacidade.</strong>{" "}
+        Cadastramos no Vault (criptografia AES-256). A chave nunca é exibida de volta, só os últimos
+        4 caracteres.
       </div>
 
       {/* Lista de chaves */}
       <section>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h3 style={{ fontSize: 13, margin: 0, color: "#c0c0d0" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <h3 style={{ fontSize: 13, margin: 0, fontWeight: 600 }}>
             Chaves cadastradas ({configs.length})
           </h3>
           {!showForm && (
-            <button onClick={() => setShowForm(true)} style={{ ...buttonPrimary, padding: "6px 12px", fontSize: 12 }}>
-              <Plus size={12} />
-              Adicionar chave
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="lf-btn lf-btn--primary"
+              style={{ padding: "7px 14px" }}
+            >
+              + Adicionar chave
             </button>
           )}
         </div>
 
         {configs.length === 0 && !showForm ? (
-          <div style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 20, textAlign: "center" }}>
-            <Key size={24} color="#252534" style={{ margin: "0 auto 8px" }} />
-            <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>Nenhuma chave cadastrada ainda.</p>
-          </div>
+          <div className="lf-empty">Nenhuma chave cadastrada ainda.</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {configs.map(c => (
-              <div key={c.id} style={{
-                background: "hsl(var(--card))", border: c.provider === selectedProvider ? "1px solid rgba(45, 212, 160, 0.35)" : "1px solid hsl(var(--border))",
-                borderRadius: 8, padding: 14,
-                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <strong style={{ fontSize: 13, color: "hsl(var(--foreground))" }}>{PROVIDER_LABELS[c.provider]}</strong>
+          <div style={{ display: "grid", gap: 10 }}>
+            {configs.map((c) => (
+              <div
+                key={c.id}
+                className="lf-panel lf-panel--ghost"
+                style={{
+                  border:
+                    c.provider === selectedProvider
+                      ? "1px solid rgba(45, 212, 160, 0.4)"
+                      : "1px solid hsl(var(--border))",
+                  background: "hsl(var(--card))",
+                  padding: 14,
+                  margin: 0,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="lf-row" style={{ gap: 8, marginBottom: 4 }}>
+                    <strong style={{ fontSize: 13 }}>{PROVIDER_LABELS[c.provider]}</strong>
                     {c.is_default && (
-                      <span style={{ background: "rgba(201, 168, 76, 0.18)", color: "#c9a84c", padding: "2px 8px", borderRadius: 10, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
-                        <Star size={9} style={{ display: "inline", marginRight: 3 }} />
-                        Padrao
-                      </span>
+                      <span className="lf-badge lf-badge--gold">★ Padrão</span>
                     )}
                     {c.provider === selectedProvider && (
-                      <span style={{ background: "rgba(45, 212, 160, 0.18)", color: "#2dd4a0", padding: "2px 8px", borderRadius: 10, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        <CheckCircle2 size={9} style={{ display: "inline", marginRight: 3 }} />
-                        Usado neste agente
-                      </span>
+                      <span className="lf-badge lf-badge--success">Usado neste agente</span>
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
-                    Chave: <span style={{ fontFamily: "monospace", color: "#c9a84c" }}>****{c.api_key_last_4 || "????"}</span>
-                    {" · "}{modelCount(c.provider)} modelos
+                    Chave:{" "}
+                    <span className="lf-mono" style={{ color: "var(--lf-gold)" }}>
+                      ****{c.api_key_last_4 || "????"}
+                    </span>{" "}
+                    · {modelCount(c.provider)} modelos
                     {c.monthly_budget_usd !== null && (
                       <>
-                        {" · "}
-                        <DollarSign size={10} style={{ display: "inline" }} />
-                        ${Number(c.monthly_spent_usd ?? 0).toFixed(4)}/${Number(c.monthly_budget_usd).toFixed(2)}/mes
+                        {" · "}${Number(c.monthly_spent_usd ?? 0).toFixed(4)}/$
+                        {Number(c.monthly_budget_usd).toFixed(2)}/mês
                       </>
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div className="lf-row" style={{ gap: 6 }}>
                   {!c.is_default && (
-                    <button onClick={() => setDefaultConfig(c.id)} title="Tornar padrao" style={{ ...buttonGhost, padding: "5px 8px" }}>
-                      <Star size={12} />
+                    <button
+                      type="button"
+                      onClick={() => setDefaultConfig(c.id)}
+                      title="Tornar padrão"
+                      className="lf-btn lf-btn--ghost"
+                      style={{ padding: "6px 12px", fontSize: 12 }}
+                    >
+                      ★ Padrão
                     </button>
                   )}
-                  <button onClick={() => handleDelete(c.id, PROVIDER_LABELS[c.provider])} title="Remover" style={{ ...buttonGhost, padding: "5px 8px", color: "#ff6b6b", borderColor: "rgba(255, 107, 107, 0.25)" }}>
-                    <Trash2 size={12} />
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(c.id, PROVIDER_LABELS[c.provider])}
+                    title="Remover"
+                    className="lf-btn lf-btn--danger-ghost"
+                    style={{ padding: "6px 12px", fontSize: 12 }}
+                  >
+                    Remover
                   </button>
                 </div>
               </div>
@@ -735,84 +880,118 @@ function TabProvedor({
 
       {/* Form inline */}
       {showForm && (
-        <section style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 18 }}>
-          <h3 style={{ fontSize: 13, margin: "0 0 14px", color: "#c0c0d0" }}>Nova chave</h3>
+        <section
+          className="lf-panel lf-panel--ghost lf-fade-in"
+          style={{
+            background: "hsl(var(--card))",
+            border: "1px solid hsl(var(--border))",
+            padding: 18,
+            marginTop: 16,
+          }}
+        >
+          <h3 style={{ fontSize: 13, margin: "0 0 14px", fontWeight: 600 }}>Nova chave</h3>
 
-          <div style={{ display: "grid", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Provedor</label>
-              <select
-                value={formProvider}
-                onChange={e => setFormProvider(e.target.value as ProviderCode)}
-                style={inputStyle}
-              >
-                {(Object.keys(PROVIDER_LABELS) as ProviderCode[]).map(p => (
-                  <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
-                ))}
-              </select>
-              <div style={{ fontSize: 11, color: "#6b6b80", marginTop: 4 }}>
-                {PROVIDER_HINTS[formProvider]}
-              </div>
-            </div>
+          <div className="lf-field">
+            <label className="lf-field__label">Provedor</label>
+            <select
+              className="lf-select"
+              value={formProvider}
+              onChange={(e) => setFormProvider(e.target.value as ProviderCode)}
+            >
+              {(Object.keys(PROVIDER_LABELS) as ProviderCode[]).map((p) => (
+                <option key={p} value={p}>
+                  {PROVIDER_LABELS[p]}
+                </option>
+              ))}
+            </select>
+            <span className="lf-field__hint">{PROVIDER_HINTS[formProvider]}</span>
+          </div>
 
-            <div>
-              <label style={labelStyle}>Chave de API</label>
+          <div className="lf-field">
+            <label className="lf-field__label">Chave de API</label>
+            <input
+              className="lf-input"
+              type="password"
+              value={formApiKey}
+              onChange={(e) => setFormApiKey(e.target.value)}
+              placeholder={
+                formProvider === "anthropic"
+                  ? "sk-ant-..."
+                  : formProvider === "openrouter"
+                    ? "sk-or-v1-..."
+                    : "sk-..."
+              }
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+
+          <div className="lf-fields-grid">
+            <div className="lf-field">
+              <label className="lf-field__label">Orçamento mensal (USD)</label>
               <input
-                type="password"
-                value={formApiKey}
-                onChange={e => setFormApiKey(e.target.value)}
-                placeholder={formProvider === "anthropic" ? "sk-ant-..." : formProvider === "openrouter" ? "sk-or-v1-..." : "sk-..."}
-                style={inputStyle}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Orcamento mensal (USD)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={formBudget}
-                  onChange={e => setFormBudget(e.target.value)}
-                  placeholder="opcional"
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>&nbsp;</label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", fontSize: 13, color: "#c0c0d0", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={formSetDefault}
-                    onChange={e => setFormSetDefault(e.target.checked)}
-                    style={{ accentColor: "#c9a84c" }}
-                  />
-                  Usar como padrao
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Anotacoes (opcional)</label>
-              <input
+                className="lf-input"
                 type="text"
-                value={formNotes}
-                onChange={e => setFormNotes(e.target.value)}
-                placeholder="ex: chave de teste"
-                style={inputStyle}
+                inputMode="decimal"
+                value={formBudget}
+                onChange={(e) => setFormBudget(e.target.value)}
+                placeholder="opcional"
               />
             </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
-              <button onClick={() => setShowForm(false)} style={buttonGhost} disabled={submitting}>
-                Cancelar
-              </button>
-              <button onClick={handleRegister} style={buttonPrimary} disabled={submitting}>
-                {submitting ? "Cadastrando..." : "Cadastrar"}
-              </button>
+            <div className="lf-field">
+              <label className="lf-field__label">&nbsp;</label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 0",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formSetDefault}
+                  onChange={(e) => setFormSetDefault(e.target.checked)}
+                  style={{ accentColor: "var(--lf-gold)" }}
+                />
+                Usar como padrão
+              </label>
             </div>
+          </div>
+
+          <div className="lf-field">
+            <label className="lf-field__label">Anotações (opcional)</label>
+            <input
+              className="lf-input"
+              type="text"
+              value={formNotes}
+              onChange={(e) => setFormNotes(e.target.value)}
+              placeholder="ex: chave de teste"
+            />
+          </div>
+
+          <div
+            className="lf-row"
+            style={{ justifyContent: "flex-end", marginTop: 6, gap: 8 }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="lf-btn lf-btn--ghost"
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleRegister}
+              className="lf-btn lf-btn--primary"
+              disabled={submitting}
+            >
+              {submitting ? "Cadastrando..." : "Cadastrar"}
+            </button>
           </div>
         </section>
       )}
