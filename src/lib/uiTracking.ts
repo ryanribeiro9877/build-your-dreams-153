@@ -17,7 +17,8 @@ export type UiEventName =
   | "tooltip_open"
   | "shortcut_used"
   | "tab_navigate"
-  | "key_activate";
+  | "key_activate"
+  | "cta_click";
 
 export interface UiEventPayload {
   surface?: string;
@@ -220,7 +221,6 @@ function recordFailure(name: string, payload: Record<string, unknown>, reason: s
   bumpCount();
   notifyDebugListeners();
   if (typeof window !== "undefined" && (import.meta as ImportMeta & { env: { DEV?: boolean } }).env?.DEV) {
-    // eslint-disable-next-line no-console
     console.warn("[ui-track:rejected]", name, reason, entry);
   }
 }
@@ -482,7 +482,6 @@ export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = 
     };
 
     if ((import.meta as ImportMeta & { env: { DEV?: boolean } }).env?.DEV) {
-      // eslint-disable-next-line no-console
       console.debug("[ui-track]", name, event);
     }
 

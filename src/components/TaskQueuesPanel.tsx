@@ -33,7 +33,7 @@ const inputStyle: React.CSSProperties = {
   background: "var(--bg4)", border: "1px solid var(--border)", color: "var(--text1)",
   fontSize: 11, fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box",
 };
-const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "auto" as any };
+const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "auto" };
 
 export default function TaskQueuesPanel() {
   const { user } = useAuth();
@@ -130,7 +130,7 @@ export default function TaskQueuesPanel() {
       agent_id: agentId,
       title: newTitle.trim(),
       client_name: newClient.trim() || null,
-      priority: newPriority as any,
+      priority: newPriority as TaskItem["priority"],
       task_category: newCategory,
       status: "pending",
       task_type: "general",

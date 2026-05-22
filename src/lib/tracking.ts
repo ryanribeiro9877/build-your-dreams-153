@@ -60,7 +60,6 @@ export async function trackEvent(name: TrackEventName, payload: TrackEventPayloa
 
     // Console echo helps QA and debugging in development.
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.debug("[track]", name, event);
     }
 

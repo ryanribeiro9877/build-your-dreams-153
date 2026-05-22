@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { trackUiEvent } from "@/lib/uiTracking";
 import {
   ClipboardList, Clock, Loader, AlertTriangle, MessageSquare, ListTodo,
   Users, BarChart3, User, Rocket, CircleAlert, Timer,
@@ -47,6 +48,16 @@ export default function WelcomeScreen({ onDismiss }: { onDismiss: () => void }) 
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+
+  const handleStartWork = () => {
+    trackUiEvent("cta_click", {
+      surface: "welcome",
+      target_id: "comecar_a_trabalhar",
+      target_label: "Começar a Trabalhar",
+      section: "primary_cta",
+    });
+    onDismiss();
+  };
 
   const shortcuts = [
     { icon: MessageSquare, label: "Chat IA", action: onDismiss },
@@ -169,16 +180,12 @@ export default function WelcomeScreen({ onDismiss }: { onDismiss: () => void }) 
         </div>
       )}
 
-      <div style={{ textAlign: "center", marginTop: 8 }}>
-        <button onClick={onDismiss} style={{
-          background: "linear-gradient(135deg, #c9a84c, #b8942e)", color: "#09090f",
-          border: "none", borderRadius: 12, padding: "14px 40px",
-          fontSize: 15, fontWeight: 700, cursor: "pointer",
-          boxShadow: "0 4px 20px rgba(201,168,76,0.3)",
-          display: "inline-flex", alignItems: "center", gap: 8,
-        }}>
-          <Rocket size={16} /> Começar a Trabalhar
-        </button>
+      <div className="ws-primary-cta-wrap">
+        <div className="ws-primary-cta-root">
+          <button type="button" className="ws-primary-cta-btn" onClick={handleStartWork}>
+            <Rocket size={16} /> Começar a Trabalhar
+          </button>
+        </div>
       </div>
     </div>
   );

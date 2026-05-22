@@ -140,3 +140,74 @@
   }
 }
 
+/* Welcome (Meu Assistente) — CTA: uma luz suave percorrendo toda a borda */
+@keyframes ws-primary-cta-border-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ws-primary-cta-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+.ws-primary-cta-root {
+  position: relative;
+  display: inline-flex;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 6px 28px rgba(201, 168, 76, 0.22);
+}
+[data-theme="dark"] .ws-primary-cta-root {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.38);
+}
+/* Um único arco claro (~42°); o resto transparente — sem segundo brilho oposto */
+.ws-primary-cta-root::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 220%;
+  margin: -110% 0 0 -110%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 253, 245, 0) 0deg,
+    rgba(255, 253, 245, 0) 272deg,
+    rgba(254, 249, 231, 0.14) 292deg,
+    rgba(253, 236, 200, 0.26) 308deg,
+    rgba(254, 243, 199, 0.32) 318deg,
+    rgba(253, 236, 200, 0.26) 328deg,
+    rgba(254, 249, 231, 0.14) 346deg,
+    rgba(255, 253, 245, 0) 360deg
+  );
+  animation: ws-primary-cta-border-spin 5.8s linear infinite;
+  z-index: 0;
+}
+.ws-primary-cta-btn {
+  position: relative;
+  z-index: 1;
+  margin: 2px;
+  padding: 14px 40px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #09090f;
+  background: linear-gradient(135deg, #c9a84c, #b8942e);
+  box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ws-primary-cta-btn:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
+}
+.ws-primary-cta-btn:focus-visible {
+  outline: 2px solid #eab308;
+  outline-offset: 3px;
+}
+

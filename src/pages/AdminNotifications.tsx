@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ export default function AdminNotifications() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "critical" | "warning" | "info">("all");
 
-  const fetch = async () => {
+  const loadRows = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data, error } = await supabase
@@ -44,9 +44,9 @@ export default function AdminNotifications() {
     if (error) toast.error("Erro ao carregar histórico: " + error.message);
     setRows((data as Row[]) || []);
     setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { fetch(); }, [user]);
+  useEffect(() => { void loadRows(); }, [loadRows]);
 
   const clearAll = async () => {
     if (!user) return;
@@ -57,7 +57,7 @@ export default function AdminNotifications() {
       .eq("user_id", user.id);
     if (error) { toast.error("Erro ao limpar: " + error.message); return; }
     toast.success("Histórico limpo.");
-    fetch();
+    void loadRows();
   };
 
   const clearOne = async (id: string) => {
@@ -87,7 +87,7 @@ export default function AdminNotifications() {
             <h1 className="text-2xl font-semibold">Histórico de avisos</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={fetch} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => void loadRows()} disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Atualizar
             </Button>
             <Button variant="destructive" size="sm" onClick={clearAll} disabled={rows.length === 0}>

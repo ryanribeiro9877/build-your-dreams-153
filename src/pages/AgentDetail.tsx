@@ -11,6 +11,7 @@ import {
   ArrowLeft, Bot, Save, Sparkles, AlertTriangle, CheckCircle2, Lock, Key,
   Cpu, FileText, Brain, Server, Trash2, Plus, Star, DollarSign,
 } from "lucide-react";
+import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
 
 /**
  * /admin/agentes/:id
@@ -36,25 +37,10 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Bot }> = [
   { key: "provedor", label: "Provedor", icon: Server },
 ];
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: 8,
-  background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-  fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-};
-const labelStyle: React.CSSProperties = {
-  display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6,
-  textTransform: "uppercase", letterSpacing: "0.08em",
-};
-const buttonPrimary: React.CSSProperties = {
-  padding: "10px 18px", borderRadius: 8, border: "none",
-  background: "#c9a84c", color: "#09090f", fontWeight: 600, cursor: "pointer",
-  fontFamily: "'DM Sans', sans-serif", display: "inline-flex", alignItems: "center", gap: 8,
-};
-const buttonGhost: React.CSSProperties = {
-  padding: "8px 14px", borderRadius: 8, border: "1px solid #252534",
-  background: "transparent", color: "#9898b0", cursor: "pointer",
-  fontFamily: "'DM Sans', sans-serif", fontSize: 13,
-};
+const inputStyle: React.CSSProperties = { ...LfInput, fontFamily: "'DM Sans', sans-serif" };
+const labelStyle: React.CSSProperties = { ...LfLabel, fontFamily: "'DM Sans', sans-serif" };
+const buttonPrimary: React.CSSProperties = { ...LfPrimaryBtn, fontFamily: "'DM Sans', sans-serif" };
+const buttonGhost: React.CSSProperties = { ...LfGhostBtn, fontFamily: "'DM Sans', sans-serif" };
 
 export default function AgentDetail() {
   const navigate = useNavigate();
@@ -70,9 +56,7 @@ export default function AgentDetail() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  // RBAC
   const isAdmin = hasRole("admin");
-  if (!user) { navigate("/auth"); return null; }
 
   const agent = agents.find(a => a.id === agentId);
   const configuredProviders = useMemo(() => new Set(configs.map(c => c.provider)), [configs]);
@@ -98,6 +82,15 @@ export default function AgentDetail() {
   const updateField = <K extends keyof AgentLLMConfig>(key: K, value: AgentLLMConfig[K]) => {
     if (!editConfig) return;
     setEditConfig({ ...editConfig, [key]: value });
+    setDirty(true);
+  };
+
+  /** Troca provedor e zera modelo num único update (evita race entre dois updateField). */
+  const applyProviderSelection = (newProvider: ProviderCode | null) => {
+    setEditConfig((prev) => {
+      if (!prev) return prev;
+      return { ...prev, provider: newProvider, model: null };
+    });
     setDirty(true);
   };
 
@@ -155,24 +148,29 @@ export default function AgentDetail() {
     }
   };
 
+  if (!user) {
+    navigate("/auth");
+    return null;
+  }
+
   if (!isAdmin) {
     return (
-      <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", padding: 40, textAlign: "center" }}>
-        <Lock size={32} color="#9898b0" />
+      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
+        <Lock size={32} style={{ color: "hsl(var(--muted-foreground))" }} />
         <h2>Acesso restrito</h2>
-        <p style={{ color: "#9898b0" }}>Apenas administradores.</p>
-        <button onClick={() => navigate(-1)} style={buttonGhost}>Voltar</button>
+        <p style={{ color: "hsl(var(--muted-foreground))" }}>Apenas administradores.</p>
+        <button type="button" onClick={() => navigate(-1)} style={buttonGhost}>Voltar</button>
       </div>
     );
   }
 
   if (!agent) {
     return (
-      <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", padding: 40, textAlign: "center", fontFamily: "'DM Sans', sans-serif" }}>
-        <Bot size={48} color="#252534" />
+      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
+        <Bot size={48} style={{ color: "hsl(var(--border))" }} />
         <h2>Agente nao encontrado</h2>
-        <p style={{ color: "#9898b0" }}>O agente solicitado nao existe ou foi removido.</p>
-        <button onClick={() => navigate("/admin/agentes")} style={buttonGhost}>Voltar para lista</button>
+        <p style={{ color: "hsl(var(--muted-foreground))" }}>O agente solicitado nao existe ou foi removido.</p>
+        <button type="button" onClick={() => navigate("/admin/agentes")} style={buttonGhost}>Voltar para lista</button>
       </div>
     );
   }
@@ -180,12 +178,16 @@ export default function AgentDetail() {
   const isConfigured = !!(editConfig?.provider && editConfig?.model);
   const providerHasKey = editConfig?.provider ? configuredProviders.has(editConfig.provider) : false;
 
+  const exitAgent = () => navigate("/admin/agentes");
+
   return (
-    <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={LfPage}>
       {/* Header */}
-      <header style={{ padding: "16px 32px", borderBottom: "1px solid #252534", display: "flex", alignItems: "center", gap: 16 }}>
-        <button onClick={() => navigate("/admin/agentes")} style={{ ...buttonGhost, padding: 8 }}>
-          <ArrowLeft size={18} />
+      <header style={{ padding: "16px 32px", borderBottom: "1px solid hsl(var(--border))", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <button type="button" onClick={exitAgent} style={{ ...LfHeaderBackBtn, fontFamily: "'DM Sans', sans-serif" }} aria-label="Voltar">
+          <ArrowLeft size={18} aria-hidden />
+          {" "}
+          Voltar
         </button>
         <div style={{
           width: 40, height: 40, borderRadius: "50%",
@@ -194,9 +196,9 @@ export default function AgentDetail() {
         }}>
           {agent.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontSize: 18, margin: 0 }}>{agent.name}</h1>
-          <div style={{ fontSize: 11, color: "#9898b0", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>
             {agent.role} · N{agent.level} · {agent.departmentName || "Sem departamento"}
             {isConfigured && editConfig?.model && (
               <span style={{ color: "#2dd4a0", marginLeft: 8 }}>
@@ -216,6 +218,7 @@ export default function AgentDetail() {
           </span>
         )}
         <button
+          type="button"
           onClick={handleSave}
           style={{ ...buttonPrimary, opacity: saving ? 0.6 : 1 }}
           disabled={saving || !dirty}
@@ -229,7 +232,7 @@ export default function AgentDetail() {
       <div style={{ display: "flex", minHeight: "calc(100vh - 73px)" }}>
         {/* Sidebar de tabs */}
         <nav style={{
-          width: 220, background: "#0d0d14", borderRight: "1px solid #252534",
+          width: 220, background: "hsl(var(--muted))", borderRight: "1px solid hsl(var(--border))",
           padding: "20px 0", display: "flex", flexDirection: "column", gap: 2,
         }}>
           {TABS.map(t => {
@@ -245,7 +248,7 @@ export default function AgentDetail() {
                   background: active ? "rgba(201, 168, 76, 0.08)" : "transparent",
                   borderLeft: active ? "3px solid #c9a84c" : "3px solid transparent",
                   border: "none",
-                  color: active ? "#c9a84c" : "#9898b0",
+                  color: active ? "#c9a84c" : "hsl(var(--muted-foreground))",
                   fontSize: 13, fontWeight: active ? 600 : 400,
                   cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
                   fontFamily: "'DM Sans', sans-serif",
@@ -267,7 +270,7 @@ export default function AgentDetail() {
         {/* Conteudo */}
         <main style={{ flex: 1, padding: "28px 36px", maxWidth: 720 }}>
           {loadingConfig ? (
-            <div style={{ color: "#9898b0" }}>Carregando configuracao...</div>
+            <div style={{ color: "hsl(var(--muted-foreground))" }}>Carregando configuracao...</div>
           ) : !editConfig ? null : (
             <>
               {activeTab === "identidade" && <TabIdentidade agent={agent} />}
@@ -275,6 +278,7 @@ export default function AgentDetail() {
                 <TabModelo
                   editConfig={editConfig}
                   updateField={updateField}
+                  applyProviderSelection={applyProviderSelection}
                   applySuggested={applySuggested}
                   agentLevel={agent.level}
                   models={models}
@@ -321,8 +325,8 @@ export default function AgentDetail() {
 function TabIdentidade({ agent }: { agent: { name: string; role: string; level: number; departmentName: string; description: string | null; permissions: string[]; status: string } }) {
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>Identidade</h2>
-      <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Identidade</h2>
+      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
         Informacoes estruturais do agente. So edicao via SQL/migracao.
       </p>
 
@@ -377,11 +381,12 @@ function TabIdentidade({ agent }: { agent: { name: string; role: string; level: 
 }
 
 function TabModelo({
-  editConfig, updateField, applySuggested, agentLevel,
+  editConfig, updateField, applyProviderSelection, applySuggested, agentLevel,
   models, configuredProviders, onGoToProvider,
 }: {
   editConfig: AgentLLMConfig;
   updateField: <K extends keyof AgentLLMConfig>(k: K, v: AgentLLMConfig[K]) => void;
+  applyProviderSelection: (provider: ProviderCode | null) => void;
   applySuggested: (lvl: number) => void;
   agentLevel: number;
   models: ReturnType<typeof useProviders>["models"];
@@ -393,13 +398,13 @@ function TabModelo({
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>Modelo de IA</h2>
+        <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Modelo de IA</h2>
         <button onClick={() => applySuggested(agentLevel)} style={{ ...buttonGhost, color: "#c9a84c", borderColor: "rgba(201, 168, 76, 0.3)" }}>
           <Sparkles size={11} style={{ display: "inline", marginRight: 4 }} />
           Aplicar preset N{agentLevel}
         </button>
       </div>
-      <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
         Provedor e modelo que este agente vai usar nas conversas.
       </p>
 
@@ -409,9 +414,23 @@ function TabModelo({
           value={editConfig.provider || ""}
           onChange={e => {
             const newProvider = (e.target.value || null) as ProviderCode | null;
-            updateField("provider", newProvider);
-            // Limpa model se trocou provider
-            updateField("model", null);
+            if (!newProvider) {
+              applyProviderSelection(null);
+              return;
+            }
+            if (!configuredProviders.has(newProvider)) {
+              toast.warning("Chave de API nao cadastrada", {
+                description:
+                  `Configure a chave de ${PROVIDER_LABELS[newProvider]} na aba "Provedor" desta pagina (ultima aba no menu lateral). Sem a chave, o agente nao consegue usar esse provedor.`,
+                duration: 8000,
+                action: {
+                  label: "Abrir Provedor",
+                  onClick: () => onGoToProvider(),
+                },
+              });
+              return;
+            }
+            applyProviderSelection(newProvider);
           }}
           style={inputStyle}
         >
@@ -464,7 +483,7 @@ function TabModelo({
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label style={labelStyle}>Temperatura</label>
           <input
@@ -472,17 +491,6 @@ function TabModelo({
             value={editConfig.temperature ?? ""}
             onChange={e => updateField("temperature", e.target.value === "" ? null : parseFloat(e.target.value))}
             placeholder="0.3"
-            style={inputStyle}
-          />
-          <div style={{ fontSize: 10, color: "#6b6b80", marginTop: 4 }}>0 = deterministico · 1 = balanceado · 2 = criativo</div>
-        </div>
-        <div>
-          <label style={labelStyle}>Top P (opcional)</label>
-          <input
-            type="number" min={0} max={1} step={0.05}
-            value={editConfig.top_p ?? ""}
-            onChange={e => updateField("top_p", e.target.value === "" ? null : parseFloat(e.target.value))}
-            placeholder="0.95"
             style={inputStyle}
           />
         </div>
@@ -497,21 +505,6 @@ function TabModelo({
           />
         </div>
       </div>
-
-      <div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#c0c0d0", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={!!editConfig.allow_fallbacks}
-            onChange={e => updateField("allow_fallbacks", e.target.checked)}
-            style={{ accentColor: "#c9a84c", width: 16, height: 16 }}
-          />
-          Permitir fallback no OpenRouter
-        </label>
-        <div style={{ fontSize: 11, color: "#6b6b80", marginTop: 4, paddingLeft: 24 }}>
-          Mantenha <strong>desligado</strong> em producao. Fallback silencioso pode trocar pra modelo inferior sem aviso.
-        </div>
-      </div>
     </div>
   );
 }
@@ -523,8 +516,8 @@ function TabPrompt({ editConfig, updateField, agentName }: {
 }) {
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>System prompt</h2>
-      <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>System prompt</h2>
+      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
         Instrucao base que define a persona, tom e regras deste agente. Se ficar vazio,
         a edge function gera um prompt automatico baseado em nome e descricao.
       </p>
@@ -552,8 +545,8 @@ function TabMemoria({ editConfig, updateField }: {
 }) {
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>Memória e contexto</h2>
-      <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Memória e contexto</h2>
+      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
         Quanto historico o agente carrega a cada turno, e se mantem memoria de longo prazo.
       </p>
 
@@ -571,7 +564,7 @@ function TabMemoria({ editConfig, updateField }: {
         </div>
       </div>
 
-      <div style={{ background: "#0d0d14", border: "1px solid #252534", borderRadius: 8, padding: 14 }}>
+      <div style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 14 }}>
         <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
           <input
             type="checkbox"
@@ -654,8 +647,8 @@ function TabProvedor({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>Provedores e chaves</h2>
-      <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+      <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>Provedores e chaves</h2>
+      <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
         Suas chaves de API ficam criptografadas no Supabase Vault. Sao usadas por todos os agentes
         que escolherem este provedor.
       </p>
@@ -684,21 +677,21 @@ function TabProvedor({
         </div>
 
         {configs.length === 0 && !showForm ? (
-          <div style={{ background: "#0d0d14", border: "1px solid #252534", borderRadius: 8, padding: 20, textAlign: "center" }}>
+          <div style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 20, textAlign: "center" }}>
             <Key size={24} color="#252534" style={{ margin: "0 auto 8px" }} />
-            <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>Nenhuma chave cadastrada ainda.</p>
+            <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>Nenhuma chave cadastrada ainda.</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {configs.map(c => (
               <div key={c.id} style={{
-                background: "#0d0d14", border: c.provider === selectedProvider ? "1px solid rgba(45, 212, 160, 0.35)" : "1px solid #252534",
+                background: "hsl(var(--card))", border: c.provider === selectedProvider ? "1px solid rgba(45, 212, 160, 0.35)" : "1px solid hsl(var(--border))",
                 borderRadius: 8, padding: 14,
                 display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <strong style={{ fontSize: 13, color: "#eeeef5" }}>{PROVIDER_LABELS[c.provider]}</strong>
+                    <strong style={{ fontSize: 13, color: "hsl(var(--foreground))" }}>{PROVIDER_LABELS[c.provider]}</strong>
                     {c.is_default && (
                       <span style={{ background: "rgba(201, 168, 76, 0.18)", color: "#c9a84c", padding: "2px 8px", borderRadius: 10, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
                         <Star size={9} style={{ display: "inline", marginRight: 3 }} />
@@ -712,7 +705,7 @@ function TabProvedor({
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: "#9898b0" }}>
+                  <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
                     Chave: <span style={{ fontFamily: "monospace", color: "#c9a84c" }}>****{c.api_key_last_4 || "????"}</span>
                     {" · "}{modelCount(c.provider)} modelos
                     {c.monthly_budget_usd !== null && (
@@ -742,7 +735,7 @@ function TabProvedor({
 
       {/* Form inline */}
       {showForm && (
-        <section style={{ background: "#0d0d14", border: "1px solid #252534", borderRadius: 8, padding: 18 }}>
+        <section style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, padding: 18 }}>
           <h3 style={{ fontSize: 13, margin: "0 0 14px", color: "#c0c0d0" }}>Nova chave</h3>
 
           <div style={{ display: "grid", gap: 12 }}>

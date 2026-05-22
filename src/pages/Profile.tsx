@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, User, Save, Bell } from "lucide-react";
 import { getLowBalanceThreshold, setLowBalanceThreshold } from "@/hooks/useTokenBalance";
+import { LfPage, LfCard, LfInput, LfLabel, LfHeaderBackBtn, LfPrimaryBtn } from "@/lib/lexforceShellTheme";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lowThreshold, setLowThresholdState] = useState<number>(10);
+
+  const exit = () => navigate("/sistema");
 
   useEffect(() => { setLowThresholdState(getLowBalanceThreshold()); }, []);
 
@@ -48,38 +51,32 @@ export default function Profile() {
     else toast.success("Perfil atualizado!");
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-    fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6,
-    textTransform: "uppercase", letterSpacing: "0.08em",
-  };
-
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#09090f", color: "#c9a84c" }}>
-      Carregando...
-    </div>
-  );
+  if (loading) {
+    return (
+      <div style={{ ...LfPage, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#c9a84c" }}>Carregando...</span>
+      </div>
+    );
+  }
 
   return (
-    <div style={{
-      minHeight: "100vh", background: "linear-gradient(135deg, #09090f 0%, #111118 50%, #09090f 100%)",
-      fontFamily: "'DM Sans', sans-serif", padding: "40px 20px",
-    }}>
+    <div style={{ ...LfPage, padding: "40px 20px" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
-        <button onClick={() => navigate("/sistema")} style={{
-          background: "none", border: "1px solid #252534", color: "#9898b0",
-          padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12, marginBottom: 24,
-          fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 6,
-        }}><ArrowLeft size={14} /> Voltar</button>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
+          <button type="button" onClick={exit} style={LfHeaderBackBtn} aria-label="Voltar">
+            <ArrowLeft size={16} aria-hidden />
+            {" "}
+            Voltar
+          </button>
+        </div>
 
         <div style={{
-          padding: 32, borderRadius: 16, background: "#111118",
-          border: "1px solid #252534", boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-        }}>
+          ...LfCard,
+          padding: 32,
+          borderRadius: 16,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+        }}
+        >
           <div style={{ textAlign: "center", marginBottom: 28 }}>
             <div style={{
               width: 80, height: 80, borderRadius: "50%", margin: "0 auto 12px",
@@ -96,74 +93,77 @@ export default function Profile() {
             <div style={{ fontSize: 10, color: "#c9a84c", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               {roleLabel} ({primaryRole})
             </div>
-            <div style={{ fontSize: 11, color: "#5a5a72", marginTop: 4 }}>{user?.email}</div>
+            <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 4 }}>{user?.email}</div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Nome completo</label>
-            <input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} placeholder="Dr. João Silva" />
+            <label style={LfLabel}>Nome completo</label>
+            <input value={displayName} onChange={e => setDisplayName(e.target.value)} style={LfInput} placeholder="Dr. João Silva" />
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Cargo / Função</label>
-            <input value={jobTitle} onChange={e => setJobTitle(e.target.value)} style={inputStyle} placeholder="Advogado Sênior" />
+            <label style={LfLabel}>Cargo / Função</label>
+            <input value={jobTitle} onChange={e => setJobTitle(e.target.value)} style={LfInput} placeholder="Advogado Sênior" />
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Departamento</label>
-            <input value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle} placeholder="Contencioso Cível" />
+            <label style={LfLabel}>Departamento</label>
+            <input value={department} onChange={e => setDepartment(e.target.value)} style={LfInput} placeholder="Contencioso Cível" />
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>URL do Avatar (opcional)</label>
-            <input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} style={inputStyle} placeholder="https://..." />
+            <label style={LfLabel}>URL do Avatar (opcional)</label>
+            <input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} style={LfInput} placeholder="https://..." />
           </div>
 
-          {/* Preferências de notificação */}
           <div style={{
             marginBottom: 24, padding: 16, borderRadius: 10,
-            background: "#16161f", border: "1px solid #252534",
-          }}>
+            background: "hsl(var(--muted))", border: "1px solid hsl(var(--border))",
+          }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: "#c9a84c" }}>
               <Bell size={14} />
               <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Alertas de saldo
               </span>
             </div>
-            <label style={labelStyle}>Avisar quando saldo ficar abaixo de</label>
+            <label style={LfLabel}>Avisar quando saldo ficar abaixo de</label>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 type="number"
                 min={0}
                 value={lowThreshold}
                 onChange={(e) => setLowThresholdState(parseInt(e.target.value || "0", 10))}
-                style={{ ...inputStyle, flex: 1 }}
+                style={{ ...LfInput, flex: 1 }}
                 placeholder="10"
               />
               <button
+                type="button"
                 onClick={() => { setLowBalanceThreshold(lowThreshold); toast.success(`Alerta configurado para ${lowThreshold} tokens`); }}
                 style={{
-                  padding: "0 16px", borderRadius: 8, border: "1px solid #c9a84c40",
+                  padding: "0 16px", borderRadius: 8, border: "1px solid rgba(201,168,76,0.45)",
                   background: "transparent", color: "#c9a84c", cursor: "pointer", fontSize: 12, fontWeight: 600,
                 }}
               >
                 Aplicar
               </button>
             </div>
-            <div style={{ fontSize: 10, color: "#5a5a72", marginTop: 6 }}>
+            <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginTop: 6 }}>
               O aviso é exibido apenas uma vez por sessão. Reaparece se o saldo subir e cair novamente.
             </div>
           </div>
 
-          <button onClick={handleSave} disabled={saving} style={{
-            width: "100%", padding: "12px 0", borderRadius: 8, border: "none", cursor: "pointer",
-            background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
-            color: "#0a0a12", fontSize: 14, fontWeight: 600,
+          <button type="button" onClick={handleSave} disabled={saving} style={{
+            ...LfPrimaryBtn,
+            width: "100%",
+            padding: "12px 0",
+            fontSize: 14,
             fontFamily: "'DM Sans', sans-serif",
             opacity: saving ? 0.7 : 1,
             boxShadow: "0 4px 20px rgba(201,168,76,0.3)",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          }}>
+            justifyContent: "center",
+          }}
+          >
             <Save size={16} />
             {saving ? "Salvando..." : "Salvar Perfil"}
           </button>

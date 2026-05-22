@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -23,7 +23,7 @@ const SEVERITY_STYLES: Record<string, string> = {
   info: "bg-blue-500/20 border-blue-500/50 text-blue-300",
 };
 
-const SEVERITY_BADGE: Record<string, string> = {
+const SEVERITY_BADGE: Record<string, "destructive" | "outline" | "secondary"> = {
   critical: "destructive",
   warning: "outline",
   info: "secondary",
@@ -35,7 +35,7 @@ export function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from("bottleneck_notifications")
@@ -45,15 +45,15 @@ export function NotificationCenter() {
       .limit(50);
     if (data) {
       setNotifications(data as Notification[]);
-      setUnreadCount(data.filter((n: any) => !n.is_read).length);
+      setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [fetchNotifications]);
 
   const markAllRead = async () => {
     if (!user) return;
@@ -115,7 +115,7 @@ export function NotificationCenter() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium leading-snug flex-1">{n.message}</p>
-                    <Badge variant={SEVERITY_BADGE[n.severity] as any || "secondary"} className="text-[10px] shrink-0">
+                    <Badge variant={SEVERITY_BADGE[n.severity] ?? "secondary"} className="text-[10px] shrink-0">
                       {n.severity === "critical" ? "CRÍTICO" : n.severity === "warning" ? "ALERTA" : "INFO"}
                     </Badge>
                   </div>

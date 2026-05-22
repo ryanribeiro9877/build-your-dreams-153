@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +34,34 @@ interface Client {
   notes: string | null; status: string; created_at: string;
 }
 
+interface ClientTaskRow {
+  id: string;
+  title?: string;
+  description?: string | null;
+  agent_name?: string | null;
+  due_date?: string | null;
+  priority?: string;
+  status?: string;
+}
+
+interface ClientProcessRow {
+  id: string;
+  process_number?: string | null;
+  description?: string | null;
+  responsible_lawyer?: string | null;
+  next_hearing_date?: string | null;
+  status?: string;
+}
+
+interface ClientDocumentRow {
+  id: string;
+  document_name?: string | null;
+  document_type?: string;
+  created_at: string;
+  file_size?: number | null;
+  notes?: string | null;
+}
+
 const sectionStyle: React.CSSProperties = {
   background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12,
   padding: 20, marginBottom: 16,
@@ -48,17 +76,13 @@ export default function ClientDetails() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [processes, setProcesses] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<ClientTaskRow[]>([]);
+  const [processes, setProcesses] = useState<ClientProcessRow[]>([]);
+  const [documents, setDocuments] = useState<ClientDocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"tasks" | "processes" | "documents">("tasks");
 
-  useEffect(() => {
-    if (id) loadAll(id);
-  }, [id]);
-
-  async function loadAll(clientId: string) {
+  const loadAll = useCallback(async (clientId: string) => {
     setLoading(true);
     const [clientRes, docsRes] = await Promise.all([
       supabase.from("clients").select("*").eq("id", clientId).single(),
@@ -66,7 +90,7 @@ export default function ClientDetails() {
     ]);
     if (clientRes.error) { toast.error("Cliente não encontrado"); navigate("/clientes"); return; }
     setClient(clientRes.data);
-    setDocuments(docsRes.data || []);
+    setDocuments((docsRes.data as ClientDocumentRow[]) || []);
 
     // Fetch tasks and processes by client name
     const name = clientRes.data.full_name;
@@ -74,10 +98,14 @@ export default function ClientDetails() {
       supabase.from("agent_tasks").select("*").eq("client_name", name).order("created_at", { ascending: false }),
       supabase.from("processes").select("*").eq("client_name", name).order("created_at", { ascending: false }),
     ]);
-    setTasks(tasksRes.data || []);
-    setProcesses(procRes.data || []);
+    setTasks((tasksRes.data as ClientTaskRow[]) || []);
+    setProcesses((procRes.data as ClientProcessRow[]) || []);
     setLoading(false);
-  }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (id) void loadAll(id);
+  }, [id, loadAll]);
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg)", color: "var(--gold, #c9a84c)", fontFamily: "'DM Sans', sans-serif" }}>

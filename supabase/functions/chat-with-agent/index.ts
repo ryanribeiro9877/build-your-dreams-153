@@ -87,8 +87,13 @@ async function callClaude(systemPrompt: string, userMessage: string, history: Ch
       throw new Error(`Anthropic ${resp.status}: ${err.slice(0, 200)}`);
     }
 
-    const data = await resp.json();
-    const text = (data.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+    const data = (await resp.json()) as {
+      content?: { type: string; text?: string }[];
+    };
+    const text = (data.content || [])
+      .filter((c) => c.type === "text")
+      .map((c) => c.text ?? "")
+      .join("\n");
     if (!text) throw new Error("Resposta vazia do modelo");
     return text;
   } finally {

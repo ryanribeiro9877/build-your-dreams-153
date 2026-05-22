@@ -43,11 +43,28 @@ interface DeptMetric {
   bottleneckScore: number;
 }
 
+/** Linhas vindas de `agent_tasks` / `agent_orchestration_log` sem tipagem gerada no cliente. */
+interface EfficiencyTaskRow {
+  created_at: string;
+  task_category?: string | null;
+  agent_name?: string | null;
+  status?: string;
+  due_date?: string | null;
+  priority?: string;
+}
+
+interface OrchLogRow {
+  id?: string;
+  action?: string;
+  created_at: string;
+  details?: unknown;
+}
+
 export default function EfficiencyKPIs() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [orchLogs, setOrchLogs] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<EfficiencyTaskRow[]>([]);
+  const [orchLogs, setOrchLogs] = useState<OrchLogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [filterDept, setFilterDept] = useState("all");
@@ -60,8 +77,8 @@ export default function EfficiencyKPIs() {
       supabase.from("agent_tasks").select("*").eq("user_id", user.id),
       supabase.from("agent_orchestration_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50),
     ]);
-    setTasks(tasksRes.data || []);
-    setOrchLogs(logsRes.data || []);
+    setTasks((tasksRes.data as EfficiencyTaskRow[]) || []);
+    setOrchLogs((logsRes.data as OrchLogRow[]) || []);
     setLoading(false);
   }, [user]);
 
@@ -113,7 +130,10 @@ export default function EfficiencyKPIs() {
 
   const priorityData = useMemo(() => {
     const counts: Record<string, number> = {};
-    filteredTasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
+    filteredTasks.forEach(t => {
+      const p = t.priority ?? "unknown";
+      counts[p] = (counts[p] || 0) + 1;
+    });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [filteredTasks]);
 
@@ -346,7 +366,9 @@ export default function EfficiencyKPIs() {
                 fontFamily: "monospace", whiteSpace: "nowrap",
               }}>{log.action}</span>
               <span style={{ fontSize: 11, color: "#aaa", flex: 1 }}>
-                {typeof log.details === "object" && log.details?.message ? String(log.details.message) : JSON.stringify(log.details).slice(0, 80)}
+                {typeof log.details === "object" && log.details !== null && "message" in log.details
+                  ? String((log.details as { message?: unknown }).message)
+                  : JSON.stringify(log.details ?? null).slice(0, 80)}
               </span>
               <span style={{ fontSize: 9, color: "#666", fontFamily: "monospace", whiteSpace: "nowrap" }}>
                 {new Date(log.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}

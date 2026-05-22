@@ -87,7 +87,7 @@ export function useBottleneckDetection() {
         const now = new Date();
         // Apply urgency filter + mute when counting overdue
         const overdueAll = tasks.filter(t => t.due_date && new Date(t.due_date) < now);
-        const overdue = overdueAll.filter(t => passesUrgencyFilter(t.priority) && !isMuted((t as any).id));
+        const overdue = overdueAll.filter(t => passesUrgencyFilter(t.priority) && !isMuted(t.id));
 
         if (overdue.length > 5) {
           alerts.push({
@@ -173,7 +173,7 @@ export function useBottleneckDetection() {
     const channel = supabase
       .channel("bottleneck_monitor")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, async (payload) => {
-        const task = payload.new as any;
+        const task = payload.new as { id?: string; priority?: string; title?: string } | null;
         if (!task) return;
 
         if (payload.eventType === "INSERT" && task.priority === "critical") {

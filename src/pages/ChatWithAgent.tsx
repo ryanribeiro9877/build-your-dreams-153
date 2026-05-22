@@ -32,13 +32,13 @@ export default function ChatWithAgent() {
   const [inputVal, setInputVal] = useState("");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sessions, setSessions] = useState<ChatSessionRow[]>([]);
+  const [configuredAgentIds, setConfiguredAgentIds] = useState<Set<string>>(new Set());
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  if (!user) { navigate("/auth"); return null; }
-
-  // Agentes elegiveis: so os que tem provider/model configurado
-  const [configuredAgentIds, setConfiguredAgentIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user) navigate("/auth");
+  }, [user, navigate]);
 
   useEffect(() => {
     if (agents.length === 0) return;
@@ -58,7 +58,7 @@ export default function ChatWithAgent() {
   useEffect(() => {
     if (!user) return;
     supabase
-      // @ts-expect-error - tabela Onda 2
+      // @ts-expect-error Tabelas chat_sessions/chat_messages ainda não estão nos tipos gerados.
       .from("chat_sessions")
       .select("*")
       .eq("user_id", user.id)
@@ -74,7 +74,7 @@ export default function ChatWithAgent() {
     if (!sessionId) { setMessages([]); return; }
     setLoadingMessages(true);
     supabase
-      // @ts-expect-error - tabela Onda 2
+      // @ts-expect-error Tabelas chat_sessions/chat_messages ainda não estão nos tipos gerados.
       .from("chat_messages")
       .select("*")
       .eq("session_id", sessionId)
@@ -134,6 +134,8 @@ export default function ChatWithAgent() {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const totalCost = messages.reduce((s, m) => s + Number(m.cost_usd ?? 0), 0);
+
+  if (!user) return null;
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#09090f", color: "#eeeef5", fontFamily: "'DM Sans', sans-serif" }}>

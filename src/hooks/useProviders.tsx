@@ -104,13 +104,13 @@ export function useProviders() {
     const others = configs.filter(c => c.id !== configId && c.is_default);
     for (const o of others) {
       await supabase
-        // @ts-expect-error
+        // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
         .from("llm_provider_configs")
         .update({ is_default: false })
         .eq("id", o.id);
     }
     const { error } = await supabase
-      // @ts-expect-error
+      // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
       .from("llm_provider_configs")
       .update({ is_default: true })
       .eq("id", configId);

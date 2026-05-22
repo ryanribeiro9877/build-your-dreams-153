@@ -31,15 +31,16 @@ import {
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
   MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
-  PanelLeftOpen, Circle, Minimize2,
+  Circle, ChevronLeft,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
    LEXFORCE  –  Sua força de trabalho de IA jurídica
 ───────────────────────────────────────────────────────────── */
 
 // ── Icon map for departments ──
-const DEPT_ICONS: Record<string, React.ComponentType<any>> = {
+const DEPT_ICONS: Record<string, LucideIcon> = {
   assistente: Sparkles, diretoria: Crown, eficiencia: Brain, conversao: RefreshCw,
   recepcao: Building2, marketing: Megaphone, criacao: Palette, civel: Scale,
   trabalhista: HardHat, tributario: Coins, protocolo: ClipboardList,
@@ -48,7 +49,7 @@ const DEPT_ICONS: Record<string, React.ComponentType<any>> = {
   compliance: Shield, familia: Heart,
 };
 
-const ROLE_ICONS: Record<string, React.ComponentType<any>> = {
+const ROLE_ICONS: Record<string, LucideIcon> = {
   ceo: Crown, director: Briefcase, orchestrator: Target, manager: ClipboardList,
   specialist: Microscope, reviewer: CheckCircle, executor: Zap, monitor: Radio,
 };
@@ -79,6 +80,16 @@ const DEPARTMENTS = [
 
 type AgentRole = "ceo" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
+
+const AGENT_PERMISSION_VALUES: readonly AgentPermission[] = [
+  "read", "write", "approve", "execute", "admin", "monitor", "schedule", "contact_client",
+  "protocol", "calculate", "review_calculation", "petition", "market_study",
+] as const;
+
+function parseAgentPermissions(raw: string[]): AgentPermission[] {
+  const allowed = new Set<string>(AGENT_PERMISSION_VALUES);
+  return raw.filter((p): p is AgentPermission => allowed.has(p));
+}
 
 interface Agent {
   id: number;
@@ -175,35 +186,8 @@ const ALERTS = [
   { type: "success", text: "Protocolo #0029991 confirmado no TJBA",  time: "09:42" },
 ];
 
-const INITIAL_MESSAGES = [
-  {
-    id: 1, role: "assistant", agent: "Meu Assistente",
-    content: null,
-    card: {
-      type: "briefing",
-      title: "Bom dia, Doutor(a)",
-      summary: "Aqui está sua visão operacional de hoje",
-      items: [
-        { label: "Prazos críticos",      value: "3", accent: "#EAB308" },
-        { label: "Revisões pendentes",    value: "12", accent: "#CA8A04" },
-        { label: "Novos contratos",       value: "2", accent: "#FDE047" },
-        { label: "Audiências esta semana",value: "7", accent: "#EAB308" },
-        { label: "Leads qualificados",    value: "5", accent: "#CA8A04" },
-        { label: "Protocolos em fila",   value: "9", accent: "#FACC15" },
-      ],
-    },
-    timestamp: "08:00",
-  },
-  {
-    id: 2, role: "user", content: "Mostre os casos mais urgentes do bancário hoje", timestamp: "08:03",
-  },
-  {
-    id: 3, role: "assistant", agent: "Pesquisador Jurídico",
-    content: "Identifiquei **3 casos críticos** no departamento bancário. O caso #0023847 tem prazo fatal **hoje às 17h** para contestação.",
-    card: { type: "process-list", processes: PROCESSES.filter(p => p.area === "Bancário" || p.area === "Cível") },
-    timestamp: "08:03",
-  },
-];
+/** Chat inicia vazio; CTA "Comece a Trabalhar" aparece até a primeira interação. */
+const INITIAL_MESSAGES: JcChatMessage[] = [];
 
 const ALL_COMMANDS = [
   "Gerar petição inicial", "Ver prazos fatais", "Resumir caso", "Avisar cliente",
@@ -283,7 +267,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
     .jc-root { display: flex; height: 100vh; overflow: hidden; background: var(--bg); }
 
-    /* SIDEBAR */
+    /* SIDEBAR — z-index acima do .jc-main para o toggle na borda (right negativo) não ficar coberto */
     .jc-sidebar {
       width: 184px; min-width: 184px; background: var(--bg2);
       border-right: 1px solid var(--border);
@@ -292,6 +276,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       overflow-y: hidden;
       transition: width 0.38s var(--panel-ease), min-width 0.38s var(--panel-ease), transform 0.35s ease;
       position: relative;
+      z-index: 6;
     }
     .jc-sidebar-body {
       flex: 1;
@@ -314,12 +299,17 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-sidebar.collapsed .jc-agent-status-dot { display: none; }
 
     .jc-sidebar-toggle {
-      position: absolute; top: 16px; right: -16px; z-index: 30;
-      width: 34px; height: 34px; border-radius: 10px;
+      position: absolute; top: 16px; right: -12px; z-index: 2;
+      width: clamp(36px, 5vw, 42px);
+      height: clamp(36px, 5vw, 42px);
+      border-radius: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
       box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+      overflow: visible;
+      line-height: 0;
+      flex-shrink: 0;
     }
     .jc-sidebar-toggle:hover {
       color: var(--gold2);
@@ -335,6 +325,19 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       outline-offset: 2px;
       box-shadow: 0 0 0 4px rgba(234,179,8,0.18);
     }
+    .jc-toggle-arrow {
+      font-size: clamp(16px, 2.5vw, 20px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0;
+      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
     .jc-sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
@@ -344,6 +347,9 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       padding: 18px 14px 14px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 10px;
     }
+    /* Evita texto do logo sob o botao de recolher (canto direito do sidebar). */
+    .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 50px; }
+    .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 36px; }
     .jc-logo-mark {
       width: 30px; height: 30px;
       background: linear-gradient(135deg, var(--gold), var(--gold2));
@@ -353,12 +359,31 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       flex-shrink: 0;
     }
     .jc-logo-text {
-      font-family: var(--font-disp); font-size: 17px; font-weight: 600;
-      transition: color var(--theme-transition);
+      font-family: var(--font-disp); font-size: 18px; font-weight: 700;
+      letter-spacing: -0.03em;
+      transition: color var(--theme-transition), text-shadow var(--theme-transition), opacity var(--theme-transition);
     }
-    .jc-logo-text.online { color: #FACC15; text-shadow: 0 0 14px rgba(234,179,8,0.35); }
-    .jc-logo-text.offline { color: #FEF9C3; text-shadow: 0 0 12px rgba(250,204,21,0.25); opacity: 0.95; }
-    .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
+    [data-theme="dark"] .jc-logo-text.online {
+      color: #FACC15;
+      text-shadow: 0 0 14px rgba(234,179,8,0.35);
+    }
+    [data-theme="dark"] .jc-logo-text.offline {
+      color: #FEF9C3;
+      text-shadow: 0 0 12px rgba(250,204,21,0.25);
+      opacity: 0.95;
+    }
+    [data-theme="light"] .jc-logo-text.online {
+      color: #713f12;
+      text-shadow: none;
+      opacity: 1;
+    }
+    [data-theme="light"] .jc-logo-text.offline {
+      color: #9a3412;
+      text-shadow: none;
+      opacity: 1;
+    }
+    .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+    [data-theme="light"] .jc-logo-sub { color: #52525b; }
 
     .jc-search {
       margin: 12px 12px 8px; background: var(--bg3); border: 1px solid var(--border);
@@ -393,6 +418,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       padding: 1px 7px; color: var(--text2); min-width: 22px; text-align: center;
     }
     .jc-nav-badge.alert { background: rgba(234,179,8,0.16); color: #FEF08A; border: 1px solid rgba(234,179,8,0.35); }
+    [data-theme="light"] .jc-nav-badge.alert {
+      color: #713f12;
+      background: rgba(253, 230, 138, 0.5);
+      border-color: rgba(161, 98, 7, 0.35);
+    }
 
     .jc-agents-section {
       padding: 8px;
@@ -425,24 +455,77 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    /* MAIN */
-    .jc-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    /* MAIN — abaixo da sidebar para não cobrir o toggle na borda */
+    .jc-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; z-index: 1; }
     .jc-topbar {
-      height: 52px; min-height: 52px; background: var(--bg2);
+      min-height: 52px;
+      height: auto;
+      background: var(--bg2);
       border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; padding: 0 20px; gap: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 10px 16px 12px;
+      gap: 10px 12px;
+      box-sizing: border-box;
     }
-    .jc-dept-title { font-family: var(--font-disp); font-size: 20px; font-weight: 600; color: var(--text1); }
-    .jc-dept-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
-    .jc-topbar-spacer { flex: 1; }
+    .jc-topbar-brand {
+      flex: 1 1 160px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .jc-dept-title {
+      font-family: var(--font-disp);
+      font-size: clamp(15px, 2.4vw, 20px);
+      font-weight: 600;
+      color: var(--text1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      line-height: 1.2;
+    }
+    .jc-dept-icon { flex-shrink: 0; }
+    .jc-dept-title-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .jc-dept-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+    [data-theme="light"] .jc-dept-sub { color: #3f3f46; }
+    .jc-topbar-trailing {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px 10px;
+      flex: 1 1 220px;
+      min-width: 0;
+    }
     .jc-alert-chip {
       display: flex; align-items: center; gap: 6px;
       padding: 5px 10px; border-radius: 20px; cursor: pointer;
       font-size: 11px; font-weight: 500; border: 1px solid; transition: opacity 0.15s;
+      max-width: min(240px, 36vw);
+      flex-shrink: 1;
     }
     .jc-alert-chip:hover { opacity: 0.8; }
+    .jc-alert-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .jc-alert-chip.fatal { background: rgba(234,179,8,0.12); border-color: rgba(250,204,21,0.45); color: #FEF9C3; }
     .jc-alert-chip.warning { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.35); color: #FACC15; }
+    [data-theme="light"] .jc-alert-chip.fatal {
+      color: #431407;
+      background: rgba(254, 215, 170, 0.45);
+      border-color: rgba(154, 52, 18, 0.35);
+    }
+    [data-theme="light"] .jc-alert-chip.warning {
+      color: #713f12;
+      background: rgba(253, 230, 138, 0.35);
+      border-color: rgba(161, 98, 7, 0.35);
+    }
     .jc-user-chip {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 12px 4px 4px; background: var(--bg3);
@@ -460,6 +543,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
     .jc-messages::-webkit-scrollbar { width: 4px; }
     .jc-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
     .jc-msg-wrap {
       display: flex; gap: 12px; padding: 8px 32px; max-width: 960px; margin: 0 auto;
       animation: fadeUp 0.3s ease both;
@@ -574,26 +658,33 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-mic-btn.recording { background: rgba(234,179,8,0.18); border-color: #EAB308; color: #FEF9C3; animation: pulse 1s infinite; }
     .jc-input-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; }
 
-    /* RIGHT PANEL */
+    /* RIGHT PANEL — acima do main para o toggle na borda esquerda ficar visível */
     .jc-right-panel {
       width: 320px; min-width: 320px; background: var(--bg2);
       border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
       transition: width 0.38s var(--panel-ease), min-width 0.38s var(--panel-ease), opacity 0.3s ease;
       position: relative;
+      z-index: 5;
     }
     .jc-right-panel.collapsed { width: 0; min-width: 0; border-left: none; }
     .jc-right-panel.collapsed > *:not(.jc-right-toggle-desk) { display: none; }
 
     .jc-right-toggle-desk {
-      position: absolute; top: 14px; left: -16px; z-index: 30;
-      width: 34px; height: 34px; border-radius: 10px;
+      position: absolute; top: 14px; left: -12px; z-index: 2;
+      width: clamp(36px, 5vw, 42px);
+      height: clamp(36px, 5vw, 42px);
+      border-radius: 10px;
       background: var(--bg3); border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
       box-shadow: -4px 4px 18px rgba(0,0,0,0.35);
+      overflow: visible;
+      line-height: 0;
+      flex-shrink: 0;
     }
     .jc-right-panel.collapsed .jc-right-toggle-desk {
       left: auto; right: 8px; position: fixed; top: 64px;
+      z-index: 55;
     }
     .jc-right-toggle-desk:hover {
       color: var(--gold2);
@@ -651,7 +742,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       animation: jcTooltipFade 120ms ease-out;
     }
     @keyframes jcTooltipFade { from { opacity: 0 } to { opacity: 1 } }
-    .jc-hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text1); padding: 4px; }
+    .jc-hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text1); padding: 4px; flex-shrink: 0; }
     .jc-right-toggle {
       display: none; background: var(--bg3); border: 1px solid var(--border);
       border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 11px; color: var(--text2);
@@ -689,7 +780,9 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       .jc-sidebar-toggle { display: none; }
       .jc-sidebar-overlay.visible { display: block; }
       .jc-hamburger { display: block; }
-      .jc-topbar { padding: 0 12px; gap: 8px; }
+      .jc-topbar { padding: 8px 10px 10px; gap: 8px; }
+      .jc-topbar-brand { flex-basis: 100%; }
+      .jc-topbar-trailing { flex-basis: 100%; justify-content: flex-start; }
       .jc-alert-chip { display: none; }
       .jc-dept-title { font-size: 16px; }
       .jc-msg-wrap { padding: 8px 16px; }
@@ -708,13 +801,53 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 );
 
 // ── SUB-COMPONENTS ───────────────────────────────────────────
-function BriefingCard({ card }: { card: any }) {
+interface BriefingKpiItem {
+  label: string;
+  value: string;
+  accent: string;
+}
+
+interface BriefingCardPayload {
+  type: "briefing";
+  title: string;
+  summary: string;
+  items: BriefingKpiItem[];
+}
+
+interface ProcessListRow {
+  id: string;
+  client: string;
+  area: string;
+  status: string;
+  prazo: string;
+  value: string;
+  tribunal?: string;
+}
+
+interface ProcessListPayload {
+  type: "process-list";
+  processes: ProcessListRow[];
+}
+
+type AssistantChatCard = BriefingCardPayload | ProcessListPayload;
+
+interface JcChatMessage {
+  id: number;
+  role: string;
+  agent?: string;
+  content?: string | null;
+  timestamp: string;
+  card?: AssistantChatCard;
+  meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
+}
+
+function BriefingCard({ card }: { card: BriefingCardPayload }) {
   return (
     <div className="jc-card-briefing">
       <div className="jc-card-briefing-title">{card.title}</div>
       <div className="jc-card-briefing-sub">{card.summary}</div>
       <div className="jc-card-grid">
-        {card.items.map((item: any, i: number) => (
+        {card.items.map((item, i: number) => (
           <div className="jc-kpi" key={i} style={{ borderLeftColor: item.accent, borderLeftWidth: 2 }}>
             <div className="jc-kpi-value" style={{ color: item.accent }}>{item.value}</div>
             <div className="jc-kpi-label">{item.label}</div>
@@ -725,10 +858,10 @@ function BriefingCard({ card }: { card: any }) {
   );
 }
 
-function ProcessListCard({ processes }: { processes: any[] }) {
+function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   return (
     <div className="jc-card-processes">
-      {processes.map((p: any) => (
+      {processes.map((p) => (
         <div className="jc-process-row" key={p.id}>
           <div className="jc-process-id">#{p.id}</div>
           <div className="jc-process-client">{p.client}</div>
@@ -748,7 +881,7 @@ function ProcessListCard({ processes }: { processes: any[] }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: any }) {
+function MessageBubble({ msg }: { msg: JcChatMessage }) {
   const agentColors: Record<string, string> = {
     "Meu Assistente": "#EAB308",
     "Pesquisador Jurídico": "#CA8A04",
@@ -834,7 +967,7 @@ export default function JurisCloudOS() {
         status: (a.status === "offline" ? "idle" : a.status) as "active" | "idle" | "alert",
         color: a.color,
         role: a.role,
-        permissions: a.permissions as any,
+        permissions: parseAgentPermissions(a.permissions),
         department: a.departmentName === "diretoria" ? [a.departmentName] : [a.departmentName, ...(a.role === "ceo" ? ["*","diretoria"] : a.role === "director" ? ["diretoria"] : [])],
         canOrchestrate: a.canOrchestrate,
         maxConcurrentTasks: a.maxConcurrentTasks,
@@ -845,7 +978,7 @@ export default function JurisCloudOS() {
 
   const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
-  const [messages, setMessages]           = useState<any[]>(INITIAL_MESSAGES);
+  const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
   const [thinking, setThinking]           = useState(false);
   const [rightTab, setRightTab]           = useState("processos");
@@ -869,7 +1002,7 @@ export default function JurisCloudOS() {
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
   useEffect(() => {
@@ -952,13 +1085,17 @@ export default function JurisCloudOS() {
       setIsRecording(false);
       return;
     }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as Window & {
+      SpeechRecognition?: new () => SpeechRecognition;
+      webkitSpeechRecognition?: new () => SpeechRecognition;
+    };
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SR) return;
     const recognition = new SR();
     recognition.lang = "pt-BR";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-    recognition.onresult = (e: any) => {
+    recognition.onresult = (e: SpeechRecognitionEvent) => {
       const transcript = e.results[0][0].transcript;
       setInputVal(prev => prev + (prev ? " " : "") + transcript);
     };
@@ -1033,8 +1170,8 @@ export default function JurisCloudOS() {
         meta: { requestId, tokensCost: cost, orchestration: data.orchestration },
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
-    } catch (e: any) {
-      await refundAndNotify(e?.message || "erro de rede");
+    } catch (e: unknown) {
+      await refundAndNotify(e instanceof Error ? e.message : "erro de rede");
     }
   };
 
@@ -1143,17 +1280,19 @@ export default function JurisCloudOS() {
           className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
           aria-label="Menu lateral de navegação"
         >
-          {withTooltip(`${sidebarCollapsed ? "Expandir" : "Recolher"} menu (Ctrl+B)`,
+          {withTooltip("Ctrl+B",
             <button
               className="jc-sidebar-toggle"
               onClick={() => handleSidebarToggle("click")}
-              aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+              aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
               aria-expanded={!sidebarCollapsed}
               aria-controls="jc-sidebar"
               aria-keyshortcuts="Control+B Meta+B"
               type="button"
             >
-              {sidebarCollapsed ? <PanelLeftOpen size={16} strokeWidth={2} /> : <Minimize2 size={16} strokeWidth={2} />}
+              <span className="jc-toggle-arrow" aria-hidden>
+                {sidebarCollapsed ? ">" : "<"}
+              </span>
             </button>
           , "sidebar_toggle_btn")}
 
@@ -1368,54 +1507,54 @@ export default function JurisCloudOS() {
         {/* MAIN */}
         <main className="jc-main">
           <header className="jc-topbar">
-            <button className="jc-hamburger" onClick={() => setSidebarOpen(true)}>
+            <button type="button" className="jc-hamburger" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu">
               <Menu size={20} />
             </button>
-            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-              <div className="jc-dept-title" style={{ color: activeDeptData?.color, display: "flex", alignItems: "center", gap: 8 }}>
-                <DeptIcon size={20} />
-                {activeDeptData?.label}
+            <div className="jc-topbar-brand">
+              <div className="jc-dept-title" style={{ color: activeDeptData?.color }}>
+                <DeptIcon size={20} className="jc-dept-icon" aria-hidden />
+                <span className="jc-dept-title-text">{activeDeptData?.label}</span>
               </div>
               <div className="jc-dept-sub">Sistema Operacional</div>
             </div>
-            <div className="jc-topbar-spacer" />
+            <div className="jc-topbar-trailing">
+              {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
+                <div key={i} className={`jc-alert-chip ${a.type}`}>
+                  <AlertIcon type={a.type} />
+                  <span>{a.text.slice(0, 28)}...</span>
+                </div>
+              ))}
 
-            {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
-              <div key={i} className={`jc-alert-chip ${a.type}`}>
-                <AlertIcon type={a.type} />
-                <span>{a.text.slice(0, 28)}...</span>
+              <NotificationCenter />
+
+              <button type="button" onClick={() => navigate("/tokens")} title="Meus Tokens"
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
+                  background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", flexShrink: 0 }}>
+                <Coins size={14} />
+                {tokenBalance.balance.toLocaleString()}
+              </button>
+
+              <button type="button" className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
+                aria-label={`Alternar para tema ${theme === "dark" ? "claro" : "escuro"}`}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20,
+                  background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)",
+                  fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", flexShrink: 0 }}>
+                {theme === "dark" ? "Claro" : "Escuro"}
+              </button>
+
+              <button type="button" className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
+                {rightPanelOpen ? <><PanelRightClose size={14} /> Fechar</> : <><PanelRightOpen size={14} /> Operações</>}
+              </button>
+
+              <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/perfil"); } }}>
+                <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
+                <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
+                {userRoles.length > 0 && (
+                  <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(234,179,8,0.15)", color: "#FACC15", textTransform: "uppercase", fontFamily: "var(--font-body)" }}>
+                    {userRoles[0]}
+                  </span>
+                )}
               </div>
-            ))}
-
-            <NotificationCenter />
-
-            <button onClick={() => navigate("/tokens")} title="Meus Tokens"
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
-                background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)" }}>
-              <Coins size={14} />
-              {tokenBalance.balance.toLocaleString()}
-            </button>
-
-            <button className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
-              aria-label={`Alternar para tema ${theme === "dark" ? "claro" : "escuro"}`}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20,
-                background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)",
-                fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-              {theme === "dark" ? "Claro" : "Escuro"}
-            </button>
-
-            <button className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
-              {rightPanelOpen ? <><PanelRightClose size={14} /> Fechar</> : <><PanelRightOpen size={14} /> Operações</>}
-            </button>
-
-            <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil">
-              <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
-              <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
-              {userRoles.length > 0 && (
-                <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(234,179,8,0.15)", color: "#FACC15", textTransform: "uppercase", fontFamily: "var(--font-body)" }}>
-                  {userRoles[0]}
-                </span>
-              )}
             </div>
           </header>
 
@@ -1469,17 +1608,19 @@ export default function JurisCloudOS() {
           aria-label="Central de operações"
         >
           {withTooltip(
-            rightCollapsed ? "Expandir Operações (Ctrl+O)" : "Recolher Operações (Ctrl+O)",
+            "Ctrl+O",
             <button
               className="jc-right-toggle-desk"
               onClick={() => handleRightToggle("click")}
-              aria-label={rightCollapsed ? "Expandir painel de operações" : "Recolher painel de operações"}
+              aria-label={rightCollapsed ? "Expandir painel" : "Recolher painel"}
               aria-expanded={!rightCollapsed}
               aria-controls="jc-right-panel"
               aria-keyshortcuts="Control+O Meta+O"
               type="button"
             >
-              {rightCollapsed ? <PanelRightOpen size={16} strokeWidth={2} /> : <Minimize2 size={16} strokeWidth={2} />}
+              <span className="jc-toggle-arrow" aria-hidden>
+                {rightCollapsed ? ">" : "<"}
+              </span>
             </button>,
             "right_panel_toggle_btn",
             { side: "left", surface: "right_panel", alwaysOn: true }

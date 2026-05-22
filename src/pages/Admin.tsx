@@ -53,10 +53,10 @@ export default function Admin() {
 
   async function toggleRole(userId: string, role: string, hasIt: boolean) {
     if (hasIt) {
-      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role as any);
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role);
       if (error) { toast.error("Erro: " + error.message); return; }
     } else {
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
       if (error) { toast.error("Erro: " + error.message); return; }
     }
     toast.success(`Papel ${hasIt ? "removido" : "atribuído"}!`);

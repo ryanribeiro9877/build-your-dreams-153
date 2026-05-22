@@ -73,8 +73,8 @@ export default function AdminMaster() {
       setTarget(row);
       setRecentTx((tx ?? []) as TxRow[]);
       return row;
-    } catch (e: any) {
-      toast.error("Erro ao carregar saldo: " + (e?.message ?? "desconhecido"));
+    } catch (e: unknown) {
+      toast.error("Erro ao carregar saldo: " + (e instanceof Error ? e.message : "desconhecido"));
       return null;
     } finally {
       if (!silent) setLoading(false);
@@ -133,8 +133,8 @@ export default function AdminMaster() {
         setLastAdjustmentAt(new Date().toISOString());
         toast.success(`+${ADJUSTMENT_AMOUNT.toLocaleString("pt-BR")} tokens creditados.`);
       }
-    } catch (e: any) {
-      toast.error("Falha no ajuste: " + (e?.message ?? "desconhecido"));
+    } catch (e: unknown) {
+      toast.error("Falha no ajuste: " + (e instanceof Error ? e.message : "desconhecido"));
     } finally {
       setApplying(false);
     }

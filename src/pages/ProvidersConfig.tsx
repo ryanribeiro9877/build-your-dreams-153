@@ -5,6 +5,7 @@ import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProvid
 import type { ProviderCode } from "@/types/lexforce";
 import { toast } from "sonner";
 import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldCheck } from "lucide-react";
+import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
 
 /**
  * /configuracoes/providers
@@ -67,43 +68,33 @@ export default function ProvidersConfig() {
     if (ok) toast.success("Definido como padrao.");
   };
 
-  // Styles padrao do projeto
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-    fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6,
-    textTransform: "uppercase", letterSpacing: "0.08em",
-  };
-  const cardStyle: React.CSSProperties = {
-    background: "#0d0d14", border: "1px solid #252534", borderRadius: 12, padding: 18,
-  };
-  const buttonPrimary: React.CSSProperties = {
-    padding: "10px 18px", borderRadius: 8, border: "none",
-    background: "#c9a84c", color: "#09090f", fontWeight: 600, cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif", display: "inline-flex", alignItems: "center", gap: 8,
-  };
-  const buttonGhost: React.CSSProperties = {
-    padding: "10px 16px", borderRadius: 8, border: "1px solid #252534",
-    background: "transparent", color: "#9898b0", cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-  };
-
   const modelCount = (p: ProviderCode) => models.filter(m => m.provider === p).length;
 
+  const inputStyle: React.CSSProperties = { ...LfInput, fontFamily: "'DM Sans', sans-serif" };
+  const labelStyle: React.CSSProperties = { ...LfLabel, fontFamily: "'DM Sans', sans-serif" };
+  const cardStyle: React.CSSProperties = {
+    ...LfCard, fontFamily: "'DM Sans', sans-serif", borderRadius: 12, padding: 18,
+  };
+  const buttonPrimary: React.CSSProperties = { ...LfPrimaryBtn, fontFamily: "'DM Sans', sans-serif" };
+  const buttonGhost: React.CSSProperties = { ...LfGhostBtn, fontFamily: "'DM Sans', sans-serif" };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={LfPage}>
       {/* Header */}
-      <header style={{ padding: "20px 32px", borderBottom: "1px solid #252534", display: "flex", alignItems: "center", gap: 16 }}>
-        <button onClick={() => navigate(-1)} style={{ ...buttonGhost, padding: 8 }}>
-          <ArrowLeft size={18} />
+      <header style={{
+        padding: "20px 32px", borderBottom: "1px solid hsl(var(--border))",
+        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+      }}
+      >
+        <button type="button" onClick={() => navigate(-1)} style={{ ...LfHeaderBackBtn, fontFamily: "'DM Sans', sans-serif" }} aria-label="Voltar">
+          <ArrowLeft size={18} aria-hidden />
+          {" "}
+          Voltar
         </button>
         <Key size={22} color="#c9a84c" />
-        <div>
-          <h1 style={{ fontSize: 20, margin: 0, color: "#eeeef5" }}>Provedores de IA</h1>
-          <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <h1 style={{ fontSize: 20, margin: 0 }}>Provedores de IA</h1>
+          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
             Suas chaves de API (BYOK). Criptografadas no Supabase Vault.
           </p>
         </div>
@@ -136,9 +127,9 @@ export default function ProvidersConfig() {
         {/* Lista de configs */}
         <section style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 16, margin: 0, color: "#eeeef5" }}>
+            <h2 style={{ fontSize: 16, margin: 0, color: "hsl(var(--foreground))" }}>
               Chaves cadastradas {configs.length > 0 && (
-                <span style={{ color: "#9898b0", fontSize: 13, fontWeight: 400 }}>
+                <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 13, fontWeight: 400 }}>
                   ({configs.length})
                 </span>
               )}
@@ -152,11 +143,11 @@ export default function ProvidersConfig() {
           </div>
 
           {loading ? (
-            <div style={{ ...cardStyle, color: "#9898b0", fontSize: 13 }}>Carregando...</div>
+            <div style={{ ...cardStyle, color: "hsl(var(--muted-foreground))", fontSize: 13 }}>Carregando...</div>
           ) : configs.length === 0 && !showForm ? (
             <div style={{ ...cardStyle, textAlign: "center", padding: 40 }}>
-              <Key size={32} color="#252534" style={{ margin: "0 auto 12px" }} />
-              <p style={{ color: "#9898b0", fontSize: 14, margin: "0 0 8px" }}>
+              <Key size={32} color="hsl(var(--border))" style={{ margin: "0 auto 12px" }} />
+              <p style={{ color: "hsl(var(--muted-foreground))", fontSize: 14, margin: "0 0 8px" }}>
                 Voce ainda nao cadastrou nenhuma chave.
               </p>
               <p style={{ color: "#6b6b80", fontSize: 12, margin: 0 }}>
@@ -170,7 +161,7 @@ export default function ProvidersConfig() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                        <strong style={{ color: "#eeeef5", fontSize: 15 }}>
+                        <strong style={{ color: "hsl(var(--foreground))", fontSize: 15 }}>
                           {PROVIDER_LABELS[c.provider]}
                         </strong>
                         {c.is_default && (
@@ -185,14 +176,14 @@ export default function ProvidersConfig() {
                         )}
                         <span style={{
                           background: c.is_active ? "rgba(45, 212, 160, 0.18)" : "rgba(155, 155, 175, 0.15)",
-                          color: c.is_active ? "#2dd4a0" : "#9898b0",
+                          color: c.is_active ? "#2dd4a0" : "hsl(var(--muted-foreground))",
                           padding: "2px 8px", borderRadius: 12, fontSize: 10,
                           textTransform: "uppercase", letterSpacing: "0.06em",
                         }}>
                           {c.is_active ? "Ativa" : "Inativa"}
                         </span>
                       </div>
-                      <div style={{ fontSize: 12, color: "#9898b0", marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginBottom: 6 }}>
                         Chave: <span style={{ fontFamily: "monospace", color: "#c9a84c" }}>
                           ****{c.api_key_last_4 || "????"}
                         </span>
@@ -202,9 +193,9 @@ export default function ProvidersConfig() {
                         </span>
                       </div>
                       {c.monthly_budget_usd !== null && (
-                        <div style={{ fontSize: 12, color: "#9898b0" }}>
+                        <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))" }}>
                           <DollarSign size={11} style={{ display: "inline", marginRight: 2 }} />
-                          Orcamento mensal: <strong style={{ color: "#eeeef5" }}>
+                          Orcamento mensal: <strong style={{ color: "hsl(var(--foreground))" }}>
                             ${Number(c.monthly_spent_usd ?? 0).toFixed(4)}
                           </strong> / ${Number(c.monthly_budget_usd).toFixed(2)}
                         </div>
@@ -243,7 +234,7 @@ export default function ProvidersConfig() {
         {/* Form de cadastro */}
         {showForm && (
           <section style={{ ...cardStyle, marginBottom: 24 }}>
-            <h3 style={{ fontSize: 15, margin: "0 0 16px", color: "#eeeef5" }}>Nova chave de provedor</h3>
+            <h3 style={{ fontSize: 15, margin: "0 0 16px", color: "hsl(var(--foreground))" }}>Nova chave de provedor</h3>
 
             <div style={{ display: "grid", gap: 16 }}>
               <div>
@@ -343,13 +334,13 @@ export default function ProvidersConfig() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
               {models.map(m => (
                 <div key={m.id} style={{
-                  padding: 10, background: "#16161f", borderRadius: 6,
-                  border: "1px solid #1f1f2c",
+                  padding: 10, background: "hsl(var(--secondary))", borderRadius: 6,
+                  border: "1px solid hsl(var(--border))",
                 }}>
-                  <div style={{ fontSize: 12, color: "#eeeef5", fontWeight: 600, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 4 }}>
                     {m.display_name}
                   </div>
-                  <div style={{ fontSize: 10, color: "#9898b0", display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", display: "flex", justifyContent: "space-between" }}>
                     <span>{m.tier}</span>
                     <span>${Number(m.input_price_per_mtok).toFixed(2)}/${Number(m.output_price_per_mtok).toFixed(2)}/MTok</span>
                   </div>

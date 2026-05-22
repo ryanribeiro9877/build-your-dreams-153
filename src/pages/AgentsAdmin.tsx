@@ -5,6 +5,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useProviders } from "@/hooks/useProviders";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Bot, Search, ChevronRight, CheckCircle2, AlertTriangle, Lock, Server } from "lucide-react";
+import { LfPage, LfInput, LfGhostBtn, LfCard, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
 
 /**
  * /admin/agentes
@@ -23,8 +24,6 @@ export default function AgentsAdmin() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "configured" | "unconfigured">("all");
   const [agentLLMStatus, setAgentLLMStatus] = useState<Record<string, { configured: boolean; model: string | null }>>({});
-
-  if (!user) { navigate("/auth"); return null; }
 
   const isAdmin = hasRole("admin");
 
@@ -65,43 +64,45 @@ export default function AgentsAdmin() {
 
   const configuredCount = Object.values(agentLLMStatus).filter(s => s.configured).length;
 
-  const buttonGhost: React.CSSProperties = {
-    padding: "8px 14px", borderRadius: 8, border: "1px solid #252534",
-    background: "transparent", color: "#9898b0", cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif", fontSize: 13,
-  };
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    background: "#16161f", border: "1px solid #252534", color: "#eeeef5",
-    fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-  };
+  const exit = () => navigate("/sistema");
+
+  if (!user) {
+    navigate("/auth");
+    return null;
+  }
 
   if (!isAdmin) {
     return (
-      <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", padding: 40, textAlign: "center", fontFamily: "'DM Sans', sans-serif" }}>
-        <Lock size={32} color="#9898b0" />
+      <div style={{ ...LfPage, padding: 40, textAlign: "center" }}>
+        <Lock size={32} style={{ color: "hsl(var(--muted-foreground))" }} />
         <h2>Acesso restrito</h2>
-        <p style={{ color: "#9898b0" }}>Apenas administradores podem acessar esta pagina.</p>
-        <button onClick={() => navigate(-1)} style={buttonGhost}>Voltar</button>
+        <p style={{ color: "hsl(var(--muted-foreground))" }}>Apenas administradores podem acessar esta pagina.</p>
+        <button type="button" onClick={exit} style={LfGhostBtn}>Voltar</button>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#09090f", color: "#eeeef5", fontFamily: "'DM Sans', sans-serif" }}>
-      <header style={{ padding: "20px 32px", borderBottom: "1px solid #252534", display: "flex", alignItems: "center", gap: 16 }}>
-        <button onClick={() => navigate(-1)} style={{ ...buttonGhost, padding: 8 }}>
-          <ArrowLeft size={18} />
+    <div style={LfPage}>
+      <header style={{
+        padding: "20px 32px", borderBottom: "1px solid hsl(var(--border))",
+        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+      }}
+      >
+        <button type="button" onClick={exit} style={LfHeaderBackBtn} aria-label="Voltar">
+          <ArrowLeft size={18} aria-hidden />
+          {" "}
+          Voltar
         </button>
         <Bot size={22} color="#c9a84c" />
-        <div>
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
           <h1 style={{ fontSize: 20, margin: 0 }}>Agentes do sistema</h1>
-          <p style={{ fontSize: 12, color: "#9898b0", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", margin: 0 }}>
             {agents.length} agentes · {configuredCount} com IA configurada · Clique numa linha para configurar.
           </p>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={() => navigate("/configuracoes/providers")} style={buttonGhost} title="Gestao centralizada de provedores (acessivel tambem pela aba Provedor dentro de cada agente)">
+        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" onClick={() => navigate("/configuracoes/providers")} style={LfGhostBtn} title="Gestao centralizada de provedores (acessivel tambem pela aba Provedor dentro de cada agente)">
             <Server size={14} style={{ display: "inline", marginRight: 6 }} />
             Provedores
           </button>
@@ -124,18 +125,18 @@ export default function AgentsAdmin() {
 
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
           <div style={{ flex: 1, position: "relative" }}>
-            <Search size={16} color="#9898b0" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+            <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "hsl(var(--muted-foreground))" }} />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por nome ou papel..."
-              style={{ ...inputStyle, paddingLeft: 36 }}
+              style={{ ...LfInput, paddingLeft: 36 }}
             />
           </div>
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value as "all" | "configured" | "unconfigured")}
-            style={{ ...inputStyle, width: 240 }}
+            style={{ ...LfInput, width: 240 }}
           >
             <option value="all">Todos ({agents.length})</option>
             <option value="configured">Apenas configurados</option>
@@ -144,11 +145,11 @@ export default function AgentsAdmin() {
         </div>
 
         {loadingAgents ? (
-          <div style={{ background: "#0d0d14", border: "1px solid #252534", borderRadius: 12, padding: 40, textAlign: "center", color: "#9898b0" }}>
+          <div style={{ ...LfCard, borderRadius: 12, padding: 40, textAlign: "center", color: "hsl(var(--muted-foreground))" }}>
             Carregando agentes...
           </div>
         ) : visibleAgents.length === 0 ? (
-          <div style={{ background: "#0d0d14", border: "1px solid #252534", borderRadius: 12, padding: 40, textAlign: "center", color: "#9898b0" }}>
+          <div style={{ ...LfCard, borderRadius: 12, padding: 40, textAlign: "center", color: "hsl(var(--muted-foreground))" }}>
             Nenhum agente corresponde aos filtros.
           </div>
         ) : (
@@ -189,11 +190,11 @@ function AgentCard({
       onMouseLeave={() => setHover(false)}
       style={{
         width: "100%", textAlign: "left",
-        background: hover ? "#11111a" : "#0d0d14",
-        border: `1px solid ${hover ? "rgba(201, 168, 76, 0.35)" : "#252534"}`,
+        background: hover ? "hsl(var(--accent))" : "hsl(var(--card))",
+        border: `1px solid ${hover ? "rgba(201, 168, 76, 0.45)" : "hsl(var(--border))"}`,
         borderRadius: 10, padding: "14px 18px",
         display: "flex", alignItems: "center", gap: 14,
-        cursor: "pointer", color: "#eeeef5",
+        cursor: "pointer", color: "hsl(var(--foreground))",
         fontFamily: "'DM Sans', sans-serif",
         transition: "background 0.12s, border-color 0.12s",
       }}
@@ -209,16 +210,16 @@ function AgentCard({
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
-          <strong style={{ fontSize: 14, color: "#eeeef5" }}>{agent.name}</strong>
+          <strong style={{ fontSize: 14, color: "hsl(var(--foreground))" }}>{agent.name}</strong>
           <span style={{
-            background: "#16161f", color: "#9898b0",
+            background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))",
             padding: "2px 8px", borderRadius: 10, fontSize: 10,
             fontFamily: "monospace",
           }}>
             N{agent.level}
           </span>
         </div>
-        <div style={{ fontSize: 11, color: "#9898b0" }}>
+        <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
           {agent.role}{agent.departmentName ? ` · ${agent.departmentName}` : ""}
         </div>
       </div>
@@ -236,7 +237,7 @@ function AgentCard({
         )}
       </div>
 
-      <ChevronRight size={16} color={hover ? "#c9a84c" : "#6b6b80"} style={{ flexShrink: 0, transition: "color 0.12s" }} />
+      <ChevronRight size={16} color={hover ? "#c9a84c" : "hsl(var(--muted-foreground))"} style={{ flexShrink: 0, transition: "color 0.12s" }} />
     </button>
   );
 }
