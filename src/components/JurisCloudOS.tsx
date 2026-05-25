@@ -899,9 +899,14 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
         color: isUser ? "#EAB308" : color,
         border: `1px solid ${isUser ? "rgba(234,179,8,0.25)" : `${color}30`}`,
         fontFamily: isUser ? "var(--font-disp)" : "var(--font-body)",
-        fontSize: isUser ? 14 : 11,
+        fontSize: isUser ? 10 : 11,
+        fontWeight: 700,
+        letterSpacing: isUser ? "0.04em" : "0",
+        textTransform: isUser ? "uppercase" : "none",
+        minWidth: isUser ? 44 : undefined,
+        paddingInline: isUser ? 8 : undefined,
       }}>
-        {isUser ? "U" : (msg.agent ? getInitials(msg.agent) : "AI")}
+        {isUser ? "VOCÊ" : (msg.agent ? getInitials(msg.agent) : "AI")}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "80%" }}>
         {!isUser && msg.agent && (

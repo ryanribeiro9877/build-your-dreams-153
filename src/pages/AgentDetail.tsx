@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAgents } from "@/hooks/useAgents";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
 import { useAgentLLMConfig, SUGGESTED_BY_LEVEL } from "@/hooks/useAgentLLMConfig";
+import { validateProviderKey, type ValidationResult } from "@/lib/validateProviderKey";
 import type { ProviderCode, AgentLLMConfig } from "@/types/lexforce";
 import { toast } from "sonner";
 
@@ -712,6 +713,28 @@ function TabProvedor({
   const [formSetDefault, setFormSetDefault] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Validação em tempo real da chave do provedor.
+  const [validationStatus, setValidationStatus] = useState<
+    "idle" | "checking" | "valid" | "invalid" | "unknown"
+  >("idle");
+  const [validationDetail, setValidationDetail] = useState<string>("");
+
+  useEffect(() => {
+    setValidationStatus("idle");
+    setValidationDetail("");
+    const trimmed = formApiKey.trim();
+    if (trimmed.length < 20) return;
+    setValidationStatus("checking");
+    const t = setTimeout(async () => {
+      const result: ValidationResult = await validateProviderKey(formProvider, trimmed);
+      if (result.ok === true) setValidationStatus("valid");
+      else if (result.ok === false) setValidationStatus("invalid");
+      else setValidationStatus("unknown");
+      setValidationDetail(result.detail);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [formApiKey, formProvider]);
+
   useEffect(() => {
     if (!providerHasKey && selectedProvider) {
       setShowForm(true);
@@ -720,8 +743,12 @@ function TabProvedor({
   }, [providerHasKey, selectedProvider]);
 
   const handleRegister = async () => {
-    if (formApiKey.trim().length < 16) {
+    if (formApiKey.trim().length < 20) {
       toast.error("Chave muito curta.");
+      return;
+    }
+    if (validationStatus === "invalid") {
+      toast.error("Chave inválida — corrija antes de cadastrar.");
       return;
     }
     setSubmitting(true);
@@ -908,7 +935,29 @@ function TabProvedor({
           </div>
 
           <div className="lf-field">
-            <label className="lf-field__label">Chave de API</label>
+            <label className="lf-field__label">
+              Chave de API
+              {validationStatus === "checking" && (
+                <span style={{ marginLeft: 8, fontSize: 10, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+                  · validando...
+                </span>
+              )}
+              {validationStatus === "valid" && (
+                <span style={{ marginLeft: 8, fontSize: 10, color: "var(--lf-success)", fontWeight: 600 }}>
+                  · válida ✓
+                </span>
+              )}
+              {validationStatus === "invalid" && (
+                <span style={{ marginLeft: 8, fontSize: 10, color: "var(--lf-danger)", fontWeight: 600 }}>
+                  · inválida ✗
+                </span>
+              )}
+              {validationStatus === "unknown" && (
+                <span style={{ marginLeft: 8, fontSize: 10, color: "var(--lf-warn)", fontWeight: 600 }}>
+                  · não confirmável
+                </span>
+              )}
+            </label>
             <input
               className="lf-input"
               type="password"
@@ -923,7 +972,47 @@ function TabProvedor({
               }
               autoComplete="off"
               spellCheck={false}
+              style={{
+                background:
+                  validationStatus === "valid"
+                    ? "rgba(45, 212, 160, 0.10)"
+                    : validationStatus === "invalid"
+                      ? "rgba(255, 107, 107, 0.10)"
+                      : validationStatus === "checking"
+                        ? "rgba(234, 179, 8, 0.06)"
+                        : undefined,
+                borderColor:
+                  validationStatus === "valid"
+                    ? "rgba(45, 212, 160, 0.55)"
+                    : validationStatus === "invalid"
+                      ? "rgba(255, 107, 107, 0.55)"
+                      : validationStatus === "checking"
+                        ? "rgba(234, 179, 8, 0.45)"
+                        : undefined,
+                boxShadow:
+                  validationStatus === "valid"
+                    ? "0 0 0 3px rgba(45, 212, 160, 0.12)"
+                    : validationStatus === "invalid"
+                      ? "0 0 0 3px rgba(255, 107, 107, 0.15)"
+                      : undefined,
+                transition: "background 200ms ease, border-color 200ms ease, box-shadow 200ms ease",
+              }}
             />
+            {(validationStatus === "invalid" || validationStatus === "unknown") && validationDetail && (
+              <span
+                className="lf-field__hint"
+                style={{
+                  color:
+                    validationStatus === "invalid"
+                      ? "var(--lf-danger)"
+                      : "var(--lf-warn)",
+                  fontWeight: 500,
+                  marginTop: 6,
+                }}
+              >
+                {validationDetail}
+              </span>
+            )}
           </div>
 
           <div className="lf-fields-grid">
@@ -988,9 +1077,20 @@ function TabProvedor({
               type="button"
               onClick={handleRegister}
               className="lf-btn lf-btn--primary"
-              disabled={submitting}
+              disabled={submitting || validationStatus === "invalid" || validationStatus === "checking"}
+              title={
+                validationStatus === "invalid"
+                  ? "Corrija a chave antes de cadastrar"
+                  : validationStatus === "checking"
+                    ? "Aguarde a validação terminar"
+                    : "Cadastrar chave"
+              }
             >
-              {submitting ? "Cadastrando..." : "Cadastrar"}
+              {submitting
+                ? "Cadastrando..."
+                : validationStatus === "checking"
+                  ? "Validando..."
+                  : "Cadastrar"}
             </button>
           </div>
         </section>
