@@ -299,9 +299,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-sidebar.collapsed .jc-agents-section { padding: 6px 4px; }
     .jc-sidebar.collapsed .jc-agent-status-dot { display: none; }
 
-    /* ========= Modern collapse pill (sidebar) ========= */
+    /* ========= Modern collapse pill (sidebar) =========
+       Renderizado como filho direto do .jc-root para escapar do overflow do
+       .jc-sidebar (overflow-y: hidden faz overflow-x: visible virar auto). */
     .jc-sidebar-toggle {
-      position: absolute; top: 18px; right: -36px; z-index: 12;
+      position: fixed; top: 18px; left: 188px; z-index: 50;
       width: 32px; height: 60px;
       border-radius: 999px;
       background: var(--bg4);
@@ -310,6 +312,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       cursor: pointer; color: var(--gold);
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+        left 0.38s var(--panel-ease),
         background 220ms ease,
         border-color 220ms ease,
         box-shadow 220ms ease,
@@ -325,6 +328,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
+    .jc-sidebar-toggle.is-collapsed { left: 56px; }
     [data-theme="light"] .jc-sidebar-toggle {
       background: #ffffff;
       border-color: rgba(161, 98, 7, 0.55);
@@ -379,8 +383,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
     }
     .jc-toggle-arrow svg { width: 100%; height: 100%; display: block; }
-    .jc-sidebar.collapsed .jc-sidebar-toggle .jc-toggle-arrow { transform: rotate(180deg); }
-    .jc-right-panel.collapsed .jc-right-toggle-desk .jc-toggle-arrow { transform: rotate(180deg); }
+    .jc-sidebar-toggle.is-collapsed .jc-toggle-arrow { transform: rotate(180deg); }
+    .jc-right-toggle-desk.is-collapsed .jc-toggle-arrow { transform: rotate(180deg); }
     .jc-sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
@@ -390,7 +394,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       padding: 18px 14px 14px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 10px;
     }
-    /* Padding normal — o toggle agora flutua FORA do sidebar (right: -36px). */
+    /* Padding normal — o toggle flutua fora do sidebar (position: fixed). */
     .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 14px; }
     .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 12px; }
     .jc-logo-mark {
@@ -729,9 +733,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-right-panel.collapsed { width: 0; min-width: 0; border-left: none; }
     .jc-right-panel.collapsed > *:not(.jc-right-toggle-desk) { display: none; }
 
-    /* ========= Modern collapse pill (right panel) ========= */
+    /* ========= Modern collapse pill (right panel) =========
+       Renderizado como filho direto do .jc-root para escapar do overflow:hidden
+       do .jc-right-panel. Position fixed; right calculado pelo estado. */
     .jc-right-toggle-desk {
-      position: absolute; top: 18px; left: -36px; z-index: 12;
+      position: fixed; top: 18px; right: 324px; z-index: 50;
       width: 32px; height: 60px;
       border-radius: 999px;
       background: var(--bg4);
@@ -740,6 +746,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       cursor: pointer; color: var(--gold);
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+        right 0.38s var(--panel-ease),
         background 220ms ease,
         border-color 220ms ease,
         box-shadow 220ms ease,
@@ -755,6 +762,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
+    .jc-right-toggle-desk.is-collapsed { right: 8px; }
     [data-theme="light"] .jc-right-toggle-desk {
       background: #ffffff;
       border-color: rgba(161, 98, 7, 0.55);
@@ -772,11 +780,6 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       opacity: 0;
       transition: opacity 220ms ease;
       pointer-events: none;
-    }
-    .jc-right-panel.collapsed .jc-right-toggle-desk {
-      left: auto; right: 12px; position: fixed; top: 72px;
-      z-index: 55;
-      transform: none;
     }
     .jc-right-toggle-desk:hover {
       color: var(--gold);
@@ -796,7 +799,6 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     .jc-right-toggle-desk:hover::before { opacity: 1; }
     .jc-right-toggle-desk:active { transform: translateX(-2px) scale(0.96); }
-    .jc-right-panel.collapsed .jc-right-toggle-desk:hover { transform: translateX(-2px); }
 
     .jc-right-header {
       padding: 16px 16px 12px 16px; border-bottom: 1px solid var(--border);
@@ -1447,24 +1449,6 @@ export default function JurisCloudOS() {
           className={`jc-sidebar ${sidebarOpen ? "mobile-open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
           aria-label="Menu lateral de navegação"
         >
-          {withTooltip("Ctrl+B",
-            <button
-              className="jc-sidebar-toggle"
-              onClick={() => handleSidebarToggle("click")}
-              aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-              aria-expanded={!sidebarCollapsed}
-              aria-controls="jc-sidebar"
-              aria-keyshortcuts="Control+B Meta+B"
-              type="button"
-            >
-              <span className="jc-toggle-arrow" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </span>
-            </button>
-          , "sidebar_toggle_btn")}
-
           <div className="jc-sidebar-body">
           <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
             <div className="jc-logo-mark">L</div>
@@ -1795,26 +1779,6 @@ export default function JurisCloudOS() {
           className={`jc-right-panel ${rightPanelOpen ? "mobile-visible" : ""} ${rightCollapsed ? "collapsed" : ""}`}
           aria-label="Central de operações"
         >
-          {withTooltip(
-            "Ctrl+O",
-            <button
-              className="jc-right-toggle-desk"
-              onClick={() => handleRightToggle("click")}
-              aria-label={rightCollapsed ? "Expandir painel" : "Recolher painel"}
-              aria-expanded={!rightCollapsed}
-              aria-controls="jc-right-panel"
-              aria-keyshortcuts="Control+O Meta+O"
-              type="button"
-            >
-              <span className="jc-toggle-arrow" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-            </button>,
-            "right_panel_toggle_btn",
-            { side: "left", surface: "right_panel", alwaysOn: true }
-          )}
           <div className="jc-right-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Central de Operações</span>
           </div>
@@ -1934,6 +1898,45 @@ export default function JurisCloudOS() {
 
         {rightPanelOpen && (
           <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} aria-hidden="true" />
+        )}
+
+        {/* TOGGLES — fora dos painéis para escapar overflow:hidden e ficarem sempre visíveis */}
+        {withTooltip("Ctrl+B",
+          <button
+            className={`jc-sidebar-toggle ${sidebarCollapsed ? "is-collapsed" : ""}`}
+            onClick={() => handleSidebarToggle("click")}
+            aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="jc-sidebar"
+            aria-keyshortcuts="Control+B Meta+B"
+            type="button"
+          >
+            <span className="jc-toggle-arrow" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </span>
+          </button>
+        , "sidebar_toggle_btn")}
+
+        {withTooltip("Ctrl+O",
+          <button
+            className={`jc-right-toggle-desk ${rightCollapsed ? "is-collapsed" : ""}`}
+            onClick={() => handleRightToggle("click")}
+            aria-label={rightCollapsed ? "Expandir painel" : "Recolher painel"}
+            aria-expanded={!rightCollapsed}
+            aria-controls="jc-right-panel"
+            aria-keyshortcuts="Control+O Meta+O"
+            type="button"
+          >
+            <span className="jc-toggle-arrow" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </span>
+          </button>,
+          "right_panel_toggle_btn",
+          { side: "left", surface: "right_panel", alwaysOn: true }
         )}
 
         {/* Live region for keyboard shortcut announcements (visually hidden, screen reader only) */}
