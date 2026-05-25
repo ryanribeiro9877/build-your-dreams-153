@@ -13,6 +13,17 @@ import type { ChatOrchestratorResponse, ChatOrchestratorError } from "@/types/le
  * via Realtime ou query direta.
  */
 
+/** Retorno do sendMessage/startSession — sem depender de state stale. */
+export interface SendResult {
+  response: ChatOrchestratorResponse | null;
+  error: ChatOrchestratorError | null;
+}
+
+export interface StartSessionResult {
+  sessionId: string | null;
+  error: ChatOrchestratorError | null;
+}
+
 export function useChatOrchestrator() {
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<ChatOrchestratorError | null>(null);
@@ -21,7 +32,7 @@ export function useChatOrchestrator() {
   const startSession = useCallback(async (
     entryAgentId: string,
     options?: { clientId?: string; title?: string }
-  ): Promise<string | null> => {
+  ): Promise<StartSessionResult> => {
     setLastError(null);
     // @ts-expect-error - RPC criada na Onda 2
     const { data, error } = await supabase.rpc("start_chat_session", {
@@ -30,18 +41,21 @@ export function useChatOrchestrator() {
       p_title: options?.title ?? null,
     });
     if (error) {
-      setLastError({ error: "start_session_failed", message: error.message });
-      return null;
+      const e: ChatOrchestratorError = { error: "start_session_failed", message: error.message };
+      setLastError(e);
+      return { sessionId: null, error: e };
     }
-    return (data as unknown as string) || null;
+    return { sessionId: (data as unknown as string) || null, error: null };
   }, []);
 
-  /** Envia mensagem pra sessao. Retorna a resposta do agente. */
+  /** Envia mensagem pra sessao. Retorna resposta e erro de forma síncrona. */
   const sendMessage = useCallback(async (
     sessionId: string,
     message: string
-  ): Promise<ChatOrchestratorResponse | null> => {
-    if (!message.trim()) return null;
+  ): Promise<SendResult> => {
+    if (!message.trim()) {
+      return { response: null, error: { error: "invalid_request", message: "Mensagem vazia" } };
+    }
     setPending(true);
     setLastError(null);
 
@@ -51,7 +65,6 @@ export function useChatOrchestrator() {
       });
 
       if (error) {
-        // FunctionsHttpError: response com error code
         const errorBody = (error as unknown as { context?: { body?: string } }).context?.body;
         let parsed: ChatOrchestratorError | null = null;
         if (errorBody) {
@@ -61,20 +74,25 @@ export function useChatOrchestrator() {
             // ignore
           }
         }
-        setLastError(parsed || { error: "request_failed", message: error.message });
-        return null;
+        const e = parsed || { error: "request_failed", message: error.message };
+        setLastError(e);
+        return { response: null, error: e };
       }
 
-      // Pode ser que data tenha estrutura de erro (status 4xx que vira data por algum motivo)
       if (data && typeof data === "object" && "error" in data) {
-        setLastError(data as ChatOrchestratorError);
-        return null;
+        const e = data as ChatOrchestratorError;
+        setLastError(e);
+        return { response: null, error: e };
       }
 
-      return data as ChatOrchestratorResponse;
+      return { response: data as ChatOrchestratorResponse, error: null };
     } catch (e) {
-      setLastError({ error: "network_error", message: (e as Error)?.message || "Erro de rede" });
-      return null;
+      const err: ChatOrchestratorError = {
+        error: "network_error",
+        message: (e as Error)?.message || "Erro de rede",
+      };
+      setLastError(err);
+      return { response: null, error: err };
     } finally {
       setPending(false);
     }
@@ -97,13 +115,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   invalid_jwt: "Sua sessao expirou. Faca login novamente.",
   request_failed: "Falha na requisição. Tente novamente em alguns segundos.",
   network_error: "Sem conexão com o servidor. Verifique sua internet.",
+  start_session_failed: "Falha ao iniciar a conversa. Tente novamente.",
 };
 
-/**
- * Reconhece erros comuns dos provedores (OpenAI / Anthropic / OpenRouter)
- * a partir do `message` retornado pelo edge function — assim a UX consegue
- * orientar o usuário com precisão (quota esgotada vs. chave inválida vs. rate-limit).
- */
 function detectProviderIssue(msg: string): string | null {
   const m = msg.toLowerCase();
   if (m.includes("insufficient_quota") || m.includes("exceeded your current quota") || m.includes("billing")) {
@@ -129,9 +143,6 @@ function detectProviderIssue(msg: string): string | null {
 
 export function friendlyError(err: ChatOrchestratorError | null): string {
   if (!err) return "";
-  // Antes do mapa de codigos: tenta detectar problema fino do provedor
-  // dentro do `message` (assim `provider_call_failed` vira "Cota esgotada"
-  // em vez do generico "tente novamente em alguns segundos").
   if (err.message) {
     const fine = detectProviderIssue(err.message);
     if (fine) return fine;

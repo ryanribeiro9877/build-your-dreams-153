@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.chat-with-agent]
 verify_jwt = true
+
+[functions.chat-orchestrator]
+verify_jwt = true

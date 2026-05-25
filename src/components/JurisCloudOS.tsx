@@ -565,6 +565,23 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     .jc-user-name { font-size: 12px; color: var(--text1); }
 
+    .jc-onboarding-banner {
+      display: flex; align-items: center; gap: 12px;
+      margin: 10px 16px 0; padding: 12px 14px;
+      background: rgba(234,179,8,0.08);
+      border: 1px solid rgba(234,179,8,0.30);
+      border-radius: 12px;
+      color: var(--text1); font-size: 13px;
+    }
+    .jc-onboarding-cta {
+      background: var(--gold); color: var(--logo-text);
+      border: none; border-radius: 8px;
+      padding: 8px 14px; font-weight: 600; font-size: 12px;
+      cursor: pointer; transition: filter 0.15s;
+      white-space: nowrap;
+    }
+    .jc-onboarding-cta:hover { filter: brightness(1.1); }
+
     /* MESSAGES */
     .jc-messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
     .jc-messages::-webkit-scrollbar { width: 4px; }
@@ -1020,7 +1037,7 @@ export default function JurisCloudOS() {
   // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO LexForce
   // (ou o primeiro agente com IA configurada) como entrada. A sessão é criada
   // sob demanda na primeira mensagem.
-  const { startSession, sendMessage: orchestratorSend, lastError: orchestratorLastError } = useChatOrchestrator();
+  const { startSession, sendMessage: orchestratorSend } = useChatOrchestrator();
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
   const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
@@ -1061,6 +1078,11 @@ export default function JurisCloudOS() {
       if (pick) setEntryAgentId(pick.id);
     })();
   }, [agentsLoading, dbAgents]);
+
+  // Reset da sessão quando o agente de entrada muda.
+  useEffect(() => {
+    setAssistantSessionId(null);
+  }, [entryAgentId]);
 
     const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
@@ -1244,24 +1266,21 @@ export default function JurisCloudOS() {
       // 2. Cria sessão sob demanda na primeira mensagem do "Meu Assistente"
       let sid = assistantSessionId;
       if (!sid) {
-        sid = await startSession(entryAgentId, { title: "Meu Assistente" });
-        if (!sid) {
-          await refundAndNotify("falha ao iniciar sessão");
+        const { sessionId, error: startErr } = await startSession(entryAgentId, { title: "Meu Assistente" });
+        if (!sessionId) {
+          await refundAndNotify(friendlyError(startErr));
           return;
         }
-        setAssistantSessionId(sid);
+        setAssistantSessionId(sessionId);
+        sid = sessionId;
       }
 
       // 3. Envia ao chat-orchestrator (mesmo backend de /sistema/chat)
-      const response = await orchestratorSend(sid, val);
+      const { response, error: sendErr } = await orchestratorSend(sid, val);
       if (!response || !response.content) {
-        // Pega o erro real que o orchestrator capturou (cota esgotada,
-        // chave inválida, modelo inexistente, rate-limit etc.) e mostra
-        // mensagem específica em vez do genérico "agente nao respondeu".
-        const realError =
-          orchestratorLastError ??
-          ({ error: "request_failed", message: "agente nao respondeu" } as const);
-        await refundAndNotify(friendlyError(realError));
+        await refundAndNotify(
+          friendlyError(sendErr ?? { error: "request_failed", message: "agente nao respondeu" }),
+        );
         return;
       }
 
@@ -1673,6 +1692,25 @@ export default function JurisCloudOS() {
               </div>
             </div>
           </header>
+
+          {!entryAgentId && !agentsLoading && !showWelcome && (
+            <div className="jc-onboarding-banner" role="status">
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>Configure um agente antes da primeira mensagem.</strong>
+                <span style={{ display: "block", fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                  Cadastre sua chave em Configurações → Provedores, depois vá em Admin → Agentes e ative provedor + modelo no CEO LexForce.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/configuracoes/providers")}
+                className="jc-onboarding-cta"
+              >
+                Configurar agora
+              </button>
+            </div>
+          )}
 
           {/* CONTENT */}
           {showWelcome ? (

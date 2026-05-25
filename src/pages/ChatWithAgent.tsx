@@ -108,17 +108,17 @@ export default function ChatWithAgent() {
 
   const handleStartNewChat = async () => {
     if (!selectedAgentId) return;
-    const sid = await startSession(selectedAgentId, { title: "Nova conversa" });
+    const { sessionId: sid, error } = await startSession(selectedAgentId, { title: "Nova conversa" });
     if (sid) setSessionId(sid);
+    else if (error) console.warn("[ChatWithAgent] startSession:", friendlyError(error));
   };
 
   const handleSend = async () => {
     if (!sessionId || !inputVal.trim() || pending) return;
     const text = inputVal.trim();
     setInputVal("");
-    // Optimistic: insere user message no UI antes do server confirmar
-    // (o Realtime tambem vai entregar, mas evita lag visual)
-    await sendMessage(sessionId, text);
+    const { error } = await sendMessage(sessionId, text);
+    if (error) console.warn("[ChatWithAgent] sendMessage:", friendlyError(error));
   };
 
   // Styles
