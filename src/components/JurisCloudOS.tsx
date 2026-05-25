@@ -301,11 +301,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* ========= Modern collapse pill (sidebar) ========= */
     .jc-sidebar-toggle {
-      position: absolute; top: 18px; right: -16px; z-index: 12;
+      position: absolute; top: 18px; right: -36px; z-index: 12;
       width: 32px; height: 60px;
       border-radius: 999px;
       background: var(--bg4);
-      border: 1.5px solid rgba(234,179,8,0.42);
+      border: 2px solid rgba(234,179,8,0.55);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; color: var(--gold);
       transition:
@@ -315,23 +315,23 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
         box-shadow 220ms ease,
         color 220ms ease;
       box-shadow:
-        0 8px 22px rgba(0,0,0,0.55),
-        0 0 0 1px rgba(234,179,8,0.12),
-        inset 0 0 0 1px rgba(234,179,8,0.06);
+        0 10px 26px rgba(0,0,0,0.7),
+        0 4px 12px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(234,179,8,0.18),
+        inset 0 0 0 1px rgba(234,179,8,0.10);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
-    /* Light mode: borda dourada mais escura + fundo claro pra continuar contrastando */
     [data-theme="light"] .jc-sidebar-toggle {
       background: #ffffff;
-      border-color: rgba(161, 98, 7, 0.45);
+      border-color: rgba(161, 98, 7, 0.55);
       color: #b45309;
       box-shadow:
-        0 4px 14px rgba(0,0,0,0.12),
-        0 0 0 1px rgba(161,98,7,0.10);
+        0 6px 18px rgba(0,0,0,0.18),
+        0 0 0 1px rgba(161,98,7,0.14);
     }
     .jc-sidebar-toggle::before {
       content: "";
@@ -345,19 +345,19 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     .jc-sidebar-toggle:hover {
       color: var(--gold);
-      border-color: rgba(234,179,8,0.85);
+      border-color: rgba(234,179,8,1);
       background: var(--bg4);
       transform: translateX(2px);
       box-shadow:
-        0 10px 28px rgba(0,0,0,0.62),
-        0 0 0 2px rgba(234,179,8,0.28),
-        inset 0 0 0 1px rgba(234,179,8,0.14);
+        0 14px 32px rgba(0,0,0,0.75),
+        0 0 0 3px rgba(234,179,8,0.32),
+        inset 0 0 0 1px rgba(234,179,8,0.18);
     }
     [data-theme="light"] .jc-sidebar-toggle:hover {
-      border-color: rgba(161, 98, 7, 0.75);
+      border-color: rgba(161, 98, 7, 0.95);
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.16),
-        0 0 0 2px rgba(161,98,7,0.20);
+        0 8px 20px rgba(0,0,0,0.22),
+        0 0 0 3px rgba(161,98,7,0.24);
     }
     .jc-sidebar-toggle:hover::before { opacity: 1; }
     .jc-sidebar-toggle:active { transform: translateX(2px) scale(0.96); }
@@ -390,9 +390,9 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       padding: 18px 14px 14px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 10px;
     }
-    /* Evita texto do logo sob o botao de recolher (canto direito do sidebar). */
-    .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 38px; }
-    .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 30px; }
+    /* Padding normal — o toggle agora flutua FORA do sidebar (right: -36px). */
+    .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 14px; }
+    .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 12px; }
     .jc-logo-mark {
       width: 30px; height: 30px;
       background: linear-gradient(135deg, var(--gold), var(--gold2));
@@ -731,11 +731,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* ========= Modern collapse pill (right panel) ========= */
     .jc-right-toggle-desk {
-      position: absolute; top: 18px; left: -16px; z-index: 12;
+      position: absolute; top: 18px; left: -36px; z-index: 12;
       width: 32px; height: 60px;
       border-radius: 999px;
       background: var(--bg4);
-      border: 1.5px solid rgba(234,179,8,0.42);
+      border: 2px solid rgba(234,179,8,0.55);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; color: var(--gold);
       transition:
@@ -745,9 +745,10 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
         box-shadow 220ms ease,
         color 220ms ease;
       box-shadow:
-        0 8px 22px rgba(0,0,0,0.55),
-        0 0 0 1px rgba(234,179,8,0.12),
-        inset 0 0 0 1px rgba(234,179,8,0.06);
+        0 10px 26px rgba(0,0,0,0.7),
+        0 4px 12px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(234,179,8,0.18),
+        inset 0 0 0 1px rgba(234,179,8,0.10);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
@@ -756,11 +757,11 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     [data-theme="light"] .jc-right-toggle-desk {
       background: #ffffff;
-      border-color: rgba(161, 98, 7, 0.45);
+      border-color: rgba(161, 98, 7, 0.55);
       color: #b45309;
       box-shadow:
-        0 4px 14px rgba(0,0,0,0.12),
-        0 0 0 1px rgba(161,98,7,0.10);
+        0 6px 18px rgba(0,0,0,0.18),
+        0 0 0 1px rgba(161,98,7,0.14);
     }
     .jc-right-toggle-desk::before {
       content: "";
@@ -773,32 +774,32 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       pointer-events: none;
     }
     .jc-right-panel.collapsed .jc-right-toggle-desk {
-      left: auto; right: 10px; position: fixed; top: 72px;
+      left: auto; right: 12px; position: fixed; top: 72px;
       z-index: 55;
       transform: none;
     }
     .jc-right-toggle-desk:hover {
       color: var(--gold);
-      border-color: rgba(234,179,8,0.85);
+      border-color: rgba(234,179,8,1);
       background: var(--bg4);
       transform: translateX(-2px);
       box-shadow:
-        0 10px 28px rgba(0,0,0,0.62),
-        0 0 0 2px rgba(234,179,8,0.28),
-        inset 0 0 0 1px rgba(234,179,8,0.14);
+        0 14px 32px rgba(0,0,0,0.75),
+        0 0 0 3px rgba(234,179,8,0.32),
+        inset 0 0 0 1px rgba(234,179,8,0.18);
     }
     [data-theme="light"] .jc-right-toggle-desk:hover {
-      border-color: rgba(161, 98, 7, 0.75);
+      border-color: rgba(161, 98, 7, 0.95);
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.16),
-        0 0 0 2px rgba(161,98,7,0.20);
+        0 8px 20px rgba(0,0,0,0.22),
+        0 0 0 3px rgba(161,98,7,0.24);
     }
     .jc-right-toggle-desk:hover::before { opacity: 1; }
     .jc-right-toggle-desk:active { transform: translateX(-2px) scale(0.96); }
     .jc-right-panel.collapsed .jc-right-toggle-desk:hover { transform: translateX(-2px); }
 
     .jc-right-header {
-      padding: 16px 16px 12px 30px; border-bottom: 1px solid var(--border);
+      padding: 16px 16px 12px 16px; border-bottom: 1px solid var(--border);
       font-family: var(--font-disp); font-size: 16px; font-weight: 600; color: var(--text1);
     }
     .jc-right-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 12px; }
