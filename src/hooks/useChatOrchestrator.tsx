@@ -95,9 +95,46 @@ export const ERROR_MESSAGES: Record<string, string> = {
   model_not_in_catalog: "O modelo configurado para este agente nao esta mais disponivel.",
   provider_call_failed: "O provedor de IA retornou erro. Tente novamente em alguns segundos.",
   invalid_jwt: "Sua sessao expirou. Faca login novamente.",
+  request_failed: "Falha na requisição. Tente novamente em alguns segundos.",
+  network_error: "Sem conexão com o servidor. Verifique sua internet.",
 };
+
+/**
+ * Reconhece erros comuns dos provedores (OpenAI / Anthropic / OpenRouter)
+ * a partir do `message` retornado pelo edge function — assim a UX consegue
+ * orientar o usuário com precisão (quota esgotada vs. chave inválida vs. rate-limit).
+ */
+function detectProviderIssue(msg: string): string | null {
+  const m = msg.toLowerCase();
+  if (m.includes("insufficient_quota") || m.includes("exceeded your current quota") || m.includes("billing")) {
+    return "Cota da chave OpenAI esgotada. Adicione saldo em platform.openai.com/account/billing e tente novamente.";
+  }
+  if (m.includes("invalid_api_key") || m.includes("invalid api key") || m.includes("incorrect api key")) {
+    return "Chave de API rejeitada pelo provedor. Cadastre uma chave válida em /admin/agentes → aba Provedor.";
+  }
+  if (m.includes("rate_limit") || m.includes("rate limit") || m.includes("429")) {
+    return "Limite de requisições atingido no provedor. Aguarde alguns segundos e tente de novo.";
+  }
+  if (m.includes("model_not_found") || m.includes("does not exist") || m.includes("the model")) {
+    return "O modelo configurado não existe ou foi desativado pelo provedor. Escolha outro em /admin/agentes → aba Modelo.";
+  }
+  if (m.includes("context_length_exceeded") || m.includes("maximum context")) {
+    return "A conversa ficou muito longa para o modelo. Limpe o histórico ou troque por um modelo de contexto maior.";
+  }
+  if (m.includes("safety") || m.includes("content_policy") || m.includes("content policy")) {
+    return "O provedor bloqueou a resposta por política de conteúdo. Reformule a pergunta.";
+  }
+  return null;
+}
 
 export function friendlyError(err: ChatOrchestratorError | null): string {
   if (!err) return "";
+  // Antes do mapa de codigos: tenta detectar problema fino do provedor
+  // dentro do `message` (assim `provider_call_failed` vira "Cota esgotada"
+  // em vez do generico "tente novamente em alguns segundos").
+  if (err.message) {
+    const fine = detectProviderIssue(err.message);
+    if (fine) return fine;
+  }
   return ERROR_MESSAGES[err.error] || err.message || "Erro desconhecido.";
 }

@@ -1020,7 +1020,7 @@ export default function JurisCloudOS() {
   // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO LexForce
   // (ou o primeiro agente com IA configurada) como entrada. A sessão é criada
   // sob demanda na primeira mensagem.
-  const { startSession, sendMessage: orchestratorSend } = useChatOrchestrator();
+  const { startSession, sendMessage: orchestratorSend, lastError: orchestratorLastError } = useChatOrchestrator();
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
   const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
@@ -1255,7 +1255,13 @@ export default function JurisCloudOS() {
       // 3. Envia ao chat-orchestrator (mesmo backend de /sistema/chat)
       const response = await orchestratorSend(sid, val);
       if (!response || !response.content) {
-        await refundAndNotify(friendlyError({ error: "request_failed", message: "agente nao respondeu" }));
+        // Pega o erro real que o orchestrator capturou (cota esgotada,
+        // chave inválida, modelo inexistente, rate-limit etc.) e mostra
+        // mensagem específica em vez do genérico "agente nao respondeu".
+        const realError =
+          orchestratorLastError ??
+          ({ error: "request_failed", message: "agente nao respondeu" } as const);
+        await refundAndNotify(friendlyError(realError));
         return;
       }
 
