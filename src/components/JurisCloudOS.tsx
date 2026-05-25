@@ -303,39 +303,40 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
        Renderizado como filho direto do .jc-root para escapar do overflow do
        .jc-sidebar (overflow-y: hidden faz overflow-x: visible virar auto). */
     .jc-sidebar-toggle {
-      position: fixed; top: 18px; left: 188px; z-index: 50;
-      width: 32px; height: 60px;
+      position: fixed; top: 78px; left: 188px; z-index: 50;
+      width: 32px; height: 56px;
       border-radius: 999px;
-      background: var(--bg4);
-      border: 2px solid rgba(234,179,8,0.55);
+      background: rgba(28, 28, 40, 0.42);
+      border: 1.5px solid rgba(234,179,8,0.32);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--gold);
+      cursor: pointer; color: rgba(234, 179, 8, 0.88);
+      opacity: 0.92;
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
         left 0.38s var(--panel-ease),
+        top 0.38s var(--panel-ease),
         background 220ms ease,
         border-color 220ms ease,
         box-shadow 220ms ease,
-        color 220ms ease;
+        color 220ms ease,
+        opacity 220ms ease;
       box-shadow:
-        0 10px 26px rgba(0,0,0,0.7),
-        0 4px 12px rgba(0,0,0,0.5),
-        0 0 0 1px rgba(234,179,8,0.18),
-        inset 0 0 0 1px rgba(234,179,8,0.10);
+        0 6px 18px rgba(0,0,0,0.35),
+        0 0 0 1px rgba(234,179,8,0.08);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
     .jc-sidebar-toggle.is-collapsed { left: 56px; }
     [data-theme="light"] .jc-sidebar-toggle {
-      background: #ffffff;
-      border-color: rgba(161, 98, 7, 0.55);
-      color: #b45309;
+      background: rgba(255, 255, 255, 0.65);
+      border-color: rgba(161, 98, 7, 0.32);
+      color: rgba(180, 83, 9, 0.9);
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.18),
-        0 0 0 1px rgba(161,98,7,0.14);
+        0 4px 14px rgba(0,0,0,0.1),
+        0 0 0 1px rgba(161,98,7,0.08);
     }
     .jc-sidebar-toggle::before {
       content: "";
@@ -348,20 +349,21 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       pointer-events: none;
     }
     .jc-sidebar-toggle:hover {
+      opacity: 1;
       color: var(--gold);
-      border-color: rgba(234,179,8,1);
-      background: var(--bg4);
+      border-color: rgba(234,179,8,0.72);
+      background: rgba(28, 28, 40, 0.62);
       transform: translateX(2px);
       box-shadow:
-        0 14px 32px rgba(0,0,0,0.75),
-        0 0 0 3px rgba(234,179,8,0.32),
-        inset 0 0 0 1px rgba(234,179,8,0.18);
+        0 8px 22px rgba(0,0,0,0.45),
+        0 0 0 2px rgba(234,179,8,0.18);
     }
     [data-theme="light"] .jc-sidebar-toggle:hover {
-      border-color: rgba(161, 98, 7, 0.95);
+      background: rgba(255, 255, 255, 0.88);
+      border-color: rgba(161, 98, 7, 0.55);
       box-shadow:
-        0 8px 20px rgba(0,0,0,0.22),
-        0 0 0 3px rgba(161,98,7,0.24);
+        0 6px 16px rgba(0,0,0,0.14),
+        0 0 0 2px rgba(161,98,7,0.14);
     }
     .jc-sidebar-toggle:hover::before { opacity: 1; }
     .jc-sidebar-toggle:active { transform: translateX(2px) scale(0.96); }
@@ -737,39 +739,40 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
        Renderizado como filho direto do .jc-root para escapar do overflow:hidden
        do .jc-right-panel. Position fixed; right calculado pelo estado. */
     .jc-right-toggle-desk {
-      position: fixed; top: 18px; right: 324px; z-index: 50;
-      width: 32px; height: 60px;
+      position: fixed; top: 78px; right: 324px; z-index: 50;
+      width: 32px; height: 56px;
       border-radius: 999px;
-      background: var(--bg4);
-      border: 2px solid rgba(234,179,8,0.55);
+      background: rgba(28, 28, 40, 0.42);
+      border: 1.5px solid rgba(234,179,8,0.32);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--gold);
+      cursor: pointer; color: rgba(234, 179, 8, 0.88);
+      opacity: 0.92;
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
         right 0.38s var(--panel-ease),
+        top 0.38s var(--panel-ease),
         background 220ms ease,
         border-color 220ms ease,
         box-shadow 220ms ease,
-        color 220ms ease;
+        color 220ms ease,
+        opacity 220ms ease;
       box-shadow:
-        0 10px 26px rgba(0,0,0,0.7),
-        0 4px 12px rgba(0,0,0,0.5),
-        0 0 0 1px rgba(234,179,8,0.18),
-        inset 0 0 0 1px rgba(234,179,8,0.10);
+        0 6px 18px rgba(0,0,0,0.35),
+        0 0 0 1px rgba(234,179,8,0.08);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
-    .jc-right-toggle-desk.is-collapsed { right: 8px; }
+    .jc-right-toggle-desk.is-collapsed { right: 8px; top: 78px; }
     [data-theme="light"] .jc-right-toggle-desk {
-      background: #ffffff;
-      border-color: rgba(161, 98, 7, 0.55);
-      color: #b45309;
+      background: rgba(255, 255, 255, 0.65);
+      border-color: rgba(161, 98, 7, 0.32);
+      color: rgba(180, 83, 9, 0.9);
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.18),
-        0 0 0 1px rgba(161,98,7,0.14);
+        0 4px 14px rgba(0,0,0,0.1),
+        0 0 0 1px rgba(161,98,7,0.08);
     }
     .jc-right-toggle-desk::before {
       content: "";
@@ -782,20 +785,21 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       pointer-events: none;
     }
     .jc-right-toggle-desk:hover {
+      opacity: 1;
       color: var(--gold);
-      border-color: rgba(234,179,8,1);
-      background: var(--bg4);
+      border-color: rgba(234,179,8,0.72);
+      background: rgba(28, 28, 40, 0.62);
       transform: translateX(-2px);
       box-shadow:
-        0 14px 32px rgba(0,0,0,0.75),
-        0 0 0 3px rgba(234,179,8,0.32),
-        inset 0 0 0 1px rgba(234,179,8,0.18);
+        0 8px 22px rgba(0,0,0,0.45),
+        0 0 0 2px rgba(234,179,8,0.18);
     }
     [data-theme="light"] .jc-right-toggle-desk:hover {
-      border-color: rgba(161, 98, 7, 0.95);
+      background: rgba(255, 255, 255, 0.88);
+      border-color: rgba(161, 98, 7, 0.55);
       box-shadow:
-        0 8px 20px rgba(0,0,0,0.22),
-        0 0 0 3px rgba(161,98,7,0.24);
+        0 6px 16px rgba(0,0,0,0.14),
+        0 0 0 2px rgba(161,98,7,0.14);
     }
     .jc-right-toggle-desk:hover::before { opacity: 1; }
     .jc-right-toggle-desk:active { transform: translateX(-2px) scale(0.96); }
