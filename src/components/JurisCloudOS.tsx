@@ -301,13 +301,13 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* ========= Modern collapse pill (sidebar) ========= */
     .jc-sidebar-toggle {
-      position: absolute; top: 18px; right: -14px; z-index: 5;
-      width: 28px; height: 56px;
+      position: absolute; top: 18px; right: -16px; z-index: 12;
+      width: 32px; height: 60px;
       border-radius: 999px;
-      background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
-      border: 1px solid var(--border2);
+      background: var(--bg4);
+      border: 1.5px solid rgba(234,179,8,0.42);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text2);
+      cursor: pointer; color: var(--gold);
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
         background 220ms ease,
@@ -315,13 +315,23 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
         box-shadow 220ms ease,
         color 220ms ease;
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.42),
-        inset 0 0 0 1px rgba(255,255,255,0.03);
+        0 8px 22px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(234,179,8,0.12),
+        inset 0 0 0 1px rgba(234,179,8,0.06);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
+    }
+    /* Light mode: borda dourada mais escura + fundo claro pra continuar contrastando */
+    [data-theme="light"] .jc-sidebar-toggle {
+      background: #ffffff;
+      border-color: rgba(161, 98, 7, 0.45);
+      color: #b45309;
+      box-shadow:
+        0 4px 14px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(161,98,7,0.10);
     }
     .jc-sidebar-toggle::before {
       content: "";
@@ -335,12 +345,19 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     .jc-sidebar-toggle:hover {
       color: var(--gold);
-      border-color: rgba(234,179,8,0.5);
+      border-color: rgba(234,179,8,0.85);
+      background: var(--bg4);
       transform: translateX(2px);
       box-shadow:
-        0 8px 24px rgba(0,0,0,0.52),
-        0 0 0 1px rgba(234,179,8,0.18),
-        inset 0 0 0 1px rgba(234,179,8,0.08);
+        0 10px 28px rgba(0,0,0,0.62),
+        0 0 0 2px rgba(234,179,8,0.28),
+        inset 0 0 0 1px rgba(234,179,8,0.14);
+    }
+    [data-theme="light"] .jc-sidebar-toggle:hover {
+      border-color: rgba(161, 98, 7, 0.75);
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.16),
+        0 0 0 2px rgba(161,98,7,0.20);
     }
     .jc-sidebar-toggle:hover::before { opacity: 1; }
     .jc-sidebar-toggle:active { transform: translateX(2px) scale(0.96); }
@@ -714,13 +731,13 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
 
     /* ========= Modern collapse pill (right panel) ========= */
     .jc-right-toggle-desk {
-      position: absolute; top: 18px; left: -14px; z-index: 5;
-      width: 28px; height: 56px;
+      position: absolute; top: 18px; left: -16px; z-index: 12;
+      width: 32px; height: 60px;
       border-radius: 999px;
-      background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
-      border: 1px solid var(--border2);
+      background: var(--bg4);
+      border: 1.5px solid rgba(234,179,8,0.42);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text2);
+      cursor: pointer; color: var(--gold);
       transition:
         transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
         background 220ms ease,
@@ -728,13 +745,22 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
         box-shadow 220ms ease,
         color 220ms ease;
       box-shadow:
-        0 6px 18px rgba(0,0,0,0.42),
-        inset 0 0 0 1px rgba(255,255,255,0.03);
+        0 8px 22px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(234,179,8,0.12),
+        inset 0 0 0 1px rgba(234,179,8,0.06);
       overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
+    }
+    [data-theme="light"] .jc-right-toggle-desk {
+      background: #ffffff;
+      border-color: rgba(161, 98, 7, 0.45);
+      color: #b45309;
+      box-shadow:
+        0 4px 14px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(161,98,7,0.10);
     }
     .jc-right-toggle-desk::before {
       content: "";
@@ -747,18 +773,25 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       pointer-events: none;
     }
     .jc-right-panel.collapsed .jc-right-toggle-desk {
-      left: auto; right: 8px; position: fixed; top: 72px;
+      left: auto; right: 10px; position: fixed; top: 72px;
       z-index: 55;
       transform: none;
     }
     .jc-right-toggle-desk:hover {
       color: var(--gold);
-      border-color: rgba(234,179,8,0.5);
+      border-color: rgba(234,179,8,0.85);
+      background: var(--bg4);
       transform: translateX(-2px);
       box-shadow:
-        0 8px 24px rgba(0,0,0,0.52),
-        0 0 0 1px rgba(234,179,8,0.18),
-        inset 0 0 0 1px rgba(234,179,8,0.08);
+        0 10px 28px rgba(0,0,0,0.62),
+        0 0 0 2px rgba(234,179,8,0.28),
+        inset 0 0 0 1px rgba(234,179,8,0.14);
+    }
+    [data-theme="light"] .jc-right-toggle-desk:hover {
+      border-color: rgba(161, 98, 7, 0.75);
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.16),
+        0 0 0 2px rgba(161,98,7,0.20);
     }
     .jc-right-toggle-desk:hover::before { opacity: 1; }
     .jc-right-toggle-desk:active { transform: translateX(-2px) scale(0.96); }
