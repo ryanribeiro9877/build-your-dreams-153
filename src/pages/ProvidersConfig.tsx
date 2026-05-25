@@ -86,9 +86,8 @@ export default function ProvidersConfig() {
         display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
       }}
       >
-        <button type="button" onClick={() => navigate(-1)} style={{ ...LfHeaderBackBtn, fontFamily: "'DM Sans', sans-serif" }} aria-label="Voltar">
+        <button type="button" className="lf-header-back-btn" onClick={() => navigate(-1)} style={{ ...LfHeaderBackBtn, fontFamily: "'DM Sans', sans-serif" }} aria-label="Voltar">
           <ArrowLeft size={18} aria-hidden />
-          {" "}
           Voltar
         </button>
         <Key size={22} color="#c9a84c" />

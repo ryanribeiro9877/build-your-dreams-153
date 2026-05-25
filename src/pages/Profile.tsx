@@ -63,9 +63,8 @@ export default function Profile() {
     <div style={{ ...LfPage, padding: "40px 20px" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
-          <button type="button" onClick={exit} style={LfHeaderBackBtn} aria-label="Voltar">
+          <button type="button" className="lf-header-back-btn" onClick={exit} style={LfHeaderBackBtn} aria-label="Voltar">
             <ArrowLeft size={16} aria-hidden />
-            {" "}
             Voltar
           </button>
         </div>

@@ -141,6 +141,15 @@
     letter-spacing: 0.02em;
     color: currentColor;
   }
+
+  /* Botões com ícone + rótulo visível (ex.: «Voltar» no perfil) — evita duplicar o texto do aria-label via ::after */
+  .lf-header-back-btn svg.lucide {
+    display: inline-block !important;
+  }
+  button.lf-header-back-btn[aria-label]::after,
+  a.lf-header-back-btn[aria-label]::after {
+    content: none !important;
+  }
 }
 
 /* Welcome (Meu Assistente) — CTA: uma luz suave percorrendo toda a borda */
