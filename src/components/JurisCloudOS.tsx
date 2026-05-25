@@ -299,25 +299,51 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-sidebar.collapsed .jc-agents-section { padding: 6px 4px; }
     .jc-sidebar.collapsed .jc-agent-status-dot { display: none; }
 
+    /* ========= Modern collapse pill (sidebar) ========= */
     .jc-sidebar-toggle {
-      position: absolute; top: 16px; right: -12px; z-index: 2;
-      width: clamp(36px, 5vw, 42px);
-      height: clamp(36px, 5vw, 42px);
-      border-radius: 10px;
-      background: var(--bg3); border: 1px solid var(--border2);
+      position: absolute; top: 18px; right: -14px; z-index: 5;
+      width: 28px; height: 56px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
+      border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-      overflow: visible;
+      cursor: pointer; color: var(--text2);
+      transition:
+        transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        color 220ms ease;
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.42),
+        inset 0 0 0 1px rgba(255,255,255,0.03);
+      overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .jc-sidebar-toggle::before {
+      content: "";
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(ellipse at center,
+        rgba(234,179,8,0.18) 0%, rgba(234,179,8,0) 70%);
+      opacity: 0;
+      transition: opacity 220ms ease;
+      pointer-events: none;
     }
     .jc-sidebar-toggle:hover {
-      color: var(--gold2);
-      border-color: rgba(234,179,8,0.55);
-      transform: scale(1.06);
-      box-shadow: 0 6px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(234,179,8,0.15);
+      color: var(--gold);
+      border-color: rgba(234,179,8,0.5);
+      transform: translateX(2px);
+      box-shadow:
+        0 8px 24px rgba(0,0,0,0.52),
+        0 0 0 1px rgba(234,179,8,0.18),
+        inset 0 0 0 1px rgba(234,179,8,0.08);
     }
+    .jc-sidebar-toggle:hover::before { opacity: 1; }
+    .jc-sidebar-toggle:active { transform: translateX(2px) scale(0.96); }
     .jc-sidebar-toggle:focus-visible,
     .jc-right-toggle-desk:focus-visible,
     .jc-nav-item:focus-visible,
@@ -327,18 +353,17 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       box-shadow: 0 0 0 4px rgba(234,179,8,0.18);
     }
     .jc-toggle-arrow {
-      font-size: clamp(16px, 2.5vw, 20px);
-      font-weight: 800;
-      line-height: 1;
-      letter-spacing: 0;
-      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      width: 14px;
+      height: 14px;
       user-select: none;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 100%;
-      height: 100%;
+      transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
     }
+    .jc-toggle-arrow svg { width: 100%; height: 100%; display: block; }
+    .jc-sidebar.collapsed .jc-sidebar-toggle .jc-toggle-arrow { transform: rotate(180deg); }
+    .jc-right-panel.collapsed .jc-right-toggle-desk .jc-toggle-arrow { transform: rotate(180deg); }
     .jc-sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
@@ -349,8 +374,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       display: flex; align-items: center; gap: 10px;
     }
     /* Evita texto do logo sob o botao de recolher (canto direito do sidebar). */
-    .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 50px; }
-    .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 36px; }
+    .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 38px; }
+    .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 30px; }
     .jc-logo-mark {
       width: 30px; height: 30px;
       background: linear-gradient(135deg, var(--gold), var(--gold2));
@@ -670,32 +695,60 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-right-panel.collapsed { width: 0; min-width: 0; border-left: none; }
     .jc-right-panel.collapsed > *:not(.jc-right-toggle-desk) { display: none; }
 
+    /* ========= Modern collapse pill (right panel) ========= */
     .jc-right-toggle-desk {
-      position: absolute; top: 14px; left: -12px; z-index: 2;
-      width: clamp(36px, 5vw, 42px);
-      height: clamp(36px, 5vw, 42px);
-      border-radius: 10px;
-      background: var(--bg3); border: 1px solid var(--border2);
+      position: absolute; top: 18px; left: -14px; z-index: 5;
+      width: 28px; height: 56px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
+      border: 1px solid var(--border2);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text1); transition: transform 0.2s ease, color 0.2s, border-color 0.2s, box-shadow 0.25s;
-      box-shadow: -4px 4px 18px rgba(0,0,0,0.35);
-      overflow: visible;
+      cursor: pointer; color: var(--text2);
+      transition:
+        transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        color 220ms ease;
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.42),
+        inset 0 0 0 1px rgba(255,255,255,0.03);
+      overflow: hidden;
       line-height: 0;
       flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .jc-right-toggle-desk::before {
+      content: "";
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(ellipse at center,
+        rgba(234,179,8,0.18) 0%, rgba(234,179,8,0) 70%);
+      opacity: 0;
+      transition: opacity 220ms ease;
+      pointer-events: none;
     }
     .jc-right-panel.collapsed .jc-right-toggle-desk {
-      left: auto; right: 8px; position: fixed; top: 64px;
+      left: auto; right: 8px; position: fixed; top: 72px;
       z-index: 55;
+      transform: none;
     }
     .jc-right-toggle-desk:hover {
-      color: var(--gold2);
-      border-color: rgba(234,179,8,0.55);
-      transform: scale(1.06);
-      box-shadow: -6px 6px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(234,179,8,0.12);
+      color: var(--gold);
+      border-color: rgba(234,179,8,0.5);
+      transform: translateX(-2px);
+      box-shadow:
+        0 8px 24px rgba(0,0,0,0.52),
+        0 0 0 1px rgba(234,179,8,0.18),
+        inset 0 0 0 1px rgba(234,179,8,0.08);
     }
+    .jc-right-toggle-desk:hover::before { opacity: 1; }
+    .jc-right-toggle-desk:active { transform: translateX(-2px) scale(0.96); }
+    .jc-right-panel.collapsed .jc-right-toggle-desk:hover { transform: translateX(-2px); }
 
     .jc-right-header {
-      padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
+      padding: 16px 16px 12px 30px; border-bottom: 1px solid var(--border);
       font-family: var(--font-disp); font-size: 16px; font-weight: 600; color: var(--text1);
     }
     .jc-right-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 12px; }
@@ -1346,7 +1399,9 @@ export default function JurisCloudOS() {
               type="button"
             >
               <span className="jc-toggle-arrow" aria-hidden>
-                {sidebarCollapsed ? ">" : "<"}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
               </span>
             </button>
           , "sidebar_toggle_btn")}
@@ -1674,7 +1729,9 @@ export default function JurisCloudOS() {
               type="button"
             >
               <span className="jc-toggle-arrow" aria-hidden>
-                {rightCollapsed ? ">" : "<"}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
               </span>
             </button>,
             "right_panel_toggle_btn",
