@@ -734,10 +734,9 @@ const GlobalStyles = () => (
       flex: 1; background: none; border: none; outline: none; resize: none;
       font-family: var(--font-body); font-size: 14px; color: var(--text1);
       line-height: 1.5; max-height: 120px; min-height: 22px;
-      text-align: center;
+      text-align: left;
     }
-    .jc-textarea:not(:placeholder-shown) { text-align: left; }
-    .jc-textarea::placeholder { color: var(--text3); text-align: center; }
+    .jc-textarea::placeholder { color: var(--text3); text-align: left; }
     .jc-send-btn, .jc-mic-btn {
       width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
