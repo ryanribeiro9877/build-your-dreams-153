@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, KeyboardEvent, useCallback } from "react";
+import { useEffect, useState, useRef, KeyboardEvent, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { trackUiEvent } from "@/lib/uiTracking";
@@ -43,6 +43,28 @@ interface WelcomeScreenProps {
 }
 
 const WAVEFORM_BARS = 40;
+const GREETING_TYPE_MS = 38;
+
+function useTypewriter(text: string, active: boolean) {
+  const [displayed, setDisplayed] = useState("");
+
+  useEffect(() => {
+    if (!active || !text) {
+      setDisplayed("");
+      return;
+    }
+    setDisplayed("");
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setDisplayed(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(timer);
+    }, GREETING_TYPE_MS);
+    return () => window.clearInterval(timer);
+  }, [text, active]);
+
+  return displayed;
+}
 
 export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProps) {
   const { user } = useAuth();
@@ -301,16 +323,24 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     { label: "Críticas", value: summary.critical, icon: AlertTriangle },
   ];
 
+  const greetingFull = useMemo(
+    () => `Olá ${displayName}, como posso te ajudar?`,
+    [displayName],
+  );
+  const typedGreeting = useTypewriter(greetingFull, !loading);
+  const greetingDone = typedGreeting.length >= greetingFull.length;
+
   return (
     <div className="ws-root">
       <div className="ws-stage">
-        <h1 className="ws-greeting">
-          Olá {displayName}, como posso te ajudar?
+        <h1 className="ws-greeting" aria-label={greetingFull}>
+          {typedGreeting}
+          {!greetingDone && <span className="ws-greeting-cursor" aria-hidden="true">|</span>}
         </h1>
 
         {/* Composer — dois modos: idle e recording */}
         {!isRecording ? (
-          <div className="ws-composer">
+          <div className={`ws-composer ${greetingDone ? "ws-composer--enter" : "ws-composer--hidden"}`}>
             <button
               type="button"
               className="ws-btn ws-attach"
@@ -364,7 +394,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
             )}
           </div>
         ) : (
-          <div className="ws-composer ws-composer--recording">
+          <div className="ws-composer ws-composer--recording ws-composer--enter">
             <div className="ws-wave" aria-label="Onda do áudio capturado">
               {waveLevels.map((h, i) => (
                 <span
@@ -409,21 +439,6 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
             </div>
           ))}
         </div>
-
-        <button
-          type="button"
-          className="ws-skip"
-          onClick={() => {
-            trackUiEvent("cta_click", {
-              surface: "welcome",
-              target_id: "welcome_skip",
-              target_label: "Pular para o chat",
-            });
-            onDismiss();
-          }}
-        >
-          Pular para o chat
-        </button>
       </div>
 
       <style>{`
@@ -444,9 +459,36 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           font-weight: 700; color: var(--text1);
           letter-spacing: -0.01em; text-align: center;
           margin: 0; line-height: 1.2;
+          min-height: 1.2em;
+        }
+        .ws-greeting-cursor {
+          color: var(--gold);
+          margin-left: 2px;
+          animation: wsCursorBlink 0.9s step-end infinite;
+        }
+        @keyframes wsCursorBlink {
+          50% { opacity: 0; }
         }
 
         /* ── Composer (idle) ───────────────────────────────────────── */
+        .ws-composer--hidden {
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(14px) scale(0.98);
+        }
+        .ws-composer--enter {
+          animation: wsComposerIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes wsComposerIn {
+          from {
+            opacity: 0;
+            transform: translateY(14px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
         .ws-composer {
           display: flex; align-items: center; gap: 8px;
           width: 100%;
@@ -587,15 +629,6 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           font-size: 11px; color: var(--text3);
           letter-spacing: 0.03em; text-align: center;
         }
-        .ws-skip {
-          background: transparent; border: none;
-          color: var(--text3); font-size: 12px;
-          letter-spacing: 0.04em; cursor: pointer;
-          padding: 6px 10px; margin-top: 4px;
-          border-radius: 6px;
-          transition: color 0.18s ease;
-        }
-        .ws-skip:hover { color: var(--text2); }
         .ws-loading {
           display: flex; flex-direction: column;
           align-items: center; gap: 12px;

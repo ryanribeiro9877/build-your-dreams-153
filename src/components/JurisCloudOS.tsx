@@ -249,6 +249,29 @@ function getTokenCost(message: string): { cost: number; label: string } {
   return { cost: DEFAULT_TOKEN_COST, label: "Comando simples" };
 }
 
+function normalizeSystemReason(reason: string): string {
+  return reason
+    .trim()
+    .replace(/\)\.\s*$/, ")")
+    .replace(/\.{2,}/g, ".")
+    .replace(/\.\s*$/, "");
+}
+
+function formatTokenRefundMessage(cost: number, reason: string): string {
+  const motivo = normalizeSystemReason(reason);
+  const motivoLine = motivo.endsWith(".") ? motivo : `${motivo}.`;
+  const tokenLine =
+    cost === 1
+      ? "O **1 token** foi estornado ao seu saldo."
+      : `Os **${cost} tokens** foram estornados ao seu saldo.`;
+  return `Não consegui processar sua solicitação agora.\n\n**Motivo:** ${motivoLine}\n\n${tokenLine}`;
+}
+
+function formatInsufficientBalanceMessage(cost: number, label: string): string {
+  const custo = cost === 1 ? "**1 token**" : `**${cost} tokens**`;
+  return `Saldo insuficiente para continuar.\n\nEste comando custa ${custo} (${label}). Recarregue seus tokens para seguir.`;
+}
+
 // V11: tema único — GlobalStyles não precisa mais receber prop.
 // ── STYLE INJECTION ──────────────────────────────────────────
 const GlobalStyles = () => (
@@ -636,9 +659,10 @@ const GlobalStyles = () => (
       font-family: var(--font-body); display: flex; align-items: center; gap: 6px;
     }
     .jc-msg-meta .agent-tag {
-      font-size: 9px; padding: 2px 7px; border-radius: 4px;
+      font-size: 10px; padding: 2px 8px; border-radius: 4px;
       background: rgba(234,179,8,0.12); color: var(--gold); border: 1px solid rgba(234,179,8,0.28);
       font-family: var(--font-body); font-weight: 500;
+      letter-spacing: 0.02em;
     }
     .jc-msg-text b, .jc-msg-text strong { color: var(--gold2); font-weight: 600; }
 
@@ -709,8 +733,10 @@ const GlobalStyles = () => (
       flex: 1; background: none; border: none; outline: none; resize: none;
       font-family: var(--font-body); font-size: 14px; color: var(--text1);
       line-height: 1.5; max-height: 120px; min-height: 22px;
+      text-align: center;
     }
-    .jc-textarea::placeholder { color: var(--text3); }
+    .jc-textarea:not(:placeholder-shown) { text-align: left; }
+    .jc-textarea::placeholder { color: var(--text3); text-align: center; }
     .jc-send-btn, .jc-mic-btn {
       width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
@@ -1002,6 +1028,7 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
 }
 
 function MessageBubble({ msg }: { msg: JcChatMessage }) {
+  const { user } = useAuth();
   const agentColors: Record<string, string> = {
     "Meu Assistente": "#EAB308",
     "Pesquisador Jurídico": "#CA8A04",
@@ -1010,6 +1037,8 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   };
   const isUser = msg.role === "user";
   const color = agentColors[msg.agent] || "#EAB308";
+  const userInitial =
+    user?.email?.split("@")[0]?.charAt(0)?.toUpperCase() || "U";
 
   return (
     <div className={`jc-msg-wrap ${isUser ? "user" : ""}`}>
@@ -1017,15 +1046,11 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
         background: isUser ? "rgba(234,179,8,0.15)" : `${color}20`,
         color: isUser ? "#EAB308" : color,
         border: `1px solid ${isUser ? "rgba(234,179,8,0.25)" : `${color}30`}`,
-        fontFamily: isUser ? "var(--font-disp)" : "var(--font-body)",
-        fontSize: isUser ? 10 : 11,
+        fontFamily: "var(--font-body)",
+        fontSize: 11,
         fontWeight: 700,
-        letterSpacing: isUser ? "0.04em" : "0",
-        textTransform: isUser ? "uppercase" : "none",
-        minWidth: isUser ? 44 : undefined,
-        paddingInline: isUser ? 8 : undefined,
       }}>
-        {isUser ? "VOCÊ" : (msg.agent ? getInitials(msg.agent) : "AI")}
+        {isUser ? userInitial : (msg.agent ? getInitials(msg.agent) : "AI")}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "80%" }}>
         {!isUser && msg.agent && (
@@ -1034,7 +1059,12 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
             <span>{msg.timestamp}</span>
           </div>
         )}
-        {isUser && <div className="jc-msg-meta" style={{ justifyContent: "flex-end" }}>{msg.timestamp}</div>}
+        {isUser && (
+          <div className="jc-msg-meta" style={{ justifyContent: "flex-end" }}>
+            <span className="agent-tag">VOCÊ</span>
+            <span>{msg.timestamp}</span>
+          </div>
+        )}
         <div className="jc-msg-bubble">
           {msg.content && (
             <SafeMarkdown className="jc-msg-text">{msg.content}</SafeMarkdown>
@@ -1272,7 +1302,7 @@ export default function JurisCloudOS() {
         id: Date.now(),
         role: "assistant",
         agent: "Sistema",
-        content: `Saldo insuficiente. Este comando custa **${cost} token(s)** (${label}). Recarregue seus tokens para continuar.`,
+        content: formatInsufficientBalanceMessage(cost, label),
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
       return;
@@ -1291,7 +1321,7 @@ export default function JurisCloudOS() {
         id: Date.now() + 1,
         role: "assistant",
         agent: "Sistema",
-        content: `Nao consegui processar sua solicitacao agora (${reason}). Os **${cost} token(s)** foram estornados ao seu saldo.`,
+        content: formatTokenRefundMessage(cost, reason),
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
     };
