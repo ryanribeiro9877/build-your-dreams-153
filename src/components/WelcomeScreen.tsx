@@ -181,11 +181,10 @@ export default function WelcomeScreen({ onDismiss }: { onDismiss: () => void }) 
       )}
 
       <div className="ws-primary-cta-wrap">
-        <div className="ws-primary-cta-root">
-          <button type="button" className="ws-primary-cta-btn" onClick={handleStartWork}>
-            <Rocket size={16} /> Começar a Trabalhar
-          </button>
-        </div>
+        <button type="button" className="ws-primary-cta-btn glow-on-hover" onClick={handleStartWork}>
+          <Rocket size={16} aria-hidden />
+          Começar a Trabalhar
+        </button>
       </div>
     </div>
   );

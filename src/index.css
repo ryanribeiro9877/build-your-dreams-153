@@ -152,73 +152,107 @@
   }
 }
 
-/* Welcome (Meu Assistente) — CTA: uma luz suave percorrendo toda a borda */
-@keyframes ws-primary-cta-border-spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* Welcome (Meu Assistente) — CTA com brilho arco-íris no hover */
+@keyframes ws-cta-glowing {
+  0% { background-position: 0 0; }
+  50% { background-position: 400% 0; }
+  100% { background-position: 0 0; }
 }
+
 .ws-primary-cta-wrap {
   display: flex;
   justify-content: center;
   margin-top: 8px;
 }
-.ws-primary-cta-root {
-  position: relative;
-  display: inline-flex;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 6px 28px rgba(201, 168, 76, 0.22);
-}
-[data-theme="dark"] .ws-primary-cta-root {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.38);
-}
-/* Um único arco claro (~42°); o resto transparente — sem segundo brilho oposto */
-.ws-primary-cta-root::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 220%;
-  height: 220%;
-  margin: -110% 0 0 -110%;
-  background: conic-gradient(
-    from 0deg,
-    rgba(255, 253, 245, 0) 0deg,
-    rgba(255, 253, 245, 0) 272deg,
-    rgba(254, 249, 231, 0.14) 292deg,
-    rgba(253, 236, 200, 0.26) 308deg,
-    rgba(254, 243, 199, 0.32) 318deg,
-    rgba(253, 236, 200, 0.26) 328deg,
-    rgba(254, 249, 231, 0.14) 346deg,
-    rgba(255, 253, 245, 0) 360deg
-  );
-  animation: ws-primary-cta-border-spin 5.8s linear infinite;
-  z-index: 0;
-}
-.ws-primary-cta-btn {
-  position: relative;
-  z-index: 1;
-  margin: 2px;
-  padding: 14px 40px;
-  border-radius: 14px;
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover {
+  min-width: 220px;
+  height: 50px;
+  padding: 0 32px;
   border: none;
+  outline: none;
+  color: #09090f;
+  background: transparent;
   cursor: pointer;
+  position: relative;
+  z-index: 0;
+  border-radius: 14px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: #09090f;
+  font-family: inherit;
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover::before {
+  content: "";
+  background: linear-gradient(
+    45deg,
+    #ff0000,
+    #ff7300,
+    #fffb00,
+    #48ff00,
+    #00ffd5,
+    #002bff,
+    #7a00ff,
+    #ff00c8,
+    #ff0000
+  );
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  background-size: 400%;
+  z-index: -1;
+  filter: blur(5px);
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
+  animation: ws-cta-glowing 20s linear infinite;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  border-radius: 14px;
+}
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover::after {
+  z-index: -1;
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  border-radius: 14px;
   background: linear-gradient(135deg, #c9a84c, #b8942e);
   box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.ws-primary-cta-btn:hover {
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:hover {
   transform: scale(1.03);
-  box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
 }
-.ws-primary-cta-btn:focus-visible {
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:hover::before {
+  opacity: 1;
+}
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:active {
+  color: #000;
+}
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:active::after {
+  background: transparent;
+}
+
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:focus-visible {
   outline: 2px solid #eab308;
   outline-offset: 3px;
+}
+
+/* Ícone do foguete visível dentro do CTA (Lucide está oculto globalmente) */
+.ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover svg.lucide {
+  display: inline-block !important;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
 }
