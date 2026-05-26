@@ -811,7 +811,11 @@ const GlobalStyles = () => (
 
     .jc-right-header {
       padding: 16px 16px 12px 16px; border-bottom: 1px solid var(--border);
-      font-family: var(--font-disp); font-size: 16px; font-weight: 600; color: var(--text1);
+      font-family: var(--font-spartan);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text1);
     }
     .jc-right-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 12px; }
     .jc-right-tab {
