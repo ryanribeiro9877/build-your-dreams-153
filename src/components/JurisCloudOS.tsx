@@ -460,7 +460,7 @@ const GlobalStyles = () => (
     .jc-logo-text {
       font-family: 'Coolvetica', var(--font-spartan), var(--font-body), sans-serif;
       font-size: 22px;
-      font-weight: 500;
+      font-weight: 700;
       letter-spacing: 0.06em;
       line-height: 1;
       color: #ffffff;
@@ -777,7 +777,7 @@ const GlobalStyles = () => (
        Renderizado como filho direto do .jc-root para escapar do overflow:hidden
        do .jc-right-panel. Position fixed; right calculado pelo estado. */
     .jc-right-toggle-desk {
-      position: fixed; top: 78px; right: 324px; z-index: 50;
+      position: fixed; top: 78px; right: 324px; z-index: 55;
       width: 32px; height: 56px;
       border-radius: 999px;
       background: rgba(28, 28, 40, 0.42);
@@ -909,12 +909,20 @@ const GlobalStyles = () => (
         display: flex; position: fixed; right: 0; top: 0; bottom: 0; z-index: 50;
         width: min(320px, 90vw); box-shadow: -4px 0 24px rgba(0,0,0,0.3);
       }
-      /* In mobile mode, the off-canvas right panel always shows full content */
-      .jc-right-panel.mobile-visible.collapsed { width: min(320px, 90vw); min-width: 0; border-left: 1px solid var(--border); }
-      .jc-right-panel.mobile-visible.collapsed > *:not(.jc-right-toggle-desk) { display: revert; }
-      /* Hide the desktop floating toggle on mobile to avoid stray buttons */
-      .jc-right-toggle-desk { display: none; }
-      .jc-right-panel.mobile-visible .jc-right-toggle-desk { display: none; }
+      .jc-right-panel.mobile-visible.collapsed {
+        width: 0; min-width: 0; border-left: none; overflow: hidden;
+      }
+      .jc-right-panel.mobile-visible.collapsed > *:not(.jc-right-toggle-desk) {
+        display: none;
+      }
+      /* V13+: pill do painel direito sempre visível (como o da sidebar de agentes) */
+      .jc-right-toggle-desk {
+        display: flex !important;
+        right: 8px;
+      }
+      .jc-right-toggle-desk.is-panel-open:not(.is-collapsed) {
+        right: min(320px, 90vw);
+      }
       .jc-right-toggle { display: flex; }
     }
     @media (max-width: 768px) {
@@ -1225,6 +1233,38 @@ export default function JurisCloudOS() {
   };
 
   const handleRightToggle = (source: "click" | "keyboard" = "click") => {
+    const narrow =
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1024px)").matches;
+
+    if (narrow) {
+      if (!rightPanelOpen) {
+        setRightPanelOpen(true);
+        setRightCollapsed(false);
+        trackUiEvent("right_panel_toggle", {
+          surface: "right_panel",
+          collapsed: false,
+          source,
+        });
+        announce("Painel de operações expandido");
+        return;
+      }
+      const nextCollapsed = !rightCollapsed;
+      setRightCollapsed(nextCollapsed);
+      if (nextCollapsed) setRightPanelOpen(false);
+      trackUiEvent("right_panel_toggle", {
+        surface: "right_panel",
+        collapsed: nextCollapsed,
+        source,
+      });
+      announce(
+        nextCollapsed
+          ? "Painel de operações recolhido"
+          : "Painel de operações expandido",
+      );
+      return;
+    }
+
     setRightCollapsed(prev => {
       const next = !prev;
       trackUiEvent("right_panel_toggle", {
@@ -1735,7 +1775,15 @@ export default function JurisCloudOS() {
                 {tokenBalance.balance.toLocaleString()}
               </button>
 
-              <button type="button" className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
+              <button
+                type="button"
+                className="jc-right-toggle"
+                onClick={() => {
+                  const next = !rightPanelOpen;
+                  setRightPanelOpen(next);
+                  setRightCollapsed(!next);
+                }}
+              >
                 {rightPanelOpen ? <><PanelRightClose size={14} /> Fechar</> : <><PanelRightOpen size={14} /> Operações</>}
               </button>
 
@@ -1997,7 +2045,14 @@ export default function JurisCloudOS() {
         </aside>
 
         {rightPanelOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }} onClick={() => setRightPanelOpen(false)} aria-hidden="true" />
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }}
+            onClick={() => {
+              setRightPanelOpen(false);
+              setRightCollapsed(true);
+            }}
+            aria-hidden="true"
+          />
         )}
 
         {/* TOGGLES — fora dos painéis para escapar overflow:hidden e ficarem sempre visíveis */}
@@ -2021,7 +2076,7 @@ export default function JurisCloudOS() {
 
         {withTooltip("Ctrl+O",
           <button
-            className={`jc-right-toggle-desk ${rightCollapsed ? "is-collapsed" : ""}`}
+            className={`jc-right-toggle-desk ${rightCollapsed ? "is-collapsed" : ""} ${rightPanelOpen ? "is-panel-open" : ""}`}
             onClick={() => handleRightToggle("click")}
             aria-label={rightCollapsed ? "Expandir painel" : "Recolher painel"}
             aria-expanded={!rightCollapsed}
