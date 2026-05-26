@@ -741,7 +741,13 @@ const GlobalStyles = () => (
       width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: all 0.2s; flex-shrink: 0;
+      line-height: 0; padding: 0;
     }
+    /* V13: garante que SVG inline sempre apareça mesmo com extensões a11y
+       que tentam injetar attr(aria-label) como conteúdo do botão. */
+    .jc-send-btn::before, .jc-send-btn::after,
+    .jc-mic-btn::before,  .jc-mic-btn::after { content: none !important; }
+    .jc-send-btn > svg, .jc-mic-btn > svg { display: block; flex-shrink: 0; }
     .jc-send-btn {
       background: linear-gradient(135deg, var(--gold), var(--gold2));
       color: #0a0a12;
@@ -1786,7 +1792,10 @@ export default function JurisCloudOS() {
             </div>
           )}
 
-          {/* INPUT */}
+          {/* INPUT — V13: oculta enquanto a Welcome Screen está visível.
+              Aparece só quando o user clica em "Pular para o chat" ou envia a
+              primeira mensagem pela composer da home. */}
+          {!showWelcome && (
           <div className="jc-input-area">
             <div className="jc-commands">
               {visibleCommands.map((cmd, i) => {
@@ -1804,11 +1813,55 @@ export default function JurisCloudOS() {
                 value={inputVal}
                 onChange={e => { setInputVal(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
                 onKeyDown={handleKeyDown} rows={1} />
-              <button className={`jc-mic-btn ${isRecording ? "recording" : ""}`} onClick={toggleRecording} title={isRecording ? "Parar gravação" : "Falar"}>
-                {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+              <button
+                className={`jc-mic-btn ${isRecording ? "recording" : ""}`}
+                onClick={toggleRecording}
+                aria-label={isRecording ? "Parar gravação" : "Gravar áudio"}
+                type="button"
+              >
+                {/* V13: SVG inline para garantir renderização (independente de
+                    extensões/bundle de ícones). Microfone clássico. */}
+                {isRecording ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2.2"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="3" y1="3" x2="21" y2="21" />
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2.2"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="12" rx="3" />
+                    <path d="M5 11a7 7 0 0 0 14 0" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
+                <span className="jc-sr-only">{isRecording ? "Parar gravação" : "Gravar áudio"}</span>
               </button>
-              <button className="jc-send-btn" onClick={() => handleSend()} disabled={thinking || !inputVal.trim()}>
-                <Send size={16} />
+              <button
+                className="jc-send-btn"
+                onClick={() => handleSend()}
+                disabled={thinking || !inputVal.trim()}
+                aria-label="Enviar"
+                type="button"
+              >
+                {/* V13: símbolo de envio CUSTOM — chevrons-right (double >)
+                    com uma centelha dourada no canto. Sugere "send forward com IA",
+                    diferente do clássico avião-de-papel que todo app usa. */}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2.6"
+                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="5 6 11 12 5 18" />
+                  <polyline points="12 6 18 12 12 18" />
+                  {/* centelha (sparkle) — fica em cima e à direita */}
+                  <path d="M20 4l0.6 1.4L22 6l-1.4 0.6L20 8l-0.6-1.4L18 6l1.4-0.6z"
+                        fill="currentColor" stroke="none" />
+                </svg>
+                <span className="jc-sr-only">Enviar mensagem</span>
               </button>
             </div>
             <div className="jc-input-hint">
@@ -1816,6 +1869,7 @@ export default function JurisCloudOS() {
               Enter para enviar · Shift+Enter para nova linha
             </div>
           </div>
+          )}
         </main>
 
         {/* RIGHT PANEL */}
