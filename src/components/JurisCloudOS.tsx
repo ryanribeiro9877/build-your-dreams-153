@@ -437,18 +437,14 @@ const GlobalStyles = () => (
     .jc-logo-text {
       font-family: var(--font-brand);
       font-size: 22px; font-weight: 700;
-      letter-spacing: 0;
+      letter-spacing: 0.06em;
       line-height: 1;
-      transition: color var(--theme-transition), text-shadow var(--theme-transition), opacity var(--theme-transition);
-    }
-    .jc-logo-text.online {
-      color: #FACC15;
-      text-shadow: 0 0 14px rgba(234,179,8,0.35);
+      color: #ffffff;
+      text-shadow: none;
+      transition: opacity var(--theme-transition);
     }
     .jc-logo-text.offline {
-      color: #FEF9C3;
-      text-shadow: 0 0 12px rgba(250,204,21,0.25);
-      opacity: 0.95;
+      opacity: 0.85;
     }
     .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
 
