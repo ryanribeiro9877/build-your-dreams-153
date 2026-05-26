@@ -15,13 +15,19 @@ interface TaskItem {
   task_category: string;
 }
 
+// V11: cores das filas padronizadas em BRANCO (--text1) — não-coloridas-arco-íris.
+// As tags de prioridade continuam coloridas para preservar leitura instantânea
+// (crítico=vermelho, alta=âmbar, etc.) — só os títulos das filas viraram brancos.
+const QUEUE_LABEL_COLOR = "var(--text1)";
+const QUEUE_ACCENT = "var(--gold)"; // borda do contador / hover drop zone
+
 const QUEUE_CONFIG = [
-  { id: "confeccao", label: " Confecção de Peças", color: "#8b5cf6" },
-  { id: "protocolar", label: " A Protocolar", color: "#6366f1" },
-  { id: "revisao", label: " Em Revisão", color: "#f59e0b" },
-  { id: "comunicacao", label: " Comunicação ao Cliente", color: "#06b6d4" },
-  { id: "audiencias_fila", label: "️ Preparação de Audiências", color: "#14b8a6" },
-  { id: "monitoramento_fila", label: " Monitoramento de Resultados", color: "#f97316" },
+  { id: "confeccao", label: " Confecção de Peças" },
+  { id: "protocolar", label: " A Protocolar" },
+  { id: "revisao", label: " Em Revisão" },
+  { id: "comunicacao", label: " Comunicação ao Cliente" },
+  { id: "audiencias_fila", label: "️ Preparação de Audiências" },
+  { id: "monitoramento_fila", label: " Monitoramento de Resultados" },
 ];
 
 const prioColors: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280" };
@@ -256,14 +262,14 @@ export default function TaskQueuesPanel() {
         return (
           <div key={queue.id} style={{ marginBottom: 14 }}>
             <div style={{
-              fontSize: 11, fontWeight: 600, color: queue.color, marginBottom: 6,
+              fontSize: 11, fontWeight: 600, color: QUEUE_LABEL_COLOR, marginBottom: 6,
               display: "flex", alignItems: "center", justifyContent: "space-between"
             }}>
               <span>{queue.label}</span>
               <span style={{
                 fontSize: 9, padding: "2px 8px", borderRadius: 10,
-                background: `${queue.color}18`, color: queue.color,
-                border: `1px solid ${queue.color}30`, fontFamily: "var(--font-mono)"
+                background: "rgba(234,179,8,0.10)", color: QUEUE_ACCENT,
+                border: "1px solid rgba(234,179,8,0.28)", fontFamily: "var(--font-mono)"
               }}>{items.length}</span>
             </div>
             <Droppable droppableId={queue.id} isDropDisabled={!canEdit}>
@@ -273,8 +279,8 @@ export default function TaskQueuesPanel() {
                   {...provided.droppableProps}
                   style={{
                     minHeight: 36, borderRadius: 8, padding: snapshot.isDraggingOver ? 4 : 0,
-                    background: snapshot.isDraggingOver ? `${queue.color}08` : "transparent",
-                    border: snapshot.isDraggingOver ? `1px dashed ${queue.color}40` : "1px dashed transparent",
+                    background: snapshot.isDraggingOver ? "rgba(234,179,8,0.06)" : "transparent",
+                    border: snapshot.isDraggingOver ? "1px dashed rgba(234,179,8,0.35)" : "1px dashed transparent",
                     transition: "all 0.2s",
                   }}
                 >
@@ -288,7 +294,7 @@ export default function TaskQueuesPanel() {
                           style={{
                             ...dragProvided.draggableProps.style,
                             background: dragSnapshot.isDragging ? "var(--bg4)" : "var(--bg3)",
-                            border: `1px solid ${dragSnapshot.isDragging ? queue.color + "60" : "var(--border)"}`,
+                            border: `1px solid ${dragSnapshot.isDragging ? "rgba(234,179,8,0.40)" : "var(--border)"}`,
                             borderLeft: `3px solid ${prioColors[item.priority]}`,
                             borderRadius: "0 8px 8px 0", padding: "10px 12px", marginBottom: 6,
                             cursor: canEdit ? "grab" : "default",

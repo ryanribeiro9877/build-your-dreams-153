@@ -28,7 +28,7 @@ import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
   Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
   DollarSign, CreditCard, Settings, Shield, Heart, Users, BarChart3,
-  Network, Activity, User, Globe, LogOut, Send, Mic, MicOff, Sun, Moon,
+  Network, Activity, User, Globe, LogOut, Send, Mic, MicOff,
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
   MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
@@ -57,6 +57,34 @@ const ROLE_ICONS: Record<string, LucideIcon> = {
 
 const ACCENT = "#EAB308";
 const ACCENT_SOFT = "#CA8A04";
+
+// V11: paleta unificada de hierarquia dos agentes na sidebar.
+// CEO   → dourado (cor do sistema, em destaque).
+// Diretores → âmbar escuro (laranja-mostarda).
+// Gerentes  → bronze.
+// Monitores → cinza esfumaçado.
+// Demais roles (specialist/reviewer/executor/orchestrator) → caem em "agente
+// padrão" — mesmo tom escuro de monitor, neutro.
+const HIERARCHY_COLORS = {
+  ceo:        "#EAB308",  // dourado — cor do sistema
+  director:   "#B45309",  // âmbar profundo
+  manager:    "#92400E",  // bronze
+  monitor:    "#6B7280",  // cinza esfumaçado
+  default:    "#6B7280",  // alinhado com monitor
+} as const;
+
+type AgentRoleColorKey = keyof typeof HIERARCHY_COLORS;
+
+/**
+ * Retorna a cor padronizada do agente conforme sua hierarquia.
+ * Aceita tanto strings de role do banco quanto qualquer outro valor (fallback).
+ */
+function getHierarchyColor(role?: string | null): string {
+  if (!role) return HIERARCHY_COLORS.default;
+  const key = role.toLowerCase() as AgentRoleColorKey;
+  return HIERARCHY_COLORS[key] ?? HIERARCHY_COLORS.default;
+}
+
 const DEPARTMENTS = [
   { id: "assistente",    label: "Meu Assistente",          color: ACCENT, badge: 8  },
   { id: "diretoria",     label: "Diretoria / CEO",         color: ACCENT_SOFT, badge: 0  },
@@ -221,10 +249,9 @@ function getTokenCost(message: string): { cost: number; label: string } {
   return { cost: DEFAULT_TOKEN_COST, label: "Comando simples" };
 }
 
-type Theme = "dark" | "light";
-
+// V11: tema único — GlobalStyles não precisa mais receber prop.
 // ── STYLE INJECTION ──────────────────────────────────────────
-const GlobalStyles = ({ theme }: { theme: Theme }) => (
+const GlobalStyles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -236,19 +263,8 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       --theme-transition: 0.42s cubic-bezier(0.22, 1, 0.36, 1);
       --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
-    /* Light: ChatGPT-inspired palette — pure white surfaces, black text. */
-    [data-theme="light"] {
-      --bg: #ffffff; --bg2: #f9f9f9; --bg3: #ececec; --bg4: #e5e5e5;
-      --border: #e5e5e5; --border2: #d9d9d9;
-      --card-border: #e5e5e5;
-      --card-border-hover: #d0d0d0;
-      --text1: #0d0d0d; --text2: #1f1f1f; --text3: #5d5d5d;
-      --logo-text: #ffffff;
-      --user-bubble-bg: #f4f4f4; --user-bubble-border: #e5e5e5;
-      --badge-bg: #ececec;
-    }
-    /* Dark: deep neutral surfaces with warm gold accents. */
-    [data-theme="dark"] {
+    /* V11: tema único dark — paleta preto + dourado, sem opção de claro. */
+    :root {
       --bg: #09090f; --bg2: #11111a; --bg3: #16161f; --bg4: #1c1c28;
       --border: #25253a; --border2: #34344d;
       --card-border: #25253a;
@@ -260,7 +276,7 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
     .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
-    .jc-nav-item, .jc-input-row, .jc-cmd, .jc-user-chip, .jc-theme-toggle,
+    .jc-nav-item, .jc-input-row, .jc-cmd, .jc-user-chip,
     .jc-agent-item, .jc-right-tab, .jc-agents-section {
       transition: background-color var(--theme-transition), border-color var(--theme-transition),
                   color var(--theme-transition), box-shadow var(--theme-transition);
@@ -412,27 +428,16 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       letter-spacing: -0.03em;
       transition: color var(--theme-transition), text-shadow var(--theme-transition), opacity var(--theme-transition);
     }
-    [data-theme="dark"] .jc-logo-text.online {
+    .jc-logo-text.online {
       color: #FACC15;
       text-shadow: 0 0 14px rgba(234,179,8,0.35);
     }
-    [data-theme="dark"] .jc-logo-text.offline {
+    .jc-logo-text.offline {
       color: #FEF9C3;
       text-shadow: 0 0 12px rgba(250,204,21,0.25);
       opacity: 0.95;
     }
-    [data-theme="light"] .jc-logo-text.online {
-      color: #713f12;
-      text-shadow: none;
-      opacity: 1;
-    }
-    [data-theme="light"] .jc-logo-text.offline {
-      color: #9a3412;
-      text-shadow: none;
-      opacity: 1;
-    }
     .jc-logo-sub { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
-    [data-theme="light"] .jc-logo-sub { color: #52525b; }
 
     .jc-search {
       margin: 12px 12px 8px; background: var(--bg3); border: 1px solid var(--border);
@@ -467,11 +472,6 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       padding: 1px 7px; color: var(--text2); min-width: 22px; text-align: center;
     }
     .jc-nav-badge.alert { background: rgba(234,179,8,0.16); color: #FEF08A; border: 1px solid rgba(234,179,8,0.35); }
-    [data-theme="light"] .jc-nav-badge.alert {
-      color: #713f12;
-      background: rgba(253, 230, 138, 0.5);
-      border-color: rgba(161, 98, 7, 0.35);
-    }
 
     .jc-agents-section {
       padding: 8px;
@@ -544,7 +544,6 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
       white-space: nowrap;
     }
     .jc-dept-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
-    [data-theme="light"] .jc-dept-sub { color: #3f3f46; }
     .jc-topbar-trailing {
       display: flex;
       flex-wrap: wrap;
@@ -565,16 +564,6 @@ const GlobalStyles = ({ theme }: { theme: Theme }) => (
     .jc-alert-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .jc-alert-chip.fatal { background: rgba(234,179,8,0.12); border-color: rgba(250,204,21,0.45); color: #FEF9C3; }
     .jc-alert-chip.warning { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.35); color: #FACC15; }
-    [data-theme="light"] .jc-alert-chip.fatal {
-      color: #431407;
-      background: rgba(254, 215, 170, 0.45);
-      border-color: rgba(154, 52, 18, 0.35);
-    }
-    [data-theme="light"] .jc-alert-chip.warning {
-      color: #713f12;
-      background: rgba(253, 230, 138, 0.35);
-      border-color: rgba(161, 98, 7, 0.35);
-    }
     .jc-user-chip {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 12px 4px 4px; background: var(--bg3);
@@ -1131,12 +1120,7 @@ export default function JurisCloudOS() {
   const [thinking, setThinking]           = useState(false);
   const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
-  // Theme: ChatGPT-style light/dark, persisted in localStorage.
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-    const saved = window.localStorage.getItem("jc-theme");
-    return saved === "dark" ? "dark" : "light";
-  });
+  // V11: tema único dark — paleta preto + dourado (sem opção de claro).
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   // Persisted per-user UI preferences (synced via Lovable Cloud).
@@ -1154,17 +1138,15 @@ export default function JurisCloudOS() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
   useEffect(() => {
-    localStorage.setItem("jc-theme", theme);
+    // V11: força sempre dark — paleta única do sistema.
     if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", theme);
-      document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.documentElement.classList.add("dark");
     }
-  }, [theme]);
+  }, []);
 
   // System health: online if no agents in alert state and no fatal alerts
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
-
-  const toggleTheme = () => setTheme(t => (t === "dark" ? "light" : "dark"));
 
   // Toggle helpers with tracking + a11y live-region announcement.
   const announce = (msg: string) => {
@@ -1436,8 +1418,8 @@ export default function JurisCloudOS() {
   };
 
   return (
-    <div data-theme={theme}>
-      <GlobalStyles theme={theme} />
+    <div data-theme="dark">
+      <GlobalStyles />
       <TooltipProvider delayDuration={150}>
       <div className="jc-root">
         {/* MOBILE OVERLAY */}
@@ -1458,7 +1440,6 @@ export default function JurisCloudOS() {
             <div className="jc-logo-mark">J</div>
             <div className="jc-logo-info">
               <div className={`jc-logo-text ${systemOnline ? "online" : "offline"}`}>JurisAI</div>
-              <div className="jc-logo-sub">{systemOnline ? "Operacional · 24/7" : "Atenção · alertas ativos"}</div>
             </div>
           </div>
 
@@ -1609,9 +1590,16 @@ export default function JurisCloudOS() {
                         className="jc-agent-item"
                         aria-label={`${agent.name} (${statusLabel}). Abrir opções.`}
                       >
-                        <div className="jc-agent-avatar" style={{ background: `${agent.color}18`, color: agent.color, border: `1px solid ${agent.color}25` }}>
-                          {getInitials(agent.name)}
-                        </div>
+                        {(() => {
+                          // V11: cor por hierarquia (CEO/Director/Manager/Monitor)
+                          // em vez de cor individual do banco. Garante padrão visual.
+                          const hColor = getHierarchyColor(agent.role);
+                          return (
+                            <div className="jc-agent-avatar" style={{ background: `${hColor}1F`, color: hColor, border: `1px solid ${hColor}33` }}>
+                              {getInitials(agent.name)}
+                            </div>
+                          );
+                        })()}
                         <div className="jc-agent-name">{agent.name}</div>
                         <Circle size={6} className="jc-agent-status-dot" fill={fill} style={{ color: fill }} />
                       </button>
@@ -1672,7 +1660,6 @@ export default function JurisCloudOS() {
                 <DeptIcon size={20} className="jc-dept-icon" aria-hidden />
                 <span className="jc-dept-title-text">{activeDeptData?.label}</span>
               </div>
-              <div className="jc-dept-sub">Sistema Operacional</div>
             </div>
             <div className="jc-topbar-trailing">
               {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
@@ -1689,14 +1676,6 @@ export default function JurisCloudOS() {
                   background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", flexShrink: 0 }}>
                 <Coins size={14} />
                 {tokenBalance.balance.toLocaleString()}
-              </button>
-
-              <button type="button" className="jc-theme-toggle" onClick={toggleTheme} title="Alternar tema"
-                aria-label={`Alternar para tema ${theme === "dark" ? "claro" : "escuro"}`}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20,
-                  background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", color: "var(--text2)",
-                  fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", flexShrink: 0 }}>
-                {theme === "dark" ? "Claro" : "Escuro"}
               </button>
 
               <button type="button" className="jc-right-toggle" onClick={() => setRightPanelOpen(!rightPanelOpen)}>
@@ -1736,7 +1715,19 @@ export default function JurisCloudOS() {
 
           {/* CONTENT */}
           {showWelcome ? (
-            <div className="jc-messages"><WelcomeScreen onDismiss={() => setShowWelcome(false)} /></div>
+            <div className="jc-messages">
+              <WelcomeScreen
+                onDismiss={() => setShowWelcome(false)}
+                onSubmit={(msg) => {
+                  // V11: primeira mensagem do composer da tela inicial entra
+                  // direto no fluxo principal. Fecha welcome, popula textarea
+                  // e dispara handleSend no próximo tick (esperando o re-render).
+                  setShowWelcome(false);
+                  setInputVal(msg);
+                  setTimeout(() => handleSend(msg), 60);
+                }}
+              />
+            </div>
           ) : (
             <div className="jc-messages">
               {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
