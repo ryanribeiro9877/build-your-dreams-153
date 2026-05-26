@@ -1,11 +1,34 @@
-import { useEffect, useState, useRef, KeyboardEvent } from "react";
+import { useEffect, useState, useRef, KeyboardEvent, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   ClipboardList, Clock, Loader, AlertTriangle,
-  Plus, Mic, Send, AudioLines,
+  Plus, Mic, Send, X, Check,
 } from "lucide-react";
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tipagens nativas — SpeechRecognition é vendor-prefixed em alguns browsers.
+// ────────────────────────────────────────────────────────────────────────────
+type SpeechRecognitionEvent = Event & {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string; confidence: number };
+  }>;
+};
+interface ISpeechRecognition extends EventTarget {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onerror: ((e: Event) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+type SpeechRecognitionCtor = new () => ISpeechRecognition;
 
 interface TaskSummary {
   total: number;
@@ -15,11 +38,11 @@ interface TaskSummary {
 }
 
 interface WelcomeScreenProps {
-  /** Mantido para compat com chamada existente, mas o submit agora é direto. */
   onDismiss: () => void;
-  /** Quando o usuário envia uma mensagem, dispara o fluxo principal de chat. */
   onSubmit?: (message: string) => void;
 }
+
+const WAVEFORM_BARS = 40;
 
 export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProps) {
   const { user } = useAuth();
@@ -32,8 +55,19 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   });
   const [loading, setLoading] = useState(true);
   const [value, setValue] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
 
+  // ── Recording state ────────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [waveLevels, setWaveLevels] = useState<number[]>(() => new Array(WAVEFORM_BARS).fill(2));
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const transcriptAccumRef = useRef<string>("");
+
+  // ── Profile + KPIs ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -65,8 +99,35 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     load();
   }, [user]);
 
-  const handleSubmit = () => {
-    const v = value.trim();
+  // ── Cleanup on unmount ──────────────────────────────────────────────────
+  useEffect(() => {
+    return () => stopRecordingInternals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stopRecordingInternals = useCallback(() => {
+    if (animFrameRef.current !== null) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* noop */ }
+      recognitionRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => { /* noop */ });
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+  }, []);
+
+  // ── Submit ─────────────────────────────────────────────────────────────
+  const handleSubmit = useCallback((overrideValue?: string) => {
+    const v = (overrideValue ?? value).trim();
     if (!v) return;
     trackUiEvent("cta_click", {
       surface: "welcome",
@@ -74,13 +135,10 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
       target_label: "Chat inicial",
       section: "primary_cta",
     });
-    if (onSubmit) {
-      onSubmit(v);
-    } else {
-      onDismiss();
-    }
+    if (onSubmit) onSubmit(v);
+    else onDismiss();
     setValue("");
-  };
+  }, [value, onSubmit, onDismiss]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -89,9 +147,8 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     }
   };
 
-  const handleAttach = () => {
-    fileInputRef.current?.click();
-  };
+  // ── File attach ────────────────────────────────────────────────────────
+  const handleAttach = () => fileInputRef.current?.click();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -106,14 +163,125 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     e.target.value = "";
   };
 
-  const toggleRecording = () => {
-    setIsRecording((r) => !r);
+  // ── Recording — start ───────────────────────────────────────────────────
+  const startRecording = useCallback(async () => {
     trackUiEvent("cta_click", {
       surface: "welcome",
-      target_id: isRecording ? "welcome_record_stop" : "welcome_record_start",
-      target_label: "Gravar áudio",
+      target_id: "welcome_record_start",
+      target_label: "Iniciar gravação",
     });
-  };
+
+    // 1) Microfone + AnalyserNode pra waveform
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const ACtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new ACtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+      audioContextRef.current = ctx;
+      analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(data);
+        const bins = data.length;
+        const step = Math.max(1, Math.floor(bins / WAVEFORM_BARS));
+        const next: number[] = [];
+        for (let i = 0; i < WAVEFORM_BARS; i++) {
+          let sum = 0;
+          for (let j = 0; j < step; j++) {
+            sum += data[i * step + j] ?? 0;
+          }
+          // 0..255 → 2..40 (mínimo 2 para uma linha de base sempre visível)
+          next.push(2 + (sum / step / 255) * 38);
+        }
+        setWaveLevels(next);
+        animFrameRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (err) {
+      // Sem permissão de microfone — desliga gracefully.
+      console.warn("[WelcomeScreen] Microphone access denied:", err);
+      setIsRecording(false);
+      return;
+    }
+
+    // 2) Web Speech API pra transcrição
+    transcriptAccumRef.current = "";
+    setLiveTranscript("");
+    const SR =
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition;
+    if (SR) {
+      try {
+        const rec = new SR();
+        rec.lang = "pt-BR";
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.onresult = (e: SpeechRecognitionEvent) => {
+          let interim = "";
+          let final = transcriptAccumRef.current;
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const res = e.results[i];
+            const txt = res[0].transcript;
+            if (res.isFinal) {
+              final = (final + " " + txt).trim();
+            } else {
+              interim += txt;
+            }
+          }
+          transcriptAccumRef.current = final;
+          setLiveTranscript((final + " " + interim).trim());
+        };
+        rec.onerror = () => { /* erro silencioso — waveform continua */ };
+        rec.onend = () => { /* termina junto com o stream */ };
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (err) {
+        console.warn("[WelcomeScreen] SpeechRecognition not available:", err);
+      }
+    }
+
+    setIsRecording(true);
+  }, []);
+
+  // ── Recording — cancel (descarta) ───────────────────────────────────────
+  const cancelRecording = useCallback(() => {
+    trackUiEvent("cta_click", {
+      surface: "welcome",
+      target_id: "welcome_record_cancel",
+      target_label: "Cancelar gravação",
+    });
+    stopRecordingInternals();
+    transcriptAccumRef.current = "";
+    setLiveTranscript("");
+    setIsRecording(false);
+  }, [stopRecordingInternals]);
+
+  // ── Recording — confirm (envia transcript) ──────────────────────────────
+  const confirmRecording = useCallback(() => {
+    trackUiEvent("cta_click", {
+      surface: "welcome",
+      target_id: "welcome_record_confirm",
+      target_label: "Confirmar gravação",
+    });
+    const finalText = (transcriptAccumRef.current || liveTranscript).trim();
+    stopRecordingInternals();
+    setIsRecording(false);
+    setLiveTranscript("");
+    transcriptAccumRef.current = "";
+    if (finalText) {
+      // Dispara o submit direto com o transcript (não passa pelo state `value`).
+      handleSubmit(finalText);
+    }
+  }, [liveTranscript, stopRecordingInternals, handleSubmit]);
 
   if (loading) {
     return (
@@ -140,62 +308,97 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           Olá {displayName}, como posso te ajudar?
         </h1>
 
-        <div className="ws-composer">
-          <button
-            type="button"
-            className="ws-attach"
-            onClick={handleAttach}
-            aria-label="Anexar arquivos"
-            title="Anexar arquivos"
-          >
-            <Plus size={20} strokeWidth={2} />
-          </button>
+        {/* Composer — dois modos: idle e recording */}
+        {!isRecording ? (
+          <div className="ws-composer">
+            <button
+              type="button"
+              className="ws-btn ws-attach"
+              onClick={handleAttach}
+            >
+              <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
+              <span className="ws-sr-only">Anexar arquivos</span>
+            </button>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            onChange={handleFileChange}
-            aria-hidden="true"
-          />
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={handleFileChange}
+              aria-hidden="true"
+            />
 
-          <textarea
-            ref={textareaRef}
-            className="ws-textarea"
-            placeholder="Pergunte alguma coisa"
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
-            }}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            aria-label="Mensagem para o assistente"
-          />
+            <textarea
+              ref={textareaRef}
+              className="ws-textarea"
+              placeholder="Pergunte alguma coisa"
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+              }}
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
 
-          <button
-            type="button"
-            className={`ws-icon-btn ${isRecording ? "is-recording" : ""}`}
-            onClick={toggleRecording}
-            aria-label={isRecording ? "Parar gravação" : "Gravar áudio"}
-            title={isRecording ? "Parar gravação" : "Gravar áudio"}
-          >
-            <Mic size={18} strokeWidth={2} />
-          </button>
+            {value.trim() ? (
+              <button
+                type="button"
+                className="ws-btn ws-send"
+                onClick={() => handleSubmit()}
+              >
+                <Send size={16} strokeWidth={2.4} aria-hidden="true" />
+                <span className="ws-sr-only">Enviar</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ws-btn ws-mic"
+                onClick={startRecording}
+              >
+                <Mic size={18} strokeWidth={2.2} aria-hidden="true" />
+                <span className="ws-sr-only">Gravar áudio</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="ws-composer ws-composer--recording">
+            <div className="ws-wave" aria-label="Onda do áudio capturado">
+              {waveLevels.map((h, i) => (
+                <span
+                  key={i}
+                  className="ws-wave-bar"
+                  style={{ height: `${h}px` }}
+                />
+              ))}
+            </div>
 
-          <button
-            type="button"
-            className="ws-send-btn"
-            onClick={handleSubmit}
-            disabled={!value.trim()}
-            aria-label="Enviar mensagem"
-            title="Enviar"
-          >
-            {value.trim() ? <Send size={16} strokeWidth={2.4} /> : <AudioLines size={16} strokeWidth={2.4} />}
-          </button>
-        </div>
+            <button
+              type="button"
+              className="ws-btn ws-cancel"
+              onClick={cancelRecording}
+            >
+              <X size={18} strokeWidth={2.4} aria-hidden="true" />
+              <span className="ws-sr-only">Cancelar gravação</span>
+            </button>
+
+            <button
+              type="button"
+              className="ws-btn ws-confirm"
+              onClick={confirmRecording}
+            >
+              <Check size={18} strokeWidth={2.6} aria-hidden="true" />
+              <span className="ws-sr-only">Enviar transcrição</span>
+            </button>
+          </div>
+        )}
+
+        {/* Transcrição parcial (preview discreto durante gravação) */}
+        {isRecording && liveTranscript && (
+          <div className="ws-transcript-preview">{liveTranscript}</div>
+        )}
 
         <div className="ws-kpis">
           {kpis.map((k) => (
@@ -225,44 +428,35 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
 
       <style>{`
         .ws-root {
-          height: 100%;
-          width: 100%;
-          display: flex;
-          align-items: flex-start;
-          justify-content: center;
+          height: 100%; width: 100%;
+          display: flex; align-items: flex-start; justify-content: center;
           padding: 80px 24px 40px;
-          background: transparent;
-          overflow-y: auto;
+          background: transparent; overflow-y: auto;
         }
         .ws-stage {
-          width: 100%;
-          max-width: 760px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 28px;
+          width: 100%; max-width: 760px;
+          display: flex; flex-direction: column; align-items: center;
+          gap: 24px;
         }
         .ws-greeting {
-          font-family: var(--font-disp);
+          font-family: var(--font-spartan, 'Plus Jakarta Sans', sans-serif);
           font-size: clamp(22px, 3.4vw, 32px);
-          font-weight: 600;
-          color: var(--text1);
-          letter-spacing: -0.01em;
-          text-align: center;
-          margin: 0;
-          line-height: 1.2;
+          font-weight: 700; color: var(--text1);
+          letter-spacing: -0.01em; text-align: center;
+          margin: 0; line-height: 1.2;
         }
+
+        /* ── Composer (idle) ───────────────────────────────────────── */
         .ws-composer {
-          display: flex;
-          align-items: center;
-          gap: 8px;
+          display: flex; align-items: center; gap: 8px;
           width: 100%;
           background: var(--bg3);
           border: 1px solid var(--border);
           border-radius: 28px;
-          padding: 8px 8px 8px 14px;
+          padding: 8px 8px 8px 8px;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
           transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          min-height: 56px;
         }
         .ws-composer:focus-within {
           border-color: rgba(234, 179, 8, 0.55);
@@ -270,95 +464,102 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
             0 8px 24px rgba(0, 0, 0, 0.55),
             0 0 0 3px rgba(234, 179, 8, 0.18);
         }
-        .ws-attach {
+
+        /* Botões — base comum (impede vazamento de aria-label) */
+        .ws-btn {
           flex-shrink: 0;
-          width: 36px;
-          height: 36px;
+          width: 40px; height: 40px;
           border-radius: 50%;
-          border: 1px solid var(--border);
+          border: 1px solid transparent;
           background: transparent;
+          display: inline-flex; align-items: center; justify-content: center;
+          cursor: pointer; padding: 0; line-height: 0;
           color: var(--text2);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+          transition: background 0.18s ease, color 0.18s ease,
+                      border-color 0.18s ease, transform 0.12s ease;
         }
-        .ws-attach:hover {
-          background: var(--bg4);
-          color: var(--gold);
-          border-color: rgba(234, 179, 8, 0.4);
+        /* Esconde qualquer texto (sr-only / aria-label vazado por extensions) */
+        .ws-btn::before,
+        .ws-btn::after { content: none !important; }
+        .ws-sr-only {
+          position: absolute; width: 1px; height: 1px;
+          padding: 0; margin: -1px; overflow: hidden;
+          clip: rect(0,0,0,0); white-space: nowrap; border: 0;
         }
+        .ws-btn:hover { background: var(--bg4); color: var(--gold); }
+
+        .ws-attach { border-color: var(--border); }
+        .ws-attach:hover { border-color: rgba(234, 179, 8, 0.45); }
+        .ws-mic:hover { background: var(--bg4); }
+        .ws-send {
+          background: var(--gold); color: #0a0a12;
+          border-color: var(--gold);
+        }
+        .ws-send:hover { background: var(--gold2); color: #0a0a12; filter: brightness(1.04); transform: scale(1.04); }
+        .ws-cancel {
+          background: var(--bg4); color: var(--text2);
+          border-color: var(--border);
+        }
+        .ws-cancel:hover { background: rgba(239,68,68,0.10); color: #ef4444; border-color: rgba(239,68,68,0.35); }
+        .ws-confirm {
+          background: var(--gold); color: #0a0a12;
+          border-color: var(--gold);
+        }
+        .ws-confirm:hover { background: var(--gold2); transform: scale(1.04); filter: brightness(1.04); }
+
+        /* Textarea */
         .ws-textarea {
-          flex: 1;
-          min-width: 0;
-          background: transparent;
-          border: none;
-          outline: none;
-          resize: none;
+          flex: 1; min-width: 0;
+          background: transparent; border: none; outline: none; resize: none;
           color: var(--text1);
           font-family: var(--font-body);
-          font-size: 15px;
-          line-height: 1.5;
+          font-size: 15px; line-height: 1.5;
           padding: 8px 4px;
           max-height: 160px;
         }
         .ws-textarea::placeholder { color: var(--text3); }
-        .ws-icon-btn {
-          flex-shrink: 0;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: transparent;
-          border: none;
-          color: var(--text2);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: background 0.18s ease, color 0.18s ease;
+
+        /* ── Composer (recording) ──────────────────────────────────── */
+        .ws-composer--recording {
+          padding: 8px 10px;
+          border-color: rgba(234, 179, 8, 0.45);
+          box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.55),
+            0 0 0 2px rgba(234, 179, 8, 0.20);
         }
-        .ws-icon-btn:hover {
-          background: var(--bg4);
-          color: var(--gold);
+        .ws-wave {
+          flex: 1;
+          height: 40px;
+          display: flex; align-items: center; justify-content: center;
+          gap: 3px;
+          overflow: hidden;
+          padding: 0 8px;
         }
-        .ws-icon-btn.is-recording {
-          color: var(--gold);
-          animation: wsPulse 1.4s ease-in-out infinite;
-        }
-        @keyframes wsPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.45); }
-          50%      { box-shadow: 0 0 0 6px rgba(234, 179, 8, 0); }
-        }
-        .ws-send-btn {
-          flex-shrink: 0;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          border: none;
+        .ws-wave-bar {
+          flex: 1;
+          max-width: 4px;
           background: var(--gold);
-          color: #0a0a12;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: filter 0.18s ease, transform 0.12s ease;
+          border-radius: 2px;
+          opacity: 0.9;
+          transition: height 60ms linear;
+          will-change: height;
         }
-        .ws-send-btn:hover:not(:disabled) {
-          filter: brightness(1.08);
-          transform: scale(1.04);
+
+        .ws-transcript-preview {
+          width: 100%;
+          font-family: var(--font-body);
+          font-size: 13px; color: var(--text3);
+          font-style: italic; text-align: center;
+          padding: 4px 12px;
+          opacity: 0.85;
+          min-height: 22px;
         }
-        .ws-send-btn:disabled {
-          background: var(--bg4);
-          color: var(--text3);
-          cursor: default;
-        }
+
+        /* ── KPIs ───────────────────────────────────────────────────── */
         .ws-kpis {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 12px;
-          width: 100%;
-          margin-top: 4px;
+          gap: 12px; width: 100%; margin-top: 4px;
         }
         @media (max-width: 640px) {
           .ws-kpis { grid-template-columns: repeat(2, 1fr); }
@@ -368,10 +569,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           border: 1px solid var(--border);
           border-radius: 14px;
           padding: 14px 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
+          display: flex; flex-direction: column; align-items: center; gap: 6px;
           transition: border-color 0.18s ease, background 0.18s ease;
         }
         .ws-kpi:hover {
@@ -380,38 +578,28 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
         }
         .ws-kpi-icon { color: var(--gold); }
         .ws-kpi-value {
-          font-family: var(--font-disp);
-          font-size: 22px;
-          font-weight: 600;
-          color: var(--gold);
-          line-height: 1;
+          font-family: var(--font-spartan, var(--font-disp));
+          font-size: 22px; font-weight: 700;
+          color: var(--gold); line-height: 1;
+          letter-spacing: -0.01em;
         }
         .ws-kpi-label {
-          font-size: 11px;
-          color: var(--text3);
-          letter-spacing: 0.03em;
-          text-align: center;
+          font-size: 11px; color: var(--text3);
+          letter-spacing: 0.03em; text-align: center;
         }
         .ws-skip {
-          background: transparent;
-          border: none;
-          color: var(--text3);
-          font-size: 12px;
-          letter-spacing: 0.04em;
-          cursor: pointer;
-          padding: 6px 10px;
-          margin-top: 4px;
+          background: transparent; border: none;
+          color: var(--text3); font-size: 12px;
+          letter-spacing: 0.04em; cursor: pointer;
+          padding: 6px 10px; margin-top: 4px;
           border-radius: 6px;
           transition: color 0.18s ease;
         }
         .ws-skip:hover { color: var(--text2); }
         .ws-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-          color: var(--text3);
-          padding: 80px 24px;
+          display: flex; flex-direction: column;
+          align-items: center; gap: 12px;
+          color: var(--text3); padding: 80px 24px;
         }
         .ws-loading-spinner { animation: wsSpin 1.4s linear infinite; color: var(--gold); }
         @keyframes wsSpin { from { transform: rotate(0); } to { transform: rotate(360deg); } }

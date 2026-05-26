@@ -253,12 +253,23 @@ function getTokenCost(message: string): { cost: number; label: string } {
 // ── STYLE INJECTION ──────────────────────────────────────────
 const GlobalStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=League+Spartan:wght@400;600;700;800&display=swap');
+
+    /* V12: Coolvetica para o logo (coloque coolvetica.woff2 ou .otf em /public/fonts/). */
+    @font-face {
+      font-family: 'Coolvetica';
+      src: url('/fonts/coolvetica.woff2') format('woff2'),
+           url('/fonts/coolvetica.otf') format('opentype');
+      font-weight: 400 700;
+      font-display: swap;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --font-disp: 'Literata', Georgia, 'Times New Roman', serif;
       --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;
+      --font-brand: 'Coolvetica', 'Bebas Neue', 'Anton', Impact, sans-serif;
+      --font-spartan: 'League Spartan', 'Plus Jakarta Sans', system-ui, sans-serif;
       --gold: #EAB308; --gold2: #FACC15;
       --theme-transition: 0.42s cubic-bezier(0.22, 1, 0.36, 1);
       --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -424,8 +435,10 @@ const GlobalStyles = () => (
       flex-shrink: 0;
     }
     .jc-logo-text {
-      font-family: var(--font-disp); font-size: 18px; font-weight: 700;
-      letter-spacing: -0.03em;
+      font-family: var(--font-brand);
+      font-size: 22px; font-weight: 700;
+      letter-spacing: 0;
+      line-height: 1;
       transition: color var(--theme-transition), text-shadow var(--theme-transition), opacity var(--theme-transition);
     }
     .jc-logo-text.online {
@@ -466,6 +479,12 @@ const GlobalStyles = () => (
     .jc-nav-item:hover { background: var(--bg4); }
     .jc-nav-item.active { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.15); }
     .jc-nav-label { font-size: 13px; font-weight: 400; color: var(--text1); flex: 1; }
+    .jc-nav-label--brand {
+      font-family: var(--font-spartan);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      font-size: 14px;
+    }
     .jc-nav-badge {
       font-size: 10px; font-family: var(--font-mono);
       background: var(--badge-bg); border-radius: 10px;
@@ -526,9 +545,10 @@ const GlobalStyles = () => (
       gap: 2px;
     }
     .jc-dept-title {
-      font-family: var(--font-disp);
+      font-family: var(--font-spartan);
       font-size: clamp(15px, 2.4vw, 20px);
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: -0.01em;
       color: var(--text1);
       display: flex;
       align-items: center;
@@ -1502,7 +1522,7 @@ export default function JurisCloudOS() {
                   }}
                 >
                   <Icon size={16} style={{ color: dept.color, flexShrink: 0 }} />
-                  <span className="jc-nav-label">{dept.label}</span>
+                  <span className={`jc-nav-label ${dept.id === "assistente" ? "jc-nav-label--brand" : ""}`}>{dept.label}</span>
                   {dept.badge > 0 && <span className={`jc-nav-badge ${dept.badge >= 8 ? "alert" : ""}`}>{dept.badge}</span>}
                 </div>,
                 dept.id
