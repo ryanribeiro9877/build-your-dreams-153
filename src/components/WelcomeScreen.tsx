@@ -305,6 +305,13 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     }
   }, [liveTranscript, stopRecordingInternals, handleSubmit]);
 
+  const greetingFull = useMemo(
+    () => `Olá ${displayName}, como posso te ajudar?`,
+    [displayName],
+  );
+  const typedGreeting = useTypewriter(greetingFull, !loading);
+  const greetingDone = typedGreeting.length >= greetingFull.length;
+
   if (loading) {
     return (
       <div className="ws-root">
@@ -322,13 +329,6 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
     { label: "Em Andamento", value: summary.inProgress, icon: Loader },
     { label: "Críticas", value: summary.critical, icon: AlertTriangle },
   ];
-
-  const greetingFull = useMemo(
-    () => `Olá ${displayName}, como posso te ajudar?`,
-    [displayName],
-  );
-  const typedGreeting = useTypewriter(greetingFull, !loading);
-  const greetingDone = typedGreeting.length >= greetingFull.length;
 
   return (
     <div className="ws-root">
