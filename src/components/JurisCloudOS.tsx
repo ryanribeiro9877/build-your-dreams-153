@@ -458,8 +458,9 @@ const GlobalStyles = () => (
       flex-shrink: 0;
     }
     .jc-logo-text {
-      font-family: var(--font-brand);
-      font-size: 22px; font-weight: 700;
+      font-family: 'Coolvetica', var(--font-spartan), var(--font-body), sans-serif;
+      font-size: 22px;
+      font-weight: 500;
       letter-spacing: 0.06em;
       line-height: 1;
       color: #ffffff;
