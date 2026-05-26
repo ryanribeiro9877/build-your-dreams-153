@@ -196,16 +196,16 @@ const PROCESSES = [
   { id: "0041887", client: "Clínica São Lucas",   area: "Contratos", status: "normal",    prazo: "7 dias",  tribunal: "—",    value: "R$ 135.000"},
 ];
 
-/** Chips de área — apenas tons de amarelo + texto preto/branco. */
+/** Chips de área — tons de amarelo com texto branco. */
 function getCaseAreaChip(area: string) {
   const m: Record<string, { background: string; color: string; border: string }> = {
-    "Bancário": { background: "rgba(234,179,8,0.32)", color: "#FFFBEB", border: "1px solid rgba(234,179,8,0.5)" },
-    "Cível": { background: "rgba(234,179,8,0.18)", color: "#FEFCE8", border: "1px solid rgba(234,179,8,0.38)" },
-    "Previdência": { background: "rgba(250,204,21,0.28)", color: "#171717", border: "1px solid rgba(250,204,21,0.48)" },
-    "Previdenciário": { background: "rgba(250,204,21,0.28)", color: "#171717", border: "1px solid rgba(250,204,21,0.48)" },
-    "Contratos": { background: "rgba(202,138,4,0.28)", color: "#FFFBEB", border: "1px solid rgba(202,138,4,0.45)" },
+    "Bancário": { background: "rgba(234,179,8,0.32)", color: "#ffffff", border: "1px solid rgba(234,179,8,0.5)" },
+    "Cível": { background: "rgba(234,179,8,0.18)", color: "#ffffff", border: "1px solid rgba(234,179,8,0.38)" },
+    "Previdência": { background: "rgba(250,204,21,0.28)", color: "#ffffff", border: "1px solid rgba(250,204,21,0.48)" },
+    "Previdenciário": { background: "rgba(250,204,21,0.28)", color: "#ffffff", border: "1px solid rgba(250,204,21,0.48)" },
+    "Contratos": { background: "rgba(202,138,4,0.28)", color: "#ffffff", border: "1px solid rgba(202,138,4,0.45)" },
   };
-  return m[area] || { background: "rgba(234,179,8,0.2)", color: "#FFFBEB", border: "1px solid rgba(234,179,8,0.4)" };
+  return m[area] || { background: "rgba(234,179,8,0.2)", color: "#ffffff", border: "1px solid rgba(234,179,8,0.4)" };
 }
 
 const ALERTS = [
