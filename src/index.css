@@ -152,7 +152,7 @@
   }
 }
 
-/* Welcome (Meu Assistente) — CTA com brilho arco-íris no hover */
+/* Welcome (Meu Assistente) — CTA com brilho dourado no hover */
 @keyframes ws-cta-glowing {
   0% { background-position: 0 0; }
   50% { background-position: 400% 0; }
@@ -191,22 +191,24 @@
   content: "";
   background: linear-gradient(
     45deg,
-    #ff0000,
-    #ff7300,
-    #fffb00,
-    #48ff00,
-    #00ffd5,
-    #002bff,
-    #7a00ff,
-    #ff00c8,
-    #ff0000
+    #5c4510,
+    #92700f,
+    #b8942e,
+    #c9a84c,
+    #e8c96a,
+    #facc15,
+    #fef08a,
+    #e8c96a,
+    #c9a84c,
+    #92700f,
+    #5c4510
   );
   position: absolute;
   top: -2px;
   left: -2px;
   background-size: 400%;
   z-index: -1;
-  filter: blur(5px);
+  filter: blur(6px);
   width: calc(100% + 4px);
   height: calc(100% + 4px);
   animation: ws-cta-glowing 20s linear infinite;
@@ -233,7 +235,7 @@
 }
 
 .ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:hover::before {
-  opacity: 1;
+  opacity: 0.95;
 }
 
 .ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:active {
