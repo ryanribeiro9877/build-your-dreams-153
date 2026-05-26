@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * IMPORTANTE: lógica/hooks/queries permanecem idênticas. Só o visual
  * foi reorganizado para usar as classes utilitárias `.lf-*` definidas
- * em `src/styles/lexforce-modern.css`.
+ * em `src/styles/jurisai-modern.css`.
  */
 export default function AgentsAdmin() {
   const navigate = useNavigate();

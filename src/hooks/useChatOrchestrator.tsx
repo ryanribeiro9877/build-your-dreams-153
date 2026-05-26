@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ChatOrchestratorResponse, ChatOrchestratorError } from "@/types/lexforce";
+import type { ChatOrchestratorResponse, ChatOrchestratorError } from "@/types/jurisai";
 
 /**
  * useChatOrchestrator — wrap da edge function chat-orchestrator.

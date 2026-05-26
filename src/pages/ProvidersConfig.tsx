@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
-import type { ProviderCode } from "@/types/lexforce";
+import type { ProviderCode } from "@/types/jurisai";
 import { toast } from "sonner";
 import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldCheck } from "lucide-react";
-import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/lexforceShellTheme";
+import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/jurisaiShellTheme";
 
 /**
  * /configuracoes/providers

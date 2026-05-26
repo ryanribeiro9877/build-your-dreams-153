@@ -1,5 +1,5 @@
 /* JurisAI — camada utilitária moderna (cards, badges, tabs, grid, animações) */
-@import "./styles/lexforce-modern.css";
+@import "./styles/jurisai-modern.css";
 
 @tailwind base;
 @tailwind components;

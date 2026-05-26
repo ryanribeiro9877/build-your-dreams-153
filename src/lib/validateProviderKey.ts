@@ -20,7 +20,7 @@
  * Timeout de 8 s para não travar o formulário.
  */
 
-import type { ProviderCode } from "@/types/lexforce";
+import type { ProviderCode } from "@/types/jurisai";
 
 export type ValidationResult = {
   /** true = válida, false = inválida, null = não foi possível validar */

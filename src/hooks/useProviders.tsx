@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ProviderCode, ProviderConfigRow, ModelPricingRow } from "@/types/lexforce";
+import type { ProviderCode, ProviderConfigRow, ModelPricingRow } from "@/types/jurisai";
 
 /**
  * useProviders — gestao de chaves de provider LLM (BYOK).

@@ -6,7 +6,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
 import { useAgentLLMConfig, SUGGESTED_BY_LEVEL } from "@/hooks/useAgentLLMConfig";
 import { validateProviderKey, type ValidationResult } from "@/lib/validateProviderKey";
-import type { ProviderCode, AgentLLMConfig } from "@/types/lexforce";
+import type { ProviderCode, AgentLLMConfig } from "@/types/jurisai";
 import { toast } from "sonner";
 
 /**
@@ -16,7 +16,7 @@ import { toast } from "sonner";
  * Abas: Identidade · Modelo · Prompt · Memória · Provedor.
  *
  * Refatorada para usar as classes utilitárias `.lf-*` definidas em
- * `src/styles/lexforce-modern.css` — mantém toda a lógica de hooks,
+ * `src/styles/jurisai-modern.css` — mantém toda a lógica de hooks,
  * estado, queries e callbacks intactos. Só o visual foi reorganizado.
  */
 

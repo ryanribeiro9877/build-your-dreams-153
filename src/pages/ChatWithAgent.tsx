@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAgents } from "@/hooks/useAgents";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { supabase } from "@/integrations/supabase/client";
-import type { ChatMessageRow, ChatSessionRow } from "@/types/lexforce";
+import type { ChatMessageRow, ChatSessionRow } from "@/types/jurisai";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
 

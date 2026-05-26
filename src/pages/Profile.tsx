@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, User, Save, Bell } from "lucide-react";
 import { getLowBalanceThreshold, setLowBalanceThreshold } from "@/hooks/useTokenBalance";
-import { LfPage, LfCard, LfInput, LfLabel, LfHeaderBackBtn, LfPrimaryBtn } from "@/lib/lexforceShellTheme";
+import { LfPage, LfCard, LfInput, LfLabel, LfHeaderBackBtn, LfPrimaryBtn } from "@/lib/jurisaiShellTheme";
 
 export default function Profile() {
   const navigate = useNavigate();

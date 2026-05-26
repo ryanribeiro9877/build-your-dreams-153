@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { AgentLLMConfig, ProviderCode } from "@/types/lexforce";
+import type { AgentLLMConfig, ProviderCode } from "@/types/jurisai";
 
 /**
  * useAgentLLMConfig — gestao de config LLM por agente.

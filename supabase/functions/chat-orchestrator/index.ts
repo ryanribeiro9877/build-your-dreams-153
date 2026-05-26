@@ -23,7 +23,7 @@
 //   8. Calcula custo via model_pricing.
 //   9. Insere assistant msg + atualiza chat_sessions (counters, totals, last_message_at).
 //  10. Atualiza llm_provider_configs.monthly_spent_usd + last_used_at.
-//  11. Retorna ChatOrchestratorResponse (forma combinada com src/types/lexforce.ts).
+//  11. Retorna ChatOrchestratorResponse (forma combinada com src/types/jurisai.ts).
 //
 // Erros estruturados (sempre { error, message }):
 //   - not_authenticated, session_not_found, forbidden_not_session_owner,
