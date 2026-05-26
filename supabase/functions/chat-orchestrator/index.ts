@@ -1,6 +1,6 @@
 // supabase/functions/chat-orchestrator/index.ts
 //
-// Orquestrador BYOK ("Bring Your Own Key") do LexForce — Patch V7 / Onda 2.
+// Orquestrador BYOK ("Bring Your Own Key") do JurisAI — Patch V7 / Onda 2.
 //
 // Substitui o antigo `chat-with-agent` por um fluxo orientado a sessão:
 //

@@ -346,7 +346,7 @@ export default function LandingPage() {
             <Scale size={18} strokeWidth={2.5} />
           </div>
           <div className="lf-nav__name-wrap">
-            <span className="lf-nav__name">LexForce</span>
+            <span className="lf-nav__name">JurisAI</span>
             <span className="lf-nav__tagline">Você comanda</span>
           </div>
         </div>
@@ -587,7 +587,7 @@ export default function LandingPage() {
                   <p>{c.challenge}</p>
                 </div>
                 <div className="lf-caso__block">
-                  <span className="lf-caso__label">Solução LexForce</span>
+                  <span className="lf-caso__label">Solução JurisAI</span>
                   <p>{c.solution}</p>
                 </div>
 
@@ -774,7 +774,7 @@ export default function LandingPage() {
             <Crown size={32} strokeWidth={1.8} />
           </div>
           <h2 className="lf-cta-final__title">
-            Conheça a plataforma <span className="lf-gradient-text">LexForce</span>.
+            Conheça a plataforma <span className="lf-gradient-text">JurisAI</span>.
           </h2>
           <p className="lf-cta-final__sub">
             Uma ferramenta de produtividade para o profissional do Direito.{" "}
@@ -803,10 +803,10 @@ export default function LandingPage() {
       <footer className="lf-footer">
         <div className="lf-footer__brand">
           <div className="lf-footer__logo"><Scale size={16} strokeWidth={2.5} /></div>
-          <span>LexForce</span>
+          <span>JurisAI</span>
         </div>
         <p className="lf-footer__copy">
-          © {new Date().getFullYear()} LexForce — Sua força de trabalho de IA jurídica.
+          © {new Date().getFullYear()} JurisAI — Sua força de trabalho de IA jurídica.
           <br />
           <strong>Você comanda. Eles executam.</strong>
         </p>

@@ -62,7 +62,7 @@ SELECT v.external_id, v.name, v.color, d.id, v.role::agent_role, v.status::agent
        v.can_orchestrate, v.max_concurrent_tasks, v.current_tasks, v.reports_to, v.description
 FROM (VALUES
   -- CEO
-  (0,   'CEO LexForce',                'diretoria',   '#c9a84c', 'ceo',          'active', true,  20, 8,  NULL::integer, 'Supervisiona todos os diretores e a operacao global'),
+  (0,   'CEO JurisAI',                'diretoria',   '#c9a84c', 'ceo',          'active', true,  20, 8,  NULL::integer, 'Supervisiona todos os diretores e a operacao global'),
   -- Diretores
   (1,   'Diretor de Recepcao',         'recepcao',    '#3b82f6', 'director',     'active', true,  10, 3,  0, 'Diretor da area de recepcao e intake'),
   (9,   'Diretor de Marketing',        'marketing',   '#f59e0b', 'director',     'active', true,  10, 5,  0, 'Diretor de marketing juridico'),

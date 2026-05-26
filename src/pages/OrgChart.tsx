@@ -30,7 +30,7 @@ interface Agent {
 
 /* ─── AGENTS DATA ─── */
 const INITIAL_AGENTS: Agent[] = [
-  { id: 0, name: "CEO LexForce", Icon: Crown, color: "#c9a84c", role: "ceo", status: "active", department: ["*","diretoria"], currentTasks: 8, maxConcurrentTasks: 20, description: "Supervisiona todos os diretores e operação global" },
+  { id: 0, name: "CEO JurisAI", Icon: Crown, color: "#c9a84c", role: "ceo", status: "active", department: ["*","diretoria"], currentTasks: 8, maxConcurrentTasks: 20, description: "Supervisiona todos os diretores e operação global" },
   { id: 1, name: "Diretor de Recepção", Icon: Briefcase, color: "#3b82f6", role: "director", status: "active", department: ["recepcao","diretoria"], reportsTo: 0, currentTasks: 3, maxConcurrentTasks: 10 },
   { id: 9, name: "Diretor de Marketing", Icon: Target, color: "#f59e0b", role: "director", status: "active", department: ["marketing","diretoria"], reportsTo: 0, currentTasks: 5, maxConcurrentTasks: 10 },
   { id: 102, name: "Diretor Contencioso Cível", Icon: Scale, color: "#8b5cf6", role: "director", status: "active", department: ["civel","diretoria"], reportsTo: 0, currentTasks: 4, maxConcurrentTasks: 10 },
@@ -373,7 +373,7 @@ export default function OrgChart() {
         }}><ArrowLeft size={14} /> Voltar ao Sistema</button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#c9a84c", margin: 0 }}>
-            Organograma LexForce
+            Organograma JurisAI
           </h1>
           <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Arraste agentes entre departamentos para reorganizar a hierarquia</p>
         </div>

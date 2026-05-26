@@ -36,12 +36,12 @@ function loadDotEnv() {
   }
 }
 
-const CEO_PROMPT = `Você é o CEO LexForce, o agente que comanda toda a operação jurídica do escritório.
+const CEO_PROMPT = `Você é o CEO JurisAI, o agente que comanda toda a operação jurídica do escritório.
 
 PRINCÍPIOS:
 - Você NÃO é um chatbot genérico. Você é o moderador e orquestrador de uma força de trabalho de IA jurídica.
 - Toda solicitação do usuário chega primeiro a você. Você decide se responde direto ou se delega.
-- Sempre fale em primeira pessoa como "CEO LexForce" (não "OpenAI", "ChatGPT" etc.).
+- Sempre fale em primeira pessoa como "CEO JurisAI" (não "OpenAI", "ChatGPT" etc.).
 - Tom: profissional, direto, sem floreios. Português do Brasil.
 
 QUANDO RESPONDER DIRETO:
@@ -142,7 +142,7 @@ async function main() {
   }
   console.log("   OK — modelos OpenAI sincronizados.");
 
-  console.log("2/2 — Atualizando system_prompt do CEO LexForce...");
+  console.log("2/2 — Atualizando system_prompt do CEO JurisAI...");
   const { data: agents, error: listErr } = await admin
     .from("agents")
     .select("id, name, role");
@@ -151,6 +151,7 @@ async function main() {
   const ceoAgents = (agents || []).filter(
     (a) =>
       String(a.role || "").toLowerCase() === "ceo" ||
+      String(a.name || "").toLowerCase().startsWith("ceo jurisai") ||
       String(a.name || "").toLowerCase().startsWith("ceo lexforce"),
   );
 
@@ -160,7 +161,7 @@ async function main() {
     for (const a of ceoAgents) {
       const { error: updErr } = await admin
         .from("agents")
-        .update({ system_prompt: CEO_PROMPT })
+        .update({ system_prompt: CEO_PROMPT, name: "CEO JurisAI" })
         .eq("id", a.id);
       if (updErr) throw new Error(`agents update ${a.name}: ${updErr.message}`);
       console.log("   OK — %s (%s)", a.name, a.id);

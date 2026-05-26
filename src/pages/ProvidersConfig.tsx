@@ -108,7 +108,7 @@ export default function ProvidersConfig() {
           <ShieldCheck size={20} color="#2dd4a0" style={{ flexShrink: 0, marginTop: 2 }} />
           <div style={{ fontSize: 13, color: "#c0d5cc" }}>
             <strong style={{ color: "#2dd4a0" }}>Sua chave fica segura.</strong>
-            {" "}Cadastramos no Supabase Vault (criptografia AES-256). O LexForce nunca exibe a chave de volta,
+            {" "}Cadastramos no Supabase Vault (criptografia AES-256). O JurisAI nunca exibe a chave de volta,
             so os ultimos 4 caracteres. Sao usadas exclusivamente para chamar a API do provedor escolhido.
           </div>
         </div>

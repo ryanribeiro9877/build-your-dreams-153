@@ -101,7 +101,7 @@ export default function Auth() {
             boxShadow: "0 0 32px rgba(201,168,76,0.4), 0 0 8px rgba(201,168,76,0.6)",
           }}>L</div>
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#eeeef5" }}>
-            LexForce
+            JurisAI
           </div>
           <div style={{ fontSize: 10, color: "#5a5a72", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 4 }}>
             Orquestração Inteligente Jurídica

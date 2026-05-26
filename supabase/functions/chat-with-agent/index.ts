@@ -1,6 +1,6 @@
 // supabase/functions/chat-with-agent/index.ts
 //
-// Roteador hibrido para o sistema de agentes LexForce.
+// Roteador hibrido para o sistema de agentes JurisAI.
 //
 // Fluxo:
 //   1. Autentica o usuario via JWT (Supabase service_role para ler agents/depts).
@@ -135,7 +135,7 @@ async function callOpenClaw(payload: Record<string, unknown>): Promise<string | 
 // -- System prompts por departamento -----------------------------------------
 
 function systemPromptForDept(deptName: string, deptDescription: string | null): string {
-  const base = `Voce e um agente de IA juridica do sistema LexForce, operando no departamento "${deptName}"${deptDescription ? ` (${deptDescription})` : ""}.
+  const base = `Voce e um agente de IA juridica do sistema JurisAI, operando no departamento "${deptName}"${deptDescription ? ` (${deptDescription})` : ""}.
 
 REGRAS INEGOCIAVEIS:
 - Voce e auxiliar tecnico. NUNCA toma decisao final por advogado humano.
@@ -250,14 +250,14 @@ serve(async (req) => {
     || /\b(delegue|delegar|coordene|coordenar|atribua|atribuir|distribua|orqu)/i.test(lower);
 
   const orchestration: OrchestrationStep[] = [];
-  let agentName = "Assistente LexForce";
+  let agentName = "Assistente JurisAI";
   let content = "";
 
   const tStart = performance.now();
 
   try {
     if (useOrchestration) {
-      orchestration.push({ agent: "CEO LexForce", role: "ceo", action: "classificou intent", ms: 0 });
+      orchestration.push({ agent: "CEO JurisAI", role: "ceo", action: "classificou intent", ms: 0 });
       const openClawResp = await callOpenClaw({
         userId,
         requestId: body.requestId,
@@ -267,7 +267,7 @@ serve(async (req) => {
       });
       if (openClawResp) {
         content = openClawResp;
-        agentName = "CEO LexForce";
+        agentName = "CEO JurisAI";
         orchestration.push({ agent: "OpenClaw", role: "orchestrator", action: "respondeu", ms: Math.round(performance.now() - tStart) });
       } else {
         // Fallback: executor direto.

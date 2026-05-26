@@ -37,7 +37,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────
-   LEXFORCE  –  Sua força de trabalho de IA jurídica
+   JURISAI  –  Sua força de trabalho de IA jurídica
 ───────────────────────────────────────────────────────────── */
 
 // ── Icon map for departments ──
@@ -107,7 +107,7 @@ interface Agent {
 // Fonte de verdade canonica esta em public.agents (migration 20260511122000_seed_agents.sql).
 // Mantemos esse array apenas para evitar flash de tela vazia no primeiro render.
 const AGENTS_FALLBACK: Agent[] = [
-  { id: 0, name: "CEO LexForce", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
+  { id: 0, name: "CEO JurisAI", status: "active", color: "#c9a84c", role: "ceo", permissions: ["read","write","approve","execute","admin"], department: ["*","diretoria"], canOrchestrate: true, maxConcurrentTasks: 20, currentTasks: 8, description: "Agente CEO — supervisiona todos os diretores e a operação global" },
   { id: 1, name: "Diretor de Recepção", status: "active", color: "#3b82f6", role: "director", permissions: ["read","write","approve","admin"], department: ["recepcao","diretoria"], canOrchestrate: true, maxConcurrentTasks: 10, currentTasks: 3, reportsTo: 0 },
   { id: 2, name: "Gerente de Atendimento", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 4, reportsTo: 1 },
   { id: 100, name: "Gerente de Intake", status: "active", color: "#3b82f6", role: "manager", permissions: ["read","write","approve","contact_client","schedule"], department: ["recepcao"], canOrchestrate: true, maxConcurrentTasks: 8, currentTasks: 5, reportsTo: 1 },
@@ -1074,7 +1074,7 @@ export default function JurisCloudOS() {
 
   // Agentes do banco. Enquanto carrega usa AGENTS_FALLBACK pra evitar flash de tela vazia.
   const { agents: dbAgents, loading: agentsLoading } = useAgents();
-  // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO LexForce
+  // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO JurisAI
   // (ou o primeiro agente com IA configurada) como entrada. A sessão é criada
   // sob demanda na primeira mensagem.
   const { startSession, sendMessage: orchestratorSend } = useChatOrchestrator();
@@ -1298,7 +1298,7 @@ export default function JurisCloudOS() {
       // 1. Garante que há um agente configurado pra responder
       if (!entryAgentId) {
         await refundAndNotify(
-          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o CEO LexForce (ou outro), na aba Modelo configure provedor + modelo, e salve",
+          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o CEO JurisAI (ou outro), na aba Modelo configure provedor + modelo, e salve",
         );
         return;
       }
@@ -1454,10 +1454,10 @@ export default function JurisCloudOS() {
           aria-label="Menu lateral de navegação"
         >
           <div className="jc-sidebar-body">
-          <div className="jc-logo" title={systemOnline ? "LexForce — sistema ativo" : "LexForce — sistema inativo"}>
-            <div className="jc-logo-mark">L</div>
+          <div className="jc-logo" title={systemOnline ? "JurisAI — sistema ativo" : "JurisAI — sistema inativo"}>
+            <div className="jc-logo-mark">J</div>
             <div className="jc-logo-info">
-              <div className={`jc-logo-text ${systemOnline ? "online" : "offline"}`}>LexForce</div>
+              <div className={`jc-logo-text ${systemOnline ? "online" : "offline"}`}>JurisAI</div>
               <div className="jc-logo-sub">{systemOnline ? "Operacional · 24/7" : "Atenção · alertas ativos"}</div>
             </div>
           </div>
@@ -1721,7 +1721,7 @@ export default function JurisCloudOS() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong>Configure um agente antes da primeira mensagem.</strong>
                 <span style={{ display: "block", fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
-                  Cadastre sua chave em Configurações → Provedores, depois vá em Admin → Agentes e ative provedor + modelo no CEO LexForce.
+                  Cadastre sua chave em Configurações → Provedores, depois vá em Admin → Agentes e ative provedor + modelo no CEO JurisAI.
                 </span>
               </div>
               <button

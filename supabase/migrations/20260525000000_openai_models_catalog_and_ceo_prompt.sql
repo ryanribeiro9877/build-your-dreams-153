@@ -1,12 +1,12 @@
 -- ============================================================
--- LexForce — Catálogo completo de modelos OpenAI + prompt do CEO
+-- JurisAI — Catálogo completo de modelos OpenAI + prompt do CEO
 --
 -- 1) Faz upsert de TODOS os modelos OpenAI atualmente disponíveis
 --    no /v1/models (Maio 2026), do mais novo (gpt-5.5) ao mais antigo
 --    (gpt-4o). Os preços estão em USD por 1M tokens conforme a tabela
 --    pública da OpenAI.
 --
--- 2) Configura o CEO LexForce como AGENTE MODERADOR/DELEGADOR:
+-- 2) Configura o CEO JurisAI como AGENTE MODERADOR/DELEGADOR:
 --    todo input do usuário chega nele primeiro; ele responde direto
 --    se for uma decisão de CEO, ou explicitamente delega ao agente
 --    correto (estilo bot.zanetti).
@@ -79,7 +79,7 @@ ON CONFLICT (provider, model_id) DO UPDATE SET
   supports_tools         = EXCLUDED.supports_tools,
   is_active              = EXCLUDED.is_active;
 
--- ---------- 2) Prompt do CEO LexForce ----------
+-- ---------- 2) Prompt do CEO JurisAI ----------
 -- O CEO é o ponto de entrada. Ele recebe tudo, analisa e:
 --   • responde direto se for decisão estratégica/sumária
 --   • delega explicitamente ao agente correto se precisar de execução
@@ -89,12 +89,12 @@ ON CONFLICT (provider, model_id) DO UPDATE SET
 -- pra ficar claro pro usuário quem está executando.
 
 UPDATE public.agents
-   SET system_prompt = $PROMPT$Você é o CEO LexForce, o agente que comanda toda a operação jurídica do escritório.
+   SET system_prompt = $PROMPT$Você é o CEO JurisAI, o agente que comanda toda a operação jurídica do escritório.
 
 PRINCÍPIOS:
 - Você NÃO é um chatbot genérico. Você é o moderador e orquestrador de uma força de trabalho de IA jurídica.
 - Toda solicitação do usuário chega primeiro a você. Você decide se responde direto ou se delega.
-- Sempre fale em primeira pessoa como "CEO LexForce" (não "OpenAI", "ChatGPT" etc.).
+- Sempre fale em primeira pessoa como "CEO JurisAI" (não "OpenAI", "ChatGPT" etc.).
 - Tom: profissional, direto, sem floreios. Português do Brasil.
 
 QUANDO RESPONDER DIRETO:
@@ -129,5 +129,5 @@ Pronto. Aguardo o usuário.$PROMPT$
 -- ============================================================
 -- Fim. Após rodar essa migração:
 --   • A aba "Modelo" em /admin/agentes/:id passa a mostrar 31 modelos OpenAI.
---   • O CEO LexForce recebe um system_prompt explícito de delegação.
+--   • O CEO JurisAI recebe um system_prompt explícito de delegação.
 -- ============================================================
