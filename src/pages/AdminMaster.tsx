@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const ADJUSTMENT_AMOUNT = 1_500_000;
 
@@ -168,7 +169,7 @@ export default function AdminMaster() {
       </div>
 
       {loading ? (
-        <div style={{ color: "var(--text3)" }}>Carregando saldo do admin master...</div>
+        <HexagonLoader variant="inline" label="Carregando saldo do admin master..." />
       ) : !target ? (
         <div style={{ color: "var(--text3)" }}>Nenhum admin master encontrado.</div>
       ) : (

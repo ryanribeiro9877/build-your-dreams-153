@@ -7,6 +7,7 @@ import {
   Crown, Briefcase, ClipboardList, Scale, Building2, BookOpen,
   CreditCard, Megaphone, FileText, Hash, ShieldCheck, ArrowLeft
 } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
@@ -33,7 +34,7 @@ export default function Auth() {
   const [selectedRole, setSelectedRole] = useState("lawyer");
   const [submitting, setSubmitting] = useState(false);
 
-  if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#09090f", color: "#c9a84c", fontFamily: "DM Sans, sans-serif" }}>Carregando...</div>;
+  if (loading) return <HexagonLoader variant="fullscreen" />;
   if (user) return <Navigate to="/sistema" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {

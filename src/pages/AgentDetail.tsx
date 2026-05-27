@@ -8,6 +8,7 @@ import { useAgentLLMConfig, SUGGESTED_BY_LEVEL } from "@/hooks/useAgentLLMConfig
 import { validateProviderKey, type ValidationResult } from "@/lib/validateProviderKey";
 import type { ProviderCode, AgentLLMConfig } from "@/types/jurisai";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 /**
  * /admin/agentes/:id
@@ -279,7 +280,7 @@ export default function AgentDetail() {
         {/* Conteúdo da aba ativa */}
         <section className="lf-fade-in" key={activeTab}>
           {loadingConfig ? (
-            <div className="lf-loading">Carregando configuração...</div>
+            <HexagonLoader variant="inline" label="Carregando configuração..." />
           ) : !editConfig ? null : (
             <>
               {activeTab === "identidade" && <TabIdentidade agent={agent} />}

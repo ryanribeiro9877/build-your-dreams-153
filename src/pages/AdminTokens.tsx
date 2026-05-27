@@ -23,6 +23,7 @@ import {
   ShoppingCart, Zap, Gift, RefreshCw, Filter, X, Eye,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Legend } from "recharts";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 interface UserStats {
   user_id: string;
@@ -182,11 +183,7 @@ export default function AdminTokens() {
   }, [detailUser, transactions]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#09090f]">
-        <Coins className="w-8 h-8 text-[#c9a84c] animate-spin" />
-      </div>
-    );
+    return <HexagonLoader variant="fullscreen" />;
   }
 
   return (

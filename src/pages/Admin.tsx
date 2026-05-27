@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const ROLES = [
   { value: "admin", label: "Administrador", icon: "" },
@@ -94,7 +95,7 @@ export default function Admin() {
         Gerencie os papéis dos usuários do sistema. Cada papel determina as permissões de acesso.
       </div>
 
-      {loading ? <div style={{ color: "var(--text3)" }}>Carregando...</div> : (
+      {loading ? <HexagonLoader variant="inline" /> : (
         <div style={{ display: "grid", gap: 12 }}>
           {users.map(u => (
             <div key={u.user_id} style={{

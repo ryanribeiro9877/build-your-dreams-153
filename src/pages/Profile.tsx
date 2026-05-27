@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, User, Save, Bell } from "lucide-react";
 import { getLowBalanceThreshold, setLowBalanceThreshold } from "@/hooks/useTokenBalance";
 import { LfPage, LfCard, LfInput, LfLabel, LfHeaderBackBtn, LfPrimaryBtn } from "@/lib/jurisaiShellTheme";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -53,8 +54,8 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div style={{ ...LfPage, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ color: "#c9a84c" }}>Carregando...</span>
+      <div style={{ ...LfPage, minHeight: "100vh" }}>
+        <HexagonLoader variant="fullscreen" />
       </div>
     );
   }

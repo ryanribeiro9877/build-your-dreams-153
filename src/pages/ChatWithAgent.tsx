@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ChatMessageRow, ChatSessionRow } from "@/types/jurisai";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 /**
  * /sistema/chat
@@ -154,7 +155,7 @@ export default function ChatWithAgent() {
             Nova conversa com:
           </label>
           {loadingAgents ? (
-            <div style={{ fontSize: 12, color: "#6b6b80" }}>Carregando...</div>
+            <HexagonLoader variant="compact" />
           ) : eligibleAgents.length === 0 ? (
             <div style={{ fontSize: 11, color: "#ffb8b8", padding: 10, background: "rgba(255,107,107,0.08)", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)" }}>
               <AlertTriangle size={11} style={{ display: "inline", marginRight: 4 }} />
@@ -260,7 +261,7 @@ export default function ChatWithAgent() {
               style={{ flex: 1, overflowY: "auto", padding: "24px 32px", display: "flex", flexDirection: "column", gap: 16 }}
             >
               {loadingMessages ? (
-                <div style={{ color: "#9898b0", textAlign: "center" }}>Carregando...</div>
+                <HexagonLoader variant="inline" />
               ) : messages.length === 0 ? (
                 <div style={{ color: "#9898b0", textAlign: "center", padding: 40 }}>
                   <Sparkles size={24} color="#6b6b80" style={{ margin: "0 auto 12px" }} />

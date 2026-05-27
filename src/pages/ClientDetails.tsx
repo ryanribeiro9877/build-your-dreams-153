@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const DOCUMENT_TYPES: Record<string, string> = {
   rg: "RG", cpf: "CPF", comprovante_residencia: "Comprovante de Residência",
@@ -107,11 +108,7 @@ export default function ClientDetails() {
     if (id) void loadAll(id);
   }, [id, loadAll]);
 
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg)", color: "var(--gold, #c9a84c)", fontFamily: "'DM Sans', sans-serif" }}>
-      Carregando detalhes...
-    </div>
-  );
+  if (loading) return <HexagonLoader variant="fullscreen" label="Carregando detalhes..." />;
 
   if (!client) return null;
 

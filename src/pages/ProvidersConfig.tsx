@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
 import type { ProviderCode } from "@/types/jurisai";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldCheck } from "lucide-react";
 import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/jurisaiShellTheme";
 
@@ -142,7 +143,7 @@ export default function ProvidersConfig() {
           </div>
 
           {loading ? (
-            <div style={{ ...cardStyle, color: "hsl(var(--muted-foreground))", fontSize: 13 }}>Carregando...</div>
+            <HexagonLoader variant="inline" />
           ) : configs.length === 0 && !showForm ? (
             <div style={{ ...cardStyle, textAlign: "center", padding: 40 }}>
               <Key size={32} color="hsl(var(--border))" style={{ margin: "0 auto 12px" }} />

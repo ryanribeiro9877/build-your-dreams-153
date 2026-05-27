@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Auth = lazy(() => import("./pages/Auth.tsx"));
@@ -31,40 +32,13 @@ const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const queryClient = new QueryClient();
 
 function PageLoader() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        background: "#09090f",
-        color: "#EAB308",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      Carregando…
-    </div>
-  );
+  return <HexagonLoader variant="fullscreen" />;
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          background: "#09090f",
-          color: "#EAB308",
-        }}
-      >
-        Carregando…
-      </div>
-    );
+    return <HexagonLoader variant="fullscreen" />;
   }
   if (!user) return <Navigate to="/auth" replace />;
   return <>{children}</>;

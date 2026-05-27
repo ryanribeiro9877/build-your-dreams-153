@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 import { useNavigate } from "react-router-dom";
 
 const DOCUMENT_TYPES = [
@@ -268,7 +269,7 @@ export default function Clients() {
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         {/* Client list */}
         <div style={{ flex: "1 1 350px", minWidth: 300 }}>
-          {loading ? <div style={{ color: "var(--text3)" }}>Carregando...</div> :
+          {loading ? <HexagonLoader variant="inline" /> :
             paginated.map(client => (
               <div
                 key={client.id}

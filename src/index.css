@@ -1,5 +1,6 @@
 /* JurisAI — camada utilitária moderna (cards, badges, tabs, grid, animações) */
 @import "./styles/jurisai-modern.css";
+@import "./styles/hexagon-loader.css";
 
 @tailwind base;
 @tailwind components;

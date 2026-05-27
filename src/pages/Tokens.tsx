@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const TOKEN_PACKAGES = [
   { id: "tokens_500_price", amount: 500, price: "R$ 9,90", popular: false },
@@ -63,11 +64,7 @@ export default function Tokens() {
   }, [checkoutSuccess, fetchBalance, fetchTransactions]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#09090f]">
-        <Coins className="w-8 h-8 text-[#c9a84c] animate-spin" />
-      </div>
-    );
+    return <HexagonLoader variant="fullscreen" />;
   }
 
   return (

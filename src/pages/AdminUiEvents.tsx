@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge, FileCheck2, GitCompareArrows, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 import {
   getRejectedEvents, getRejectedCount, clearRejectedEvents, onDebugChange,
   getRejectionBuckets, runTrackingHealthCheck,
@@ -515,9 +516,7 @@ export default function AdminUiEvents() {
 
   if (authLoading || !isAdmin) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background text-foreground">
-        Carregando…
-      </div>
+      <HexagonLoader variant="fullscreen" className="hexagon-loader--fullscreen bg-background" />
     );
   }
 

@@ -6,6 +6,7 @@ import {
   ClipboardList, Clock, Loader, AlertTriangle,
   Plus, Mic, Send, X, Check,
 } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tipagens nativas — SpeechRecognition é vendor-prefixed em alguns browsers.
@@ -315,10 +316,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   if (loading) {
     return (
       <div className="ws-root">
-        <div className="ws-loading">
-          <Loader size={28} className="ws-loading-spinner" />
-          <p>Carregando…</p>
-        </div>
+        <HexagonLoader variant="inline" />
       </div>
     );
   }
@@ -629,13 +627,6 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           font-size: 11px; color: var(--text3);
           letter-spacing: 0.03em; text-align: center;
         }
-        .ws-loading {
-          display: flex; flex-direction: column;
-          align-items: center; gap: 12px;
-          color: var(--text3); padding: 80px 24px;
-        }
-        .ws-loading-spinner { animation: wsSpin 1.4s linear infinite; color: var(--gold); }
-        @keyframes wsSpin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
         .ws-root svg.lucide { display: inline-block !important; }
       `}</style>
     </div>

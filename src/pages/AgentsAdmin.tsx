@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAgents } from "@/hooks/useAgents";
 import { useProviders } from "@/hooks/useProviders";
 import { supabase } from "@/integrations/supabase/client";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 /**
  * /admin/agentes
@@ -209,7 +210,7 @@ export default function AgentsAdmin() {
 
         {/* Lista de agentes */}
         {loadingAgents ? (
-          <div className="lf-loading">Carregando agentes...</div>
+          <HexagonLoader variant="inline" label="Carregando agentes..." />
         ) : visibleAgents.length === 0 ? (
           <div className="lf-empty">
             Nenhum agente corresponde aos filtros.<br />

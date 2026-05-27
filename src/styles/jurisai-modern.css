@@ -545,8 +545,7 @@
 }
 
 /* ---------- Empty/Loading states ------------------------------- */
-.lf-empty,
-.lf-loading {
+.lf-empty {
   padding: 56px 24px;
   text-align: center;
   background: hsl(var(--card));
@@ -555,22 +554,6 @@
   color: hsl(var(--muted-foreground));
   font-size: 13px;
   line-height: 1.6;
-}
-
-.lf-loading::before {
-  content: "";
-  display: block;
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  border: 2px solid hsl(var(--border));
-  border-top-color: var(--lf-gold);
-  animation: lf-spin 0.8s linear infinite;
-}
-
-@keyframes lf-spin {
-  to { transform: rotate(360deg); }
 }
 
 /* ---------- Animations ----------------------------------------- */

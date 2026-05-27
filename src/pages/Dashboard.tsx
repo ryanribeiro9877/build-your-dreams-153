@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { format, subDays, parseISO, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 const CATEGORY_LABELS: Record<string, string> = {
   confeccao: "Confecção de Peças",
@@ -100,11 +101,7 @@ export default function Dashboard() {
   const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11 };
 
   if (loading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg1, #09090f)", color: "var(--gold, #c9a84c)" }}>
-        Carregando dashboard...
-      </div>
-    );
+    return <HexagonLoader variant="fullscreen" label="Carregando dashboard..." />;
   }
 
   return (

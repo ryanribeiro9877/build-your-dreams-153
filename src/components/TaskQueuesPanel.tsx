@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 interface TaskItem {
   id: string;
@@ -163,7 +164,7 @@ export default function TaskQueuesPanel() {
 
   const tasksByCategory = (catId: string) => filteredTasks.filter(t => t.task_category === catId);
 
-  if (loading) return <div style={{ fontSize: 11, color: "var(--text3)", padding: 12 }}>Carregando filas...</div>;
+  if (loading) return <HexagonLoader variant="compact" label="Carregando filas..." />;
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>

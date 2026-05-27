@@ -9,6 +9,7 @@ import {
   Brain, TrendingUp, Target, ClipboardList, Clock, AlertTriangle, Siren, X, ArrowLeft
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 /* ─── DEPARTMENT CONFIG ─── */
 const DEPTS: { id: string; label: string; color: string; icon: LucideIcon }[] = [
@@ -154,11 +155,7 @@ export default function EfficiencyKPIs() {
   }, [orchLogs]);
 
   if (loading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#09090f", color: "#c9a84c" }}>
-        Carregando métricas de eficiência...
-      </div>
-    );
+    return <HexagonLoader variant="fullscreen" label="Carregando métricas de eficiência..." />;
   }
 
   return (
