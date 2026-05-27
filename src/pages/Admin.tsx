@@ -89,6 +89,11 @@ export default function Admin() {
           background: "rgba(201,168,76,0.15)", color: "#c9a84c", cursor: "pointer", fontSize: 13,
           fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
         }}> Dashboard de Tokens</button>
+        <button onClick={() => navigate("/admin/modelo-v14")} style={{
+          padding: "8px 16px", borderRadius: 8, border: "1px solid #eab308",
+          background: "rgba(234,179,8,0.12)", color: "#facc15", cursor: "pointer", fontSize: 13,
+          fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+        }}> Modelo V14 (Bacellar)</button>
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>

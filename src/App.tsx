@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword.tsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
 const OrgChart = lazy(() => import("./pages/OrgChart.tsx"));
+const OrgModelV14 = lazy(() => import("./pages/OrgModelV14.tsx"));
 const EfficiencyKPIs = lazy(() => import("./pages/EfficiencyKPIs.tsx"));
 const Tokens = lazy(() => import("./pages/Tokens.tsx"));
 const AdminTokens = lazy(() => import("./pages/AdminTokens.tsx"));
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
+              <Route path="/admin/modelo-v14" element={<ProtectedRoute><OrgModelV14 /></ProtectedRoute>} />
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
               <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
               <Route path="/admin/tokens" element={<ProtectedRoute><AdminTokens /></ProtectedRoute>} />

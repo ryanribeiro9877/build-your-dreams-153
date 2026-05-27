@@ -104,3 +104,254 @@ export interface ChatOrchestratorError {
   message: string;
   details?: unknown;
 }
+
+// ============================================================================
+// V14 — LexForce Organizational Model (Bacellar Advogados)
+// ============================================================================
+
+export type OrgStage =
+  | "atendimento"
+  | "confeccao"
+  | "revisao"
+  | "protocolo"
+  | "audiencia"
+  | "execucao"
+  | "execucao_sindicato"
+  | "recursos"
+  | "recursos_criticos"
+  | "alvara"
+  | "diligencia"
+  | "acompanhamento"
+  | "financeiro"
+  | "recepcao"
+  | "recepcao_supervisionada"
+  | "admin_equipe"
+  | "captacao_cooperativa"
+  | "kanban_pendencias"
+  | "gestao"
+  | "todas";
+
+export type LegalArea =
+  | "bancario"
+  | "familia"
+  | "plano_saude"
+  | "consumidor"
+  | "civil"
+  | "previdenciario"
+  | "tributario";
+
+export type UserTaskStatus =
+  | "draft"
+  | "assigned"
+  | "in_progress"
+  | "awaiting_external"
+  | "awaiting_validation"
+  | "blocked"
+  | "completed"
+  | "cancelled";
+
+export type CoverageStatus = "scheduled" | "active" | "finished" | "cancelled";
+
+export type InterAssistantStatus =
+  | "pending"
+  | "in_progress"
+  | "answered"
+  | "denied"
+  | "expired";
+
+export type CaptacaoCanalTipo =
+  | "cooperativa"
+  | "ressaque"
+  | "indicacao"
+  | "site"
+  | "outro";
+
+export type AgentRoleV14 =
+  | "ceo"
+  | "assistant_root"
+  | "director"
+  | "orchestrator"
+  | "manager"
+  | "specialist"
+  | "reviewer"
+  | "executor"
+  | "monitor";
+
+export type TaskPriority = "critical" | "high" | "medium" | "low";
+
+export interface RoleTemplateRow {
+  id: string;
+  code: string;
+  display_name: string;
+  description: string | null;
+  stages: OrgStage[];
+  areas: LegalArea[] | null;
+  is_admin: boolean;
+  has_login: boolean;
+  can_assign_tasks: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentTemplateRow {
+  id: string;
+  code: string;
+  display_name: string;
+  description: string | null;
+  role: AgentRoleV14;
+  stage: OrgStage | null;
+  area: LegalArea | null;
+  default_color: string;
+  default_provider: ProviderCode;
+  default_model: string;
+  default_temperature: number;
+  default_max_tokens: number;
+  default_system_prompt: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleAgentMatrixRow {
+  id: string;
+  role_template_id: string;
+  agent_template_id: string;
+  is_default: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface TaskTypeRow {
+  id: string;
+  code: string;
+  display_name: string;
+  description: string | null;
+  stage: OrgStage;
+  area: LegalArea | null;
+  default_sla_hours: number | null;
+  requires_validation: boolean;
+  validator_role_code: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleTaskMatrixRow {
+  id: string;
+  task_type_id: string;
+  role_template_id: string;
+  can_execute: boolean;
+  can_assign: boolean;
+  is_default_assignee: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface UserAreaRow {
+  id: string;
+  user_id: string;
+  area: LegalArea;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface RoleCoverageRow {
+  id: string;
+  primary_user_id: string;
+  backup_user_id: string | null;
+  scope_stage: OrgStage | null;
+  scope_area: LegalArea | null;
+  status: CoverageStatus;
+  active_from: string;
+  active_until: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalCollaboratorRow {
+  id: string;
+  full_name: string;
+  role_template_id: string | null;
+  phone_whatsapp: string | null;
+  email: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserTaskRow {
+  id: string;
+  task_type_id: string;
+  title: string;
+  description: string | null;
+  assigner_user_id: string;
+  assignee_user_id: string | null;
+  assignee_external_id: string | null;
+  process_id: string | null;
+  client_id: string | null;
+  area: LegalArea | null;
+  status: UserTaskStatus;
+  priority: TaskPriority;
+  documentation_completed_at: string | null;
+  deadline_at: string | null;
+  external_kanban_ref: string | null;
+  payload: Record<string, unknown>;
+  notes: string | null;
+  validator_user_id: string | null;
+  validated_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterAssistantRequestRow {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  from_agent_id: string | null;
+  to_agent_id: string | null;
+  request_type: string;
+  payload: Record<string, unknown>;
+  status: InterAssistantStatus;
+  response_payload: Record<string, unknown> | null;
+  related_task_id: string | null;
+  related_session_id: string | null;
+  expires_at: string | null;
+  answered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaptacaoCanalRow {
+  id: string;
+  code: string;
+  display_name: string;
+  tipo: CaptacaoCanalTipo;
+  description: string | null;
+  is_active: boolean;
+  default_assignee_role_code: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+// Extensions to existing types
+export interface ProfileV14Extension {
+  role_template_id: string | null;
+  organization_id: string | null;
+  full_name: string | null;
+}
+
+export interface AgentV14Extension {
+  owner_user_id: string | null;
+  source_template_id: string | null;
+  is_overridden: boolean;
+  is_personal: boolean;
+}
