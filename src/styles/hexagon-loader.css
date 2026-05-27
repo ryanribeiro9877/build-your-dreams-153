@@ -48,6 +48,43 @@
   margin-bottom: 0.65em;
 }
 
+/* Inline em títulos, botões e tabelas */
+.hexagon-loader--embed {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0;
+  min-height: 0;
+  width: auto;
+  font-size: 0.625rem;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.hexagon-loader--embed .hexagon {
+  width: 2.4em;
+  height: 2.4em;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.hexagon-loader--embed .hexagon-loader__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.hexagon-loader--btn {
+  font-size: 0.5625rem;
+}
+
+.hexagon-loader--btn .hexagon {
+  width: 2em;
+  height: 2em;
+}
+
 .hexagon {
   margin-bottom: 1.25em;
   overflow: hidden;

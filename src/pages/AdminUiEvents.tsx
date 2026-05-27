@@ -594,8 +594,14 @@ export default function AdminUiEvents() {
               Verificação de saúde do tracking
             </CardTitle>
             <Button size="sm" variant="default" onClick={handleHealthCheck} disabled={healthLoading}>
-              <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-              {healthLoading ? "Testando…" : "Executar verificação"}
+              {healthLoading ? (
+                <HexagonLoader variant="embed" label="Carregando..." className="hexagon-loader--btn" />
+              ) : (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                  Executar verificação
+                </>
+              )}
             </Button>
           </CardHeader>
           <CardContent>
@@ -1311,8 +1317,9 @@ export default function AdminUiEvents() {
         {/* Recent rows */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Últimos eventos {loading && <span className="text-muted-foreground text-xs">(carregando…)</span>}
+            <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+              Últimos eventos
+              {loading && <HexagonLoader variant="embed" label="Carregando..." />}
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -1340,6 +1347,13 @@ export default function AdminUiEvents() {
                     </td>
                   </tr>
                 ))}
+                {loading && rows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6">
+                      <HexagonLoader variant="compact" label="Carregando..." />
+                    </td>
+                  </tr>
+                )}
                 {rows.length === 0 && !loading && (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-muted-foreground">

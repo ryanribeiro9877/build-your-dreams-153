@@ -9,6 +9,7 @@ import { NotificationSettings } from "@/components/NotificationSettings";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Trash2, RefreshCw, ArrowLeft } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
 
 interface Row {
   id: string;
@@ -88,7 +89,13 @@ export default function AdminNotifications() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void loadRows()} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Atualizar
+              {loading ? (
+                <HexagonLoader variant="embed" label="Carregando..." className="hexagon-loader--btn" />
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+                </>
+              )}
             </Button>
             <Button variant="destructive" size="sm" onClick={clearAll} disabled={rows.length === 0}>
               <Trash2 className="h-4 w-4 mr-1" /> Limpar histórico
@@ -115,7 +122,9 @@ export default function AdminNotifications() {
             </div>
 
             <ScrollArea className="h-[60vh] pr-2">
-              {visible.length === 0 ? (
+              {loading ? (
+                <HexagonLoader variant="compact" label="Carregando..." />
+              ) : visible.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-12">Sem avisos.</p>
               ) : (
                 <ul className="space-y-2">

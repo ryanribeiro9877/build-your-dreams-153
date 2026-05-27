@@ -16,7 +16,7 @@ function HexagonRipple() {
   );
 }
 
-export type HexagonLoaderVariant = "fullscreen" | "inline" | "compact";
+export type HexagonLoaderVariant = "fullscreen" | "inline" | "compact" | "embed";
 
 export interface HexagonLoaderProps {
   /** Texto abaixo da animação (padrão: Carregando...) */
@@ -39,6 +39,7 @@ export function HexagonLoader({
         variant === "fullscreen" && "hexagon-loader--fullscreen",
         variant === "inline" && "hexagon-loader--inline",
         variant === "compact" && "hexagon-loader--compact",
+        variant === "embed" && "hexagon-loader--embed",
         className,
       )}
       style={style}
@@ -48,7 +49,7 @@ export function HexagonLoader({
       aria-label={label}
     >
       <HexagonRipple />
-      <p className="hexagon-loader__label">{label}</p>
+      {label ? <p className="hexagon-loader__label">{label}</p> : null}
     </div>
   );
 }

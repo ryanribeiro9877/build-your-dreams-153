@@ -161,7 +161,13 @@ export default function AdminMaster() {
         <button onClick={() => fetchBalance()} disabled={loading} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text1)", cursor: loading ? "wait" : "pointer", fontSize: 13,
-        }}>{loading ? "Atualizando..." : "↻ Atualizar saldo"}</button>
+        }}>
+          {loading ? (
+            <HexagonLoader variant="embed" label="Carregando..." className="hexagon-loader--btn" />
+          ) : (
+            "↻ Atualizar saldo"
+          )}
+        </button>
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>

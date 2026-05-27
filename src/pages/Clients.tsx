@@ -421,7 +421,11 @@ export default function Clients() {
                 fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans', sans-serif",
                 opacity: uploading ? 0.6 : 1,
               }}>
-                {uploading ? "Enviando..." : "⬆ Selecionar Arquivo"}
+                {uploading ? (
+                  <HexagonLoader variant="embed" label="Carregando..." className="hexagon-loader--btn" />
+                ) : (
+                  "⬆ Selecionar Arquivo"
+                )}
                 <input type="file" hidden onChange={handleUploadDoc} disabled={uploading} accept="image/*,.pdf,.doc,.docx" />
               </label>
             </div>
