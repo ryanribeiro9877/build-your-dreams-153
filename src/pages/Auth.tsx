@@ -95,13 +95,14 @@ export default function Auth() {
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
             width: 52, height: 52, borderRadius: 14, margin: "0 auto 12px",
-            background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
+            background: "linear-gradient(145deg, #eab308 0%, #facc15 100%)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 26, fontWeight: 700, color: "#0a0a12",
-            fontFamily: "'Cormorant Garamond', serif",
-            boxShadow: "0 0 32px rgba(201,168,76,0.4), 0 0 8px rgba(201,168,76,0.6)",
-          }}>L</div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "#eeeef5" }}>
+            fontSize: 28, fontWeight: 800, color: "#0a0a12",
+            fontFamily: "'League Spartan', 'Plus Jakarta Sans', system-ui, sans-serif",
+            lineHeight: 1, letterSpacing: "-0.03em", paddingTop: 2,
+            boxShadow: "0 2px 12px rgba(234, 179, 8, 0.22)",
+          }}>J</div>
+          <div style={{ fontFamily: "'Roboto', system-ui, sans-serif", fontSize: 24, fontWeight: 700, color: "#eeeef5", letterSpacing: "0.02em" }}>
             JurisAI
           </div>
           <div style={{ fontSize: 10, color: "#5a5a72", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 4 }}>

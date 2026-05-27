@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Brain, Zap, Crown, MessageSquare, CheckCircle2, Coffee,
   Shield, ShieldCheck, Lock, Eye, Clock, TrendingUp, Sparkles,
-  ArrowRight, Menu, X, Scale, Award, FileCheck, Bot,
+  ArrowRight, Menu, X, Award, FileCheck, Bot,
   Briefcase, Gavel, Building2, Plus, Minus,
 } from "lucide-react";
 import { trackEvent, onCtaClick } from "@/lib/tracking";
@@ -342,9 +342,7 @@ export default function LandingPage() {
       {/* ═══════ NAVBAR ═══════ */}
       <nav className={`lf-nav ${scrollY > 50 ? "lf-nav--scrolled" : ""}`}>
         <div className="lf-nav__brand">
-          <div className="lf-nav__logo">
-            <Scale size={18} strokeWidth={2.5} />
-          </div>
+          <div className="lf-nav__logo" aria-hidden="true">J</div>
           <div className="lf-nav__name-wrap">
             <span className="lf-nav__name">JurisAI</span>
             <span className="lf-nav__tagline">Você comanda</span>
@@ -802,7 +800,7 @@ export default function LandingPage() {
       {/* ═══════ FOOTER ═══════ */}
       <footer className="lf-footer">
         <div className="lf-footer__brand">
-          <div className="lf-footer__logo"><Scale size={16} strokeWidth={2.5} /></div>
+          <div className="lf-footer__logo" aria-hidden="true">J</div>
           <span>JurisAI</span>
         </div>
         <p className="lf-footer__copy">
@@ -820,7 +818,7 @@ export default function LandingPage() {
            Tipografia: Cormorant (heads) + Inter (body)
         ════════════════════════════════════════ */
 
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&family=Roboto:wght@700&family=League+Spartan:wght@700;800&display=swap');
 
         /* ───── BASE ───── */
         .lf-root {
@@ -952,18 +950,25 @@ export default function LandingPage() {
         .lf-nav__logo {
           width: 38px; height: 38px;
           border-radius: 12px;
-          background: linear-gradient(135deg, #d4b157, #a8872e);
+          background: linear-gradient(145deg, #eab308 0%, #facc15 100%);
           display: flex; align-items: center; justify-content: center;
-          color: #060610;
-          box-shadow: 0 6px 20px rgba(201,168,76,0.3);
+          color: #0a0a12;
+          font-family: 'League Spartan', 'Inter', system-ui, sans-serif;
+          font-size: 20px;
+          font-weight: 800;
+          line-height: 1;
+          letter-spacing: -0.03em;
+          padding-top: 1px;
+          box-shadow: 0 2px 10px rgba(234, 179, 8, 0.22);
+          user-select: none;
         }
         .lf-nav__name-wrap { display: flex; flex-direction: column; line-height: 1; }
         .lf-nav__name {
-          font-family: 'Cormorant Garamond', serif;
+          font-family: 'Roboto', system-ui, sans-serif;
           font-size: 22px;
           font-weight: 700;
           color: #e8e5d4;
-          letter-spacing: 0.01em;
+          letter-spacing: 0.02em;
         }
         .lf-nav__tagline {
           font-size: 9px;
@@ -1918,12 +1923,19 @@ export default function LandingPage() {
         .lf-footer__logo {
           width: 32px; height: 32px;
           border-radius: 10px;
-          background: linear-gradient(135deg, #d4b157, #a8872e);
-          color: #060610;
+          background: linear-gradient(145deg, #eab308 0%, #facc15 100%);
+          color: #0a0a12;
           display: flex; align-items: center; justify-content: center;
+          font-family: 'League Spartan', 'Inter', system-ui, sans-serif;
+          font-size: 17px;
+          font-weight: 800;
+          line-height: 1;
+          letter-spacing: -0.03em;
+          padding-top: 1px;
+          user-select: none;
         }
         .lf-footer__brand span:last-child {
-          font-family: 'Cormorant Garamond', serif;
+          font-family: 'Roboto', system-ui, sans-serif;
           font-size: 20px;
           font-weight: 700;
           color: #c9a84c;

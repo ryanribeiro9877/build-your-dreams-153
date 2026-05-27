@@ -276,22 +276,13 @@ function formatInsufficientBalanceMessage(cost: number, label: string): string {
 // ── STYLE INJECTION ──────────────────────────────────────────
 const GlobalStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=League+Spartan:wght@400;600;700;800&display=swap');
-
-    /* V12: Coolvetica para o logo (coloque coolvetica.woff2 ou .otf em /public/fonts/). */
-    @font-face {
-      font-family: 'Coolvetica';
-      src: url('/fonts/coolvetica.woff2') format('woff2'),
-           url('/fonts/coolvetica.otf') format('opentype');
-      font-weight: 400 700;
-      font-display: swap;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=League+Spartan:wght@400;600;700;800&family=Roboto:wght@700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --font-disp: 'Literata', Georgia, 'Times New Roman', serif;
       --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;
-      --font-brand: 'Coolvetica', 'Bebas Neue', 'Anton', Impact, sans-serif;
+      --font-brand: 'Roboto', system-ui, -apple-system, sans-serif;
       --font-spartan: 'League Spartan', 'Plus Jakarta Sans', system-ui, sans-serif;
       --gold: #EAB308; --gold2: #FACC15;
       --theme-transition: 0.42s cubic-bezier(0.22, 1, 0.36, 1);
@@ -450,18 +441,31 @@ const GlobalStyles = () => (
     .jc-sidebar:not(.collapsed) .jc-logo { padding-right: 14px; }
     .jc-sidebar.collapsed .jc-logo { padding-left: 10px; padding-right: 12px; }
     .jc-logo-mark {
-      width: 30px; height: 30px;
-      background: linear-gradient(135deg, var(--gold), var(--gold2));
-      border-radius: 8px; display: flex; align-items: center; justify-content: center;
-      font-size: 15px; font-weight: 700; color: var(--logo-text);
-      font-family: var(--font-disp); box-shadow: 0 0 14px rgba(234,179,8,0.3);
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      background: linear-gradient(145deg, var(--gold) 0%, var(--gold2) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+      color: var(--logo-text);
+      /* League Spartan: traço forte e legível em tamanho pequeno, sem exagero */
+      font-family: var(--font-spartan);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      padding-top: 1px;
+      box-shadow: 0 2px 8px rgba(234, 179, 8, 0.2);
+      user-select: none;
     }
     .jc-logo-text {
-      font-family: 'Coolvetica', var(--font-spartan), var(--font-body), sans-serif;
+      font-family: var(--font-brand);
       font-size: 22px;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.02em;
       line-height: 1;
       color: #ffffff;
       text-shadow: none;
