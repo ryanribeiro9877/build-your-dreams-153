@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
+import { useInboxCount } from "@/hooks/useUserTasks";
+import { useInterAssistantCount } from "@/hooks/useInterAssistant";
+import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
@@ -33,7 +36,7 @@ import {
   Network, Activity, User, Globe, LogOut, Send, Mic, MicOff,
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
-  MessageSquare, ListTodo, FileText,
+  MessageSquare, ListTodo, FileText, ShieldCheck,
   Circle, ChevronLeft, UserPlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -172,6 +175,32 @@ const AGENTS_FALLBACK: Agent[] = [
   { id: 401, name: "Detector de Gargalos", status: "active", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","execute"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, reportsTo: 400 },
   { id: 406, name: "Monitor de KPIs Global", status: "active", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400 },
 ];
+
+// V16: helper de ponte. WorkspaceAgent (formato V14) → Agent (formato legacy
+// esperado pela sidebar/right panel). Mantém compatibilidade enquanto a UI
+// migra gradualmente. Quando todos os consumidores entenderem WorkspaceAgent,
+// removemos isso.
+function toLegacyAgent(ws: WorkspaceAgent): Agent {
+  const role = (ws.role === "assistant_root" ? "ceo" : ws.role) as AgentRole;
+  return {
+    id: Math.abs(hashCode(ws.id)),  // fallback numérico estável
+    uuid: ws.id,
+    name: ws.name,
+    status: ws.status === "offline" ? "idle" : (ws.status as Agent["status"]),
+    color: ws.color || "#EAB308",
+    role,
+    permissions: [],
+    department: ws.template_stage ? [`stage:${ws.template_stage}`] : ["assistente"],
+    canOrchestrate: ws.role === "ceo" || ws.role === "assistant_root" || ws.role === "director",
+    maxConcurrentTasks: 10,
+    currentTasks: 0,
+  };
+}
+function hashCode(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i) | 0;
+  return h;
+}
 
 function getAgentsForDepartment(agents: Agent[], deptId: string): Agent[] {
   return agents.filter(a => a.department.includes("*") || a.department.includes(deptId));
@@ -1186,6 +1215,30 @@ export default function JurisCloudOS() {
 
   // Agentes do banco. Enquanto carrega usa AGENTS_FALLBACK pra evitar flash de tela vazia.
   const { agents: dbAgents, loading: agentsLoading } = useAgents();
+  // V17: contador de tarefas pendentes pra badge
+  const inboxCount = useInboxCount();
+  // V19: contador de pedidos inter-Assistente pendentes
+  const interAssistantCount = useInterAssistantCount();
+  // V18: contador de validações pendentes
+  const [validationCount, setValidationCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchValidation = async () => {
+      const { data } = await supabase.rpc("get_validation_count" as never);
+      if (!cancelled && typeof data === "number") setValidationCount(data);
+    };
+    void fetchValidation();
+    const interval = setInterval(fetchValidation, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+  // V16: workspace do usuário logado (role_template + agentes pessoais).
+  // Quando role_template existe, a sidebar passa a ser dinâmica:
+  // mostra só as stages do cargo do usuário + agentes pessoais dele.
+  // Senão (legacy / sem cargo seedado), cai no fallback de 19 departamentos.
+  const { workspace } = useMyWorkspace();
   // Chat principal "Meu Assistente" usa o orchestrator novo, com o CEO JurisAI
   // (ou o primeiro agente com IA configurada) como entrada. A sessão é criada
   // sob demanda na primeira mensagem.
@@ -1489,14 +1542,85 @@ export default function JurisCloudOS() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const activeDeptData = DEPARTMENTS.find(d => d.id === activeDept);
+  // V16: monta sidebar dinâmica quando workspace está disponível.
+  // Cada stage do role_template vira um "item de departamento" virtual.
+  // Áreas do cargo aparecem como sub-labels no item de stage 'confeccao' (e similares).
+  // Se workspace.role_template é null (admin@juridico.com sem cargo, ou ainda carregando)
+  // → fallback pros 19 DEPARTMENTS hardcoded (comportamento pré-V16).
+  type SidebarItem = { id: string; label: string; color: string; badge: number; isVirtual?: boolean };
 
-  // Filter departments by role
-  const visibleDepts = DEPARTMENTS.filter(d => canAccessDepartment(d.id));
+  const dynamicDepts: SidebarItem[] = (() => {
+    if (!workspace?.role_template) return [];
+    const stages = workspace.role_template.stages || [];
+    const areas = workspace.role_template.areas || [];
+
+    // "Meu Assistente" sempre primeiro (corresponde à raiz pessoal)
+    const items: SidebarItem[] = [
+      { id: "assistente", label: "Meu Assistente", color: ACCENT, badge: 0, isVirtual: true },
+    ];
+
+    for (const stage of stages) {
+      // Skip 'todas' (genérico — usado pela Laura que faz ciclo inteiro de previdenciário;
+      // ela já vê tudo dela via área primary, não precisa de "Todas" na sidebar)
+      if (stage === "todas") continue;
+      const label = STAGE_LABELS[stage] || stage;
+      // Conta agentes do workspace que estão nessa stage (badge dinâmico)
+      const badge = (workspace.agents || []).filter(
+        (a: WorkspaceAgent) => a.template_stage === stage,
+      ).length;
+      items.push({ id: `stage:${stage}`, label, color: ACCENT_SOFT, badge, isVirtual: true });
+    }
+
+    // Áreas como sub-itens (só pra advogadas que cobrem múltiplas áreas)
+    if (areas.length > 1) {
+      for (const area of areas) {
+        const label = `· ${AREA_LABELS[area] || area}`;
+        items.push({ id: `area:${area}`, label, color: ACCENT, badge: 0, isVirtual: true });
+      }
+    }
+    return items;
+  })();
+
+  const useDynamic = dynamicDepts.length > 0;
+
+  // V16: visibleDepts agora pode vir do workspace (dinâmico) OU dos 19 fixos (legacy/admin).
+  const visibleDepts: SidebarItem[] = useDynamic
+    ? dynamicDepts
+    : DEPARTMENTS.filter(d => canAccessDepartment(d.id)).map(d => ({ id: d.id, label: d.label, color: d.color, badge: d.badge }));
+
+  const activeSidebarItem = visibleDepts.find((d) => d.id === activeDept);
+  const activeDeptData =
+    DEPARTMENTS.find((d) => d.id === activeDept) ??
+    (activeSidebarItem
+      ? {
+          id: activeSidebarItem.id,
+          label: activeSidebarItem.label,
+          color: activeSidebarItem.color,
+          badge: activeSidebarItem.badge,
+        }
+      : undefined);
+
   // Filter commands by role
   const visibleCommands = ALL_COMMANDS.filter(c => canSeeCommand(c));
-  // Filter agents by role + department
+
+  // V16: agentes visíveis vêm do workspace quando dinâmico; senão, fallback antigo.
+  // Quando dinâmico: filtra agentes do workspace pela stage/area selecionada.
   const visibleAgents = (() => {
+    if (useDynamic && workspace) {
+      const wsAgents = workspace.agents || [];
+      // Stage virtual selecionada?
+      if (activeDept.startsWith("stage:")) {
+        const stage = activeDept.slice(6);
+        return wsAgents.filter(a => a.template_stage === stage).map(toLegacyAgent);
+      }
+      if (activeDept.startsWith("area:")) {
+        const area = activeDept.slice(5);
+        return wsAgents.filter(a => a.template_area === area).map(toLegacyAgent);
+      }
+      // Assistente / default: mostra todos os agentes pessoais (raiz + especialistas)
+      return wsAgents.map(toLegacyAgent);
+    }
+    // Fallback legacy
     const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(AGENTS, activeDept);
     return deptAgents.filter(a => canSeeAgentRole(a.role)).slice(0, visibility.maxAgentsShown);
   })();
@@ -1817,8 +1941,86 @@ export default function JurisCloudOS() {
               </div>
             </div>
             <div className="jc-topbar-trailing">
+              <button
+                type="button"
+                className="jc-btn-team-list"
+                onClick={() => navigate("/sistema/inter-assistente")}
+                title="Pedidos entre Meus Assistentes"
+                style={{ position: "relative" }}
+              >
+                <MessageSquare size={15} strokeWidth={2.5} />
+                Inter-Assistente
+                {interAssistantCount > 0 && (
+                  <span style={{
+                    position: "absolute", top: -4, right: -4,
+                    minWidth: 18, height: 18, padding: "0 5px",
+                    borderRadius: 9, background: "#a855f7", color: "#ffffff",
+                    fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {interAssistantCount}
+                  </span>
+                )}
+              </button>
+
+              {validationCount > 0 && (
+                <button
+                  type="button"
+                  className="jc-btn-team-list"
+                  onClick={() => navigate("/sistema/validar")}
+                  title="Fila de validação de cadastros"
+                  style={{ position: "relative" }}
+                >
+                  <ShieldCheck size={15} strokeWidth={2.5} />
+                  Validar
+                  <span style={{
+                    position: "absolute", top: -4, right: -4,
+                    minWidth: 18, height: 18, padding: "0 5px",
+                    borderRadius: 9, background: "#a855f7", color: "#ffffff",
+                    fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {validationCount}
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="jc-btn-team-list"
+                onClick={() => navigate("/sistema/tarefas")}
+                title="Minhas tarefas"
+                style={{ position: "relative" }}
+              >
+                <ClipboardList size={15} strokeWidth={2.5} />
+                Tarefas
+                {inboxCount.total > 0 && (
+                  <span style={{
+                    position: "absolute", top: -4, right: -4,
+                    minWidth: 18, height: 18,
+                    padding: "0 5px",
+                    borderRadius: 9,
+                    background: inboxCount.overdue > 0 ? "#ef4444" : "#eab308",
+                    color: "#0a0a12",
+                    fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {inboxCount.total}
+                  </span>
+                )}
+              </button>
+
               {isMaster && (
                 <>
+                  <button
+                    type="button"
+                    className="jc-btn-team-list"
+                    onClick={() => navigate("/sistema/equipe")}
+                    title="Painel de equipe e tarefas (apenas master)"
+                  >
+                    <Network size={15} strokeWidth={2.5} />
+                    Equipe
+                  </button>
                   <button
                     type="button"
                     className="jc-btn-create-user"
