@@ -65,42 +65,40 @@ WHERE role_template_id = (SELECT id FROM public.role_templates WHERE code = 'rec
 DELETE FROM public.role_agent_matrix
 WHERE role_template_id = (SELECT id FROM public.role_templates WHERE code = 'estagiaria_recepcao');
 
--- Taís — recepcionista NÃO-estagiária: 10 agentes
--- (todos da líder MENOS Captação Cooperativa virou TRUE pra ela também,
---  e MENOS Monitor Equipe — esse é exclusivo da líder)
+-- Compartilhados Taís + Yasmin (requires_is_estagiario NULL — única linha por agent_template)
+INSERT INTO public.role_agent_matrix (role_template_id, agent_template_id, is_default, requires_is_estagiario)
+SELECT rt.id, at.id, true, NULL
+FROM public.role_templates rt, public.agent_templates at
+WHERE rt.code = 'recepcionista'
+  AND at.code IN (
+    'asst_root_lider_recepcao',
+    'esp_whatsapp_fila',
+    'esp_tabela_audiencias',
+    'esp_documentacao_geral',
+    'esp_lembretes',
+    'esp_demandas_admin',
+    'esp_kanban_pendencias'
+  );
+
+-- Taís — recepcionista NÃO-estagiária (exclusivos)
 INSERT INTO public.role_agent_matrix (role_template_id, agent_template_id, is_default, requires_is_estagiario)
 SELECT rt.id, at.id, true, false
 FROM public.role_templates rt, public.agent_templates at
 WHERE rt.code = 'recepcionista'
   AND at.code IN (
-    'asst_root_lider_recepcao',
     'esp_triagem',
-    'esp_tabela_audiencias',
-    'esp_whatsapp_fila',
     'esp_cadastro_projuris_lider',
-    'esp_documentacao_geral',
-    'esp_demandas_admin',
-    'esp_lembretes',
     'esp_captacao_cooperativa',
-    'esp_kanban_pendencias',
     'mon_pendencias_cliente'
   );
 
--- Yasmin — recepcionista ESTAGIÁRIA: 7 agentes (subset reduzido)
--- (sem: Triagem, Captação Cooperativa, Cadastro completo, Monitor Pendências)
+-- Yasmin — recepcionista ESTAGIÁRIA (exclusivos)
 INSERT INTO public.role_agent_matrix (role_template_id, agent_template_id, is_default, requires_is_estagiario)
 SELECT rt.id, at.id, true, true
 FROM public.role_templates rt, public.agent_templates at
 WHERE rt.code = 'recepcionista'
   AND at.code IN (
-    'asst_root_lider_recepcao',
-    'esp_whatsapp_fila',
-    'esp_tabela_audiencias',
-    'esp_documentacao_geral',
-    'esp_lembretes',
-    'esp_cadastro_projuris_rascunho',
-    'esp_demandas_admin',
-    'esp_kanban_pendencias'
+    'esp_cadastro_projuris_rascunho'
   );
 
 -- ----------------------------------------------------------------------------
@@ -265,7 +263,7 @@ BEGIN
       v_template.description,
       true,
       CASE v_template.agent_role
-        WHEN 'ceo' THEN 0
+        WHEN 'ceo' THEN 1
         WHEN 'assistant_root' THEN 1
         WHEN 'director' THEN 1
         WHEN 'manager' THEN 2
