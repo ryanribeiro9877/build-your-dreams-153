@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.verify-turnstile]
 verify_jwt = false
+
+[functions.integration-api]
+verify_jwt = false
