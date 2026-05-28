@@ -6,7 +6,7 @@ import "./index.css";
 (function applyInitialTheme() {
   try {
     const saved = window.localStorage.getItem("jc-theme");
-    const theme = saved === "dark" ? "dark" : "light";
+    const theme = saved === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.classList.toggle("dark", theme === "dark");
   } catch {

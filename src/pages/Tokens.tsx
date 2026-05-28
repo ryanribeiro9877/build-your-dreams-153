@@ -72,12 +72,19 @@ export default function Tokens() {
       <PaymentTestModeBanner />
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/sistema")} className="text-[#c9a84c] hover:bg-[#c9a84c]/10">
-            <ArrowLeft className="w-5 h-5" />
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/sistema")}
+            className="shrink-0 gap-2 border-[#eab308] bg-[#eab308]/15 text-[#facc15] font-semibold hover:bg-[#eab308]/28 hover:text-[#fde047] hover:border-[#facc15] shadow-[0_0_12px_rgba(234,179,8,0.2)]"
+            aria-label="Voltar ao sistema"
+          >
+            <ArrowLeft className="w-4 h-4" strokeWidth={2.5} />
+            Voltar
           </Button>
-          <Coins className="w-6 h-6 text-[#c9a84c]" />
-          <h1 className="text-2xl font-bold text-[#c9a84c]">Meus Tokens</h1>
+          <Coins className="w-6 h-6 text-[#eab308]" />
+          <h1 className="text-2xl font-bold text-[#eab308]">Meus Tokens</h1>
         </div>
 
         {/* Checkout success */}

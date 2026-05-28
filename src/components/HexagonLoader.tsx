@@ -2,16 +2,19 @@ import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import "@/styles/hexagon-loader.css";
 
-function HexagonRipple() {
+function DashLoaderGraphic() {
   return (
-    <div className="hexagon" role="img" aria-hidden="true">
-      {Array.from({ length: 6 }, (_, groupIndex) => (
-        <div className="hexagon__group" key={groupIndex}>
-          {Array.from({ length: 6 }, (_, sectorIndex) => (
-            <div className="hexagon__sector" key={sectorIndex} />
-          ))}
-        </div>
-      ))}
+    <div className="hexagon-loader__dash" aria-hidden="true">
+      <svg width="16" height="12" viewBox="0 0 16 12">
+        <polyline
+          className="hexagon-loader__dash-back"
+          points="1 6 4 6 6 11 10 1 12 6 15 6"
+        />
+        <polyline
+          className="hexagon-loader__dash-front"
+          points="1 6 4 6 6 11 10 1 12 6 15 6"
+        />
+      </svg>
     </div>
   );
 }
@@ -19,7 +22,7 @@ function HexagonRipple() {
 export type HexagonLoaderVariant = "fullscreen" | "inline" | "compact" | "embed";
 
 export interface HexagonLoaderProps {
-  /** Texto abaixo da animação (padrão: Carregando...) */
+  /** Texto abaixo da animação (padrão: Carregando) */
   label?: string;
   variant?: HexagonLoaderVariant;
   className?: string;
@@ -27,7 +30,7 @@ export interface HexagonLoaderProps {
 }
 
 export function HexagonLoader({
-  label = "Carregando...",
+  label = "Carregando",
   variant = "inline",
   className,
   style,
@@ -48,7 +51,7 @@ export function HexagonLoader({
       aria-busy="true"
       aria-label={label}
     >
-      <HexagonRipple />
+      <DashLoaderGraphic />
       {label ? <p className="hexagon-loader__label">{label}</p> : null}
     </div>
   );

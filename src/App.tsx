@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Auth = lazy(() => import("./pages/Auth.tsx"));
@@ -15,9 +16,10 @@ const Admin = lazy(() => import("./pages/Admin.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword.tsx"));
+const DefinePassword = lazy(() => import("./pages/DefinePassword.tsx"));
+const AdminEmployees = lazy(() => import("./pages/AdminEmployees.tsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
 const OrgChart = lazy(() => import("./pages/OrgChart.tsx"));
-const OrgModelV14 = lazy(() => import("./pages/OrgModelV14.tsx"));
 const EfficiencyKPIs = lazy(() => import("./pages/EfficiencyKPIs.tsx"));
 const Tokens = lazy(() => import("./pages/Tokens.tsx"));
 const AdminTokens = lazy(() => import("./pages/AdminTokens.tsx"));
@@ -42,7 +44,12 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <HexagonLoader variant="fullscreen" />;
   }
   if (!user) return <Navigate to="/auth" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <PlatformPresenceSync />
+      {children}
+    </>
+  );
 }
 
 const App = () => (
@@ -58,6 +65,12 @@ const App = () => (
               <Route path="/site" element={<LandingPage />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/definir-senha" element={<DefinePassword />} />
+              <Route path="/admin/funcionarios" element={<ProtectedRoute><AdminEmployees /></ProtectedRoute>} />
+              <Route
+                path="/admin/funcionarios/novo"
+                element={<Navigate to="/sistema?criar=funcionario" replace />}
+              />
               <Route path="/sistema" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
               <Route path="/clientes/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
@@ -65,7 +78,7 @@ const App = () => (
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
-              <Route path="/admin/modelo-v14" element={<ProtectedRoute><OrgModelV14 /></ProtectedRoute>} />
+              <Route path="/admin/modelo-v14" element={<Navigate to="/admin" replace />} />
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
               <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
               <Route path="/admin/tokens" element={<ProtectedRoute><AdminTokens /></ProtectedRoute>} />

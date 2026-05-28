@@ -94,32 +94,38 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const firstName =
-        profile?.display_name?.split(" ")[0] ||
-        user.email?.split("@")[0] ||
-        "Usuário";
-      setDisplayName(firstName);
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const firstName =
+          profile?.display_name?.split(" ")[0] ||
+          user.email?.split("@")[0] ||
+          "Usuário";
+        setDisplayName(firstName);
 
-      const { data: tasks } = await supabase
-        .from("agent_tasks")
-        .select("priority, status")
-        .eq("user_id", user.id);
-      if (tasks) {
-        setSummary({
-          total: tasks.length,
-          critical: tasks.filter((t) => t.priority === "critical").length,
-          pending: tasks.filter((t) => t.status === "pending").length,
-          inProgress: tasks.filter((t) => t.status === "in_progress").length,
-        });
+        const { data: tasks } = await supabase
+          .from("agent_tasks")
+          .select("priority, status")
+          .eq("user_id", user.id);
+        if (tasks) {
+          setSummary({
+            total: tasks.length,
+            critical: tasks.filter((t) => t.priority === "critical").length,
+            pending: tasks.filter((t) => t.status === "pending").length,
+            inProgress: tasks.filter((t) => t.status === "in_progress").length,
+          });
+        }
+      } catch (err) {
+        console.warn("[WelcomeScreen] Falha ao carregar dados:", err);
+        setDisplayName(user.email?.split("@")[0] || "Usuário");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    load();
+    void load();
   }, [user]);
 
   // ── Cleanup on unmount ──────────────────────────────────────────────────

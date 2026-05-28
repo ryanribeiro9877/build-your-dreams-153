@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import CreateEmployee from "@/pages/CreateEmployee";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -23,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useUiPreferences } from "@/hooks/useUiPreferences";
+import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
@@ -31,8 +33,8 @@ import {
   Network, Activity, User, Globe, LogOut, Send, Mic, MicOff,
   Menu, X, Search, AlertTriangle, AlertCircle, Info, CheckCircle,
   ChevronRight, Briefcase, Target, Microscope, Zap, Radio, Lock,
-  MessageSquare, ListTodo, FileText, PanelRightOpen, PanelRightClose,
-  Circle, ChevronLeft,
+  MessageSquare, ListTodo, FileText,
+  Circle, ChevronLeft, UserPlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -308,6 +310,12 @@ const GlobalStyles = () => (
     }
     body { background: var(--bg); color: var(--text1); font-family: var(--font-body); }
     .jc-root { display: flex; height: 100vh; overflow: hidden; background: var(--bg); }
+    .jc-create-employee-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(9, 9, 15, 0.94);
+      overflow-y: auto;
+      backdrop-filter: blur(4px);
+    }
 
     /* SIDEBAR — z-index acima do .jc-main para o toggle na borda (right negativo) não ficar coberto */
     .jc-sidebar {
@@ -620,6 +628,49 @@ const GlobalStyles = () => (
       font-size: 11px; font-weight: 700; color: var(--logo-text); font-family: var(--font-disp);
     }
     .jc-user-name { font-size: 12px; color: var(--text1); }
+    .jc-btn-create-user {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(234, 179, 8, 0.5);
+      cursor: pointer;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 700;
+      color: #0a0a12;
+      background: linear-gradient(145deg, var(--gold) 0%, var(--gold2) 100%);
+      box-shadow: 0 0 16px rgba(234, 179, 8, 0.28);
+      flex-shrink: 0;
+      transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .jc-btn-create-user:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 0 20px rgba(234, 179, 8, 0.4);
+    }
+    .jc-btn-team-list {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(234, 179, 8, 0.45);
+      cursor: pointer;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      color: #facc15;
+      background: rgba(234, 179, 8, 0.08);
+      flex-shrink: 0;
+      transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .jc-btn-team-list:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 0 16px rgba(234, 179, 8, 0.28);
+    }
 
     .jc-onboarding-banner {
       display: flex; align-items: center; gap: 12px;
@@ -926,7 +977,6 @@ const GlobalStyles = () => (
       .jc-right-toggle-desk.is-panel-open:not(.is-collapsed) {
         right: min(320px, 90vw);
       }
-      .jc-right-toggle { display: flex; }
     }
     @media (max-width: 768px) {
       .jc-sidebar {
@@ -1123,7 +1173,12 @@ function AlertIcon({ type }: { type: string }) {
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
   const navigate = useNavigate();
-  const { user, userRoles, signOut, hasRole } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showCreateEmployee = searchParams.get("criar") === "funcionario";
+  const openCreateEmployee = () => setSearchParams({ criar: "funcionario" });
+  const closeCreateEmployee = () => setSearchParams({});
+  const { user, signOut, hasRole } = useAuth();
+  const { isMaster } = useMasterAdmin();
   const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection();
@@ -1762,6 +1817,29 @@ export default function JurisCloudOS() {
               </div>
             </div>
             <div className="jc-topbar-trailing">
+              {isMaster && (
+                <>
+                  <button
+                    type="button"
+                    className="jc-btn-create-user"
+                    onClick={openCreateEmployee}
+                    title="Convidar novo funcionário (apenas master)"
+                  >
+                    <UserPlus size={15} strokeWidth={2.5} />
+                    Criar Funcionário
+                  </button>
+                  <button
+                    type="button"
+                    className="jc-btn-team-list"
+                    onClick={() => navigate("/admin/funcionarios")}
+                    title="Lista de funcionários e status online (apenas master)"
+                  >
+                    <Users size={15} strokeWidth={2.5} />
+                    Ver Lista
+                  </button>
+                </>
+              )}
+
               {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
                 <div key={i} className={`jc-alert-chip ${a.type}`}>
                   <AlertIcon type={a.type} />
@@ -1778,26 +1856,9 @@ export default function JurisCloudOS() {
                 {tokenBalance.balance.toLocaleString()}
               </button>
 
-              <button
-                type="button"
-                className="jc-right-toggle"
-                onClick={() => {
-                  const next = !rightPanelOpen;
-                  setRightPanelOpen(next);
-                  setRightCollapsed(!next);
-                }}
-              >
-                {rightPanelOpen ? <><PanelRightClose size={14} /> Fechar</> : <><PanelRightOpen size={14} /> Operações</>}
-              </button>
-
               <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/perfil"); } }}>
                 <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
                 <div className="jc-user-name">{user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Usuário"}</div>
-                {userRoles.length > 0 && (
-                  <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(234,179,8,0.15)", color: "#FACC15", textTransform: "uppercase", fontFamily: "var(--font-body)" }}>
-                    {userRoles[0]}
-                  </span>
-                )}
               </div>
             </div>
           </header>
@@ -2101,6 +2162,17 @@ export default function JurisCloudOS() {
         <div className="jc-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {shortcutAnnouncement}
         </div>
+
+        {showCreateEmployee && (
+          <div
+            className="jc-create-employee-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Novo funcionário"
+          >
+            <CreateEmployee embedded onClose={closeCreateEmployee} />
+          </div>
+        )}
       </div>
       </TooltipProvider>
     </div>
