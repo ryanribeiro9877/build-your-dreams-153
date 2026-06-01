@@ -100,15 +100,18 @@ export function useProviders() {
     const target = configs.find(c => c.id === configId);
     if (!target) return false;
 
-    // Desliga is_default das outras
-    const others = configs.filter(c => c.id !== configId && c.is_default);
-    for (const o of others) {
-      await supabase
-        // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
-        .from("llm_provider_configs")
-        .update({ is_default: false } as never)
-        .eq("id", o.id);
+    // Batch: reset all other defaults in one query, then set chosen one
+    const { error: resetError } = await supabase
+      // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
+      .from("llm_provider_configs")
+      .update({ is_default: false } as never)
+      .neq("id", configId)
+      .eq("is_default" as never, true);
+    if (resetError) {
+      setError(resetError.message);
+      return false;
     }
+
     const { error } = await supabase
       // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
       .from("llm_provider_configs")

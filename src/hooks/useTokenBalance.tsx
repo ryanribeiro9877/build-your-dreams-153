@@ -48,7 +48,7 @@ export function suggestRechargePackage(balance: number): { amount: number; query
   return { amount: 5000, query: "?suggested=5000" };
 }
 
-export function useTokenBalance() {
+export function useTokenBalance(navigate?: (to: string) => void) {
   const { user } = useAuth();
   const [tokenBalance, setTokenBalance] = useState<TokenBalance>({ balance: 0, totalPurchased: 0, totalConsumed: 0 });
   const [transactions, setTransactions] = useState<TokenTransaction[]>([]);
@@ -63,7 +63,11 @@ export function useTokenBalance() {
 
     const goRecharge = () => {
       const { query } = suggestRechargePackage(balance);
-      window.location.href = `/tokens${query}`;
+      if (navigate) {
+        navigate(`/tokens${query}`);
+      } else {
+        window.location.href = `/tokens${query}`;
+      }
     };
 
     if (balance <= 0 && !zeroWarned) {
@@ -87,7 +91,7 @@ export function useTokenBalance() {
       window.sessionStorage.removeItem(WARNED_LOW_KEY);
       window.sessionStorage.removeItem(WARNED_ZERO_KEY);
     }
-  }, []);
+  }, [navigate]);
 
   const fetchBalance = useCallback(async () => {
     if (!user) return;

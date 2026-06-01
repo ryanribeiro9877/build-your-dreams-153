@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
@@ -72,10 +73,14 @@ const badgeStyle = (bg: string, color: string): React.CSSProperties => ({
   background: bg, color, textTransform: "uppercase", letterSpacing: "0.04em",
 });
 
+const ALLOWED_ROLES = ["socio", "lider_recepcao", "recepcionista"];
+
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { workspace } = useMyWorkspace();
   const navigate = useNavigate();
+  const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
   const [client, setClient] = useState<Client | null>(null);
   const [tasks, setTasks] = useState<ClientTaskRow[]>([]);
   const [processes, setProcesses] = useState<ClientProcessRow[]>([]);
@@ -111,6 +116,26 @@ export default function ClientDetails() {
   if (loading) return <HexagonLoader variant="fullscreen" label="Carregando detalhes..." />;
 
   if (!client) return null;
+
+  if (workspace && !hasAccess) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
+        fontFamily: "'Roboto', sans-serif", padding: 40,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
+      }}>
+        <div style={{ fontSize: 48 }}>🔒</div>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "var(--gold, #c9a84c)" }}>Acesso restrito</h1>
+        <p style={{ color: "var(--text3)", fontSize: 13, textAlign: "center", maxWidth: 400 }}>
+          A gestão de clientes é exclusiva da <strong>Recepção</strong>.
+        </p>
+        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{
+          padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)",
+          background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
+        }}>← Voltar ao Sistema</button>
+      </div>
+    );
+  }
 
   const tabs = [
     { key: "tasks" as const, label: "Tarefas", count: tasks.length, icon: "" },

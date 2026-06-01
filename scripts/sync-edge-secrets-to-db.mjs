@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// DEPRECATED: Use scripts/manage-secrets.mjs sync (or npm run secrets:sync) instead.
 import fs from "node:fs";
 import path from "node:path";
 

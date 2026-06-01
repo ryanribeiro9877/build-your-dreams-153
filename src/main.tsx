@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
+import { initSentry } from "./lib/sentry";
 import App from "./App.tsx";
 import "./index.css";
+
+// Initialize Sentry error monitoring before anything else.
+initSentry();
 
 // Apply persisted theme as early as possible to avoid flash.
 (function applyInitialTheme() {

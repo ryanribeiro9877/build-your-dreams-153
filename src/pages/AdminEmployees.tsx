@@ -47,6 +47,7 @@ export default function AdminEmployees() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <button
           type="button"
+          className="btn-voltar"
           onClick={() => navigate(isMaster ? "/sistema" : "/admin")}
           style={{
             padding: "8px 16px",

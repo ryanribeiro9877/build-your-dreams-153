@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useNavigate } from "react-router-dom";
@@ -24,15 +25,49 @@ const PAGE_SIZE = 20;
 
 interface Client {
   id: string;
-  full_name: string;
+  tipo_pessoa: string;            // 'fisica' | 'juridica'
+  full_name: string;              // nome completo / razão social
+  fantasy_name: string | null;    // nome fantasia (PJ)
   cpf: string | null;
+  cnpj: string | null;
   rg: string | null;
+  rg_issuer: string | null;       // órgão emissor
+  rg_uf: string | null;
+  ie: string | null;              // inscrição estadual (PJ)
+  im: string | null;              // inscrição municipal (PJ)
+  birth_date: string | null;      // nascimento (PF)
+  foundation_date: string | null; // fundação (PJ)
+  gender: string | null;
+  marital_status: string | null;
+  nationality: string | null;
+  natural_city: string | null;    // naturalidade
+  natural_uf: string | null;
+  mother_name: string | null;
+  father_name: string | null;
+  profession: string | null;
+  pis_nit: string | null;
+  legal_rep_name: string | null;  // representante legal (PJ)
+  legal_rep_cpf: string | null;
   email: string | null;
-  phone: string | null;
-  address: string | null;
+  phone: string | null;           // celular
+  phone_commercial: string | null;
+  phone_home: string | null;
+  zip_code: string | null;
+  address: string | null;         // logradouro
+  address_number: string | null;
+  address_complement: string | null;
+  neighborhood: string | null;    // bairro
   city: string | null;
   state: string | null;
-  zip_code: string | null;
+  country: string | null;
+  bank_name: string | null;
+  bank_agency: string | null;
+  bank_account: string | null;
+  bank_account_type: string | null;
+  pix_key: string | null;
+  pix_key_type: string | null;
+  client_origin: string | null;   // origem/captação
+  gov_br_profile: string | null;  // ouro | prata | bronze
   notes: string | null;
   status: string;
   created_at: string;
@@ -49,18 +84,42 @@ interface ClientDocument {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: 8,
-  background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text1)",
+  width: "100%", padding: "10px 14px", borderRadius: 12,
+  background: "#0a0a12", border: "1px solid rgba(201,168,76,0.2)", color: "#f5f5f5",
   fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+  transition: "border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease",
+};
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  color: "#c9a84c",
+  cursor: "pointer",
+  appearance: "none" as const,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 12px center",
+  paddingRight: "36px",
 };
 const labelStyle: React.CSSProperties = {
   display: "block", fontSize: 10, color: "var(--text3)", marginBottom: 4,
   textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600,
 };
+const secTitle: React.CSSProperties = {
+  gridColumn: "1 / -1", fontSize: 11, fontWeight: 700, color: "var(--gold, #c9a84c)",
+  textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 10, marginBottom: -2,
+  borderBottom: "1px solid var(--border)", paddingBottom: 4,
+  animation: "fadeSlideDown 0.3s ease",
+};
+
+const ALLOWED_ROLES = ["socio", "lider_recepcao", "recepcionista"];
 
 export default function Clients() {
   const { user } = useAuth();
+  const { workspace } = useMyWorkspace();
   const navigate = useNavigate();
+  const roleCode = workspace?.role_template?.code ?? "";
+  const hasAccess = ALLOWED_ROLES.includes(roleCode);
+
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -70,25 +129,110 @@ export default function Clients() {
   const [docName, setDocName] = useState("");
   const [docType, setDocType] = useState("outro");
   const [docNotes, setDocNotes] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [stateFilter, setStateFilter] = useState("todos");
   const [page, setPage] = useState(1);
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
   const [processCounts, setProcessCounts] = useState<Record<string, number>>({});
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+  const [hasPix, setHasPix] = useState(false);
 
-  const [form, setForm] = useState({
-    full_name: "", cpf: "", rg: "", email: "", phone: "",
-    address: "", city: "", state: "BA", zip_code: "", notes: "",
-  });
+  const EMPTY_FORM = {
+    tipo_pessoa: "fisica", status: "ativo",
+    full_name: "", fantasy_name: "", cpf: "", cnpj: "", rg: "", rg_issuer: "", rg_uf: "BA",
+    ie: "", im: "", birth_date: "", foundation_date: "", gender: "masculino", marital_status: "solteiro",
+    nationality: "BRASILEIRA", natural_city: "", natural_uf: "BA", mother_name: "", father_name: "",
+    profession: "", pis_nit: "", legal_rep_name: "", legal_rep_cpf: "",
+    email: "", phone: "", phone_commercial: "", phone_home: "",
+    zip_code: "", address: "", address_number: "", address_complement: "", neighborhood: "",
+    city: "", state: "BA", country: "BRASIL",
+    bank_name: "", bank_agency: "", bank_account: "", bank_account_type: "corrente", pix_key: "", pix_key_type: "cpf",
+    client_origin: "indicacao", gov_br_profile: "ouro", notes: "",
+  };
+
+  const toUpper = (v: string) => v.toUpperCase();
+
+  function formatCPF(value: string): string {
+    const d = value.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+    return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+  }
+
+  function formatRG(value: string): string {
+    const d = value.replace(/\D/g, "").slice(0, 9);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0,2)}.${d.slice(2)}`;
+    if (d.length <= 8) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`;
+    return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}-${d.slice(8)}`;
+  }
+
+  function formatCEP(value: string): string {
+    const d = value.replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 5) return d;
+    return `${d.slice(0,5)}-${d.slice(5)}`;
+  }
+
+  function formatPhone(value: string): string {
+    const d = value.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 2) return d.length > 0 ? `(${d}` : "";
+    if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+    return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  }
+
+  function formatPixKey(value: string, type: string): string {
+    const digits = value.replace(/\D/g, "");
+    if (type === "cpf") {
+      return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (_, a, b, c, d) => d ? `${a}.${b}.${c}-${d}` : digits.length > 6 ? `${a}.${b}.${c}` : digits.length > 3 ? `${a}.${b}` : a).slice(0, 14);
+    }
+    if (type === "cnpj") {
+      return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, (_, a, b, c, d, e) => e ? `${a}.${b}.${c}/${d}-${e}` : digits.length > 9 ? `${a}.${b}.${c}/${d}` : digits.length > 6 ? `${a}.${b}.${c}` : digits.length > 3 ? `${a}.${b}` : digits.length > 2 ? `${a}.${b}` : a).slice(0, 18);
+    }
+    if (type === "telefone") {
+      return digits.replace(/(\d{2})(\d{5})(\d{0,4})/, (_, a, b, c) => c ? `(${a}) ${b}-${c}` : digits.length > 2 ? `(${a}) ${b}` : digits.length > 0 ? `(${a}` : "").slice(0, 15);
+    }
+    return value;
+  }
+  const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => { fetchClients(); fetchCounts(); }, []);
+
+  async function fetchAddressByCep(cep: string) {
+    const cleanCep = cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
+    setCepLoading(true);
+    setCepError("");
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+      } else {
+        setForm(prev => ({
+          ...prev,
+          address: (data.logradouro || prev.address).toUpperCase(),
+          neighborhood: (data.bairro || prev.neighborhood).toUpperCase(),
+          city: (data.localidade || prev.city).toUpperCase(),
+          state: data.uf || prev.state,
+          address_complement: (data.complemento || prev.address_complement).toUpperCase(),
+        }));
+      }
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  }
 
   async function fetchClients() {
     setLoading(true);
     const { data, error } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar clientes");
-    else setClients(data || []);
+    else setClients((data as unknown as Client[]) || []);
     setLoading(false);
   }
 
@@ -112,31 +256,47 @@ export default function Clients() {
   async function handleCreateClient(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    const { error } = await supabase.from("clients").insert({ ...form, created_by: user.id });
+    const payload: Record<string, unknown> = { created_by: user.id };
+    for (const [k, v] of Object.entries(form)) payload[k] = v === "" ? null : v;
+    const { error } = await supabase.from("clients").insert(payload as any);
     if (error) { toast.error("Erro ao criar cliente: " + error.message); return; }
     toast.success("Cliente cadastrado com sucesso!");
-    setForm({ full_name: "", cpf: "", rg: "", email: "", phone: "", address: "", city: "", state: "BA", zip_code: "", notes: "" });
+    setForm(EMPTY_FORM);
     setShowForm(false);
     fetchClients();
   }
 
-  async function handleUploadDoc(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files?.length || !selectedClient || !user) return;
+  function handleAddFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length) return;
+    const newFiles = Array.from(e.target.files);
+    setPendingFiles(prev => [...prev, ...newFiles]);
+    e.target.value = "";
+  }
+
+  function removePendingFile(index: number) {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleUploadAllFiles() {
+    if (!pendingFiles.length || !selectedClient || !user) return;
     setUploading(true);
-    const file = e.target.files[0];
-    const filePath = `${selectedClient.id}/${Date.now()}_${file.name}`;
-    const { error: uploadErr } = await supabase.storage.from("client-documents").upload(filePath, file);
-    if (uploadErr) { toast.error("Erro no upload: " + uploadErr.message); setUploading(false); return; }
-    const { error: dbErr } = await supabase.from("client_documents").insert({
-      client_id: selectedClient.id, document_type: docType, document_name: docName || file.name,
-      file_path: filePath, file_size: file.size, mime_type: file.type, notes: docNotes || null, uploaded_by: user.id,
-    });
-    if (dbErr) { toast.error("Erro ao salvar documento: " + dbErr.message); setUploading(false); return; }
-    toast.success("Documento anexado!");
-    setDocName(""); setDocType("outro"); setDocNotes("");
+    let successCount = 0;
+    for (const file of pendingFiles) {
+      const filePath = `${selectedClient.id}/${Date.now()}_${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from("client-documents").upload(filePath, file);
+      if (uploadErr) { toast.error("Erro no upload: " + uploadErr.message); continue; }
+      const { error: dbErr } = await supabase.from("client_documents").insert({
+        client_id: selectedClient.id, client_name: selectedClient.full_name,
+        document_type: docType, document_name: docName || file.name,
+        file_path: filePath, file_size: file.size, mime_type: file.type, notes: docNotes || null, uploaded_by: user.id,
+      } as any);
+      if (dbErr) { toast.error("Erro ao salvar: " + dbErr.message); continue; }
+      successCount++;
+    }
+    if (successCount > 0) toast.success(`${successCount} arquivo(s) anexado(s)!`);
+    setDocName(""); setDocType("outro"); setDocNotes(""); setPendingFiles([]);
     fetchDocuments(selectedClient.id);
     setUploading(false);
-    e.target.value = "";
   }
 
   async function handleDeleteDoc(doc: ClientDocument) {
@@ -181,19 +341,74 @@ export default function Clients() {
     return counts;
   }, [clients]);
 
+  if (workspace && !hasAccess) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
+        fontFamily: "'Roboto', sans-serif", padding: 40,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
+      }}>
+        <div style={{ fontSize: 48 }}>🔒</div>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "var(--gold, #c9a84c)" }}>Acesso restrito</h1>
+        <p style={{ color: "var(--text3)", fontSize: 13, textAlign: "center", maxWidth: 400 }}>
+          A gestão de clientes é exclusiva da <strong>Recepção</strong>.
+          Apenas Kailane, Taís, Yasmin e o sócio podem acessar esta área.
+        </p>
+        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{
+          padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)",
+          background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
+        }}>← Voltar ao Sistema</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
-      fontFamily: "'DM Sans', sans-serif", padding: 20,
+      fontFamily: "'Roboto', sans-serif", padding: 20,
     }}>
+      <style>{`
+        @keyframes fadeSlideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .clients-form input:focus,
+        .clients-form textarea:focus {
+          border-color: rgba(201,168,76,0.6) !important;
+          box-shadow: 0 0 0 3px rgba(201,168,76,0.12), 0 2px 8px rgba(0,0,0,0.4) !important;
+          transform: translateY(-1px);
+        }
+        .clients-form select:focus {
+          border-color: rgba(201,168,76,0.6) !important;
+          box-shadow: 0 0 0 3px rgba(201,168,76,0.12), 0 2px 8px rgba(0,0,0,0.4) !important;
+        }
+        .clients-form input:hover,
+        .clients-form select:hover,
+        .clients-form textarea:hover {
+          border-color: rgba(201,168,76,0.4) !important;
+        }
+        .client-card {
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+          animation: fadeIn 0.3s ease;
+        }
+        .client-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(201,168,76,0.4);
+          filter: brightness(1.05);
+        }
+      `}</style>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button onClick={() => navigate("/sistema")} style={{
+        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
           fontFamily: "'DM Sans', sans-serif",
         }}>← Voltar</button>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
+        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
           Gestão de Clientes
         </h1>
         <span style={{ fontSize: 12, color: "var(--text3)", background: "var(--bg2)", padding: "4px 10px", borderRadius: 6 }}>
@@ -201,46 +416,228 @@ export default function Clients() {
         </span>
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowForm(!showForm)} style={{
-          padding: "10px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+          padding: "10px 20px", borderRadius: 10, border: "none", cursor: "pointer",
           background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
           fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-        }}>
+          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          boxShadow: "0 4px 12px rgba(201,168,76,0.3)",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(201,168,76,0.5)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(201,168,76,0.3)"; }}
+        >
           {showForm ? " Fechar" : "+ Novo Cliente"}
         </button>
       </div>
 
       {/* New Client Form */}
       {showForm && (
-        <form onSubmit={handleCreateClient} style={{
+        <form onSubmit={handleCreateClient} className="clients-form" style={{
           background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12,
           padding: 24, marginBottom: 20,
+          animation: "fadeSlideDown 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
         }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text1)", marginBottom: 16 }}>Cadastrar Novo Cliente</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
-            <div><label style={labelStyle}>Nome Completo *</label><input required style={inputStyle} value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} /></div>
-            <div><label style={labelStyle}>CPF</label><input style={inputStyle} value={form.cpf} onChange={e => setForm({...form, cpf: e.target.value})} placeholder="000.000.000-00" /></div>
-            <div><label style={labelStyle}>RG</label><input style={inputStyle} value={form.rg} onChange={e => setForm({...form, rg: e.target.value})} /></div>
-            <div><label style={labelStyle}>Email</label><input type="email" style={inputStyle} value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
-            <div><label style={labelStyle}>Telefone</label><input style={inputStyle} value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="(71) 99999-9999" /></div>
-            <div><label style={labelStyle}>Endereço</label><input style={inputStyle} value={form.address} onChange={e => setForm({...form, address: e.target.value})} /></div>
-            <div><label style={labelStyle}>Cidade</label><input style={inputStyle} value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
+
+            {/* Classificação */}
+            <div style={secTitle}>Classificação</div>
+            <div>
+              <label style={labelStyle}>Tipo de Pessoa *</label>
+              <select style={selectStyle} value={form.tipo_pessoa} onChange={e => setForm({...form, tipo_pessoa: e.target.value})}>
+                <option value="fisica">Pessoa Física</option>
+                <option value="juridica">Pessoa Jurídica</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Situação</label>
+              <select style={selectStyle} value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+                <option value="prospecto">Prospecto</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Perfil do GOV.BR</label>
+              <select style={selectStyle} value={form.gov_br_profile} onChange={e => setForm({...form, gov_br_profile: e.target.value})} required>
+                <option value="ouro">Ouro</option>
+                <option value="prata">Prata</option>
+                <option value="bronze">Bronze</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Origem / Captação</label>
+              <select style={selectStyle} value={["indicacao","ressaque","whatsapp","marketing","site"].includes(form.client_origin) ? form.client_origin : "outro"} onChange={e => setForm({...form, client_origin: e.target.value})} required>
+                <option value="indicacao">Indicação</option>
+                <option value="ressaque">Ressaque</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="marketing">Marketing / Anúncio</option>
+                <option value="site">Site</option>
+                <option value="outro">Outro</option>
+              </select>
+              {!["indicacao","ressaque","whatsapp","marketing","site"].includes(form.client_origin) || form.client_origin === "outro" ? (
+                <input style={{...inputStyle, marginTop: 6}} value={form.client_origin === "outro" ? "" : form.client_origin} onChange={e => setForm({...form, client_origin: e.target.value})} placeholder="Informe a origem..." />
+              ) : null}
+            </div>
+
+            {/* Identificação */}
+            <div style={secTitle}>{form.tipo_pessoa === "juridica" ? "Dados da Empresa" : "Dados Pessoais"}</div>
+            <div>
+              <label style={labelStyle}>{form.tipo_pessoa === "juridica" ? "Razão Social *" : "Nome Completo *"}</label>
+              <input required style={inputStyle} value={form.full_name} onChange={e => setForm({...form, full_name: toUpper(e.target.value)})} />
+            </div>
+
+            {form.tipo_pessoa === "juridica" ? (
+              <>
+                <div><label style={labelStyle}>Nome Fantasia</label><input required style={inputStyle} value={form.fantasy_name} onChange={e => setForm({...form, fantasy_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>CNPJ</label><input required style={inputStyle} value={form.cnpj} onChange={e => setForm({...form, cnpj: e.target.value})} placeholder="00.000.000/0000-00" /></div>
+                <div><label style={labelStyle}>Inscrição Estadual</label><input required style={inputStyle} value={form.ie} onChange={e => setForm({...form, ie: e.target.value})} /></div>
+                <div><label style={labelStyle}>Inscrição Municipal</label><input required style={inputStyle} value={form.im} onChange={e => setForm({...form, im: e.target.value})} /></div>
+                <div><label style={labelStyle}>Data de Fundação</label><input required type="date" style={inputStyle} value={form.foundation_date} onChange={e => setForm({...form, foundation_date: e.target.value})} /></div>
+                <div><label style={labelStyle}>Representante Legal</label><input required style={inputStyle} value={form.legal_rep_name} onChange={e => setForm({...form, legal_rep_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>CPF do Representante</label><input required style={inputStyle} value={form.legal_rep_cpf} onChange={e => setForm({...form, legal_rep_cpf: formatCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} /></div>
+              </>
+            ) : (
+              <>
+                <div><label style={labelStyle}>CPF</label><input required style={inputStyle} value={form.cpf} onChange={e => setForm({...form, cpf: formatCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} /></div>
+                <div><label style={labelStyle}>RG</label><input required style={inputStyle} value={form.rg} onChange={e => setForm({...form, rg: formatRG(e.target.value)})} placeholder="00.000.000-0" maxLength={12} /></div>
+                <div><label style={labelStyle}>Órgão Emissor</label><input required style={inputStyle} value={form.rg_issuer} onChange={e => setForm({...form, rg_issuer: toUpper(e.target.value)})} placeholder="SSP" /></div>
+                <div>
+                  <label style={labelStyle}>UF do RG</label>
+                  <select style={selectStyle} value={form.rg_uf} onChange={e => setForm({...form, rg_uf: e.target.value})} required>
+                    {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div><label style={labelStyle}>Data de Nascimento</label><input required type="date" style={inputStyle} value={form.birth_date} onChange={e => setForm({...form, birth_date: e.target.value})} /></div>
+                <div>
+                  <label style={labelStyle}>Sexo</label>
+                  <select style={selectStyle} value={["masculino","feminino"].includes(form.gender) ? form.gender : "outro"} onChange={e => setForm({...form, gender: e.target.value})} required>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                  {!["masculino","feminino"].includes(form.gender) || form.gender === "outro" ? (
+                    <input style={{...inputStyle, marginTop: 6}} value={form.gender === "outro" ? "" : form.gender} onChange={e => setForm({...form, gender: e.target.value})} placeholder="Informe..." />
+                  ) : null}
+                </div>
+                <div>
+                  <label style={labelStyle}>Estado Civil</label>
+                  <select style={selectStyle} value={form.marital_status} onChange={e => setForm({...form, marital_status: e.target.value})} required>
+                    <option value="solteiro">Solteiro(a)</option>
+                    <option value="casado">Casado(a)</option>
+                    <option value="divorciado">Divorciado(a)</option>
+                    <option value="viuvo">Viúvo(a)</option>
+                    <option value="uniao_estavel">União Estável</option>
+                  </select>
+                </div>
+                <div><label style={labelStyle}>Nacionalidade</label><input required style={inputStyle} value={form.nationality} onChange={e => setForm({...form, nationality: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>Naturalidade (Cidade)</label><input required style={inputStyle} value={form.natural_city} onChange={e => setForm({...form, natural_city: toUpper(e.target.value)})} /></div>
+                <div>
+                  <label style={labelStyle}>Naturalidade (UF)</label>
+                  <select style={selectStyle} value={form.natural_uf} onChange={e => setForm({...form, natural_uf: e.target.value})} required>
+                    {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div><label style={labelStyle}>Profissão</label><input required style={inputStyle} value={form.profession} onChange={e => setForm({...form, profession: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>Nome da Mãe</label><input required style={inputStyle} value={form.mother_name} onChange={e => setForm({...form, mother_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>Nome do Pai</label><input required style={inputStyle} value={form.father_name} onChange={e => setForm({...form, father_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>PIS / NIT</label><input required style={inputStyle} value={form.pis_nit} onChange={e => setForm({...form, pis_nit: toUpper(e.target.value)})} /></div>
+              </>
+            )}
+
+            {/* Contato */}
+            <div style={secTitle}>Contato</div>
+            <div><label style={labelStyle}>Email</label><input required type="email" style={inputStyle} value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
+            <div><label style={labelStyle}>Celular</label><input required style={inputStyle} value={form.phone} onChange={e => setForm({...form, phone: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
+            <div><label style={labelStyle}>Telefone Comercial</label><input style={inputStyle} value={form.phone_commercial} onChange={e => setForm({...form, phone_commercial: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
+            <div><label style={labelStyle}>Telefone Residencial</label><input style={inputStyle} value={form.phone_home} onChange={e => setForm({...form, phone_home: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
+
+            {/* Endereço */}
+            <div style={secTitle}>Endereço</div>
+            <div>
+              <label style={labelStyle}>CEP {cepLoading && <span style={{ color: "#3b82f6", fontWeight: 400 }}>buscando...</span>}</label>
+              <input required style={{...inputStyle, borderColor: cepError ? "#ef4444" : undefined}} value={form.zip_code} onChange={e => {
+                const formatted = formatCEP(e.target.value);
+                setForm({...form, zip_code: formatted});
+                setCepError("");
+                const clean = formatted.replace(/\D/g, "");
+                if (clean.length === 8) fetchAddressByCep(clean);
+              }} placeholder="00000-000" maxLength={9} />
+              {cepError && <span style={{ fontSize: 10, color: "#ef4444", marginTop: 2, display: "block" }}>{cepError} — preencha manualmente</span>}
+            </div>
+            <div><label style={labelStyle}>Logradouro</label><input required style={inputStyle} value={form.address} onChange={e => setForm({...form, address: toUpper(e.target.value)})} /></div>
+            <div><label style={labelStyle}>Número</label><input required style={inputStyle} value={form.address_number} onChange={e => setForm({...form, address_number: e.target.value})} /></div>
+            <div><label style={labelStyle}>Complemento</label><input required style={inputStyle} value={form.address_complement} onChange={e => setForm({...form, address_complement: toUpper(e.target.value)})} /></div>
+            <div><label style={labelStyle}>Bairro</label><input required style={inputStyle} value={form.neighborhood} onChange={e => setForm({...form, neighborhood: toUpper(e.target.value)})} /></div>
+            <div><label style={labelStyle}>Cidade</label><input required style={inputStyle} value={form.city} onChange={e => setForm({...form, city: toUpper(e.target.value)})} /></div>
             <div>
               <label style={labelStyle}>Estado</label>
-              <select style={inputStyle} value={form.state} onChange={e => setForm({...form, state: e.target.value})}>
+              <select style={selectStyle} value={form.state} onChange={e => setForm({...form, state: e.target.value})} required>
                 {STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div><label style={labelStyle}>CEP</label><input style={inputStyle} value={form.zip_code} onChange={e => setForm({...form, zip_code: e.target.value})} /></div>
+            <div><label style={labelStyle}>País</label><input required style={inputStyle} value={form.country} onChange={e => setForm({...form, country: toUpper(e.target.value)})} /></div>
+
+            {/* Dados Bancários / PIX */}
+            <div style={secTitle}>Dados Bancários / PIX</div>
+            <div><label style={labelStyle}>Banco</label><input required style={inputStyle} value={form.bank_name} onChange={e => setForm({...form, bank_name: toUpper(e.target.value)})} /></div>
+            <div><label style={labelStyle}>Agência</label><input required style={inputStyle} value={form.bank_agency} onChange={e => setForm({...form, bank_agency: e.target.value})} /></div>
+            <div><label style={labelStyle}>Conta</label><input required style={inputStyle} value={form.bank_account} onChange={e => setForm({...form, bank_account: e.target.value})} /></div>
+            <div>
+              <label style={labelStyle}>Tipo de Conta</label>
+              <select style={selectStyle} value={form.bank_account_type} onChange={e => setForm({...form, bank_account_type: e.target.value})} required>
+                <option value="corrente">Corrente</option>
+                <option value="poupanca">Poupança</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 16, marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Possui PIX?</span>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: hasPix ? "#c9a84c" : "var(--text3)" }}>
+                <input type="radio" name="hasPix" checked={hasPix} onChange={() => setHasPix(true)} style={{ accentColor: "#c9a84c" }} /> Sim
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: !hasPix ? "#c9a84c" : "var(--text3)" }}>
+                <input type="radio" name="hasPix" checked={!hasPix} onChange={() => { setHasPix(false); setForm({...form, pix_key: "", pix_key_type: "cpf"}); }} style={{ accentColor: "#c9a84c" }} /> Não
+              </label>
+            </div>
+            {hasPix && (
+              <>
+                <div>
+                  <label style={labelStyle}>Tipo da Chave PIX</label>
+                  <select style={selectStyle} value={form.pix_key_type} onChange={e => setForm({...form, pix_key_type: e.target.value, pix_key: ""})} required>
+                    <option value="cpf">CPF</option>
+                    <option value="cnpj">CNPJ</option>
+                    <option value="email">Email</option>
+                    <option value="telefone">Telefone</option>
+                    <option value="aleatoria">Aleatória</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Chave PIX</label>
+                  <input
+                    style={inputStyle}
+                    value={form.pix_key}
+                    onChange={e => setForm({...form, pix_key: formatPixKey(e.target.value, form.pix_key_type)})}
+                    placeholder={form.pix_key_type === "cpf" ? "000.000.000-00" : form.pix_key_type === "cnpj" ? "00.000.000/0001-00" : form.pix_key_type === "telefone" ? "(00) 00000-0000" : form.pix_key_type === "email" ? "email@exemplo.com" : "Chave aleatória"}
+                    required
+                  />
+                </div>
+              </>
+            )}
           </div>
+
           <div style={{ marginTop: 12 }}>
             <label style={labelStyle}>Observações</label>
             <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
           </div>
           <button type="submit" style={{
-            marginTop: 16, padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer",
+            marginTop: 16, padding: "10px 24px", borderRadius: 10, border: "none", cursor: "pointer",
             background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
             fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-          }}>Cadastrar Cliente</button>
+            transition: "transform 0.2s ease, box-shadow 0.2s ease",
+            boxShadow: "0 4px 12px rgba(201,168,76,0.3)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(201,168,76,0.5)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(201,168,76,0.3)"; }}
+          >Cadastrar Cliente</button>
         </form>
       )}
 
@@ -251,13 +648,13 @@ export default function Clients() {
           placeholder=" Buscar nome, CPF, email, telefone, cidade..."
           value={search} onChange={e => setSearch(e.target.value)}
         />
-        <select style={{ ...inputStyle, maxWidth: 160 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <select style={{ ...selectStyle, maxWidth: 160 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="todos">Todos os status</option>
           {Object.entries(statusCounts).map(([s, c]) => (
             <option key={s} value={s}>{s} ({c})</option>
           ))}
         </select>
-        <select style={{ ...inputStyle, maxWidth: 120 }} value={stateFilter} onChange={e => setStateFilter(e.target.value)}>
+        <select style={{ ...selectStyle, maxWidth: 120 }} value={stateFilter} onChange={e => setStateFilter(e.target.value)}>
           <option value="todos">Todos UF</option>
           {uniqueStates.map(s => <option key={s} value={s!}>{s}</option>)}
         </select>
@@ -273,40 +670,41 @@ export default function Clients() {
             paginated.map(client => (
               <div
                 key={client.id}
+                className="client-card"
                 onClick={() => { setSelectedClient(client); fetchDocuments(client.id); }}
                 style={{
                   padding: 14, borderRadius: 10, marginBottom: 8, cursor: "pointer",
-                  background: selectedClient?.id === client.id ? "rgba(201,168,76,0.08)" : "var(--bg2)",
-                  border: selectedClient?.id === client.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid var(--border)",
-                  transition: "all 0.2s",
+                  background: selectedClient?.id === client.id ? "rgba(201,168,76,0.25)" : "linear-gradient(135deg, #c9a84c, #e8c96a)",
+                  border: selectedClient?.id === client.id ? "2px solid #c9a84c" : "1px solid rgba(201,168,76,0.4)",
+                  boxShadow: "0 2px 8px rgba(201,168,76,0.15)",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)" }}>{client.full_name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#0a0a12" }}>{client.full_name}</div>
                   <button onClick={(e) => { e.stopPropagation(); navigate(`/clientes/${client.id}`); }} style={{
-                    padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)",
-                    background: "var(--bg)", color: "var(--text2)", cursor: "pointer", fontSize: 10,
-                    fontFamily: "'DM Sans', sans-serif",
+                    padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(10,10,18,0.2)",
+                    background: "rgba(10,10,18,0.1)", color: "#0a0a12", cursor: "pointer", fontSize: 10,
+                    fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
                   }}>Ver detalhes →</button>
                 </div>
-                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text3)", flexWrap: "wrap", alignItems: "center" }}>
-                  {client.cpf && <span>CPF: {client.cpf}</span>}
-                  {client.phone && <span> {client.phone}</span>}
-                  {client.city && <span> {client.city}/{client.state}</span>}
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "rgba(10,10,18,0.7)", flexWrap: "wrap", alignItems: "center" }}>
+                  {client.cpf && <span style={{ fontWeight: 500 }}>CPF: {client.cpf}</span>}
+                  {client.phone && <span style={{ fontWeight: 500 }}> {client.phone}</span>}
+                  {client.city && <span style={{ fontWeight: 500 }}> {client.city}/{client.state}</span>}
                   {(taskCounts[client.full_name] || 0) > 0 && (
-                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>
+                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(10,10,18,0.15)", color: "#0a0a12", fontWeight: 600 }}>
                        {taskCounts[client.full_name]} tarefa{taskCounts[client.full_name] > 1 ? "s" : ""}
                     </span>
                   )}
                   {(processCounts[client.full_name] || 0) > 0 && (
-                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(168,85,247,0.15)", color: "#a855f7", fontWeight: 600 }}>
+                    <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 9, background: "rgba(10,10,18,0.12)", color: "#0a0a12", fontWeight: 600 }}>
                       ️ {processCounts[client.full_name]} processo{processCounts[client.full_name] > 1 ? "s" : ""}
                     </span>
                   )}
                   <span style={{
-                    padding: "1px 8px", borderRadius: 4, fontSize: 9, textTransform: "uppercase",
-                    background: client.status === "ativo" ? "rgba(45,212,160,0.15)" : client.status === "em_analise" ? "rgba(251,191,36,0.15)" : "rgba(239,68,68,0.15)",
-                    color: client.status === "ativo" ? "#2dd4a0" : client.status === "em_analise" ? "#fbbf24" : "#ef4444",
+                    padding: "1px 8px", borderRadius: 4, fontSize: 9, textTransform: "uppercase", fontWeight: 700,
+                    background: client.status === "ativo" ? "rgba(10,10,18,0.12)" : client.status === "em_analise" ? "rgba(10,10,18,0.18)" : "rgba(239,68,68,0.25)",
+                    color: client.status === "ativo" ? "#0a0a12" : client.status === "em_analise" ? "#0a0a12" : "#7f1d1d",
                   }}>{client.status}</span>
                 </div>
               </div>
@@ -379,8 +777,20 @@ export default function Clients() {
               background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12,
               padding: 20, marginBottom: 16,
             }}>
-              <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text1)", marginBottom: 12, fontFamily: "'Cormorant Garamond', serif" }}>
-                {selectedClient.full_name}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text1)" }}>
+                  {selectedClient.full_name}
+                </div>
+                <button onClick={() => setSelectedClient(null)} style={{
+                  width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--bg)", color: "var(--text2)", cursor: "pointer",
+                  fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--text2)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                title="Fechar detalhes"
+                >✕</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
                 {selectedClient.cpf && <div><span style={{ color: "var(--text3)" }}>CPF:</span> <span style={{ color: "var(--text1)" }}>{selectedClient.cpf}</span></div>}
@@ -401,7 +811,7 @@ export default function Clients() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <label style={labelStyle}>Tipo do Documento</label>
-                  <select style={inputStyle} value={docType} onChange={e => setDocType(e.target.value)}>
+                  <select style={selectStyle} value={docType} onChange={e => setDocType(e.target.value)}>
                     {DOCUMENT_TYPES.map(dt => <option key={dt.value} value={dt.value}>{dt.label}</option>)}
                   </select>
                 </div>
@@ -414,20 +824,58 @@ export default function Clients() {
                 <label style={labelStyle}>Observações</label>
                 <input style={inputStyle} value={docNotes} onChange={e => setDocNotes(e.target.value)} placeholder="Notas sobre o documento" />
               </div>
-              <label style={{
-                display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px",
-                borderRadius: 8, cursor: uploading ? "wait" : "pointer",
-                background: "linear-gradient(135deg, #4f8ef7, #60a5fa)", color: "#fff",
-                fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans', sans-serif",
-                opacity: uploading ? 0.6 : 1,
-              }}>
-                {uploading ? (
-                  <HexagonLoader variant="embed" label="Carregando..." className="hexagon-loader--btn" />
-                ) : (
-                  "⬆ Selecionar Arquivo"
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <label style={{
+                  display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px",
+                  borderRadius: 8, cursor: uploading ? "wait" : "pointer",
+                  background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
+                  fontSize: 13, fontWeight: 600,
+                  opacity: uploading ? 0.6 : 1, transition: "filter 0.2s ease",
+                }}>
+                  + Adicionar Arquivo(s)
+                  <input type="file" hidden multiple onChange={handleAddFiles} disabled={uploading} accept="image/*,.pdf,.doc,.docx" />
+                </label>
+                {pendingFiles.length > 0 && (
+                  <button
+                    onClick={handleUploadAllFiles}
+                    disabled={uploading}
+                    style={{
+                      padding: "10px 20px", borderRadius: 8, border: "none", cursor: uploading ? "wait" : "pointer",
+                      background: "linear-gradient(135deg, #4f8ef7, #60a5fa)", color: "#fff",
+                      fontSize: 13, fontWeight: 600, opacity: uploading ? 0.6 : 1,
+                    }}
+                  >
+                    {uploading ? "Enviando..." : `⬆ Enviar ${pendingFiles.length} arquivo(s)`}
+                  </button>
                 )}
-                <input type="file" hidden onChange={handleUploadDoc} disabled={uploading} accept="image/*,.pdf,.doc,.docx" />
-              </label>
+              </div>
+              {pendingFiles.length > 0 && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {pendingFiles.map((file, i) => (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
+                      background: "rgba(201,168,76,0.08)", borderRadius: 6, border: "1px solid rgba(201,168,76,0.2)",
+                    }}>
+                      <span style={{ flex: 1, fontSize: 11, color: "var(--text1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        📄 {file.name} <span style={{ color: "var(--text3)" }}>({(file.size / 1024).toFixed(0)} KB)</span>
+                      </span>
+                      <button onClick={() => removePendingFile(i)} style={{
+                        padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)",
+                        background: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer", fontSize: 10,
+                      }}>✕</button>
+                    </div>
+                  ))}
+                  <label style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 36, height: 36, borderRadius: 8, cursor: "pointer", marginTop: 4,
+                    border: "2px dashed rgba(201,168,76,0.4)", background: "rgba(201,168,76,0.05)",
+                    color: "#c9a84c", fontSize: 20, fontWeight: 700, transition: "all 0.2s ease",
+                  }}>
+                    +
+                    <input type="file" hidden multiple onChange={handleAddFiles} accept="image/*,.pdf,.doc,.docx" />
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Documents list */}

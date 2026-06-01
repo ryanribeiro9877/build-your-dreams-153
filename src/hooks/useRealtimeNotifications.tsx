@@ -3,21 +3,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
+/** Runtime guard: returns true if value is a non-null object with the given string keys. */
+function hasStringFields<K extends string>(
+  value: unknown,
+  ...keys: K[]
+): value is Record<K, string> {
+  if (typeof value !== "object" || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return keys.every((k) => typeof obj[k] === "string");
+}
+
 export function useRealtimeNotifications() {
   const { user } = useAuth();
-  const initialized = useRef(false);
   const deadlineInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!user || initialized.current) return;
-    initialized.current = true;
+    if (!user) return;
 
     // Listen for new clients
     const clientsChannel = supabase
       .channel("notify_clients")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "clients" }, (payload) => {
-        const client = payload.new as { full_name: string };
-        toast.info(` Novo cliente cadastrado: ${client.full_name}`, { duration: 5000 });
+        if (hasStringFields(payload.new, "full_name")) {
+          toast.info(` Novo cliente cadastrado: ${payload.new.full_name}`, { duration: 5000 });
+        }
       })
       .subscribe();
 
@@ -25,8 +34,9 @@ export function useRealtimeNotifications() {
     const docsChannel = supabase
       .channel("notify_documents")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "client_documents" }, (payload) => {
-        const doc = payload.new as { document_name: string; document_type: string };
-        toast.info(` Novo documento: ${doc.document_name} (${doc.document_type})`, { duration: 5000 });
+        if (hasStringFields(payload.new, "document_name", "document_type")) {
+          toast.info(` Novo documento: ${payload.new.document_name} (${payload.new.document_type})`, { duration: 5000 });
+        }
       })
       .subscribe();
 
@@ -34,19 +44,22 @@ export function useRealtimeNotifications() {
     const tasksChannel = supabase
       .channel("notify_critical_tasks")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "agent_tasks" }, (payload) => {
-        const task = payload.new as { title: string; priority: string; client_name?: string };
-        if (task.priority === "critical") {
-          toast.error(` TAREFA CRÍTICA: ${task.title}${task.client_name ? ` — ${task.client_name}` : ""}`, {
-            duration: 10000,
-          });
-        } else if (task.priority === "high") {
-          toast.warning(`️ Tarefa alta prioridade: ${task.title}`, { duration: 7000 });
+        if (hasStringFields(payload.new, "title", "priority")) {
+          const task = payload.new as { title: string; priority: string; client_name?: string };
+          const clientSuffix = typeof task.client_name === "string" ? ` — ${task.client_name}` : "";
+          if (task.priority === "critical") {
+            toast.error(` TAREFA CRÍTICA: ${task.title}${clientSuffix}`, { duration: 10000 });
+          } else if (task.priority === "high") {
+            toast.warning(`️ Tarefa alta prioridade: ${task.title}`, { duration: 7000 });
+          }
         }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agent_tasks" }, (payload) => {
-        const task = payload.new as { title: string; priority: string; status: string };
-        if (task.priority === "critical" && task.status === "completed") {
-          toast.success(` Tarefa crítica concluída: ${task.title}`, { duration: 5000 });
+        if (hasStringFields(payload.new, "title", "priority", "status")) {
+          const task = payload.new;
+          if (task.priority === "critical" && task.status === "completed") {
+            toast.success(` Tarefa crítica concluída: ${task.title}`, { duration: 5000 });
+          }
         }
       })
       .subscribe();

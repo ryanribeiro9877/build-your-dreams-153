@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type { LegalArea, OrgStage, UserTaskStatus, TaskPriority } from "@/types/jurisai";
 
 /**
@@ -82,166 +82,96 @@ export interface TeamTask {
 // ─── Inbox pessoal ────────────────────────────────────────────────────────────
 export function useMyInbox(includeCompleted = false) {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<InboxTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = useCallback(async () => {
-    if (!user) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const { data, error: rpcErr } = await supabase.rpc("get_my_inbox" as never, {
-      p_include_completed: includeCompleted,
-    } as never);
-    if (rpcErr) {
-      setError(rpcErr.message);
-      setTasks([]);
-    } else {
-      setTasks((data as unknown as InboxTask[]) || []);
-    }
-    setLoading(false);
-  }, [user, includeCompleted]);
+  const { data, loading, error, refetch } = useSupabaseQuery<InboxTask[]>({
+    queryKey: `my-inbox-${user?.id ?? "anon"}`,
+    enabled: !!user,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_my_inbox" as never, {
+        p_include_completed: includeCompleted,
+      } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as InboxTask[]) || [];
+    },
+    realtime: user
+      ? { table: "user_tasks", filter: `assignee_user_id=eq.${user.id}` }
+      : undefined,
+  });
 
-  useEffect(() => { void fetchTasks(); }, [fetchTasks]);
-
-  // Realtime: refaz query quando uma user_task minha muda
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`my-inbox-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_tasks", filter: `assignee_user_id=eq.${user.id}` },
-        () => { void fetchTasks(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, fetchTasks]);
-
-  return { tasks, loading, error, refresh: fetchTasks };
+  return { tasks: data ?? [], loading, error, refresh: refetch };
 }
 
 // ─── Badge counter ────────────────────────────────────────────────────────────
+const DEFAULT_INBOX_COUNT: InboxCount = { total: 0, overdue: 0, critical: 0 };
+
 export function useInboxCount() {
   const { user } = useAuth();
-  const [count, setCount] = useState<InboxCount>({ total: 0, overdue: 0, critical: 0 });
 
-  const fetchCount = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase.rpc("get_inbox_count" as never);
-    if (data && Array.isArray(data) && data.length > 0) {
-      setCount(data[0] as InboxCount);
-    }
-  }, [user]);
+  const { data } = useSupabaseQuery<InboxCount>({
+    queryKey: `inbox-count-${user?.id ?? "anon"}`,
+    enabled: !!user,
+    fetcher: async () => {
+      const { data } = await supabase.rpc("get_inbox_count" as never);
+      if (data && Array.isArray(data) && data.length > 0) {
+        return data[0] as InboxCount;
+      }
+      return DEFAULT_INBOX_COUNT;
+    },
+    realtime: user
+      ? { table: "user_tasks", filter: `assignee_user_id=eq.${user.id}` }
+      : undefined,
+  });
 
-  useEffect(() => { void fetchCount(); }, [fetchCount]);
-
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`inbox-count-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_tasks", filter: `assignee_user_id=eq.${user.id}` },
-        () => { void fetchCount(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, fetchCount]);
-
-  return count;
+  return data ?? DEFAULT_INBOX_COUNT;
 }
 
 // ─── Catálogo de tipos de tarefa ──────────────────────────────────────────────
 export function useTaskTypes() {
-  const [types, setTypes] = useState<TaskTypeOption[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
+  const { data, loading } = useSupabaseQuery<TaskTypeOption[]>({
+    queryKey: "task-types",
+    fetcher: async () => {
       const { data } = await supabase.rpc("get_task_types_by_stage" as never);
-      if (!cancelled) {
-        setTypes((data as unknown as TaskTypeOption[]) || []);
-        setLoading(false);
-      }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, []);
+      return (data as unknown as TaskTypeOption[]) || [];
+    },
+  });
 
-  return { types, loading };
+  return { types: data ?? [], loading };
 }
 
 // ─── Destinatários elegíveis ──────────────────────────────────────────────────
 export function useEligibleAssignees(taskTypeId: string | null) {
-  const [assignees, setAssignees] = useState<EligibleAssignee[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!taskTypeId) {
-      setAssignees([]);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const load = async () => {
+  const { data, loading } = useSupabaseQuery<EligibleAssignee[]>({
+    queryKey: `eligible-assignees-${taskTypeId ?? "none"}`,
+    enabled: !!taskTypeId,
+    fetcher: async () => {
       const { data } = await supabase.rpc("get_eligible_assignees" as never, {
         p_task_type_id: taskTypeId,
       } as never);
-      if (!cancelled) {
-        setAssignees((data as unknown as EligibleAssignee[]) || []);
-        setLoading(false);
-      }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, [taskTypeId]);
+      return (data as unknown as EligibleAssignee[]) || [];
+    },
+  });
 
-  return { assignees, loading };
+  return { assignees: data ?? [], loading };
 }
 
 // ─── Visão da equipe (master) ─────────────────────────────────────────────────
 export function useTeamTasks(filters?: { status?: UserTaskStatus; assigneeUserId?: string; includeCompleted?: boolean }) {
-  const [tasks, setTasks] = useState<TeamTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refetch } = useSupabaseQuery<TeamTask[]>({
+    queryKey: `team-tasks-${filters?.status ?? "all"}-${filters?.assigneeUserId ?? "all"}-${filters?.includeCompleted ?? false}`,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_team_tasks" as never, {
+        p_status: filters?.status ?? null,
+        p_assignee_user_id: filters?.assigneeUserId ?? null,
+        p_include_completed: filters?.includeCompleted ?? false,
+        p_limit: 200,
+      } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as TeamTask[]) || [];
+    },
+    realtime: { table: "user_tasks" },
+  });
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    const { data, error: rpcErr } = await supabase.rpc("get_team_tasks" as never, {
-      p_status: filters?.status ?? null,
-      p_assignee_user_id: filters?.assigneeUserId ?? null,
-      p_include_completed: filters?.includeCompleted ?? false,
-      p_limit: 200,
-    } as never);
-    if (rpcErr) {
-      setError(rpcErr.message);
-      setTasks([]);
-    } else {
-      setTasks((data as unknown as TeamTask[]) || []);
-    }
-    setLoading(false);
-  }, [filters?.status, filters?.assigneeUserId, filters?.includeCompleted]);
-
-  useEffect(() => { void fetchTasks(); }, [fetchTasks]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("team-tasks")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_tasks" },
-        () => { void fetchTasks(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [fetchTasks]);
-
-  return { tasks, loading, error, refresh: fetchTasks };
+  return { tasks: data ?? [], loading, error, refresh: refetch };
 }
 
 // ─── Helpers: criar e atualizar ───────────────────────────────────────────────

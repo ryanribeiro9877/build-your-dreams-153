@@ -10,7 +10,7 @@
 ## 0. TL;DR em 30 segundos
 
 - **Sistema**: plataforma multi-agente jurídica BR, **uso interno** da empresa Bacellar Advogados (Salvador-BA). 1 sócio + 8 funcionárias + 1 colaborador externo.
-- **Stack**: Vite + React 18 + TypeScript + Tailwind + shadcn/ui · Supabase (Auth, Postgres com RLS, Edge Functions Deno) · Stripe (test mode) · Resend (email) · Cloudflare Turnstile (captcha) · Vercel + Lovable.
+- **Stack**: Vite + React 18 + TypeScript + Tailwind + shadcn/ui · Supabase (Auth, Postgres com RLS, Edge Functions Deno) · Stripe (test mode) · Resend (email) · Cloudflare Turnstile (captcha) · Vercel.
 - **Dono**: Rodrigo Bacellar (`ryanribeiro@cohapm.com.br`). Idioma: **PT-BR**.
 - **Conta de teste**: `admin@juridico.com / admin123` no deploy `build-your-dreams-153.vercel.app`.
 - **Repo**: `https://github.com/ryanribeiro9877/build-your-dreams-153` (branch `main`).
@@ -75,7 +75,6 @@
 
 ### Deploy
 - **Vercel** (frontend): `build-your-dreams-153.vercel.app`
-- **Lovable** (companion editor visual)
 - **Supabase** (banco + edge functions)
 
 ---
@@ -369,7 +368,7 @@ Aplica o `domain-model.md`:
 - Página `/admin/modelo-v14` (rota redirecionada por enquanto)
 
 ### V14-master (commits f225488, 0c79c2a)
-Implementado pelo Lovable em cima da minha V14:
+Implementado em cima da V14:
 - Convite de funcionário via Resend
 - `is_master_admin` com 3 critérios
 - Turnstile captcha
@@ -393,7 +392,7 @@ Implementado pelo Lovable em cima da minha V14:
 - Hook `useUserTasks` (5 hooks + 2 helpers)
 - 3 páginas novas: `/sistema/tarefas` (inbox), `/sistema/equipe` (kanban master), `/sistema/equipe/atribuir`
 - Botões "Tarefas" (todos, com badge) e "Equipe" (só master) no header
-- Realtime em `user_tasks` pro Lovable já tinha ativado V14
+- Realtime em `user_tasks` (ativado desde V14)
 - Validação em 2 camadas: assigner pode atribuir + assignee elegível
 
 ### Bootstrap Sócio
@@ -419,7 +418,7 @@ Implementado pelo Lovable em cima da minha V14:
 
 ### Crítico (impede produção plena)
 - **2 erros TS pré-existentes** em `src/components/__tests__/JurisCloudOS.responsive.test.tsx` — imports `screen`/`fireEvent` mal mockados. Débito anterior, ignorar.
-- **types.ts do Supabase** desatualizado após V14 (Lovable usa `as "agents"` / `as never` pra contornar). Regenerar quando possível.
+- **types.ts do Supabase** desatualizado após V14 (usa `as "agents"` / `as never` pra contornar). Regenerar quando possível.
 
 ### Médio
 - **Sem tool-use** no chat-orchestrator. É o resto da Onda 3.
@@ -539,7 +538,6 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 | **Edge Function** | função Deno hospedada no Supabase |
 | **Resend** | serviço de email transacional (convites) |
 | **Turnstile** | captcha do Cloudflare em define-password |
-| **Lovable** | editor visual que o Ryan usa em paralelo (faz commits direto no GitHub) |
 | **Cowork** | ferramenta da Anthropic que o Ryan usa pra automação local. Lê `AGENTS.md`. |
 | **provisionamento** | clonar agent_templates como agents pessoais quando user é criado |
 | **inter-Assistente** | protocolo entre Meus Assistentes (V19) — ex: Assistente da Ana pede RG ao da Kailane |

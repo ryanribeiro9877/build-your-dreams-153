@@ -12,6 +12,13 @@ interface BottleneckAlert {
   agentName?: string;
 }
 
+const BOTTLENECK_CONFIG = {
+  PENDING_TASK_THRESHOLD: 10,
+  OVERDUE_CRITICAL_THRESHOLD: 5,
+  AGENT_OVERLOAD_THRESHOLD: 15,
+  POLL_INTERVAL_MS: 5 * 60 * 1000,
+} as const;
+
 const DEPT_LABELS: Record<string, string> = {
   recepcao: "Recepção", marketing: "Marketing", civel: "Contencioso Cível",
   trabalhista: "Cont. Trabalhista", tributario: "Cont. Tributário",
@@ -21,11 +28,7 @@ const DEPT_LABELS: Record<string, string> = {
   eficiencia: "Eficiência", cobrancas: "Cobranças",
 };
 
-function openEfficiency() {
-  if (typeof window !== "undefined") window.location.assign("/eficiencia");
-}
-
-export function useBottleneckDetection() {
+export function useBottleneckDetection(navigate?: (to: string) => void) {
   const { user } = useAuth();
   const initialized = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -33,6 +36,14 @@ export function useBottleneckDetection() {
   useEffect(() => {
     if (!user || initialized.current) return;
     initialized.current = true;
+
+    const openEfficiency = () => {
+      if (navigate) {
+        navigate("/eficiencia");
+      } else if (typeof window !== "undefined") {
+        window.location.assign("/eficiencia");
+      }
+    };
 
     const saveNotification = async (alert: BottleneckAlert) => {
       await supabase.from("bottleneck_notifications").insert({
@@ -64,7 +75,7 @@ export function useBottleneckDetection() {
 
         Object.entries(byCategory).forEach(([cat, catTasks]) => {
           const pending = catTasks.filter(t => t.status === "pending").length;
-          if (pending > 10) {
+          if (pending > BOTTLENECK_CONFIG.PENDING_TASK_THRESHOLD) {
             alerts.push({
               type: "stalled",
               severity: "warning",
@@ -89,7 +100,7 @@ export function useBottleneckDetection() {
         const overdueAll = tasks.filter(t => t.due_date && new Date(t.due_date) < now);
         const overdue = overdueAll.filter(t => passesUrgencyFilter(t.priority) && !isMuted(t.id));
 
-        if (overdue.length > 5) {
+        if (overdue.length > BOTTLENECK_CONFIG.OVERDUE_CRITICAL_THRESHOLD) {
           alerts.push({
             type: "deadline",
             severity: "critical",
@@ -112,7 +123,7 @@ export function useBottleneckDetection() {
           }
         });
         Object.entries(byAgent).forEach(([agent, count]) => {
-          if (count > 15) {
+          if (count > BOTTLENECK_CONFIG.AGENT_OVERLOAD_THRESHOLD) {
             alerts.push({
               type: "overload",
               severity: "warning",
@@ -216,7 +227,7 @@ export function useBottleneckDetection() {
       .subscribe();
 
     detectBottlenecks();
-    intervalRef.current = setInterval(detectBottlenecks, 5 * 60 * 1000);
+    intervalRef.current = setInterval(detectBottlenecks, BOTTLENECK_CONFIG.POLL_INTERVAL_MS);
 
     return () => {
       supabase.removeChannel(channel);

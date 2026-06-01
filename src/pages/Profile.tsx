@@ -158,7 +158,7 @@ export default function Profile() {
             width: "100%",
             padding: "12px 0",
             fontSize: 14,
-            fontFamily: "'DM Sans', sans-serif",
+            fontFamily: "'Roboto', sans-serif",
             opacity: saving ? 0.7 : 1,
             boxShadow: "0 4px 20px rgba(201,168,76,0.3)",
             justifyContent: "center",

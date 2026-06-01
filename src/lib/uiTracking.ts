@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/lib/sessionId";
 
 /**
  * In-app UI tracking. Records lightweight interactions with the operating
@@ -447,17 +448,6 @@ export function validateExportPayload(input: unknown): ExportValidationResult {
     result.bucketIssues.length === 0 &&
     result.rejectedIssues.length === 0;
   return result;
-}
-
-function getSessionId(): string {
-  if (typeof window === "undefined") return "ssr";
-  const KEY = "lf_session_id";
-  let id = sessionStorage.getItem(KEY);
-  if (!id) {
-    id = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(KEY, id);
-  }
-  return id;
 }
 
 export async function trackUiEvent(name: UiEventName, payload: UiEventPayload = {}) {

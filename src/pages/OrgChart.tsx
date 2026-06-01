@@ -230,7 +230,7 @@ function StatsBar({ agents }: { agents: Agent[] }) {
           background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
           borderRadius: 10, borderLeft: `3px solid ${s.color}`,
         }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: s.color, fontFamily: "'Cormorant Garamond', serif" }}>{s.value}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: s.color, fontFamily: "'Roboto', sans-serif" }}>{s.value}</div>
           <div style={{ fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</div>
         </div>
       ))}
@@ -358,7 +358,7 @@ export default function OrgChart() {
 
   return (
     <div
-      style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Inter', sans-serif" }}
+      style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Roboto', sans-serif" }}
       onDragEnd={handleDragEnd}
     >
       <header style={{
@@ -372,7 +372,7 @@ export default function OrgChart() {
           display: "flex", alignItems: "center", gap: 6,
         }}><ArrowLeft size={14} /> Voltar ao Sistema</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#c9a84c", margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Roboto', sans-serif", color: "#c9a84c", margin: 0 }}>
             Organograma JurisAI
           </h1>
           <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Arraste agentes entre departamentos para reorganizar a hierarquia</p>

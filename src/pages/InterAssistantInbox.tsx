@@ -58,6 +58,7 @@ export default function InterAssistantInbox() {
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <button
+            className="btn-voltar"
             onClick={() => navigate("/sistema")}
             style={{
               padding: "8px 16px", borderRadius: 8, border: "1px solid #25253a",

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// DEPRECATED: Use scripts/manage-secrets.mjs push (or npm run secrets:push) instead.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

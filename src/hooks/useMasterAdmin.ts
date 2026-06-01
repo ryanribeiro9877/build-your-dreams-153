@@ -13,11 +13,9 @@ export function useMasterAdmin() {
       setChecking(false);
       return;
     }
-    const emailMaster =
-      user.email?.toLowerCase() === "admin@juridico.com";
     const directorMaster = hasRole("director");
 
-    if (!emailMaster && !directorMaster && !hasRole("admin")) {
+    if (!directorMaster && !hasRole("admin")) {
       setIsMaster(false);
       setChecking(false);
       return;
@@ -42,9 +40,9 @@ export function useMasterAdmin() {
 
     const { data, error } = await supabase.rpc("is_master_admin", { _user_id: user.id });
     if (error) {
-      setIsMaster(emailMaster || directorMaster || profileSocio);
+      setIsMaster(directorMaster || profileSocio);
     } else {
-      setIsMaster(Boolean(data) || emailMaster || directorMaster || profileSocio);
+      setIsMaster(Boolean(data) || directorMaster || profileSocio);
     }
     setChecking(false);
   }, [user, hasRole]);

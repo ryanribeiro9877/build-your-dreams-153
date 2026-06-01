@@ -113,7 +113,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "DM Sans", system-ui, sans-serif;
+    font-family: "Roboto", system-ui, -apple-system, sans-serif;
   }
 }
 
@@ -251,6 +251,16 @@
 .ws-primary-cta-wrap .ws-primary-cta-btn.glow-on-hover:focus-visible {
   outline: 2px solid #eab308;
   outline-offset: 3px;
+}
+
+/* Botão "← Voltar" — hover amarelo */
+.btn-voltar {
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.btn-voltar:hover {
+  color: #c9a84c !important;
+  border-color: rgba(201,168,76,0.5) !important;
+  background: rgba(201,168,76,0.08) !important;
 }
 
 /* Ícone do foguete visível dentro do CTA (Lucide está oculto globalmente) */

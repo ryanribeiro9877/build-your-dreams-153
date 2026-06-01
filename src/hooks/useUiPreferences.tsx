@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
  *
  * Strategy:
  *  - Read initial value from localStorage (instant render, no flash).
- *  - On login, fetch from Lovable Cloud — if a server value exists it overrides
+ *  - On login, fetch from Supabase — if a server value exists it overrides
  *    local storage so the layout follows the user across devices.
  *  - On every change, write to localStorage and (debounced) to the backend.
  */

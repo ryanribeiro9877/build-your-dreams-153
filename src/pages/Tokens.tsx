@@ -34,7 +34,7 @@ export default function Tokens() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { tokenBalance, transactions, loading, fetchTransactions, fetchBalance } = useTokenBalance();
+  const { tokenBalance, transactions, loading, fetchTransactions, fetchBalance } = useTokenBalance(navigate);
   const [loaded, setLoaded] = useState(false);
   const [checkoutPkg, setCheckoutPkg] = useState<typeof TOKEN_PACKAGES[0] | null>(null);
   const checkoutSuccess = searchParams.get("checkout") === "success";

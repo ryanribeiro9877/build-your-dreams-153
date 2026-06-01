@@ -2,11 +2,12 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
+import { AdminRoute } from "@/components/AdminRoute";
+import { MasterRoute } from "@/components/MasterRoute";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Auth = lazy(() => import("./pages/Auth.tsx"));
@@ -35,6 +36,7 @@ const TeamDashboard = lazy(() => import("./pages/TeamDashboard.tsx"));
 const AssignTask = lazy(() => import("./pages/AssignTask.tsx"));
 const ValidationQueue = lazy(() => import("./pages/ValidationQueue.tsx"));
 const InterAssistantInbox = lazy(() => import("./pages/InterAssistantInbox.tsx"));
+const CronJobs = lazy(() => import("./pages/CronJobs.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();
@@ -57,10 +59,22 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   );
 }
 
+function TechRoute({ children }: { children: ReactNode }) {
+  const { user, loading, hasRole } = useAuth();
+  if (loading) return <HexagonLoader variant="fullscreen" />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!hasRole("tech")) return <Navigate to="/sistema" replace />;
+  return (
+    <>
+      <PlatformPresenceSync />
+      {children}
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
@@ -71,7 +85,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/definir-senha" element={<DefinePassword />} />
-              <Route path="/admin/funcionarios" element={<ProtectedRoute><AdminEmployees /></ProtectedRoute>} />
+              <Route path="/admin/funcionarios" element={<AdminRoute><AdminEmployees /></AdminRoute>} />
               <Route
                 path="/admin/funcionarios/novo"
                 element={<Navigate to="/sistema?criar=funcionario" replace />}
@@ -79,20 +93,21 @@ const App = () => (
               <Route path="/sistema" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
               <Route path="/clientes/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
-              <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+              <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
-              <Route path="/admin/modelo-v14" element={<Navigate to="/admin" replace />} />
+
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
               <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
-              <Route path="/admin/tokens" element={<ProtectedRoute><AdminTokens /></ProtectedRoute>} />
-              <Route path="/admin/ui" element={<ProtectedRoute><AdminUiEvents /></ProtectedRoute>} />
-              <Route path="/admin/master" element={<ProtectedRoute><AdminMaster /></ProtectedRoute>} />
-              <Route path="/admin/notificacoes" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
-              <Route path="/admin/agentes" element={<ProtectedRoute><AgentsAdmin /></ProtectedRoute>} />
-              <Route path="/admin/agentes/:id" element={<ProtectedRoute><AgentDetail /></ProtectedRoute>} />
-              <Route path="/configuracoes/providers" element={<ProtectedRoute><ProvidersConfig /></ProtectedRoute>} />
+              <Route path="/admin/tokens" element={<AdminRoute><AdminTokens /></AdminRoute>} />
+              <Route path="/admin/ui" element={<AdminRoute><AdminUiEvents /></AdminRoute>} />
+              <Route path="/admin/master" element={<MasterRoute><AdminMaster /></MasterRoute>} />
+              <Route path="/admin/notificacoes" element={<AdminRoute><AdminNotifications /></AdminRoute>} />
+              <Route path="/admin/agentes" element={<TechRoute><AgentsAdmin /></TechRoute>} />
+              <Route path="/admin/agentes/:id" element={<TechRoute><AgentDetail /></TechRoute>} />
+              <Route path="/configuracoes/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
+              <Route path="/admin/crons" element={<TechRoute><CronJobs /></TechRoute>} />
               <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
               <Route path="/sistema/tarefas" element={<ProtectedRoute><MyInbox /></ProtectedRoute>} />
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />

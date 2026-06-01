@@ -134,7 +134,7 @@ export default function CreateEmployee({ embedded = false, onClose }: CreateEmpl
           <button
             type="button"
             onClick={exitToSistema}
-            className="px-4 py-2 rounded-lg border border-[#25253a] bg-[#11111a] text-sm text-[#c4c4d4] hover:border-[#eab308]/40"
+            className="btn-voltar px-4 py-2 rounded-lg border border-[#25253a] bg-[#11111a] text-sm text-[#c4c4d4] hover:border-[#eab308]/40"
           >
             ← Voltar
           </button>

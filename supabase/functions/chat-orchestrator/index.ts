@@ -512,45 +512,19 @@ serve(async (req) => {
   }
   const assistantMessageId = (asstMsg as { id: string }).id;
 
-  // 9) Atualiza chat_sessions com somatório acumulado.
-  //
-  // Como Supabase JS não tem `.update({ field: sql"field + n" })`, fazemos
-  // read-modify-write. Sob carga seria race; o fluxo do orchestrator é
-  // sequencial por sessão (UI envia próxima mensagem só depois desta resposta),
-  // então o risco é baixo. Se virar problema, migrar para RPC com UPDATE inline:
-  //   UPDATE chat_sessions SET total_cost_usd = total_cost_usd + $1 ...
-  {
-    const { data: cur } = await admin
-      .from("chat_sessions")
-      .select("total_tokens_input, total_tokens_output, total_cost_usd")
-      .eq("id", body.sessionId)
-      .maybeSingle();
-    const c = (cur as {
-      total_tokens_input: number;
-      total_tokens_output: number;
-      total_cost_usd: number;
-    } | null) ?? { total_tokens_input: 0, total_tokens_output: 0, total_cost_usd: 0 };
+  // 9) Atomically increment session counters via RPC (no read-modify-write race).
+  await admin.rpc("increment_session_counters", {
+    p_session_id: body.sessionId,
+    p_tokens_in: providerResult.inputTokens,
+    p_tokens_out: providerResult.outputTokens,
+    p_cost: costUsd,
+  });
 
-    await admin
-      .from("chat_sessions")
-      .update({
-        message_count: nextSeq + 1,
-        total_tokens_input: c.total_tokens_input + providerResult.inputTokens,
-        total_tokens_output: c.total_tokens_output + providerResult.outputTokens,
-        total_cost_usd: Number(c.total_cost_usd) + costUsd,
-        last_message_at: new Date().toISOString(),
-      })
-      .eq("id", body.sessionId);
-  }
-
-  // 10) Atualiza llm_provider_configs (monthly_spent_usd + last_used_at)
-  await admin
-    .from("llm_provider_configs")
-    .update({
-      monthly_spent_usd: Number(provCfg.monthly_spent_usd) + costUsd,
-      last_used_at: new Date().toISOString(),
-    })
-    .eq("id", provCfg.id);
+  // 10) Atomically increment provider spend via RPC.
+  await admin.rpc("increment_provider_spend", {
+    p_config_id: provCfg.id,
+    p_cost: costUsd,
+  });
 
   // 11) Resposta no formato ChatOrchestratorResponse
   return json(200, {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import TaskAttachments from "@/components/TaskAttachments";
 import { useMyInbox, updateUserTaskStatus } from "@/hooks/useUserTasks";
 import { toast } from "sonner";
 import type { UserTaskStatus, TaskPriority } from "@/types/jurisai";
@@ -52,6 +53,7 @@ export default function MyInbox() {
   const [includeCompleted, setIncludeCompleted] = useState(false);
   const { tasks, loading, error, refresh } = useMyInbox(includeCompleted);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const advance = async (taskId: string, current: UserTaskStatus) => {
     const next = NEXT_STATUS[current];
@@ -83,6 +85,7 @@ export default function MyInbox() {
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <button
+            className="btn-voltar"
             onClick={() => navigate("/sistema")}
             style={{
               padding: "8px 16px",
@@ -199,6 +202,24 @@ export default function MyInbox() {
                       >
                         {updatingId === task.id ? "..." : `→ ${STATUS_LABELS[next]}`}
                       </button>
+                    )}
+                  </div>
+
+                  {/* V20: botão expandir anexos + bloco */}
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #25253a" }}>
+                    <button
+                      onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+                      style={{
+                        padding: "6px 10px", borderRadius: 6,
+                        border: "1px solid #25253a", background: "transparent",
+                        color: "#9898b0", fontSize: 11, fontWeight: 600,
+                        cursor: "pointer", letterSpacing: "0.04em",
+                      }}
+                    >
+                      {expandedId === task.id ? "▾ Ocultar anexos" : "▸ Anexos"}
+                    </button>
+                    {expandedId === task.id && (
+                      <TaskAttachments taskId={task.id} canUpload={!isCompleted} />
                     )}
                   </div>
                 </div>

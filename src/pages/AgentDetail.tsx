@@ -216,7 +216,7 @@ export default function AgentDetail() {
         <button
           type="button"
           onClick={() => navigate("/admin/agentes")}
-          className="lf-btn lf-btn--ghost"
+          className="lf-btn lf-btn--ghost btn-voltar"
           aria-label="Voltar para a lista de agentes"
         >
           ← Voltar

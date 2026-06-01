@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type { InterAssistantStatus } from "@/types/jurisai";
 
 /**
@@ -54,134 +54,78 @@ export interface UserForInterAssistant {
 // ─── Inbox (recebidos) ────────────────────────────────────────────────────────
 export function useInterAssistantInbox(includeFinalized = false) {
   const { user } = useAuth();
-  const [items, setItems] = useState<InterAssistantInboxItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!user) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const { data, error: rpcErr } = await supabase.rpc(
-      "get_my_inter_assistant_inbox" as never,
-      { p_include_finalized: includeFinalized } as never,
-    );
-    if (rpcErr) {
-      setError(rpcErr.message);
-      setItems([]);
-    } else {
-      setItems((data as unknown as InterAssistantInboxItem[]) || []);
-    }
-    setLoading(false);
-  }, [user, includeFinalized]);
+  const { data, loading, error, refetch } = useSupabaseQuery<InterAssistantInboxItem[]>({
+    queryKey: `iar-inbox-${user?.id ?? "anon"}`,
+    enabled: !!user,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc(
+        "get_my_inter_assistant_inbox" as never,
+        { p_include_finalized: includeFinalized } as never,
+      );
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as InterAssistantInboxItem[]) || [];
+    },
+    realtime: user
+      ? { table: "inter_assistant_requests", filter: `to_user_id=eq.${user.id}` }
+      : undefined,
+  });
 
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`iar-inbox-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "inter_assistant_requests", filter: `to_user_id=eq.${user.id}` },
-        () => { void refresh(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, refresh]);
-
-  return { items, loading, error, refresh };
+  return { items: data ?? [], loading, error, refresh: refetch };
 }
 
 // ─── Outbox (enviados) ────────────────────────────────────────────────────────
 export function useInterAssistantOutbox(includeFinalized = true) {
   const { user } = useAuth();
-  const [items, setItems] = useState<InterAssistantOutboxItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    if (!user) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const { data } = await supabase.rpc(
-      "get_my_inter_assistant_outbox" as never,
-      { p_include_finalized: includeFinalized } as never,
-    );
-    setItems((data as unknown as InterAssistantOutboxItem[]) || []);
-    setLoading(false);
-  }, [user, includeFinalized]);
+  const { data, loading, refetch } = useSupabaseQuery<InterAssistantOutboxItem[]>({
+    queryKey: `iar-outbox-${user?.id ?? "anon"}`,
+    enabled: !!user,
+    fetcher: async () => {
+      const { data } = await supabase.rpc(
+        "get_my_inter_assistant_outbox" as never,
+        { p_include_finalized: includeFinalized } as never,
+      );
+      return (data as unknown as InterAssistantOutboxItem[]) || [];
+    },
+    realtime: user
+      ? { table: "inter_assistant_requests", filter: `from_user_id=eq.${user.id}` }
+      : undefined,
+  });
 
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`iar-outbox-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "inter_assistant_requests", filter: `from_user_id=eq.${user.id}` },
-        () => { void refresh(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, refresh]);
-
-  return { items, loading, refresh };
+  return { items: data ?? [], loading, refresh: refetch };
 }
 
 // ─── Badge counter ────────────────────────────────────────────────────────────
 export function useInterAssistantCount() {
   const { user } = useAuth();
-  const [count, setCount] = useState(0);
 
-  const refresh = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase.rpc("get_inter_assistant_inbox_count" as never);
-    if (typeof data === "number") setCount(data);
-  }, [user]);
+  const { data } = useSupabaseQuery<number>({
+    queryKey: `iar-count-${user?.id ?? "anon"}`,
+    enabled: !!user,
+    fetcher: async () => {
+      const { data } = await supabase.rpc("get_inter_assistant_inbox_count" as never);
+      return typeof data === "number" ? data : 0;
+    },
+    realtime: user
+      ? { table: "inter_assistant_requests", filter: `to_user_id=eq.${user.id}` }
+      : undefined,
+  });
 
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`iar-count-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "inter_assistant_requests", filter: `to_user_id=eq.${user.id}` },
-        () => { void refresh(); },
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, refresh]);
-
-  return count;
+  return data ?? 0;
 }
 
 // ─── Lista de destinatários elegíveis ─────────────────────────────────────────
 export function useUsersForInterAssistant() {
-  const [users, setUsers] = useState<UserForInterAssistant[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const { data, loading } = useSupabaseQuery<UserForInterAssistant[]>({
+    queryKey: "iar-users",
+    fetcher: async () => {
       const { data } = await supabase.rpc("list_users_for_inter_assistant" as never);
-      if (!cancelled) {
-        setUsers((data as unknown as UserForInterAssistant[]) || []);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+      return (data as unknown as UserForInterAssistant[]) || [];
+    },
+  });
 
-  return { users, loading };
+  return { users: data ?? [], loading };
 }
 
 // ─── Helpers async ────────────────────────────────────────────────────────────

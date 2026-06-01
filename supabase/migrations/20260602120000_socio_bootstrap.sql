@@ -87,7 +87,7 @@ END $$;
 -- ----------------------------------------------------------------------------
 -- 2. Trigger: novos perfis com role_template_id setado provisionam automaticamente
 -- ----------------------------------------------------------------------------
--- Cobre o caso de Lovable/edge-function setar role_template_id sem chamar
+-- Cobre o caso de edge-function setar role_template_id sem chamar
 -- provision_user_agents diretamente. apply_employee_profile já chama, mas
 -- esse trigger é fallback de segurança.
 CREATE OR REPLACE FUNCTION public.trg_profile_after_role_template_set()

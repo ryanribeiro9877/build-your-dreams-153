@@ -159,7 +159,7 @@ export default function EfficiencyKPIs() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#09090f", color: "#e8e8ed", fontFamily: "'Roboto', sans-serif" }}>
       <header style={{
         display: "flex", alignItems: "center", gap: 16, padding: "16px 24px",
         borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)",
@@ -171,7 +171,7 @@ export default function EfficiencyKPIs() {
           display: "flex", alignItems: "center", gap: 6,
         }}><ArrowLeft size={14} /> Voltar ao Sistema</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Cormorant Garamond', serif", color: "#ff6b6b", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Roboto', sans-serif", color: "#ff6b6b", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
             <Brain size={24} /> Central de Eficiência — KPIs em Tempo Real
           </h1>
           <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Métricas de gargalo por departamento · Atualização automática</p>
@@ -238,7 +238,7 @@ export default function EfficiencyKPIs() {
               padding: "16px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
               borderRadius: 10, borderLeft: `3px solid ${k.color}`,
             }}>
-              <div style={{ fontSize: 28, fontWeight: 700, color: k.color, fontFamily: "'Cormorant Garamond', serif" }}>{k.value}</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: k.color, fontFamily: "'Roboto', sans-serif" }}>{k.value}</div>
               <div style={{ fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: "0.08em" }}>{k.label}</div>
             </div>
           ))}

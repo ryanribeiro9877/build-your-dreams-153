@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
+import type { RealtimeConfig } from "@/hooks/useSupabaseQuery";
 import type { LegalArea, OrgStage, AgentRoleV14 } from "@/types/jurisai";
 
 /**
@@ -53,58 +55,33 @@ export interface MyWorkspace {
 
 export function useMyWorkspace() {
   const { user, loading: authLoading } = useAuth();
-  const [workspace, setWorkspace] = useState<MyWorkspace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchWorkspace = useCallback(async () => {
-    if (!user) {
-      setWorkspace(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const { data, error: rpcErr } = await supabase.rpc("get_my_workspace" as never);
-    if (rpcErr) {
-      setError(rpcErr.message);
-      setWorkspace(null);
-    } else if (data) {
-      setWorkspace(data as unknown as MyWorkspace);
-    }
-    setLoading(false);
+  const enabled = !authLoading && !!user;
+
+  const realtimeConfigs = useMemo<RealtimeConfig[]>(() => {
+    if (!user) return [];
+    return [
+      { table: "profiles", filter: `user_id=eq.${user.id}` },
+      { table: "agents", event: "INSERT", filter: `owner_user_id=eq.${user.id}` },
+    ];
   }, [user]);
 
-  useEffect(() => {
-    if (authLoading) return;
-    void fetchWorkspace();
-  }, [authLoading, fetchWorkspace]);
-
-  // Subscription pra atualizar quando profile ou agents mudam (provisionamento async)
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`workspace-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
-        () => { void fetchWorkspace(); },
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "agents", filter: `owner_user_id=eq.${user.id}` },
-        () => { void fetchWorkspace(); },
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, fetchWorkspace]);
+  const { data, loading, error, refetch } = useSupabaseQuery<MyWorkspace>({
+    queryKey: user ? `workspace-${user.id}` : "workspace-anonymous",
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_my_workspace" as never);
+      if (rpcErr) throw new Error(rpcErr.message);
+      return data as unknown as MyWorkspace;
+    },
+    realtime: realtimeConfigs.length > 0 ? realtimeConfigs : undefined,
+    enabled,
+  });
 
   return {
-    workspace,
+    workspace: data,
     loading,
     error,
-    refresh: fetchWorkspace,
+    refresh: refetch,
   };
 }
 

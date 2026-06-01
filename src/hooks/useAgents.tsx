@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 
 /**
  * Fonte de verdade unica para agentes da plataforma.
@@ -51,61 +51,49 @@ interface AgentRow {
   agent_permissions: { permission: string }[] | null;
 }
 
+async function fetchAgents(): Promise<AgentRecord[]> {
+  const { data, error } = await supabase
+    .from("agents")
+    .select(`
+      id, external_id, name, color, role, status,
+      department_id, can_orchestrate, max_concurrent_tasks,
+      current_tasks, reports_to, description, level,
+      departments ( name ),
+      agent_permissions ( permission )
+    `)
+    .eq("is_active", true)
+    .order("external_id", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const rows = (data || []) as unknown as AgentRow[];
+  return rows.map(r => ({
+    id: r.id,
+    externalId: r.external_id,
+    name: r.name,
+    color: r.color,
+    role: r.role,
+    status: r.status,
+    departmentId: r.department_id,
+    departmentName: r.departments?.name ?? "",
+    canOrchestrate: r.can_orchestrate,
+    maxConcurrentTasks: r.max_concurrent_tasks,
+    currentTasks: r.current_tasks,
+    reportsTo: r.reports_to,
+    description: r.description,
+    permissions: (r.agent_permissions ?? []).map(p => p.permission),
+    level: r.level ?? 4,
+  }));
+}
+
 export function useAgents() {
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refetch } = useSupabaseQuery<AgentRecord[]>({
+    queryKey: "agents_realtime",
+    fetcher: fetchAgents,
+    realtime: { table: "agents" },
+  });
 
-  const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("agents")
-      .select(`
-        id, external_id, name, color, role, status,
-        department_id, can_orchestrate, max_concurrent_tasks,
-        current_tasks, reports_to, description, level,
-        departments ( name ),
-        agent_permissions ( permission )
-      `)
-      .eq("is_active", true)
-      .order("external_id", { ascending: true });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    const rows = (data || []) as unknown as AgentRow[];
-    setAgents(rows.map(r => ({
-      id: r.id,
-      externalId: r.external_id,
-      name: r.name,
-      color: r.color,
-      role: r.role,
-      status: r.status,
-      departmentId: r.department_id,
-      departmentName: r.departments?.name ?? "",
-      canOrchestrate: r.can_orchestrate,
-      maxConcurrentTasks: r.max_concurrent_tasks,
-      currentTasks: r.current_tasks,
-      reportsTo: r.reports_to,
-      description: r.description,
-      permissions: (r.agent_permissions ?? []).map(p => p.permission),
-      level: r.level ?? 4,
-    })));
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-    const ch = supabase
-      .channel("agents_realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agents" }, () => load())
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [load]);
-
-  return { agents, loading, error, reload: load };
+  return { agents: data ?? [], loading, error, reload: refetch };
 }
 
 // Helpers analogos aos antigos.

@@ -355,3 +355,65 @@ export interface AgentV14Extension {
   is_overridden: boolean;
   is_personal: boolean;
 }
+
+// ============================================================================
+// V20 — Notificações por e-mail + Anexos em tarefas
+// ============================================================================
+
+export type EmailNotificationType =
+  | "task_assigned"
+  | "task_validation_required"
+  | "task_validated"
+  | "task_rejected"
+  | "inter_assistant_received"
+  | "inter_assistant_answered";
+
+export type EmailNotificationStatus =
+  | "pending"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "skipped";
+
+export interface EmailNotificationRow {
+  id: string;
+  recipient_user_id: string;
+  recipient_email: string;
+  type: EmailNotificationType;
+  subject: string;
+  body_html: string;
+  body_text: string | null;
+  related_task_id: string | null;
+  related_request_id: string | null;
+  status: EmailNotificationStatus;
+  attempts: number;
+  last_error: string | null;
+  scheduled_at: string;
+  sent_at: string | null;
+  resend_id: string | null;
+  created_at: string;
+}
+
+export interface TaskAttachmentRow {
+  id: string;
+  task_id: string;
+  uploader_user_id: string;
+  storage_path: string;
+  file_name: string;
+  file_size_bytes: number;
+  mime_type: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+export interface FindUserMissingAgentsRow {
+  user_id: string;
+  email: string;
+  full_name: string;
+  cargo: string;
+  cargo_label: string;
+  is_estagiario: boolean;
+  templates_esperados: number;
+  agentes_atuais: number;
+  faltam: number;
+}

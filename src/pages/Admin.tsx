@@ -52,7 +52,7 @@ export default function Admin() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => navigate("/sistema")} style={btnBase}>
+        <button type="button" className="btn-voltar" onClick={() => navigate("/sistema")} style={btnBase}>
           ← Voltar
         </button>
         <h1

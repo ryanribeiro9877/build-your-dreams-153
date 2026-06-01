@@ -110,7 +110,7 @@ export default function AgentsAdmin() {
         <button
           type="button"
           onClick={exit}
-          className="lf-btn lf-btn--ghost"
+          className="lf-btn lf-btn--ghost btn-voltar"
           aria-label="Voltar ao sistema"
         >
           ← Voltar

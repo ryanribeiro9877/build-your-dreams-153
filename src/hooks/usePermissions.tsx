@@ -26,6 +26,7 @@ export function usePermissions() {
   };
 
   const isAdmin = primaryRole === "admin";
+  const isTech = userRoles.includes("tech");
   const isDirector = primaryRole === "director";
   const isManager = primaryRole === "manager";
   const canEdit = ["admin", "director", "manager", "lawyer", "receptionist", "financial", "marketing", "protocol", "calculator", "compliance"].includes(primaryRole);
@@ -33,6 +34,8 @@ export function usePermissions() {
   const canAccessAdmin = primaryRole === "admin";
   const canAccessFinancial = ["admin", "director", "manager", "financial"].includes(primaryRole);
   const canAccessClients = ["admin", "director", "manager", "lawyer", "receptionist", "intern"].includes(primaryRole);
+  const canEditAgents = isTech;
+  const canManageCrons = isTech;
   const isReadOnly = !canEdit;
   const roleLabel = visibility.label;
 
@@ -49,8 +52,11 @@ export function usePermissions() {
     canAccessAdmin,
     canAccessFinancial,
     canAccessClients,
+    canEditAgents,
+    canManageCrons,
     isReadOnly,
     isAdmin,
+    isTech,
     isDirector,
     isManager,
   };

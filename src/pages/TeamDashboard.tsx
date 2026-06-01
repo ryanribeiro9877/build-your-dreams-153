@@ -61,6 +61,7 @@ export default function TeamDashboard() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <button
+          className="btn-voltar"
           onClick={() => navigate("/sistema")}
           style={{
             padding: "8px 16px", borderRadius: 8,

@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session, AuthError } from "@supabase/supabase-js";
 
@@ -21,36 +21,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userRoles, setUserRoles] = useState<string[]>([]);
 
+  // Guard: true once getSession resolves, so the onAuthStateChange listener
+  // that fires for the *initial* session skips duplicate work.
+  const initialised = useRef(false);
+  // Track in-flight fetchRoles to avoid double-fetch
+  const rolesFetchId = useRef(0);
+
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchRoles(session.user.id), 0);
+    // Set up the listener FIRST (Supabase docs recommend this order).
+    // The listener will fire for the initial session, but we ignore that
+    // event until getSession has resolved (initialised === true).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Skip events that arrive before getSession resolves — getSession
+      // handles the initial state to avoid a double-fetch.
+      if (!initialised.current) return;
+
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+
+      if (newSession?.user) {
+        fetchRoles(newSession.user.id);
       } else {
         setUserRoles([]);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchRoles(session.user.id);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      initialised.current = true;
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
+
+      if (initialSession?.user) {
+        fetchRoles(initialSession.user.id);
+      } else {
+        // No user — nothing else to wait for.
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   async function fetchRoles(userId: string) {
+    // Bump the id so any earlier in-flight fetch becomes stale.
+    const id = ++rolesFetchId.current;
+
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
+
+    // Only apply the result if this is still the latest fetch.
+    if (id !== rolesFetchId.current) return;
+
     setUserRoles(data?.map(r => r.role) || []);
+    setLoading(false);
   }
 
   const signUp = async (email: string, password: string, displayName: string) => {

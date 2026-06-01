@@ -160,6 +160,7 @@ export default function AssignTaskPage() {
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <button
+            className="btn-voltar"
             onClick={() => navigate("/sistema/equipe")}
             style={{
               padding: "8px 16px", borderRadius: 8,

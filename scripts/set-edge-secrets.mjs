@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// DEPRECATED: Use scripts/manage-secrets.mjs set (or npm run secrets:set) instead.
 /**
  * Aplica secrets da edge function a partir de supabase/.env.local (UTF-8 sem BOM).
  * Requer: npx supabase login

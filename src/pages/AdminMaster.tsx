@@ -150,7 +150,7 @@ export default function AdminMaster() {
       fontFamily: "'DM Sans', sans-serif", padding: 20,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <button onClick={() => navigate("/admin")} style={{
+        <button className="btn-voltar" onClick={() => navigate("/admin")} style={{
           padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
           background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
         }}>← Voltar</button>
