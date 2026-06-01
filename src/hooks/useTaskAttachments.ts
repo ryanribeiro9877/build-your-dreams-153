@@ -94,7 +94,7 @@ export function useTaskAttachments(taskId: string | null) {
       setError(`Arquivo excede 25MB (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
       return null;
     }
-    if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
+    if (!file.type || !ALLOWED_MIME_TYPES.includes(file.type)) {
       setError(`Tipo "${file.type}" não permitido. Use: PDF, DOC, XLS, imagens, TXT, CSV`);
       return null;
     }

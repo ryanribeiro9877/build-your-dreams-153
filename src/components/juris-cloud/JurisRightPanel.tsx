@@ -29,6 +29,7 @@ export interface JurisRightPanelProps {
   allAgents: Agent[];
   visibleAgents: Agent[];
   visibility: { showCapacityPanel: boolean };
+  hasRole: (role: string) => boolean;
 }
 
 export default function JurisRightPanel({
@@ -41,6 +42,7 @@ export default function JurisRightPanel({
   allAgents,
   visibleAgents,
   visibility,
+  hasRole,
 }: JurisRightPanelProps) {
   return (
     <>
@@ -57,7 +59,7 @@ export default function JurisRightPanel({
             { id: "filas", label: "Filas", icon: ListTodo },
             { id: "processos", label: "Processos", icon: FileText },
             { id: "alertas", label: "Alertas", icon: AlertTriangle },
-            { id: "agentes", label: "Agentes", icon: Zap },
+            ...(hasRole("tech") ? [{ id: "agentes", label: "Agentes", icon: Zap }] : []),
           ].map(tab => (
             <div key={tab.id} className={`jc-right-tab ${rightTab === tab.id ? "active" : ""}`} onClick={() => setRightTab(tab.id)}>
               <tab.icon size={12} /> {tab.label}

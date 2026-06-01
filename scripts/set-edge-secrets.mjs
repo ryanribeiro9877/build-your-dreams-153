@@ -11,7 +11,11 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const envPath = path.join(root, "supabase", ".env.local");
-const projectRef = "tsltxvswzdnlmvljpryh";
+const projectRef = process.env.SUPABASE_PROJECT_ID;
+if (!projectRef) {
+  console.error("ERROR: SUPABASE_PROJECT_ID environment variable is required.");
+  process.exit(1);
+}
 
 if (!fs.existsSync(envPath)) {
   console.error("Crie supabase/.env.local com RESEND_API_KEY, INVITE_EMAIL_FROM, SITE_URL.");

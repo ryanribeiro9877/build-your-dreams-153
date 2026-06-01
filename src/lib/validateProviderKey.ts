@@ -112,8 +112,8 @@ export async function validateProviderKey(
 
     if (provider === "google") {
       const r = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmed)}`,
-        { method: "GET" },
+        `https://generativelanguage.googleapis.com/v1beta/models`,
+        { method: "GET", headers: { "x-goog-api-key": trimmed } },
       );
       if (r.status === 200) return { ok: true, detail: "Chave válida no Google AI." };
       if (r.status === 400 || r.status === 401 || r.status === 403)

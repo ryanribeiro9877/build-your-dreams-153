@@ -12,14 +12,10 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const MAX_PER_RUN = 20;
 const MAX_ATTEMPTS = 5;
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 interface Notification {
   id: string;
@@ -39,13 +35,28 @@ interface ResendResponse {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  // --- Authentication: require service_role key or cron secret ---
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const cronSecret = req.headers.get("X-Cron-Secret") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const expectedCronSecret = Deno.env.get("CRON_SECRET") ?? "";
+
+  const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
+  const isCronAuth = expectedCronSecret && cronSecret === expectedCronSecret;
+
+  if (!isServiceRole && !isCronAuth) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Unauthorized. Provide service_role key or X-Cron-Secret header." }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  const admin = createClient(SUPABASE_URL, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
@@ -62,7 +73,7 @@ Deno.serve(async (req: Request) => {
   if (!RESEND_API_KEY) {
     return new Response(
       JSON.stringify({ ok: false, error: "RESEND_API_KEY não configurado em edge_runtime_secrets" }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -79,7 +90,7 @@ Deno.serve(async (req: Request) => {
   if (queueErr) {
     return new Response(
       JSON.stringify({ ok: false, error: queueErr.message }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -88,7 +99,7 @@ Deno.serve(async (req: Request) => {
   if (notifications.length === 0) {
     return new Response(
       JSON.stringify({ ok: true, processed: 0, message: "fila vazia" }),
-      { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -165,6 +176,6 @@ Deno.serve(async (req: Request) => {
       failed: results.filter(r => !r.ok).length,
       results,
     }),
-    { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });

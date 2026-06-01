@@ -20,7 +20,7 @@ interface CronJob {
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "10px 14px", borderRadius: 8,
   background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text1)",
-  fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
+  fontSize: 13, fontFamily: "'Roboto', sans-serif", outline: "none", boxSizing: "border-box",
 };
 const labelStyle: React.CSSProperties = {
   display: "block", fontSize: 10, color: "var(--text3)", marginBottom: 4,
@@ -82,19 +82,19 @@ export default function CronJobs() {
 
   if (!isTech) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text1)", fontFamily: "'DM Sans', sans-serif", padding: 40 }}>
+      <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text1)", fontFamily: "'Roboto', sans-serif", padding: 40 }}>
         <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13 }}>← Voltar</button>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, color: "var(--gold, #c9a84c)", marginTop: 24 }}>Acesso restrito</h1>
+        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, color: "var(--gold, #c9a84c)", marginTop: 24 }}>Acesso restrito</h1>
         <p style={{ color: "var(--text3)", fontSize: 13 }}>A aba de Crons é exclusiva do acesso técnico (papel <code>tech</code>).</p>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text1)", fontFamily: "'DM Sans', sans-serif", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text1)", fontFamily: "'Roboto', sans-serif", padding: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>← Voltar</button>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>Crons · Técnico</h1>
+        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13, fontFamily: "'Roboto', sans-serif" }}>← Voltar</button>
+        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>Crons · Técnico</h1>
         <span style={{ fontSize: 12, color: "var(--text3)", background: "var(--bg2)", padding: "4px 10px", borderRadius: 6 }}>{jobs.length} job(s)</span>
         <button onClick={() => setShowForm(!showForm)} style={{ marginLeft: "auto", padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12", fontSize: 13, fontWeight: 600 }}>{showForm ? "Fechar" : "+ Nova Cron"}</button>
       </div>

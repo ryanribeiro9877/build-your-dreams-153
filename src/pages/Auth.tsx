@@ -3,35 +3,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Crown, Briefcase, ClipboardList, Scale, Building2, BookOpen,
-  CreditCard, Megaphone, FileText, Hash, ShieldCheck, ArrowLeft
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
 const AgentScene3D = lazy(() => import("@/components/AgentScene3D"));
 
-const ROLES = [
-  { value: "admin", label: "Administrador", icon: Crown },
-  { value: "director", label: "Diretor", icon: Briefcase },
-  { value: "manager", label: "Gerente", icon: ClipboardList },
-  { value: "lawyer", label: "Advogado", icon: Scale },
-  { value: "receptionist", label: "Recepcionista", icon: Building2 },
-  { value: "intern", label: "Estagiário", icon: BookOpen },
-  { value: "financial", label: "Financeiro", icon: CreditCard },
-  { value: "marketing", label: "Marketing", icon: Megaphone },
-  { value: "protocol", label: "Protocolo", icon: FileText },
-  { value: "calculator", label: "Calculista", icon: Hash },
-  { value: "compliance", label: "Compliance", icon: ShieldCheck },
-];
 
 export default function Auth() {
   const { user, loading, signUp, signIn } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [mode, setMode] = useState<"login" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [selectedRole, setSelectedRole] = useState("lawyer");
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) return <HexagonLoader variant="fullscreen" />;
@@ -45,10 +27,6 @@ export default function Auth() {
         const { error } = await signIn(email, password);
         if (error) { toast.error(error.message); return; }
         toast.success("Login realizado com sucesso!");
-      } else if (mode === "signup") {
-        const { error } = await signUp(email, password, displayName);
-        if (error) { toast.error(error.message); return; }
-        toast.success("Conta criada! Verifique seu email para confirmar.");
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
@@ -110,19 +88,6 @@ export default function Auth() {
           </div>
         </div>
 
-        {mode !== "forgot" && (
-          <div style={{ display: "flex", marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(37,37,52,0.6)" }}>
-            {(["login", "signup"] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)} style={{
-                flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-                background: mode === m ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
-                color: mode === m ? "#c9a84c" : "#5a5a72",
-                borderBottom: mode === m ? "2px solid #c9a84c" : "2px solid transparent",
-                fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
-              }}>{m === "login" ? "Entrar" : "Criar Conta"}</button>
-            ))}
-          </div>
-        )}
 
         {mode === "forgot" && (
           <div style={{ marginBottom: 20 }}>
@@ -143,12 +108,6 @@ export default function Auth() {
         )}
 
         <form onSubmit={handleSubmit}>
-          {mode === "signup" && (
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nome completo</label>
-              <input type="text" required value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Dr. João Silva" style={inputCss} />
-            </div>
-          )}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Email</label>
             <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@escritorio.com" style={inputCss} />
@@ -161,31 +120,6 @@ export default function Auth() {
             </div>
           )}
 
-          {mode === "signup" && (
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Função no escritório</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {ROLES.map(role => {
-                  const IconComp = role.icon;
-                  return (
-                    <button key={role.value} type="button" onClick={() => setSelectedRole(role.value)} style={{
-                      padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-                      border: selectedRole === role.value ? "1px solid #c9a84c" : "1px solid rgba(37,37,52,0.6)",
-                      background: selectedRole === role.value ? "rgba(201,168,76,0.1)" : "rgba(22,22,31,0.6)",
-                      color: selectedRole === role.value ? "#c9a84c" : "#9898b0",
-                      fontSize: 11, fontFamily: "'DM Sans', sans-serif",
-                      display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s",
-                      backdropFilter: "blur(4px)",
-                    }}>
-                      <IconComp size={14} />
-                      <span>{role.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <button type="submit" disabled={submitting} style={{
             width: "100%", padding: "12px 0", borderRadius: 10, border: "none", cursor: "pointer",
             background: "linear-gradient(135deg, #c9a84c, #e8c96a)",
@@ -195,9 +129,13 @@ export default function Auth() {
             boxShadow: "0 4px 24px rgba(201,168,76,0.35)",
             transition: "all 0.3s",
           }}>
-            {submitting ? "Aguarde..." : mode === "login" ? "Entrar no Sistema" : mode === "signup" ? "Criar Conta" : "Enviar Link de Recuperação"}
+            {submitting ? "Aguarde..." : mode === "login" ? "Entrar no Sistema" : "Enviar Link de Recuperação"}
           </button>
         </form>
+
+        <div style={{ textAlign: "center", marginTop: 14, fontSize: 11, color: "#5a5a72" }}>
+          O cadastro e somente por convite. Solicite acesso ao administrador.
+        </div>
 
         {mode === "login" && (
           <div style={{ textAlign: "center", marginTop: 16 }}>

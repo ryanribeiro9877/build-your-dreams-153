@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { validatePassword, PASSWORD_RULES_HINT } from "@/lib/passwordPolicy";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -27,7 +28,8 @@ export default function ResetPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) { toast.error("As senhas não coincidem"); return; }
-    if (password.length < 6) { toast.error("A senha deve ter pelo menos 6 caracteres"); return; }
+    const check = validatePassword(password);
+    if (!check.valid) { toast.error(check.errors.join(" · ")); return; }
     setSubmitting(true);
     const { error } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
@@ -55,7 +57,7 @@ export default function ResetPassword() {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 20, fontWeight: 600, color: "#eeeef5" }}> Nova Senha</div>
           <div style={{ fontSize: 12, color: "#5a5a72", marginTop: 8 }}>
-            {ready ? "Digite sua nova senha abaixo." : "Verificando link de recuperação..."}
+            {ready ? PASSWORD_RULES_HINT : "Verificando link de recuperação..."}
           </div>
         </div>
 
@@ -63,11 +65,11 @@ export default function ResetPassword() {
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nova senha</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} style={inputCss} />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" minLength={8} style={inputCss} />
             </div>
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Confirmar senha</label>
-              <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repita a senha" minLength={6} style={inputCss} />
+              <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repita a senha" minLength={8} style={inputCss} />
             </div>
             <button type="submit" disabled={submitting} style={{
               width: "100%", padding: "12px 0", borderRadius: 8, border: "none", cursor: "pointer",

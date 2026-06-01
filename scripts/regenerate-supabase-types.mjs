@@ -23,7 +23,11 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..");
-const PROJECT_ID = "tsltxvswzdnlmvljpryh"; // lexforce-prod
+const PROJECT_ID = process.env.SUPABASE_PROJECT_ID;
+if (!PROJECT_ID) {
+  console.error("ERROR: SUPABASE_PROJECT_ID environment variable is required.");
+  process.exit(1);
+}
 const TARGET = resolve(PROJECT_ROOT, "src/integrations/supabase/types.ts");
 
 function log(msg) { console.log(`[regen-types] ${msg}`); }

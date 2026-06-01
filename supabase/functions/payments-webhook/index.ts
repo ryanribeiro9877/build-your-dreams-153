@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsHeaders } from "../_shared/cors.ts";
 import { type StripeEnv, createStripeClient, getConnectionApiKey } from "../_shared/stripe.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -57,6 +57,21 @@ serve(async (req) => {
     if (userId && tokenAmount) {
       const amount = parseInt(tokenAmount, 10);
       if (amount > 0) {
+        // Idempotency guard: check if this webhook was already processed
+        const { data: existing } = await supabase
+          .from('token_transactions')
+          .select('id')
+          .eq('reference_id', session.id)
+          .eq('transaction_type', 'purchase')
+          .maybeSingle();
+
+        if (existing) {
+          console.log('Duplicate webhook delivery, skipping:', session.id);
+          return new Response(JSON.stringify({ received: true, duplicate: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         await supabase.rpc("add_tokens", {
           p_user_id: userId,
           p_amount: amount,

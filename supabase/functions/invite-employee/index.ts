@@ -9,11 +9,7 @@ import {
 } from "../_shared/inviteEmail.ts";
 import { getRuntimeSecret } from "../_shared/runtimeSecrets.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface InviteBody {
   full_name: string;
@@ -177,6 +173,26 @@ serve(async (req) => {
         }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // Rate limiting: check if email already has a recent pending invite (last 5 minutes)
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(u => u.email === email);
+    if (existingUser) {
+      const invitedAt = existingUser.invited_at ?? existingUser.created_at;
+      if (invitedAt) {
+        const inviteTime = new Date(invitedAt).getTime();
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        if (inviteTime > fiveMinutesAgo) {
+          return new Response(
+            JSON.stringify({
+              error: "rate_limited",
+              message: "Um convite já foi enviado para este e-mail nos últimos 5 minutos. Aguarde antes de reenviar.",
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
     }
 
     const meta = {

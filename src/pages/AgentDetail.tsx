@@ -45,7 +45,7 @@ export default function AgentDetail() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const isAdmin = hasRole("admin");
+  const isAdmin = hasRole("admin") || hasRole("tech");
 
   const agent = agents.find((a) => a.id === agentId);
   const configuredProviders = useMemo(

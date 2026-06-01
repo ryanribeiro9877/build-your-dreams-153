@@ -65,8 +65,12 @@ const url = (
   ""
 ).trim();
 const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-const email = (process.env.SEED_ADMIN_EMAIL || "admin@juridico.com").trim();
-const password = process.env.SEED_ADMIN_PASSWORD || "admin123";
+const email = process.env.SEED_ADMIN_EMAIL?.trim();
+const password = process.env.SEED_ADMIN_PASSWORD;
+if (!email || !password) {
+  console.error("ERROR: SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment variables are required.");
+  process.exit(1);
+}
 
 async function findUserByEmail(adminClient, target) {
   let page = 1;

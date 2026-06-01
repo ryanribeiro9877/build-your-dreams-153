@@ -18,6 +18,7 @@ import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
+  Bot, Clock, Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -766,13 +767,15 @@ export default function JurisCloudOS() {
   };
 
   // ── Sidebar dynamic departments (workspace-based or legacy fallback) ──
+  // Stages/areas only visible to tech; other users see only "Meu Assistente"
   const dynamicDepts: SidebarItem[] = (() => {
     if (!workspace?.role_template) return [];
-    const stages = workspace.role_template.stages || [];
-    const areas = workspace.role_template.areas || [];
     const items: SidebarItem[] = [
       { id: "assistente", label: "Meu Assistente", color: ACCENT, badge: 0, isVirtual: true },
     ];
+    if (!hasRole("tech")) return items;
+    const stages = workspace.role_template.stages || [];
+    const areas = workspace.role_template.areas || [];
     for (const stage of stages) {
       if (stage === "todas") continue;
       const label = STAGE_LABELS[stage] || stage;
@@ -824,8 +827,11 @@ export default function JurisCloudOS() {
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
-    { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") },
+    { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
+    { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/admin/agentes"), show: hasRole("tech") },
+    { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/admin/crons"), show: hasRole("tech") },
+    { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/configuracoes/providers"), show: hasRole("tech") },
     { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
@@ -947,6 +953,7 @@ export default function JurisCloudOS() {
           allAgents={AGENTS}
           visibleAgents={visibleAgents}
           visibility={visibility}
+          hasRole={hasRole}
         />
 
         {/* TOGGLES — outside panels to escape overflow:hidden */}

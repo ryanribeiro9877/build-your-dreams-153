@@ -30,7 +30,7 @@ export default function AgentsAdmin() {
     Record<string, { configured: boolean; model: string | null; provider: string | null }>
   >({});
 
-  const isAdmin = hasRole("admin");
+  const isAdmin = hasRole("admin") || hasRole("tech");
 
   // Buscar provider/model de todos os agentes em uma única query
   useEffect(() => {

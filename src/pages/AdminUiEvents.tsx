@@ -172,7 +172,8 @@ export default function AdminUiEvents() {
       rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>())
     );
     const escape = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      let s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const lines = [headers.join(",")];

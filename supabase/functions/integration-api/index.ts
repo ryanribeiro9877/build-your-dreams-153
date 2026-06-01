@@ -111,9 +111,16 @@ const INTEGRATION_RPCS = [
   "apply_employee_profile",
 ];
 
+function assertNoRelationshipTraversal(select: string | undefined): void {
+  if (select && /[()]/.test(select)) {
+    throw new Error('Relationship traversal not allowed in select');
+  }
+}
+
 async function handleSelect(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table) throw new Error("Campo table é obrigatório");
   assertIdentifier(body.table, "table");
+  assertNoRelationshipTraversal(body.select);
 
   const limit = Math.min(body.limit ?? 100, MAX_SELECT_LIMIT);
   const offset = body.offset ?? 0;
@@ -139,6 +146,7 @@ async function handleInsert(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
 
+  assertNoRelationshipTraversal(body.select);
   const { data, error } = await admin.from(body.table).insert(body.data).select(body.select ?? "*");
   if (error) throw new Error(error.message);
   return { ok: true, data };
@@ -147,6 +155,7 @@ async function handleInsert(admin: SupabaseClient, body: IntegrationBody) {
 async function handleUpdate(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
+  assertNoRelationshipTraversal(body.select);
 
   let query = admin.from(body.table).update(body.data);
   query = applyFilters(query, body.filters);
@@ -158,6 +167,7 @@ async function handleUpdate(admin: SupabaseClient, body: IntegrationBody) {
 async function handleDelete(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table) throw new Error("table é obrigatório");
   assertIdentifier(body.table, "table");
+  assertNoRelationshipTraversal(body.select);
 
   let query = admin.from(body.table).delete();
   query = applyFilters(query, body.filters);
@@ -169,7 +179,9 @@ async function handleDelete(admin: SupabaseClient, body: IntegrationBody) {
 async function handleUpsert(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
+  assertNoRelationshipTraversal(body.select);
 
+  if (body.on_conflict) assertIdentifier(body.on_conflict, "on_conflict");
   const opts = body.on_conflict ? { onConflict: body.on_conflict } : undefined;
   const { data, error } = await admin.from(body.table).upsert(body.data, opts).select(body.select ?? "*");
   if (error) throw new Error(error.message);
@@ -211,10 +223,11 @@ async function handleInvokeEdge(req: Request, body: IntegrationBody) {
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+  // Always use service role token — never trust user_authorization from the request
   const headers: Record<string, string> = {
     "content-type": "application/json",
     apikey: anon,
-    authorization: body.user_authorization ?? `Bearer ${service}`,
+    authorization: `Bearer ${service}`,
   };
 
   const resp = await fetch(`${base}/functions/v1/${fn}`, {

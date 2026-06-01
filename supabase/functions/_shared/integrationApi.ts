@@ -1,12 +1,9 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRuntimeSecret } from "./runtimeSecrets.ts";
 
-export const integrationCorsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-integration-key, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+import { corsHeaders as sharedCorsHeaders } from "./cors.ts";
+
+export const integrationCorsHeaders = sharedCorsHeaders;
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -58,11 +55,23 @@ export async function assertIntegrationKey(
     );
   }
 
-  if (provided !== expected) {
+  if (!timingSafeEqual(provided, expected)) {
     return errorResponse("invalid_api_key", "Chave de integração inválida", 403);
   }
 
   return null;
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
+  if (bufA.length !== bufB.length) return false;
+  let result = 0;
+  for (let i = 0; i < bufA.length; i++) {
+    result |= bufA[i] ^ bufB[i];
+  }
+  return result === 0;
 }
 
 export function createServiceClient(): SupabaseClient {

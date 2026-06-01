@@ -163,8 +163,31 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     dashboardWidgets: ["kpis", "alerts"],
     label: "Compliance",
   },
+  tech: {
+    departments: "*",
+    commands: [
+      "Ver gargalos", "Relatório do dia", "Status orquestração", "Auditoria geral",
+    ],
+    menuItems: ["admin", "dashboard", "organograma", "eficiencia", "perfil", "sair"],
+    agentRolesVisible: "*",
+    maxAgentsShown: 20,
+    showCapacityPanel: true,
+    showAlertChips: true,
+    dashboardWidgets: ["kpis", "alerts", "queues", "capacity", "bottlenecks"],
+    label: "Tecnologia",
+  },
 };
 
 export function getRoleVisibility(role: string): RoleVisibility {
-  return ROLE_VISIBILITY[role] || ROLE_VISIBILITY.intern;
+  return ROLE_VISIBILITY[role] || {
+    departments: [],
+    commands: [],
+    menuItems: [],
+    agentRolesVisible: [],
+    maxAgentsShown: 0,
+    showCapacityPanel: false,
+    showAlertChips: false,
+    dashboardWidgets: [],
+    label: "Desconhecido",
+  };
 }

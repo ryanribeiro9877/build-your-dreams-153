@@ -8,15 +8,9 @@ import { useNavigate } from "react-router-dom";
 
 const DOCUMENT_TYPES = [
   { value: "rg", label: "RG" },
-  { value: "cpf", label: "CPF" },
   { value: "comprovante_residencia", label: "Comprovante de Residência" },
-  { value: "extrato_conta", label: "Extrato de Conta" },
-  { value: "extrato_inss", label: "Extrato INSS" },
-  { value: "cnis", label: "CNIS" },
-  { value: "procuracao", label: "Procuração" },
-  { value: "contrato", label: "Contrato" },
-  { value: "certidao", label: "Certidão" },
-  { value: "outro", label: "Outro" },
+  { value: "extrato_conta", label: "Extrato Bancário" },
+  { value: "extrato_ir", label: "Extrato de Imposto de Renda" },
 ];
 
 const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
@@ -140,6 +134,13 @@ export default function Clients() {
   const [cepError, setCepError] = useState("");
   const [hasPix, setHasPix] = useState(false);
 
+  // Document attachments for client creation
+  const [docRgFrente, setDocRgFrente] = useState<File | null>(null);
+  const [docRgVerso, setDocRgVerso] = useState<File | null>(null);
+  const [docComprovante, setDocComprovante] = useState<File | null>(null);
+  const [docIR, setDocIR] = useState<File | null>(null);
+  const [docExtratoBancario, setDocExtratoBancario] = useState<File | null>(null);
+
   const EMPTY_FORM = {
     tipo_pessoa: "fisica", status: "ativo",
     full_name: "", fantasy_name: "", cpf: "", cnpj: "", rg: "", rg_issuer: "", rg_uf: "BA",
@@ -256,12 +257,44 @@ export default function Clients() {
   async function handleCreateClient(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
+
+    // Validate required documents
+    if (!docRgFrente) { toast.error("Anexe o RG (frente)"); return; }
+    if (!docRgVerso) { toast.error("Anexe o RG (verso)"); return; }
+    if (!docComprovante) { toast.error("Anexe o Comprovante de Residência"); return; }
+
     const payload: Record<string, unknown> = { created_by: user.id };
     for (const [k, v] of Object.entries(form)) payload[k] = v === "" ? null : v;
-    const { error } = await supabase.from("clients").insert(payload as any);
-    if (error) { toast.error("Erro ao criar cliente: " + error.message); return; }
+    const { data: inserted, error } = await supabase.from("clients").insert(payload as any).select("id").single();
+    if (error || !inserted) { toast.error("Erro ao criar cliente: " + (error?.message || "sem retorno")); return; }
+
+    const clientId = (inserted as unknown as { id: string }).id;
+
+    // Upload documents
+    const docsToUpload: { file: File; type: string; name: string }[] = [
+      { file: docRgFrente, type: "rg", name: "RG Frente" },
+      { file: docRgVerso, type: "rg", name: "RG Verso" },
+      { file: docComprovante, type: "comprovante_residencia", name: "Comprovante de Residência" },
+    ];
+    if (docIR) docsToUpload.push({ file: docIR, type: "extrato_ir", name: "Extrato Imposto de Renda" });
+    if (docExtratoBancario) docsToUpload.push({ file: docExtratoBancario, type: "extrato_conta", name: "Extrato Bancário" });
+
+    for (const doc of docsToUpload) {
+      const filePath = `${clientId}/${Date.now()}_${doc.file.name}`;
+      const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, doc.file);
+      if (upErr) { toast.error(`Erro ao enviar ${doc.name}: ${upErr.message}`); continue; }
+      await supabase.from("client_documents").insert({
+        client_id: clientId, client_name: form.full_name,
+        document_type: doc.type, document_name: doc.name,
+        file_path: filePath, file_size: doc.file.size, mime_type: doc.file.type,
+        notes: null, uploaded_by: user.id,
+      } as any);
+    }
+
     toast.success("Cliente cadastrado com sucesso!");
     setForm(EMPTY_FORM);
+    setDocRgFrente(null); setDocRgVerso(null); setDocComprovante(null);
+    setDocIR(null); setDocExtratoBancario(null);
     setShowForm(false);
     fetchClients();
   }
@@ -277,11 +310,30 @@ export default function Clients() {
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   }
 
+  const ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg', 'image/png', 'image/webp',
+    'text/plain', 'text/csv'
+  ];
+  const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+
   async function handleUploadAllFiles() {
     if (!pendingFiles.length || !selectedClient || !user) return;
     setUploading(true);
     let successCount = 0;
     for (const file of pendingFiles) {
+      if (!file.type || !ALLOWED_MIME_TYPES.includes(file.type)) {
+        toast.warning(`Arquivo "${file.name}" ignorado: tipo "${file.type || 'desconhecido'}" não permitido.`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.warning(`Arquivo "${file.name}" ignorado: excede 25 MB (${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+        continue;
+      }
       const filePath = `${selectedClient.id}/${Date.now()}_${file.name}`;
       const { error: uploadErr } = await supabase.storage.from("client-documents").upload(filePath, file);
       if (uploadErr) { toast.error("Erro no upload: " + uploadErr.message); continue; }
@@ -628,6 +680,64 @@ export default function Clients() {
             <label style={labelStyle}>Observações</label>
             <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
           </div>
+
+          {/* Document Attachments */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginTop: 16 }}>
+            <div style={secTitle}>Documentos Obrigatórios</div>
+            <div>
+              <label style={labelStyle}>RG — Frente *</label>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={e => setDocRgFrente(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "8px 10px", fontSize: 11 }}
+              />
+              {docRgFrente && <span style={{ fontSize: 10, color: "var(--gold, #c9a84c)", marginTop: 2, display: "block" }}>{docRgFrente.name}</span>}
+            </div>
+            <div>
+              <label style={labelStyle}>RG — Verso *</label>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={e => setDocRgVerso(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "8px 10px", fontSize: 11 }}
+              />
+              {docRgVerso && <span style={{ fontSize: 10, color: "var(--gold, #c9a84c)", marginTop: 2, display: "block" }}>{docRgVerso.name}</span>}
+            </div>
+            <div>
+              <label style={labelStyle}>Comprovante de Residência *</label>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={e => setDocComprovante(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "8px 10px", fontSize: 11 }}
+              />
+              {docComprovante && <span style={{ fontSize: 10, color: "var(--gold, #c9a84c)", marginTop: 2, display: "block" }}>{docComprovante.name}</span>}
+            </div>
+
+            <div style={secTitle}>Documentos Opcionais</div>
+            <div>
+              <label style={labelStyle}>Extrato de Imposto de Renda</label>
+              <input
+                type="file"
+                accept="image/*,.pdf,.xls,.xlsx"
+                onChange={e => setDocIR(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "8px 10px", fontSize: 11 }}
+              />
+              {docIR && <span style={{ fontSize: 10, color: "var(--gold, #c9a84c)", marginTop: 2, display: "block" }}>{docIR.name}</span>}
+            </div>
+            <div>
+              <label style={labelStyle}>Extrato Bancário</label>
+              <input
+                type="file"
+                accept="image/*,.pdf,.xls,.xlsx"
+                onChange={e => setDocExtratoBancario(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "8px 10px", fontSize: 11 }}
+              />
+              {docExtratoBancario && <span style={{ fontSize: 10, color: "var(--gold, #c9a84c)", marginTop: 2, display: "block" }}>{docExtratoBancario.name}</span>}
+            </div>
+          </div>
+
           <button type="submit" style={{
             marginTop: 16, padding: "10px 24px", borderRadius: 10, border: "none", cursor: "pointer",
             background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
@@ -907,11 +1017,36 @@ export default function Clients() {
                         </div>
                         {doc.notes && <div style={{ fontSize: 10, color: "var(--text2)", marginTop: 2 }}>{doc.notes}</div>}
                       </div>
+                      <label style={{
+                        padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(201,168,76,0.3)",
+                        background: "rgba(201,168,76,0.1)", color: "#c9a84c", cursor: "pointer",
+                        fontSize: 10, fontFamily: "'DM Sans', sans-serif", marginRight: 4,
+                      }}>
+                        Substituir
+                        <input type="file" hidden accept="image/*,.pdf,.xls,.xlsx" onChange={async (ev) => {
+                          const file = ev.target.files?.[0];
+                          if (!file || !user || !selectedClient) return;
+                          const filePath = `${selectedClient.id}/${Date.now()}_${file.name}`;
+                          const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
+                          if (upErr) { toast.error("Erro ao enviar: " + upErr.message); return; }
+                          // Remove old file from storage
+                          await supabase.storage.from("client-documents").remove([doc.file_path]);
+                          // Update record
+                          const { error: dbErr } = await supabase.from("client_documents").update({
+                            file_path: filePath, file_size: file.size, mime_type: file.type,
+                            document_name: doc.document_name,
+                          } as any).eq("id", doc.id);
+                          if (dbErr) { toast.error("Erro ao atualizar: " + dbErr.message); return; }
+                          toast.success("Documento substituído!");
+                          fetchDocuments(selectedClient.id);
+                          ev.target.value = "";
+                        }} />
+                      </label>
                       <button onClick={() => handleDeleteDoc(doc)} style={{
                         padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)",
                         background: "rgba(239,68,68,0.1)", color: "#ef4444", cursor: "pointer",
                         fontSize: 10, fontFamily: "'DM Sans', sans-serif",
-                      }}></button>
+                      }}>Excluir</button>
                     </div>
                   );
                 })

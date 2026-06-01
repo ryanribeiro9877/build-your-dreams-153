@@ -48,6 +48,16 @@ export default function DefinePassword() {
     }
 
     setSubmitting(true);
+
+    const { data: turnstileResult, error: turnstileError } = await supabase.functions.invoke('verify-turnstile', {
+      body: { token: captchaToken }
+    });
+    if (turnstileError || !turnstileResult?.success) {
+      toast.error("Verificação de segurança falhou. Tente novamente.");
+      setSubmitting(false);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
 

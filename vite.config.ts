@@ -22,5 +22,6 @@ export default defineConfig(({ mode }) => ({
     // Evitar manualChunks em React/Router: em produção pode gerar ordem de chunks
     // incorreta e tela branca. Code-split fica por React.lazy nas rotas (App.tsx).
     chunkSizeWarningLimit: 900,
+    sourcemap: false,
   },
 }));

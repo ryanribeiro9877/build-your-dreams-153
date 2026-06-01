@@ -218,6 +218,7 @@ export default function JurisSidebar({
           })}
         </nav>
 
+        {hasRole("tech") && (
         <div className="jc-agents-section" aria-label="Agentes ativos">
           <div className="jc-section-label">Agentes ({visibleAgents.length})</div>
           {visibleAgents.map(agent => {
@@ -275,8 +276,8 @@ export default function JurisSidebar({
                   <DropdownMenuItem
                     className="cursor-pointer gap-2 focus:bg-yellow-500/15 focus:text-yellow-50"
                     onSelect={() => {
-                      if (!hasRole("admin")) {
-                        toast.error("Apenas administradores podem configurar agentes.");
+                      if (!hasRole("tech")) {
+                        toast.error("Apenas o usuário técnico pode configurar agentes.");
                         return;
                       }
                       if (!agent.uuid) {
@@ -302,6 +303,7 @@ export default function JurisSidebar({
             );
           })}
         </div>
+        )}
       </div>
     </aside>
   );
