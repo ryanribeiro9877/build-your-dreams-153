@@ -5,6 +5,39 @@ import { useAgents } from "@/hooks/useAgents";
 import { useProviders } from "@/hooks/useProviders";
 import { supabase } from "@/integrations/supabase/client";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import { toast } from "sonner";
+
+// Mapeamento: departamento → setor exibido
+const SECTOR_MAP: Record<string, string> = {
+  diretoria: "CEO", assistente: "CEO", jur_assistente: "CEO",
+  recepcao: "Recepção", jur_recepcao: "Recepção",
+  financeiro: "Financeiro", jur_financeiro: "Financeiro",
+  protocolo: "Advogado", jur_protocolo: "Advogado",
+  audiencias: "Advogado", jur_audiencias: "Advogado",
+  jur_execucao: "Advogado", jur_confeccao: "Advogado",
+  jur_calculos: "Advogado", jur_monitoramento: "Advogado",
+  jur_compliance: "Advogado",
+  civel: "Advogado", trabalhista: "Advogado", tributario: "Advogado", familia: "Advogado",
+  calculos: "Advogado", monitoramento: "Advogado", compliance: "Advogado",
+  marketing: "Marketing", criacao: "Marketing", conversao: "Marketing",
+  eficiencia: "CEO", tech: "Tech",
+};
+
+// Mapeamento: departamento → responsável humano
+const RESPONSIBLE_MAP: Record<string, string> = {
+  diretoria: "Rodrigo", assistente: "Rodrigo", jur_assistente: "Rodrigo",
+  recepcao: "Kailane", jur_recepcao: "Kailane",
+  financeiro: "Ana Rosa", jur_financeiro: "Ana Rosa",
+  protocolo: "Luísa", jur_protocolo: "Luísa",
+  audiencias: "Daiane", jur_audiencias: "Daiane",
+  jur_execucao: "Daiane", jur_confeccao: "Ana Cristina",
+  jur_calculos: "Rodrigo", jur_monitoramento: "Rodrigo",
+  jur_compliance: "Rodrigo",
+  civel: "Rodrigo", trabalhista: "Rodrigo", tributario: "Rodrigo", familia: "Rodrigo",
+  calculos: "Rodrigo", monitoramento: "Rodrigo", compliance: "Rodrigo",
+  marketing: "Rodrigo", criacao: "Rodrigo", conversao: "Rodrigo",
+  eficiencia: "Rodrigo", tech: "Tech Dev",
+};
 
 /**
  * /admin/agentes
@@ -228,6 +261,20 @@ export default function AgentsAdmin() {
                   agent={agent}
                   status={agentLLMStatus[agent.id]}
                   onClick={() => navigate(`/admin/agentes/${agent.id}`)}
+                  onToggleStatus={async (id, current) => {
+                    const next = current === "active" ? "inactive" : "active";
+                    const { error } = await supabase.from("agents").update({ status: next } as any).eq("id", id);
+                    if (error) { toast.error("Erro: " + error.message); return; }
+                    toast.success(next === "active" ? "Agente ativado" : "Agente desativado");
+                    window.location.reload();
+                  }}
+                  onDelete={async (id, name) => {
+                    if (!confirm(`Excluir permanentemente o agente "${name}"?`)) return;
+                    const { error } = await supabase.from("agents").delete().eq("id", id);
+                    if (error) { toast.error("Erro: " + error.message); return; }
+                    toast.success("Agente excluído");
+                    window.location.reload();
+                  }}
                 />
               ))}
             </div>
@@ -244,10 +291,14 @@ function AgentCard({
   agent,
   status,
   onClick,
+  onToggleStatus,
+  onDelete,
 }: {
-  agent: { id: string; name: string; departmentName: string; role: string; level: number; color: string };
+  agent: { id: string; name: string; departmentName: string; role: string; level: number; color: string; status: string };
   status?: { configured: boolean; model: string | null; provider: string | null };
   onClick: () => void;
+  onToggleStatus: (id: string, currentStatus: string) => void;
+  onDelete: (id: string, name: string) => void;
 }) {
   const initials = agent.name
     .split(" ")
@@ -257,41 +308,78 @@ function AgentCard({
     .slice(0, 2)
     .toUpperCase();
 
-  return (
-    <button type="button" onClick={onClick} className="lf-card" aria-label={`Configurar ${agent.name}`}>
-      <div className="lf-card__head">
-        <div
-          className="lf-avatar"
-          style={agent.color ? { background: agent.color } : undefined}
-          aria-hidden
-        >
-          {initials}
-          </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h3 className="lf-card__title">{agent.name}</h3>
-          <p className="lf-card__subtitle">
-            {agent.role}
-            {agent.departmentName ? ` · ${agent.departmentName}` : ""}
-          </p>
-        </div>
-      </div>
+  const deptKey = agent.departmentName?.toLowerCase().replace(/\s+/g, "_") || "";
+  const sector = SECTOR_MAP[deptKey] || agent.departmentName || "—";
+  const responsible = RESPONSIBLE_MAP[deptKey] || "—";
+  const isInactive = agent.status === "inactive";
 
-      <div className="lf-card__meta">
-        <span className="lf-badge lf-badge--neutral lf-badge--mono">N{agent.level}</span>
-        {status?.configured ? (
-          <span className="lf-badge lf-badge--success">
-            <span className="lf-dot lf-dot--success" />
-            {status.model}
-          </span>
-        ) : (
-          <span className="lf-badge lf-badge--warn">
-            <span className="lf-dot lf-dot--warn" />
-            Sem IA
-          </span>
-         )}
-        <span className="lf-spacer" />
-        <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Configurar →</span>
+  return (
+    <div className="lf-card" style={{ opacity: isInactive ? 0.5 : 1, position: "relative" }}>
+      <button type="button" onClick={onClick} style={{ all: "unset", cursor: "pointer", display: "contents" }} aria-label={`Configurar ${agent.name}`}>
+        <div className="lf-card__head">
+          <div
+            className="lf-avatar"
+            style={agent.color ? { background: agent.color } : undefined}
+            aria-hidden
+          >
+            {initials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 className="lf-card__title">
+              {agent.name}{" "}
+              <span style={{ fontSize: 10, fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>
+                ({sector}/{responsible})
+              </span>
+            </h3>
+            <p className="lf-card__subtitle">
+              {agent.role}
+              {agent.departmentName ? ` · ${agent.departmentName}` : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="lf-card__meta">
+          <span className="lf-badge lf-badge--neutral lf-badge--mono">N{agent.level}</span>
+          {isInactive && (
+            <span className="lf-badge" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
+              Desativado
+            </span>
+          )}
+          {status?.configured ? (
+            <span className="lf-badge lf-badge--success">
+              <span className="lf-dot lf-dot--success" />
+              {status.model}
+            </span>
+          ) : (
+            <span className="lf-badge lf-badge--warn">
+              <span className="lf-dot lf-dot--warn" />
+              Sem IA
+            </span>
+          )}
+          <span className="lf-spacer" />
+          <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Configurar →</span>
+        </div>
+      </button>
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid hsl(var(--border) / 0.3)" }}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleStatus(agent.id, agent.status); }}
+          className="lf-btn lf-btn--ghost"
+          style={{ fontSize: 10, padding: "3px 8px", flex: 1 }}
+        >
+          {isInactive ? "✓ Ativar" : "⏸ Desativar"}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(agent.id, agent.name); }}
+          className="lf-btn lf-btn--ghost"
+          style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
+        >
+          🗑 Excluir
+        </button>
       </div>
-    </button>
+    </div>
   );
 }

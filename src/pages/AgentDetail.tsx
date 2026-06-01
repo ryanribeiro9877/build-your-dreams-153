@@ -21,7 +21,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
  * estado, queries e callbacks intactos. Só o visual foi reorganizado.
  */
 
-type TabKey = "identidade" | "modelo" | "prompt" | "memoria" | "provedor";
+type TabKey = "identidade" | "modelo" | "prompt" | "memoria" | "provedor" | "mcp";
 
 const TABS: Array<{ key: TabKey; label: string; hint: string }> = [
   { key: "identidade", label: "Identidade", hint: "Nome, papel, departamento" },
@@ -29,6 +29,7 @@ const TABS: Array<{ key: TabKey; label: string; hint: string }> = [
   { key: "prompt", label: "Prompt", hint: "Persona e tom" },
   { key: "memoria", label: "Memória", hint: "Contexto e long-term" },
   { key: "provedor", label: "Provedor", hint: "Chaves de API" },
+  { key: "mcp", label: "MCP", hint: "Model Context Protocol" },
 ];
 
 export default function AgentDetail() {
@@ -317,14 +318,18 @@ export default function AgentDetail() {
                   providerHasKey={providerHasKey}
                 />
               )}
+              {activeTab === "mcp" && <TabMCP agentId={agentId!} />}
             </>
           )}
         </section>
 
-        {/* Zona de perigo (limpar config) */}
+        {/* Zona de perigo */}
         <div className="lf-panel" style={{ marginTop: 22, borderStyle: "dashed" }}>
-          <h3 className="lf-panel__title">
-            Zona de risco
+          <h3 className="lf-panel__title">Zona de risco</h3>
+          <p className="lf-panel__hint" style={{ marginBottom: 12 }}>
+            Ações destrutivas sobre este agente. Use com cuidado.
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
               className="lf-btn lf-btn--danger-ghost"
@@ -333,11 +338,43 @@ export default function AgentDetail() {
             >
               Limpar config de IA
             </button>
-          </h3>
-          <p className="lf-panel__hint" style={{ marginBottom: 0 }}>
-            Remove provedor, modelo, prompt e demais ajustes deste agente. Não apaga o agente —
-            só zera a configuração de IA.
-          </p>
+            <button
+              type="button"
+              className="lf-btn lf-btn--ghost"
+              style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}
+              disabled={saving}
+              onClick={async () => {
+                if (!agentId) return;
+                const next = agent?.status === "active" ? "inactive" : "active";
+                if (!confirm(next === "inactive" ? "Desativar este agente?" : "Reativar este agente?")) return;
+                setSaving(true);
+                const { error } = await supabase.from("agents").update({ status: next } as any).eq("id", agentId);
+                setSaving(false);
+                if (error) { toast.error(error.message); return; }
+                toast.success(next === "active" ? "Agente ativado" : "Agente desativado");
+                reloadAgents();
+              }}
+            >
+              {agent?.status === "active" ? "⏸ Desativar agente" : "✓ Reativar agente"}
+            </button>
+            <button
+              type="button"
+              className="lf-btn lf-btn--danger-ghost"
+              disabled={saving}
+              onClick={async () => {
+                if (!agentId) return;
+                if (!confirm(`Excluir permanentemente o agente "${agent?.name}"? Esta ação não pode ser desfeita.`)) return;
+                setSaving(true);
+                const { error } = await supabase.from("agents").delete().eq("id", agentId);
+                setSaving(false);
+                if (error) { toast.error(error.message); return; }
+                toast.success("Agente excluído");
+                navigate("/admin/agentes");
+              }}
+            >
+              🗑 Excluir agente
+            </button>
+          </div>
         </div>
       </main>
     </div>
@@ -1096,6 +1133,294 @@ function TabProvedor({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/* ==================================================================
+   TAB MCP — Model Context Protocol
+   ================================================================== */
+
+type McpEntry = {
+  id: string; name: string; url: string; description: string;
+  enabled: boolean; config: Record<string, string>;
+};
+
+function TabMCP({ agentId }: { agentId: string }) {
+  const [mcps, setMcps] = useState<McpEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // New MCP form
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [newCreds, setNewCreds] = useState<Array<{ key: string; value: string }>>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("agent_mcp_servers" as any)
+        .select("*")
+        .eq("agent_id", agentId)
+        .order("created_at", { ascending: true });
+      const rows = ((data as any) || []).map((r: any) => ({
+        ...r, config: r.config && typeof r.config === "object" ? r.config : {},
+      }));
+      setMcps(rows);
+      setLoading(false);
+    })();
+  }, [agentId]);
+
+  const handleAdd = async () => {
+    if (!name.trim() || !url.trim()) { toast.error("Nome e URL são obrigatórios"); return; }
+    const cfg: Record<string, string> = {};
+    for (const c of newCreds) { if (c.key.trim()) cfg[c.key.trim()] = c.value; }
+    const { data, error } = await supabase
+      .from("agent_mcp_servers" as any)
+      .insert({ agent_id: agentId, name: name.trim(), url: url.trim(), description: description.trim(), enabled: true, config: cfg } as any)
+      .select()
+      .single();
+    if (error) { toast.error("Erro: " + error.message); return; }
+    const row = data as any;
+    setMcps(prev => [...prev, { ...row, config: row.config || {} }]);
+    setName(""); setUrl(""); setDescription(""); setNewCreds([]);
+    toast.success("MCP adicionado");
+  };
+
+  const handleToggle = async (id: string, current: boolean) => {
+    const { error } = await supabase.from("agent_mcp_servers" as any).update({ enabled: !current } as any).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMcps(prev => prev.map(m => m.id === id ? { ...m, enabled: !current } : m));
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Remover este MCP server?")) return;
+    const { error } = await supabase.from("agent_mcp_servers" as any).delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMcps(prev => prev.filter(m => m.id !== id));
+    toast.success("MCP removido");
+  };
+
+  const handleSaveConfig = async (id: string, config: Record<string, string>) => {
+    const { error } = await supabase.from("agent_mcp_servers" as any).update({ config } as any).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMcps(prev => prev.map(m => m.id === id ? { ...m, config } : m));
+    toast.success("Credenciais salvas");
+  };
+
+  if (loading) return <HexagonLoader variant="inline" label="Carregando MCPs..." />;
+
+  const inputSm: React.CSSProperties = { fontSize: 12, padding: "6px 10px" };
+  const mask = (v: string) => v.length <= 6 ? "••••••" : v.slice(0, 3) + "•".repeat(v.length - 6) + v.slice(-3);
+
+  return (
+    <div>
+      <div className="lf-panel">
+        <h3 className="lf-panel__title">MCP Servers</h3>
+        <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+          Configure os Model Context Protocol (MCP) servers que este agente pode acessar.
+          Cada MCP pode ter suas próprias credenciais (API keys, tokens, headers).
+        </p>
+
+        {mcps.length === 0 ? (
+          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", textAlign: "center", padding: 16 }}>
+            Nenhum MCP configurado para este agente.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            {mcps.map(mcp => {
+              const isExpanded = expandedId === mcp.id;
+              const configEntries = Object.entries(mcp.config || {});
+              return (
+                <div key={mcp.id} style={{
+                  background: "hsl(var(--card))", border: "1px solid hsl(var(--border))",
+                  borderRadius: 8, opacity: mcp.enabled ? 1 : 0.5, overflow: "hidden",
+                }}>
+                  {/* Header row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                      background: mcp.enabled ? "var(--lf-success, #22c55e)" : "hsl(var(--muted-foreground))",
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "hsl(var(--foreground))" }}>
+                        {mcp.name}
+                        {configEntries.length > 0 && (
+                          <span style={{ fontSize: 10, fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 6 }}>
+                            ({configEntries.length} credencia{configEntries.length === 1 ? "l" : "is"})
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {mcp.url}
+                      </div>
+                      {mcp.description && (
+                        <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{mcp.description}</div>
+                      )}
+                    </div>
+                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
+                      onClick={() => setExpandedId(isExpanded ? null : mcp.id)}
+                    >
+                      {isExpanded ? "▲ Fechar" : "⚙ Credenciais"}
+                    </button>
+                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
+                      onClick={() => handleToggle(mcp.id, mcp.enabled)}
+                    >
+                      {mcp.enabled ? "Desativar" : "Ativar"}
+                    </button>
+                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
+                      onClick={() => handleDelete(mcp.id)}
+                    >
+                      Remover
+                    </button>
+                  </div>
+
+                  {/* Expanded credentials panel */}
+                  {isExpanded && (
+                    <McpCredentialsEditor
+                      config={mcp.config}
+                      onSave={(cfg) => handleSaveConfig(mcp.id, cfg)}
+                      mask={mask}
+                      inputSm={inputSm}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add new MCP */}
+        <div style={{
+          borderTop: "1px solid hsl(var(--border))", paddingTop: 16,
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+        }}>
+          <div className="lf-field">
+            <label className="lf-field__label">Nome do MCP *</label>
+            <input className="lf-input" style={inputSm} value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Supabase MCP" />
+          </div>
+          <div className="lf-field">
+            <label className="lf-field__label">URL / Endpoint *</label>
+            <input className="lf-input" style={inputSm} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://mcp.example.com" />
+          </div>
+          <div className="lf-field" style={{ gridColumn: "1 / -1" }}>
+            <label className="lf-field__label">Descrição (opcional)</label>
+            <input className="lf-input" style={inputSm} value={description} onChange={e => setDescription(e.target.value)} placeholder="O que este MCP faz..." />
+          </div>
+
+          {/* Credentials for new MCP */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label className="lf-field__label" style={{ marginBottom: 6, display: "block" }}>
+              Credenciais / Variáveis de Configuração
+            </label>
+            {newCreds.map((c, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                <input
+                  className="lf-input" style={{ ...inputSm, flex: 1 }}
+                  value={c.key} placeholder="Nome (ex: SUPABASE_URL)"
+                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, key: e.target.value } : cc))}
+                />
+                <input
+                  className="lf-input" style={{ ...inputSm, flex: 1 }}
+                  value={c.value} placeholder="Valor (ex: https://xxx.supabase.co)"
+                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, value: e.target.value } : cc))}
+                />
+                <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
+                  onClick={() => setNewCreds(prev => prev.filter((_, ii) => ii !== i))}
+                >✕</button>
+              </div>
+            ))}
+            <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+              onClick={() => setNewCreds(prev => [...prev, { key: "", value: "" }])}
+            >
+              + Adicionar credencial
+            </button>
+          </div>
+
+          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" className="lf-btn lf-btn--primary" onClick={handleAdd}>
+              + Adicionar MCP
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Inline credentials editor for an existing MCP */
+function McpCredentialsEditor({
+  config, onSave, mask, inputSm,
+}: {
+  config: Record<string, string>;
+  onSave: (cfg: Record<string, string>) => void;
+  mask: (v: string) => string;
+  inputSm: React.CSSProperties;
+}) {
+  const [entries, setEntries] = useState<Array<{ key: string; value: string; revealed: boolean }>>(
+    () => Object.entries(config).map(([k, v]) => ({ key: k, value: v, revealed: false }))
+  );
+
+  const addRow = () => setEntries(prev => [...prev, { key: "", value: "", revealed: true }]);
+  const removeRow = (i: number) => setEntries(prev => prev.filter((_, ii) => ii !== i));
+  const updateRow = (i: number, field: "key" | "value", val: string) =>
+    setEntries(prev => prev.map((e, ii) => ii === i ? { ...e, [field]: val } : e));
+  const toggleReveal = (i: number) =>
+    setEntries(prev => prev.map((e, ii) => ii === i ? { ...e, revealed: !e.revealed } : e));
+
+  const handleSave = () => {
+    const cfg: Record<string, string> = {};
+    for (const e of entries) { if (e.key.trim()) cfg[e.key.trim()] = e.value; }
+    onSave(cfg);
+  };
+
+  return (
+    <div style={{ padding: "10px 14px", borderTop: "1px solid hsl(var(--border) / 0.3)", background: "hsl(var(--card) / 0.5)" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "hsl(var(--foreground))", marginBottom: 8 }}>
+        Credenciais &amp; Variáveis
+      </div>
+      {entries.length === 0 && (
+        <p style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", margin: "4px 0 8px" }}>
+          Nenhuma credencial configurada.
+        </p>
+      )}
+      {entries.map((e, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+          <input
+            className="lf-input" style={{ ...inputSm, flex: 1, fontFamily: "monospace", fontSize: 11 }}
+            value={e.key} placeholder="CHAVE"
+            onChange={ev => updateRow(i, "key", ev.target.value)}
+          />
+          <input
+            className="lf-input" style={{ ...inputSm, flex: 1.5, fontFamily: "monospace", fontSize: 11 }}
+            value={e.revealed ? e.value : mask(e.value)} placeholder="valor"
+            onChange={ev => { updateRow(i, "value", ev.target.value); if (!e.revealed) toggleReveal(i); }}
+            onFocus={() => { if (!e.revealed) toggleReveal(i); }}
+          />
+          <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px" }}
+            onClick={() => toggleReveal(i)} title={e.revealed ? "Ocultar" : "Revelar"}
+          >
+            {e.revealed ? "🙈" : "👁"}
+          </button>
+          <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px", color: "#ef4444" }}
+            onClick={() => removeRow(i)}
+          >✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+          onClick={addRow}
+        >
+          + Adicionar variável
+        </button>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="lf-btn lf-btn--primary" style={{ fontSize: 11, padding: "4px 14px" }}
+          onClick={handleSave}
+        >
+          Salvar credenciais
+        </button>
+      </div>
     </div>
   );
 }
