@@ -47,15 +47,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
       initialised.current = true;
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
 
       if (initialSession?.user) {
-        fetchRoles(initialSession.user.id);
+        // getSession() so le do storage — NAO valida se o token ainda e aceito.
+        // Validamos no servidor com getUser() (que tenta refresh se preciso).
+        // Se o refresh token estiver morto ("sessao zumbi"), limpamos e forcamos
+        // re-login, evitando 401 em todas as chamadas seguintes.
+        const { data: { user: validUser }, error } = await supabase.auth.getUser();
+        if (error || !validUser) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setUserRoles([]);
+          setLoading(false);
+          return;
+        }
+        setSession(initialSession);
+        setUser(validUser);
+        fetchRoles(validUser.id);
       } else {
-        // No user — nothing else to wait for.
+        setSession(null);
+        setUser(null);
         setLoading(false);
       }
     });

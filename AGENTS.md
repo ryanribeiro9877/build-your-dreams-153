@@ -14,8 +14,8 @@
 - **Dono**: Rodrigo Bacellar (`ryanribeiro@cohapm.com.br`). Idioma: **PT-BR**.
 - **Conta de teste**: `admin@juridico.com / admin123` no deploy `build-your-dreams-153.vercel.app`.
 - **Repo**: `https://github.com/ryanribeiro9877/build-your-dreams-153` (branch `main`).
-- **Estado atual**: 17 patches aplicados (V7-V17). Próximas: V18 (validação Yasmin→Kailane) e V19 (protocolo inter-Assistente).
-- **NÃO faça**: não use light mode, não invente cores fora da paleta, não mexa em arquivos sem rodar `vite build` antes de entregar, não pré-crie usuários (todos vêm do convite do sócio).
+- **Estado atual**: 23 patches aplicados (V7-V23). V21 aposentou role `ceo`; V22 adicionou biblioteca de modelos de peticao; V23 transformou o chat em **orquestracao multi-agente N1->N2->N3** (assincrona + Realtime), com modelos rapidos por nivel (NUNCA gpt-5.5 no chat).
+- **NÃO faça**: não use light mode, não invente cores fora da paleta, não mexa em arquivos sem rodar `vite build` antes de entregar, não pré-crie usuários (todos vêm do convite do sócio), não use role `ceo` (deprecated V21).
 
 ---
 
@@ -238,6 +238,9 @@ build-your-dreams-153/
 - `provision_user_agents(p_user_id)` → table (agent_id, template_code, display_name, was_created) — **clona templates como agentes pessoais. Chamado automaticamente por apply_employee_profile.**
 - `get_my_workspace()` → JSON (profile + role_template + agents + is_master)
 
+**V21**:
+- `get_sector_workload(p_target_role_code)` → table (user_id, full_name, pending_count, is_least_loaded) — **roteamento por setor: contagem agregada de pendências por usuário de um papel. SECURITY DEFINER. Única exceção controlada ao isolamento estrito.**
+
 **V17**:
 - `is_role_eligible_for_task(p_task_type_id, p_role_template_id)` → bool
 - `get_eligible_assignees(p_task_type_id)` → table
@@ -254,6 +257,7 @@ build-your-dreams-153/
 **V7**: `provider_code`, `chat_session_status`, `chat_message_role`, `model_tier`
 **V14**: `org_stage`, `legal_area`, `user_task_status`, `coverage_status`, `inter_assistant_status`, `captacao_canal_tipo`
 **V14-update**: `agent_role` ganhou valor `'ceo'` e depois `'assistant_root'`
+**V21**: `'ceo'` **deprecated** (valor morto no enum — nenhum agente ativo o usa). Usar `'assistant_root'` para orquestradores pessoais.
 
 ### Fluxo principal: convite → provisionamento → uso
 
@@ -311,8 +315,8 @@ build-your-dreams-153/
 ### Cores hierárquicas dos agentes
 ```ts
 const HIERARCHY_COLORS = {
-  ceo:             "#EAB308",  // dourado — cor do sistema
-  assistant_root:  "#7a7a92",  // cinza — "Meu Assistente"
+  ceo:             "#EAB308",  // dourado — DEPRECATED V21, valor morto
+  assistant_root:  "#7C3AED",  // roxo — "Meu Assistente" (orquestrador pessoal)
   director:        "#B45309",  // âmbar profundo
   manager:         "#92400E",  // bronze
   specialist:      "#92400E",  // bronze (especialistas)
@@ -338,7 +342,7 @@ Botões `.jc-sidebar-toggle` e `.jc-right-toggle-desk` são **filhos diretos do 
 
 ---
 
-## 6. Histórico de patches (V7 → V19)
+## 6. Histórico de patches (V7 → V23)
 
 ### V7 — Backend Onda 2 (chat-orchestrator BYOK)
 Cria tabelas `model_pricing/llm_provider_configs/chat_sessions/chat_messages`, colunas LLM em agents, RPCs, seed Anthropic, RLS strict, Edge Function BYOK.
@@ -412,13 +416,91 @@ Implementado em cima da V14:
 - Hook `useInterAssistantInbox`
 - UI: aba "Pedidos" no kanban da equipe
 
+### V21 — Aposentar CEO → Meu Assistente por Usuário
+Mudança arquitetural: cada usuário passa a ter **"Meu Assistente" (`assistant_root`) pessoal e privado** como orquestrador, substituindo o modelo de CEO compartilhado.
+
+**5 migrations aplicadas (V21a–V21e):**
+
+1. **V21a — Limpeza CEOs + novos templates** (`v21_retire_ceo_create_assistant_roots`)
+   - Criou templates `asst_root_socio` (gestão) e `asst_root_tech` (visão global)
+   - Atualizou `role_agent_matrix`: socio → `asst_root_socio` (antes: `ceo_lexforce`); tech → `asst_root_tech`
+   - Desativou template `ceo_lexforce` (`is_active=false`)
+   - Desativou 2 CEOs pessoais dos sócios; migrou CEO JurisAI (ext_id=0) para `assistant_root` ("Raiz Organograma Legado")
+   - Desativou "CEO Jurídico" (ext_id=5000) + 9 diretores filhos
+   - Re-provisionou 3 perfis existentes (Ryan, Sócio Bacellar, Tech)
+
+2. **V21b — Remover gating estagiária** (`v21b_remove_estagiario_gating_recepcionista`)
+   - `requires_is_estagiario` zerado na matrix do `recepcionista` → Yasmin recebe os mesmos 12 agentes que Taís
+
+3. **V21c — RLS isolamento de agentes** (`v21c_rls_agents_isolamento_pessoal`)
+   - SELECT: não-pessoais visíveis a todos; pessoais visíveis só ao dono + admin; tech vê sub-agentes de todos **exceto** `assistant_root` de outros
+   - Tech mantém INSERT/UPDATE/DELETE em todos (gestão admin)
+
+4. **V21d — Inter-assistant sem ceo** (`v21d_inter_assistant_remove_ceo_ref`)
+   - `create_inter_assistant_request` e `list_users_for_inter_assistant` agora só referenciam `assistant_root` (sem fallback a `ceo`)
+
+5. **V21e — RPC roteamento por carga** (`v21e_rpc_get_sector_workload`)
+   - `get_sector_workload(role_code)` — SECURITY DEFINER, retorna contagem de `user_tasks` pendentes por usuário de um papel
+   - Exceção controlada ao isolamento: expõe metadado agregado, nunca conteúdo de tarefa
+
+**Fronteira privado/compartilhado (cravada):**
+- **Privado por user** (RLS `user_id`/`owner_user_id`): `chat_sessions`, `chat_messages`, `user_tasks`, agentes pessoais, `inter_assistant_requests`
+- **Compartilhado** (RLS por papel): `clients`, `client_documents`, `processes`, catálogos
+- Dado privado alheio → obrigatoriamente via `inter_assistant_requests` (humano no loop)
+- Dado compartilhado → resposta direta do Meu Assistente
+
+**Critérios de aceite verificados:**
+- 0 agentes ativos com role `ceo`
+- Cada perfil tem 1 `assistant_root` + instâncias do papel, todos `is_personal=true`
+- Provisionamento idempotente no convite
+- RLS impede leitura de memória privada entre usuários
+- Roteamento por setor via contagem agregada
+
+---
+
+### V22 — Biblioteca de modelos + roteamento por exclusividade + injecao no orchestrator
+
+**3 novas tabelas:**
+- `document_library` — modelos de peticao tagueados (doc_type, categoria, reu_categoria, match_keywords, content_cache), compartilhados entre agentes
+- `agent_document_links` — ponte N:N agente <-> modelo (quais modelos cada agente pode usar)
+- `routing_exclusivities` — exclusividade por reu (Agiproteg/Agibank/Facta → socio)
+
+**Alteracao no chat-orchestrator (entre carregar historico e chamar LLM):**
+1. Mini-chamada classificadora → `{area, doc_type, reu_categoria, reu_nome}`
+2. Camada 1 (exclusividade): se reu casa com `routing_exclusivities` e agente nao pertence ao role exclusivo, sinaliza ao usuario
+3. Camada 2 (selecao): busca ate 2 modelos relevantes em `document_library` via `agent_document_links`, filtrando por doc_type/reu_categoria
+4. Monta bloco delimitado (═══ MODELOS DE REFERENCIA ═══) com teto de tokens
+5. Anthropic: bloco com `cache_control: { type: "ephemeral" }`; OpenAI: concatenado ao system prompt
+6. Metadata da classificacao + modelos injetados salva em `chat_messages.metadata`
+
+**Nota:** Os 2 docs existentes sao .docx (nao txt/md). O orchestrator so injeta txt/md nesta fase. Para os .docx funcionarem como contexto, precisam ser re-uploadados em .md ou aguardar parser de docx numa fase seguinte.
+
+### V23 — Orquestracao multi-agente N1->N2->N3 (assincrona + Realtime)
+
+Reescreve o `chat-orchestrator` de single-agent para uma **cadeia hierarquica** com validacao. So o N3 (specialist) executa; N1 (assistant_root) e N2 (director) sao roteadores/validadores.
+
+**Migrations:**
+- Modelos por nivel: N1/N2 -> `gpt-4o-mini` (rapido), N3 -> `gpt-4o` (qualidade). **NUNCA gpt-5.5** no chat (flagship lento, >115s -> timeout).
+- Diretor (N2) para todos: novo `agent_template` `dir_area_geral` vinculado na `role_agent_matrix` aos perfis sem diretor + reprovisionamento. So o socio tinha diretores antes.
+- Tabela `orchestration_runs`: maquina de estado (routing_n1 -> routing_n2 -> executing_n3 -> validating_n2 -> validating_n1 -> done).
+
+**chat-orchestrator (2 modos):**
+- **start** (frontend, JWT): valida, insere user msg, cria run, retorna **202** `{runId}`, dispara passo 1.
+- **step** (interno, header `x-internal-step`=service_role): processa UM passo (1 chamada LLM curta) e re-invoca a si mesmo (`EdgeRuntime.waitUntil` + fetch fire-and-forget) para o proximo. Evita o timeout do Edge Function na cadeia longa.
+- Roteamento: o LLM roteador escolhe o sub-agente (JSON `{agent_id}`) entre `agents WHERE owner_user_id=X AND role=<proximo nivel>`. Validacao: ate `MAX_ITERATIONS=2` correcoes (validador devolve ao N3 com feedback).
+- Progresso publicado como `chat_messages` role='system' (`metadata.kind='stage'`); resposta final role='assistant' (`metadata.kind='final'`).
+
+**Frontend:** `useChatOrchestrator.startOrchestration` (nao espera resposta). `JurisCloudOS` assina **Realtime** em `chat_messages` (filter session_id) + fetch catch-up; alimenta `messages` com dedup por id. `JurisChatPanel` renderiza etapas (`StageLine`) e a resposta final como balao. `thinking` desliga ao chegar `kind=final|error`.
+
+**Validado:** cadeia real Ana -> "Meu Assistente" -> "Diretor de Área" -> "Especialista Confeccao Consumidor" -> resposta, run=done, via pg_net. Ver [[jurisai-orchestrator-gotchas]].
+
 ---
 
 ## 7. Gaps conhecidos / Backlog técnico
 
 ### Crítico (impede produção plena)
 - **2 erros TS pré-existentes** em `src/components/__tests__/JurisCloudOS.responsive.test.tsx` — imports `screen`/`fireEvent` mal mockados. Débito anterior, ignorar.
-- **types.ts do Supabase** desatualizado após V14 (usa `as "agents"` / `as never` pra contornar). Regenerar quando possível.
+- **types.ts do Supabase** desatualizado após V14 (usa `as "agents"` / `as never` pra contornar). Regenerado após V21 mas pode precisar de ajuste manual nos casts.
 
 ### Médio
 - **Sem tool-use** no chat-orchestrator. É o resto da Onda 3.
@@ -454,7 +536,7 @@ O Ryan tem padrão de qualidade alto e detesta retrabalho:
 
 ## 9. Próximas frentes sugeridas (ordem de impacto)
 
-1. **Atualizar types.ts do Supabase** após V19 — destrava cast safety nos hooks
+1. **Atualizar types.ts do Supabase** após V21 — regenerado, verificar casts nos hooks
 2. **Tool-use no chat-orchestrator** — loop de tool calls, persistência em `tool_calls`/`tool_result`
 3. **Streaming SSE** no chat-orchestrator — UX token a token
 4. **Upload real de arquivos** — Supabase Storage + multipart no `chat_messages` e `user_tasks`
@@ -526,7 +608,9 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 | **JurisAI** | nome de exibição do sistema (era LexForce até commit c4cef21) |
 | **JurisCloudOS** | nome interno do componente principal (`src/components/JurisCloudOS.tsx`) |
 | **Bacellar Advogados** | empresa cliente única — Salvador-BA, sócio Rodrigo Bacellar |
-| **Meu Assistente** | agente raiz pessoal de cada funcionário (role `assistant_root`). Sócio tem `CEO LexForce` (role `ceo`). |
+| **Meu Assistente** | agente raiz pessoal de cada funcionário (role `assistant_root`). Privado e isolado — cada user tem o seu. Desde V21, sócio também usa `assistant_root` (CEO aposentado). |
+| **inter_assistant_request** | canal único para pedir estado privado de outro usuário. Humano no loop: destinatário recebe, decide, responde. NUNCA leitura direta. |
+| **get_sector_workload** | RPC SECURITY DEFINER que retorna contagem de pendências por papel — única exceção controlada ao isolamento. |
 | **role_template** | cargo no sistema (socio, adv_confeccao_geral, recepcionista, etc.) |
 | **agent_template** | template de agente IA (~75 cadastrados) — clonado pro user no provisionamento |
 | **task_type** | catálogo de 66 tipos de tarefa atribuíveis |
@@ -544,5 +628,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 02/junho/2026 (após V14-V17 + bootstrap + V18 + V19)
+**Última atualização**: 02/junho/2026 (após V21 — aposentar CEO → Meu Assistente por Usuário)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.

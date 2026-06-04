@@ -33,7 +33,7 @@ export function usePermissions() {
   const canDelete = ["admin", "director"].includes(primaryRole);
   const canAccessAdmin = primaryRole === "admin";
   const canAccessFinancial = ["admin", "director", "manager", "financial"].includes(primaryRole);
-  const canAccessClients = ["admin", "director", "manager", "lawyer", "receptionist", "intern"].includes(primaryRole);
+  const canAccessClients = ["admin", "receptionist"].includes(primaryRole);
   const canEditAgents = isTech;
   const canManageCrons = isTech;
   const isReadOnly = !canEdit;

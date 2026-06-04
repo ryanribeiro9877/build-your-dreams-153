@@ -195,11 +195,14 @@ serve(async (req) => {
       }
     }
 
+    const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
     const meta = {
       display_name: fullName,
       full_name: fullName,
       role_template_id: roleTemplateId,
       is_estagiario: isEstagiario,
+      invite_expires_at: inviteExpiresAt,
     };
 
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
@@ -216,6 +219,13 @@ serve(async (req) => {
     }
 
     const userId = linkData.user.id;
+
+    // Auto-confirmar e-mail — sem necessidade de validacao inicial
+    await adminClient.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+      user_metadata: { ...meta, invite_expires_at: inviteExpiresAt },
+    });
+
     const actionLink = linkData.properties?.action_link ?? redirectTo;
     const inviteFrom = await getRuntimeSecret(adminClient, "INVITE_EMAIL_FROM");
     await sendResendEmail(resendKey, email, fullName, template.display_name, actionLink, inviteFrom);

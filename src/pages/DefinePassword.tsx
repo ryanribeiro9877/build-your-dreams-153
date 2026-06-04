@@ -12,20 +12,43 @@ export default function DefinePassword() {
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
+
+    const checkInviteExpiration = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const expiresAt = user.user_metadata?.invite_expires_at;
+      if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+        setExpired(true);
+        setReady(false);
+      }
+    };
+
     if (hash.includes("type=invite") || hash.includes("type=recovery") || hash.includes("access_token")) {
       setReady(true);
+      checkInviteExpiration();
       return;
     }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setReady(true);
+        checkInviteExpiration();
       }
     });
-    return () => subscription.unsubscribe();
+
+    const timeout = setTimeout(() => {
+      setExpired(true);
+    }, 15000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +75,7 @@ export default function DefinePassword() {
     const { data: turnstileResult, error: turnstileError } = await supabase.functions.invoke('verify-turnstile', {
       body: { token: captchaToken }
     });
-    if (turnstileError || !turnstileResult?.success) {
+    if (turnstileError || !turnstileResult?.ok) {
       toast.error("Verificação de segurança falhou. Tente novamente.");
       setSubmitting(false);
       return;
@@ -124,7 +147,33 @@ export default function DefinePassword() {
           <div style={{ fontSize: 12, color: "#7a7a92", marginTop: 8 }}>{PASSWORD_RULES_HINT}</div>
         </div>
 
-        {!ready ? (
+        {!ready && expired ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏰</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#f87171", marginBottom: 8 }}>
+              Convite expirado ou link invalido
+            </div>
+            <div style={{ fontSize: 12, color: "#7a7a92", lineHeight: 1.6, marginBottom: 16 }}>
+              O prazo de 7 dias para definir sua senha foi ultrapassado. Peca ao administrador para reenviar o convite.
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/auth")}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                background: "#eab308",
+                color: "#09090f",
+                fontWeight: 600,
+                fontSize: 13,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              Ir para login
+            </button>
+          </div>
+        ) : !ready ? (
           <HexagonLoader variant="inline" label="Validando convite..." />
         ) : (
           <form onSubmit={handleSubmit}>

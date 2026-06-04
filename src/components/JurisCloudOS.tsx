@@ -541,7 +541,7 @@ export default function JurisCloudOS() {
   }, []);
 
   const { workspace } = useMyWorkspace();
-  const { startSession, sendMessage: orchestratorSend } = useChatOrchestrator();
+  const { startSession, startOrchestration } = useChatOrchestrator();
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
 
@@ -605,6 +605,53 @@ export default function JurisCloudOS() {
       document.documentElement.classList.add("dark");
     }
   }, []);
+
+  // V23: acompanha a orquestracao via Realtime. Etapas (role=system) e a resposta
+  // final (role=assistant) chegam como linhas em chat_messages. Fetch inicial
+  // (catch-up) + assinatura de INSERTs. Dedup por id; desliga "thinking" no final.
+  useEffect(() => {
+    if (!assistantSessionId) return;
+    let cancelled = false;
+
+    const mapRow = (r: Record<string, any>): JcChatMessage => ({
+      id: r.id,
+      role: r.role,
+      agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
+      content: r.content,
+      kind: r.metadata?.kind,
+      stage: r.metadata?.stage,
+      timestamp: r.created_at
+        ? new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    });
+    const upsert = (rows: JcChatMessage[]) => setMessages(prev => {
+      const seen = new Set(prev.map(m => String(m.id)));
+      const add = rows.filter(r => !seen.has(String(r.id)));
+      return add.length ? [...prev, ...add] : prev;
+    });
+
+    (async () => {
+      const { data } = await supabase.from("chat_messages")
+        .select("id, role, content, metadata, created_at, sequence_number")
+        .eq("session_id", assistantSessionId)
+        .order("sequence_number", { ascending: true });
+      if (cancelled || !data) return;
+      upsert((data as Record<string, any>[]).map(mapRow));
+      if ((data as Record<string, any>[]).some(r => r.metadata?.kind === "final" || r.metadata?.kind === "error")) setThinking(false);
+    })();
+
+    const channel = supabase.channel(`chat:${assistantSessionId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${assistantSessionId}` },
+        (payload) => {
+          const row = payload.new as Record<string, any>;
+          upsert([mapRow(row)]);
+          if (row.metadata?.kind === "final" || row.metadata?.kind === "error") setThinking(false);
+        })
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, [assistantSessionId]);
 
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
@@ -716,8 +763,9 @@ export default function JurisCloudOS() {
       return;
     }
 
-    const userMsg = { id: Date.now(), role: "user", content: val, timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
-    setMessages(prev => [...prev, userMsg]);
+    // V23: a user message, as etapas e a resposta final chegam via Realtime
+    // (inseridas pelo backend). Nao inserimos a conversa localmente — apenas
+    // mensagens de SISTEMA locais (saldo/estorno) que nao passam pelo banco.
     setInputVal("");
     setThinking(true);
 
@@ -725,7 +773,7 @@ export default function JurisCloudOS() {
       await refundTokens(cost, requestId, `Estorno automatico: ${reason}`);
       setThinking(false);
       setMessages(prev => [...prev, {
-        id: Date.now() + 1, role: "assistant", agent: "Sistema",
+        id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
         content: formatTokenRefundMessage(cost, reason),
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       }]);
@@ -734,7 +782,7 @@ export default function JurisCloudOS() {
     try {
       if (!entryAgentId) {
         await refundAndNotify(
-          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o CEO JurisAI (ou outro), na aba Modelo configure provedor + modelo, e salve",
+          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o agente, na aba Modelo configure provedor + modelo, e salve",
         );
         return;
       }
@@ -742,25 +790,35 @@ export default function JurisCloudOS() {
       if (!sid) {
         const { sessionId, error: startErr } = await startSession(entryAgentId, { title: "Meu Assistente" });
         if (!sessionId) { await refundAndNotify(friendlyError(startErr)); return; }
-        setAssistantSessionId(sessionId);
+        setAssistantSessionId(sessionId); // dispara a assinatura Realtime
         sid = sessionId;
       }
-      const { response, error: sendErr } = await orchestratorSend(sid, val);
-      if (!response || !response.content) {
+      // Dispara a orquestracao assincrona. As mensagens chegam via Realtime.
+      const { ok, error: sendErr } = await startOrchestration(sid, val);
+      if (!ok) {
         await refundAndNotify(friendlyError(sendErr ?? { error: "request_failed", message: "agente nao respondeu" }));
         return;
       }
-      setThinking(false);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1, role: "assistant",
-        agent: response.agent?.name || "Assistente",
-        content: response.content,
-        meta: {
-          requestId, tokensCost: cost,
-          orchestration: { agent: response.agent?.name, model: response.model, provider: response.provider, durationMs: response.durationMs, costUsd: response.usage?.costUsd },
-        },
-        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      }]);
+      // Catch-up: garante que a user message e a 1a etapa aparecam mesmo se o
+      // canal assinou apos o INSERT inicial.
+      setTimeout(async () => {
+        const { data } = await supabase.from("chat_messages")
+          .select("id, role, content, metadata, created_at, sequence_number")
+          .eq("session_id", sid).order("sequence_number", { ascending: true });
+        if (!data) return;
+        setMessages(prev => {
+          const seen = new Set(prev.map(m => String(m.id)));
+          const add = (data as Record<string, any>[])
+            .filter(r => !seen.has(String(r.id)))
+            .map(r => ({
+              id: r.id, role: r.role,
+              agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
+              content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
+              timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+            } as JcChatMessage));
+          return add.length ? [...prev, ...add] : prev;
+        });
+      }, 1200);
     } catch (e: unknown) {
       await refundAndNotify(e instanceof Error ? e.message : "erro de rede");
     }
@@ -806,20 +864,23 @@ export default function JurisCloudOS() {
   const visibleCommands = ALL_COMMANDS.filter(c => canSeeCommand(c));
 
   const visibleAgents = (() => {
+    let result: ReturnType<typeof toLegacyAgent>[];
     if (useDynamic && workspace) {
       const wsAgents = workspace.agents || [];
       if (activeDept.startsWith("stage:")) {
         const stage = activeDept.slice(6);
-        return wsAgents.filter(a => a.template_stage === stage).map(toLegacyAgent);
-      }
-      if (activeDept.startsWith("area:")) {
+        result = wsAgents.filter(a => a.template_stage === stage).map(toLegacyAgent);
+      } else if (activeDept.startsWith("area:")) {
         const area = activeDept.slice(5);
-        return wsAgents.filter(a => a.template_area === area).map(toLegacyAgent);
+        result = wsAgents.filter(a => a.template_area === area).map(toLegacyAgent);
+      } else {
+        result = wsAgents.map(toLegacyAgent);
       }
-      return wsAgents.map(toLegacyAgent);
+    } else {
+      const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(AGENTS, activeDept);
+      result = deptAgents.filter(a => canSeeAgentRole(a.role)).slice(0, visibility.maxAgentsShown);
     }
-    const deptAgents = activeDept === "assistente" ? AGENTS : getAgentsForDepartment(AGENTS, activeDept);
-    return deptAgents.filter(a => canSeeAgentRole(a.role)).slice(0, visibility.maxAgentsShown);
+    return result.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   })();
 
   // Menu items

@@ -7,76 +7,109 @@ import { supabase } from "@/integrations/supabase/client";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { toast } from "sonner";
 
-// Mapeamento: departamento → setor exibido
-const SECTOR_MAP: Record<string, string> = {
-  diretoria: "CEO", assistente: "CEO", jur_assistente: "CEO",
-  recepcao: "Recepção", jur_recepcao: "Recepção",
-  financeiro: "Financeiro", jur_financeiro: "Financeiro",
-  protocolo: "Advogado", jur_protocolo: "Advogado",
-  audiencias: "Advogado", jur_audiencias: "Advogado",
-  jur_execucao: "Advogado", jur_confeccao: "Advogado",
-  jur_calculos: "Advogado", jur_monitoramento: "Advogado",
-  jur_compliance: "Advogado",
-  civel: "Advogado", trabalhista: "Advogado", tributario: "Advogado", familia: "Advogado",
-  calculos: "Advogado", monitoramento: "Advogado", compliance: "Advogado",
-  marketing: "Marketing", criacao: "Marketing", conversao: "Marketing",
-  eficiencia: "CEO", tech: "Tech",
-};
+interface TemplateCatalogEntry {
+  templateId: string;
+  code: string;
+  displayName: string;
+  role: string;
+  stage: string | null;
+  area: string | null;
+  defaultColor: string;
+  roleName: string;
+  roleCode: string;
+}
 
-// Mapeamento: departamento → responsável humano
-const RESPONSIBLE_MAP: Record<string, string> = {
-  diretoria: "Rodrigo", assistente: "Rodrigo", jur_assistente: "Rodrigo",
-  recepcao: "Kailane", jur_recepcao: "Kailane",
-  financeiro: "Ana Rosa", jur_financeiro: "Ana Rosa",
-  protocolo: "Luísa", jur_protocolo: "Luísa",
-  audiencias: "Daiane", jur_audiencias: "Daiane",
-  jur_execucao: "Daiane", jur_confeccao: "Ana Cristina",
-  jur_calculos: "Rodrigo", jur_monitoramento: "Rodrigo",
-  jur_compliance: "Rodrigo",
-  civel: "Rodrigo", trabalhista: "Rodrigo", tributario: "Rodrigo", familia: "Rodrigo",
-  calculos: "Rodrigo", monitoramento: "Rodrigo", compliance: "Rodrigo",
-  marketing: "Rodrigo", criacao: "Rodrigo", conversao: "Rodrigo",
-  eficiencia: "Rodrigo", tech: "Tech Dev",
-};
+async function fetchTemplateCatalog(): Promise<TemplateCatalogEntry[]> {
+  const { data, error } = await supabase
+    .from("agent_templates" as any)
+    .select("id, code, display_name, role, stage, area, default_color, sort_order")
+    .eq("is_active", true)
+    .order("sort_order");
+  if (error) throw new Error(error.message);
 
-/**
- * /admin/agentes
- *
- * Listagem de agentes — estilo "Meus Agentes" (bot.zanetti).
- * Cabeçalho com KPIs, busca, filtros e grid de cards clicáveis.
- * Toda a configuração acontece em /admin/agentes/:id (AgentDetail).
- *
- * IMPORTANTE: lógica/hooks/queries permanecem idênticas. Só o visual
- * foi reorganizado para usar as classes utilitárias `.lf-*` definidas
- * em `src/styles/jurisai-modern.css`.
- */
+  const templates = (data || []) as any[];
+  const templateIds = templates.map((t: any) => t.id);
+
+  const { data: matrixData } = await supabase
+    .from("role_agent_matrix" as any)
+    .select("agent_template_id, role_template_id")
+    .in("agent_template_id", templateIds);
+
+  const roleTemplateIds = [...new Set((matrixData || []).map((m: any) => m.role_template_id))];
+  const { data: roleData } = await supabase
+    .from("role_templates" as any)
+    .select("id, code, display_name, sort_order")
+    .in("id", roleTemplateIds)
+    .order("sort_order");
+
+  const roleMap: Record<string, { code: string; displayName: string; sortOrder: number }> = {};
+  for (const r of (roleData || []) as any[]) {
+    roleMap[r.id] = { code: r.code, displayName: r.display_name, sortOrder: r.sort_order };
+  }
+
+  const entries: TemplateCatalogEntry[] = [];
+  for (const m of (matrixData || []) as any[]) {
+    const t = templates.find((tt: any) => tt.id === m.agent_template_id);
+    const role = roleMap[m.role_template_id];
+    if (!t || !role) continue;
+    entries.push({
+      templateId: t.id,
+      code: t.code,
+      displayName: t.display_name,
+      role: t.role,
+      stage: t.stage,
+      area: t.area,
+      defaultColor: t.default_color || "#c9a84c",
+      roleName: role.displayName,
+      roleCode: role.code,
+    });
+  }
+
+  entries.sort((a, b) => {
+    const ra = roleMap[Object.keys(roleMap).find(k => roleMap[k].code === a.roleCode)!]?.sortOrder ?? 99;
+    const rb = roleMap[Object.keys(roleMap).find(k => roleMap[k].code === b.roleCode)!]?.sortOrder ?? 99;
+    if (ra !== rb) return ra - rb;
+    return a.displayName.localeCompare(b.displayName, "pt-BR");
+  });
+
+  return entries;
+}
+
 export default function AgentsAdmin() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { agents, loading: loadingAgents } = useAgents();
   const { configs, loading: loadingProviders } = useProviders();
 
+  const [catalog, setCatalog] = useState<TemplateCatalogEntry[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "configured" | "unconfigured">("all");
-  const [filterDepartment, setFilterDepartment] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
   const [agentLLMStatus, setAgentLLMStatus] = useState<
     Record<string, { configured: boolean; model: string | null; provider: string | null }>
   >({});
 
   const isAdmin = hasRole("admin") || hasRole("tech");
 
-  // Buscar provider/model de todos os agentes em uma única query
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchTemplateCatalog()
+      .then(setCatalog)
+      .catch(() => setCatalog([]))
+      .finally(() => setLoadingCatalog(false));
+  }, [isAdmin]);
+
   useEffect(() => {
     if (!isAdmin || agents.length === 0) return;
+    const agentIds = agents.map((a) => a.id);
     (async () => {
       const { data } = await supabase
         .from("agents")
-        .select("id, provider, model");
+        .select("id, provider, model, source_template_id")
+        .in("id", agentIds);
       if (data) {
         const map: Record<string, { configured: boolean; model: string | null; provider: string | null }> = {};
-        // Supabase generated types não incluem `provider`/`model` na tabela `agents`,
-        // mas as colunas existem no banco — cast via `unknown` para o tipo real.
-        for (const row of data as unknown as { id: string; provider: string | null; model: string | null }[]) {
+        for (const row of data as unknown as { id: string; provider: string | null; model: string | null; source_template_id: string | null }[]) {
           map[row.id] = {
             configured: !!(row.provider && row.model),
             model: row.model,
@@ -86,38 +119,38 @@ export default function AgentsAdmin() {
         setAgentLLMStatus(map);
       }
     })();
-  }, [isAdmin, agents.length]);
+  }, [isAdmin, agents]);
 
-  const departments = useMemo(() => {
-    const set = new Set<string>();
+  const agentByTemplate = useMemo(() => {
+    const map: Record<string, typeof agents[0]> = {};
     for (const a of agents) {
-      if (a.departmentName) set.add(a.departmentName);
+      const key = a.name;
+      if (!map[key]) map[key] = a;
     }
-    return Array.from(set).sort();
+    return map;
   }, [agents]);
 
-  const visibleAgents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return agents
-      .filter((a) => {
-        if (q && !a.name.toLowerCase().includes(q) && !a.role.toLowerCase().includes(q)) return false;
-        if (filterDepartment !== "all" && a.departmentName !== filterDepartment) return false;
-        const status = agentLLMStatus[a.id];
-        if (filterStatus === "configured") return status?.configured === true;
-        if (filterStatus === "unconfigured") return !status?.configured;
-        return true;
-      });
-  }, [agents, search, filterStatus, filterDepartment, agentLLMStatus]);
+  const roleNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of catalog) set.add(c.roleName);
+    return Array.from(set);
+  }, [catalog]);
 
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return catalog.filter((c) => {
+      if (q && !c.displayName.toLowerCase().includes(q) && !c.role.toLowerCase().includes(q) && !c.roleName.toLowerCase().includes(q)) return false;
+      if (filterRole !== "all" && c.roleName !== filterRole) return false;
+      return true;
+    });
+  }, [catalog, search, filterRole]);
+
+  const instancedCount = agents.length;
   const configuredCount = Object.values(agentLLMStatus).filter((s) => s.configured).length;
-  const unconfiguredCount = agents.length - configuredCount;
 
   const exit = () => navigate("/sistema");
 
-  if (!user) {
-    navigate("/auth");
-    return null;
-  }
+  if (!user) { navigate("/auth"); return null; }
 
   if (!isAdmin) {
     return (
@@ -126,32 +159,27 @@ export default function AgentsAdmin() {
           <div className="lf-panel" style={{ maxWidth: 420, margin: "0 auto" }}>
             <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>Acesso restrito</h2>
             <p className="lf-panel__hint" style={{ marginBottom: 18 }}>
-              Apenas administradores podem acessar esta página.
+              Apenas administradores podem acessar esta pagina.
             </p>
-            <button type="button" onClick={exit} className="lf-btn lf-btn--ghost">
-              Voltar ao sistema
-            </button>
+            <button type="button" onClick={exit} className="lf-btn lf-btn--ghost">Voltar ao sistema</button>
           </div>
         </div>
       </div>
     );
   }
 
+  const loading = loadingAgents || loadingCatalog;
+
   return (
     <div className="lf-modern lf-page">
       <header className="lf-header">
-        <button
-          type="button"
-          onClick={exit}
-          className="lf-btn lf-btn--ghost btn-voltar"
-          aria-label="Voltar ao sistema"
-        >
+        <button type="button" onClick={exit} className="lf-btn lf-btn--ghost btn-voltar" aria-label="Voltar ao sistema">
           ← Voltar
         </button>
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
           <h1>Agentes do sistema</h1>
           <p className="lf-header__subtitle">
-            {agents.length} agentes · {configuredCount} com IA configurada · clique num card para configurar
+            {catalog.length} agentes definidos · {instancedCount} instanciados · {configuredCount} com IA configurada
           </p>
         </div>
         <div className="lf-row" style={{ marginLeft: "auto" }}>
@@ -159,7 +187,6 @@ export default function AgentsAdmin() {
             type="button"
             onClick={() => navigate("/configuracoes/providers")}
             className="lf-btn lf-btn--ghost"
-            title="Gestão centralizada de provedores (também acessível pela aba Provedor dentro de cada agente)"
           >
             Provedores
           </button>
@@ -170,9 +197,14 @@ export default function AgentsAdmin() {
         {/* KPIs */}
         <section className="lf-stats">
           <div className="lf-stat">
-            <div className="lf-stat__label">Total</div>
-            <div className="lf-stat__value">{agents.length}</div>
-            <div className="lf-stat__hint">Agentes cadastrados</div>
+            <div className="lf-stat__label">Total definido</div>
+            <div className="lf-stat__value">{catalog.length}</div>
+            <div className="lf-stat__hint">Templates por papel</div>
+          </div>
+          <div className="lf-stat lf-stat--gold">
+            <div className="lf-stat__label">Instanciados</div>
+            <div className="lf-stat__value">{instancedCount}</div>
+            <div className="lf-stat__hint">Criados para usuarios</div>
           </div>
           <div className="lf-stat lf-stat--success">
             <div className="lf-stat__label">Configurados</div>
@@ -180,18 +212,12 @@ export default function AgentsAdmin() {
             <div className="lf-stat__hint">Com provedor + modelo</div>
           </div>
           <div className="lf-stat lf-stat--warn">
-            <div className="lf-stat__label">Sem IA</div>
-            <div className="lf-stat__value">{unconfiguredCount}</div>
-            <div className="lf-stat__hint">Aguardando configuração</div>
-          </div>
-          <div className="lf-stat lf-stat--gold">
-            <div className="lf-stat__label">Departamentos</div>
-            <div className="lf-stat__value">{departments.length}</div>
-            <div className="lf-stat__hint">Áreas com agentes ativos</div>
+            <div className="lf-stat__label">Papeis</div>
+            <div className="lf-stat__value">{roleNames.length}</div>
+            <div className="lf-stat__hint">Cargos com agentes</div>
           </div>
         </section>
 
-        {/* Alerta se nenhum provedor cadastrado */}
         {!loadingProviders && configs.length === 0 && (
           <div className="lf-panel" style={{ borderColor: "rgba(255, 107, 107, 0.35)", background: "rgba(255, 107, 107, 0.06)", marginBottom: 18 }}>
             <h3 className="lf-panel__title" style={{ color: "#ff6b6b", fontSize: 13 }}>
@@ -215,68 +241,53 @@ export default function AgentsAdmin() {
               className="lf-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome ou papel..."
+              placeholder="Buscar por nome, papel ou cargo..."
             />
           </div>
           <select
             className="lf-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as "all" | "configured" | "unconfigured")}
-            style={{ minWidth: 180 }}
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            style={{ minWidth: 220 }}
           >
-            <option value="all">Todos ({agents.length})</option>
-            <option value="configured">Configurados ({configuredCount})</option>
-            <option value="unconfigured">Sem IA ({unconfiguredCount})</option>
-          </select>
-          <select
-            className="lf-select"
-            value={filterDepartment}
-            onChange={(e) => setFilterDepartment(e.target.value)}
-            style={{ minWidth: 200 }}
-          >
-            <option value="all">Todos os departamentos</option>
-            {departments.map((d) => (
-              <option key={d} value={d}>{d}</option>
+            <option value="all">Todos os cargos ({catalog.length})</option>
+            {roleNames.map((r) => (
+              <option key={r} value={r}>
+                {r} ({catalog.filter((c) => c.roleName === r).length})
+              </option>
             ))}
           </select>
         </section>
 
-        {/* Lista de agentes */}
-        {loadingAgents ? (
+        {/* Lista */}
+        {loading ? (
           <HexagonLoader variant="inline" label="Carregando agentes..." />
-        ) : visibleAgents.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="lf-empty">
             Nenhum agente corresponde aos filtros.<br />
-            Tente limpar a busca ou trocar de departamento.
+            Tente limpar a busca ou trocar o cargo.
           </div>
         ) : (
           <>
             <p className="lf-header__subtitle" style={{ margin: "0 0 10px" }}>
-              Exibindo {visibleAgents.length} de {agents.length} agentes
+              Exibindo {visible.length} de {catalog.length} agentes
             </p>
             <div className="lf-grid lf-stagger">
-              {visibleAgents.map((agent) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  status={agentLLMStatus[agent.id]}
-                  onClick={() => navigate(`/admin/agentes/${agent.id}`)}
-                  onToggleStatus={async (id, current) => {
-                    const next = current === "active" ? "inactive" : "active";
-                    const { error } = await supabase.from("agents").update({ status: next } as any).eq("id", id);
-                    if (error) { toast.error("Erro: " + error.message); return; }
-                    toast.success(next === "active" ? "Agente ativado" : "Agente desativado");
-                    window.location.reload();
-                  }}
-                  onDelete={async (id, name) => {
-                    if (!confirm(`Excluir permanentemente o agente "${name}"?`)) return;
-                    const { error } = await supabase.from("agents").delete().eq("id", id);
-                    if (error) { toast.error("Erro: " + error.message); return; }
-                    toast.success("Agente excluído");
-                    window.location.reload();
-                  }}
-                />
-              ))}
+              {visible.map((entry, idx) => {
+                const matchedAgent = agentByTemplate[entry.displayName];
+                const status = matchedAgent ? agentLLMStatus[matchedAgent.id] : undefined;
+                const hasInstance = !!matchedAgent;
+
+                return (
+                  <TemplateCard
+                    key={`${entry.code}-${entry.roleCode}-${idx}`}
+                    entry={entry}
+                    hasInstance={hasInstance}
+                    status={status}
+                    onClick={hasInstance ? () => navigate(`/admin/agentes/${matchedAgent.id}`) : undefined}
+                  />
+                );
+              })}
             </div>
           </>
         )}
@@ -287,20 +298,18 @@ export default function AgentsAdmin() {
 
 /* ------------------------------------------------------------------ */
 
-function AgentCard({
-  agent,
+function TemplateCard({
+  entry,
+  hasInstance,
   status,
   onClick,
-  onToggleStatus,
-  onDelete,
 }: {
-  agent: { id: string; name: string; departmentName: string; role: string; level: number; color: string; status: string };
+  entry: TemplateCatalogEntry;
+  hasInstance: boolean;
   status?: { configured: boolean; model: string | null; provider: string | null };
-  onClick: () => void;
-  onToggleStatus: (id: string, currentStatus: string) => void;
-  onDelete: (id: string, name: string) => void;
+  onClick?: () => void;
 }) {
-  const initials = agent.name
+  const initials = entry.displayName
     .split(" ")
     .filter(Boolean)
     .map((w) => w[0])
@@ -308,78 +317,58 @@ function AgentCard({
     .slice(0, 2)
     .toUpperCase();
 
-  const deptKey = agent.departmentName?.toLowerCase().replace(/\s+/g, "_") || "";
-  const sector = SECTOR_MAP[deptKey] || agent.departmentName || "—";
-  const responsible = RESPONSIBLE_MAP[deptKey] || "—";
-  const isInactive = agent.status === "inactive";
-
   return (
-    <div className="lf-card" style={{ opacity: isInactive ? 0.5 : 1, position: "relative" }}>
-      <button type="button" onClick={onClick} style={{ all: "unset", cursor: "pointer", display: "contents" }} aria-label={`Configurar ${agent.name}`}>
+    <div
+      className="lf-card"
+      style={{ position: "relative", opacity: hasInstance ? 1 : 0.65 }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!onClick}
+        style={{ all: "unset", cursor: onClick ? "pointer" : "default", display: "contents" }}
+        aria-label={`${entry.displayName} — ${entry.roleName}`}
+      >
         <div className="lf-card__head">
           <div
             className="lf-avatar"
-            style={agent.color ? { background: agent.color } : undefined}
+            style={{ background: entry.defaultColor }}
             aria-hidden
           >
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 className="lf-card__title">
-              {agent.name}{" "}
-              <span style={{ fontSize: 10, fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>
-                ({sector}/{responsible})
-              </span>
-            </h3>
+            <h3 className="lf-card__title">{entry.displayName}</h3>
             <p className="lf-card__subtitle">
-              {agent.role}
-              {agent.departmentName ? ` · ${agent.departmentName}` : ""}
+              {entry.role} · {entry.roleName}
             </p>
           </div>
         </div>
 
         <div className="lf-card__meta">
-          <span className="lf-badge lf-badge--neutral lf-badge--mono">N{agent.level}</span>
-          {isInactive && (
-            <span className="lf-badge" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
-              Desativado
-            </span>
-          )}
-          {status?.configured ? (
-            <span className="lf-badge lf-badge--success">
-              <span className="lf-dot lf-dot--success" />
-              {status.model}
-            </span>
+          {hasInstance ? (
+            status?.configured ? (
+              <span className="lf-badge lf-badge--success">
+                <span className="lf-dot lf-dot--success" />
+                {status.model}
+              </span>
+            ) : (
+              <span className="lf-badge lf-badge--warn">
+                <span className="lf-dot lf-dot--warn" />
+                Sem IA
+              </span>
+            )
           ) : (
-            <span className="lf-badge lf-badge--warn">
-              <span className="lf-dot lf-dot--warn" />
-              Sem IA
+            <span className="lf-badge" style={{ background: "rgba(156,163,175,0.15)", color: "#9ca3af" }}>
+              Aguardando usuario
             </span>
           )}
           <span className="lf-spacer" />
-          <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Configurar →</span>
+          {hasInstance && (
+            <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Configurar →</span>
+          )}
         </div>
       </button>
-
-      {/* Action buttons */}
-      <div style={{ display: "flex", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid hsl(var(--border) / 0.3)" }}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleStatus(agent.id, agent.status); }}
-          className="lf-btn lf-btn--ghost"
-          style={{ fontSize: 10, padding: "3px 8px", flex: 1 }}
-        >
-          {isInactive ? "✓ Ativar" : "⏸ Desativar"}
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(agent.id, agent.name); }}
-          className="lf-btn lf-btn--ghost"
-          style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
-        >
-          🗑 Excluir
-        </button>
-      </div>
     </div>
   );
 }

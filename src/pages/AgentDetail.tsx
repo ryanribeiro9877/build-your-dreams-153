@@ -6,6 +6,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
 import { useAgentLLMConfig, SUGGESTED_BY_LEVEL } from "@/hooks/useAgentLLMConfig";
 import { validateProviderKey, type ValidationResult } from "@/lib/validateProviderKey";
+import { useAgentDocuments, type AgentDocument } from "@/hooks/useAgentDocuments";
 import type { ProviderCode, AgentLLMConfig } from "@/types/jurisai";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
@@ -21,14 +22,16 @@ import { HexagonLoader } from "@/components/HexagonLoader";
  * estado, queries e callbacks intactos. Só o visual foi reorganizado.
  */
 
-type TabKey = "identidade" | "modelo" | "prompt" | "memoria" | "provedor" | "mcp";
+type TabKey = "identidade" | "modelo" | "prompt" | "memoria" | "markdown" | "provedor" | "mcp" | "tools";
 
 const TABS: Array<{ key: TabKey; label: string; hint: string }> = [
   { key: "identidade", label: "Identidade", hint: "Nome, papel, departamento" },
   { key: "modelo", label: "Modelo", hint: "Provedor e modelo de IA" },
   { key: "prompt", label: "Prompt", hint: "Persona e tom" },
   { key: "memoria", label: "Memória", hint: "Contexto e long-term" },
+  { key: "markdown", label: "Markdown", hint: "Arquivos de referência" },
   { key: "provedor", label: "Provedor", hint: "Chaves de API" },
+  { key: "tools", label: "Tools", hint: "Habilidades do agente" },
   { key: "mcp", label: "MCP", hint: "Model Context Protocol" },
 ];
 
@@ -318,6 +321,8 @@ export default function AgentDetail() {
                   providerHasKey={providerHasKey}
                 />
               )}
+              {activeTab === "markdown" && <TabMarkdown agentId={agentId!} />}
+              {activeTab === "tools" && <TabTools agentId={agentId!} />}
               {activeTab === "mcp" && <TabMCP agentId={agentId!} />}
             </>
           )}
@@ -345,17 +350,17 @@ export default function AgentDetail() {
               disabled={saving}
               onClick={async () => {
                 if (!agentId) return;
-                const next = agent?.status === "active" ? "inactive" : "active";
-                if (!confirm(next === "inactive" ? "Desativar este agente?" : "Reativar este agente?")) return;
+                if (!confirm("Desativar este agente?")) return;
                 setSaving(true);
-                const { error } = await supabase.from("agents").update({ status: next } as any).eq("id", agentId);
+                const { error } = await supabase.from("agents").update({ is_active: false } as any).eq("id", agentId);
                 setSaving(false);
                 if (error) { toast.error(error.message); return; }
-                toast.success(next === "active" ? "Agente ativado" : "Agente desativado");
+                toast.success("Agente desativado");
                 reloadAgents();
+                navigate("/admin/agentes");
               }}
             >
-              {agent?.status === "active" ? "⏸ Desativar agente" : "✓ Reativar agente"}
+              ⏸ Desativar agente
             </button>
             <button
               type="button"
@@ -1138,74 +1143,699 @@ function TabProvedor({
 }
 
 /* ==================================================================
+   TAB MARKDOWN — Arquivos de referência na memória do agente
+   ================================================================== */
+
+function TabMarkdown({ agentId }: { agentId: string }) {
+  const { documents, loading, upload, remove, toggleActive, updateDescription, getDownloadUrl } =
+    useAgentDocuments(agentId);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [editingDesc, setEditingDesc] = useState<string | null>(null);
+  const [descDraft, setDescDraft] = useState("");
+
+  const handleFiles = async (files: FileList | File[]) => {
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      const ok = await upload(file);
+      if (ok) toast.success(`${file.name} enviado`);
+    }
+    setUploading(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
+    e.target.value = "";
+  };
+
+  const handleDownload = async (doc: AgentDocument) => {
+    const url = await getDownloadUrl(doc.storage_path);
+    if (url) window.open(url, "_blank");
+  };
+
+  const handleRemove = async (doc: AgentDocument) => {
+    if (!confirm(`Remover "${doc.file_name}" permanentemente?`)) return;
+    const ok = await remove(doc);
+    if (ok) toast.success("Documento removido");
+  };
+
+  const startEditDesc = (doc: AgentDocument) => {
+    setEditingDesc(doc.id);
+    setDescDraft(doc.description || "");
+  };
+
+  const saveDesc = async (docId: string) => {
+    await updateDescription(docId, descDraft);
+    setEditingDesc(null);
+    toast.success("Descricao atualizada");
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const extIcon = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    if (ext === "pdf") return "\u{1F4C4}";
+    if (ext === "docx") return "\u{1F4DD}";
+    if (ext === "md" || ext === "markdown") return "\u{1F4D1}";
+    return "\u{1F4C3}";
+  };
+
+  if (loading) return <HexagonLoader variant="inline" label="Carregando documentos..." />;
+
+  return (
+    <div>
+      {/* Upload zone */}
+      <div className="lf-panel">
+        <h2 className="lf-panel__title">
+          Arquivos de Referencia
+          <span className="lf-badge lf-badge--neutral lf-badge--mono">
+            {documents.length} arquivo{documents.length !== 1 ? "s" : ""}
+          </span>
+        </h2>
+        <p className="lf-panel__hint">
+          Envie arquivos de texto (.txt, .md, .pdf, .docx) que servem como base de conhecimento
+          para este agente. O conteudo sera injetado no contexto das conversas, permitindo que o
+          agente siga modelos, templates e instrucoes especificas.
+        </p>
+
+        {/* Dica de uso */}
+        <div
+          className="lf-panel lf-panel--ghost"
+          style={{
+            background: "rgba(92, 194, 255, 0.06)",
+            border: "1px solid rgba(92, 194, 255, 0.25)",
+            padding: 12,
+            margin: "0 0 14px",
+            fontSize: 12,
+          }}
+        >
+          <strong style={{ color: "var(--lf-info, #5cc2ff)" }}>Como usar.</strong>{" "}
+          Faca upload de modelos de pecas, templates de documentos ou instrucoes detalhadas.
+          Na aba <strong>Prompt</strong>, instrua o agente a seguir o conteudo dos documentos
+          carregados. Ex: <em>"Crie a peca inicial seguindo o modelo fornecido nos documentos
+          de referencia."</em>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          style={{
+            border: `2px dashed ${dragOver ? "var(--lf-gold)" : "hsl(var(--border))"}`,
+            borderRadius: 10,
+            padding: "28px 20px",
+            textAlign: "center",
+            background: dragOver ? "rgba(201, 168, 76, 0.08)" : "transparent",
+            transition: "all 200ms ease",
+            cursor: "pointer",
+            marginBottom: 16,
+          }}
+          onClick={() => document.getElementById("md-file-input")?.click()}
+        >
+          <div style={{ fontSize: 28, marginBottom: 6, opacity: 0.6 }}>
+            {uploading ? "⏳" : "\u{1F4E4}"}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            {uploading ? "Enviando..." : "Arraste arquivos aqui ou clique para selecionar"}
+          </div>
+          <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
+            .txt, .md, .markdown, .pdf, .docx — ate 10 MB por arquivo
+          </div>
+          <input
+            id="md-file-input"
+            type="file"
+            multiple
+            accept=".txt,.md,.markdown,.pdf,.docx"
+            onChange={handleFileInput}
+            style={{ display: "none" }}
+          />
+        </div>
+      </div>
+
+      {/* Lista de documentos */}
+      {documents.length > 0 && (
+        <div className="lf-panel" style={{ marginTop: 16 }}>
+          <h3 className="lf-panel__title">
+            Documentos Carregados
+          </h3>
+          <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+            Documentos ativos sao incluidos no contexto do agente durante as conversas.
+            Desative um documento para mante-lo salvo sem injeta-lo no contexto.
+          </p>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {documents.map((doc) => (
+              <div
+                key={doc.id}
+                className="lf-panel lf-panel--ghost"
+                style={{
+                  border: doc.is_active
+                    ? "1px solid rgba(45, 212, 160, 0.4)"
+                    : "1px solid hsl(var(--border))",
+                  background: "hsl(var(--card))",
+                  padding: 14,
+                  margin: 0,
+                  opacity: doc.is_active ? 1 : 0.6,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="lf-row" style={{ gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 18 }}>{extIcon(doc.file_name)}</span>
+                      <strong style={{ fontSize: 13, wordBreak: "break-word" }}>
+                        {doc.file_name}
+                      </strong>
+                      {doc.is_active ? (
+                        <span className="lf-badge lf-badge--success">Ativo</span>
+                      ) : (
+                        <span
+                          className="lf-badge"
+                          style={{ background: "rgba(156,163,175,0.15)", color: "#9ca3af" }}
+                        >
+                          Inativo
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "hsl(var(--muted-foreground))",
+                        display: "flex",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span>{formatSize(doc.file_size)}</span>
+                      <span>{doc.mime_type || "—"}</span>
+                      <span>{new Date(doc.created_at).toLocaleDateString("pt-BR")}</span>
+                    </div>
+
+                    {/* Descricao */}
+                    {editingDesc === doc.id ? (
+                      <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          className="lf-input"
+                          style={{ fontSize: 12, padding: "5px 10px", flex: 1 }}
+                          value={descDraft}
+                          onChange={(e) => setDescDraft(e.target.value)}
+                          placeholder="Descricao do documento..."
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveDesc(doc.id);
+                            if (e.key === "Escape") setEditingDesc(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="lf-btn lf-btn--primary"
+                          style={{ fontSize: 11, padding: "4px 10px" }}
+                          onClick={() => saveDesc(doc.id)}
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          className="lf-btn lf-btn--ghost"
+                          style={{ fontSize: 11, padding: "4px 10px" }}
+                          onClick={() => setEditingDesc(null)}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 11,
+                          color: doc.description
+                            ? "hsl(var(--foreground))"
+                            : "hsl(var(--muted-foreground))",
+                          cursor: "pointer",
+                          fontStyle: doc.description ? "normal" : "italic",
+                        }}
+                        onClick={() => startEditDesc(doc)}
+                        title="Clique para editar a descricao"
+                      >
+                        {doc.description || "Clique para adicionar uma descricao..."}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="lf-row" style={{ gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="lf-btn lf-btn--ghost"
+                      style={{ padding: "6px 10px", fontSize: 11 }}
+                      onClick={() => handleDownload(doc)}
+                      title="Baixar arquivo"
+                    >
+                      Baixar
+                    </button>
+                    <button
+                      type="button"
+                      className="lf-btn lf-btn--ghost"
+                      style={{ padding: "6px 10px", fontSize: 11 }}
+                      onClick={() => toggleActive(doc)}
+                    >
+                      {doc.is_active ? "Desativar" : "Ativar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="lf-btn lf-btn--danger-ghost"
+                      style={{ padding: "6px 10px", fontSize: 11 }}
+                      onClick={() => handleRemove(doc)}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==================================================================
+   TAB TOOLS — Habilidades do agente
+   ================================================================== */
+
+type ToolCatalogEntry = {
+  id: string;
+  code: string;
+  display_name: string;
+  description: string;
+  category: string;
+  icon: string;
+  tool_schema: Record<string, unknown>;
+  allowed_roles: string[] | null;
+  is_active: boolean;
+};
+
+type AgentToolLink = {
+  id: string;
+  agent_id: string;
+  tool_id: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+};
+
+function TabTools({ agentId }: { agentId: string }) {
+  const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
+  const [links, setLinks] = useState<AgentToolLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedTool, setExpandedTool] = useState<string | null>(null);
+
+  const loadData = async () => {
+    const [catalogRes, linksRes] = await Promise.all([
+      supabase.from("tool_catalog" as any).select("*").eq("is_active", true).order("sort_order"),
+      supabase.from("agent_tools" as any).select("*").eq("agent_id", agentId),
+    ]);
+    setCatalog((catalogRes.data as any) || []);
+    setLinks(((linksRes.data as any) || []).map((r: any) => ({
+      ...r, config: r.config && typeof r.config === "object" ? r.config : {},
+    })));
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, [agentId]);
+
+  const linkedToolIds = new Set(links.map((l) => l.tool_id));
+
+  const handleEnable = async (tool: ToolCatalogEntry) => {
+    const { data, error } = await supabase
+      .from("agent_tools" as any)
+      .insert({ agent_id: agentId, tool_id: tool.id, enabled: true, config: {} } as any)
+      .select()
+      .single();
+    if (error) {
+      toast.error("Erro ao habilitar: " + error.message);
+      return;
+    }
+    const row = data as any;
+    setLinks((prev) => [...prev, { ...row, config: row.config || {} }]);
+    toast.success(`${tool.display_name} habilitada`);
+  };
+
+  const handleToggle = async (linkId: string, current: boolean) => {
+    const { error } = await supabase
+      .from("agent_tools" as any)
+      .update({ enabled: !current } as any)
+      .eq("id", linkId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setLinks((prev) =>
+      prev.map((l) => (l.id === linkId ? { ...l, enabled: !current } : l)),
+    );
+  };
+
+  const handleRemove = async (linkId: string) => {
+    if (!confirm("Remover esta tool do agente?")) return;
+    const { error } = await supabase
+      .from("agent_tools" as any)
+      .delete()
+      .eq("id", linkId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setLinks((prev) => prev.filter((l) => l.id !== linkId));
+    toast.success("Tool removida");
+  };
+
+  if (loading) return <HexagonLoader variant="inline" label="Carregando tools..." />;
+
+  return (
+    <div>
+      {/* Tools habilitadas */}
+      <div className="lf-panel">
+        <h3 className="lf-panel__title">Tools Habilitadas</h3>
+        <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+          Tools ativas neste agente. Quando habilitada, a tool é injetada como function call
+          no contexto do chat-orchestrator — o agente pode invocá-la durante a conversa.
+        </p>
+
+        {links.length === 0 ? (
+          <p
+            style={{
+              fontSize: 12,
+              color: "hsl(var(--muted-foreground))",
+              textAlign: "center",
+              padding: 16,
+            }}
+          >
+            Nenhuma tool habilitada. Adicione do catálogo abaixo.
+          </p>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {links.map((link) => {
+              const tool = catalog.find((c) => c.id === link.tool_id);
+              if (!tool) return null;
+              const isExpanded = expandedTool === link.id;
+
+              return (
+                <div
+                  key={link.id}
+                  className="lf-panel lf-panel--ghost"
+                  style={{
+                    border: link.enabled
+                      ? "1px solid rgba(45, 212, 160, 0.4)"
+                      : "1px solid hsl(var(--border))",
+                    background: "hsl(var(--card))",
+                    padding: 14,
+                    margin: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="lf-row" style={{ gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 18 }}>{tool.icon}</span>
+                        <strong style={{ fontSize: 13 }}>{tool.display_name}</strong>
+                        <span className="lf-badge lf-badge--neutral lf-badge--mono">
+                          {tool.code}
+                        </span>
+                        {link.enabled ? (
+                          <span className="lf-badge lf-badge--success">Ativa</span>
+                        ) : (
+                          <span className="lf-badge" style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
+                            Desativada
+                          </span>
+                        )}
+                      </div>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "hsl(var(--muted-foreground))",
+                          margin: 0,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {tool.description}
+                      </p>
+                    </div>
+                    <div className="lf-row" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className="lf-btn lf-btn--ghost"
+                        style={{ padding: "6px 12px", fontSize: 11 }}
+                        onClick={() => setExpandedTool(isExpanded ? null : link.id)}
+                      >
+                        {isExpanded ? "▲ Fechar" : "▼ Schema"}
+                      </button>
+                      <button
+                        type="button"
+                        className="lf-btn lf-btn--ghost"
+                        style={{ padding: "6px 12px", fontSize: 11 }}
+                        onClick={() => handleToggle(link.id, link.enabled)}
+                      >
+                        {link.enabled ? "⏸ Desativar" : "✓ Ativar"}
+                      </button>
+                      <button
+                        type="button"
+                        className="lf-btn lf-btn--danger-ghost"
+                        style={{ padding: "6px 12px", fontSize: 11 }}
+                        onClick={() => handleRemove(link.id)}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ marginTop: 12 }}>
+                      <label
+                        className="lf-field__label"
+                        style={{ fontSize: 11, marginBottom: 6 }}
+                      >
+                        Function Schema (OpenAI format)
+                      </label>
+                      <pre
+                        className="lf-mono"
+                        style={{
+                          fontSize: 11,
+                          background: "hsl(var(--background))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: 6,
+                          padding: 12,
+                          overflow: "auto",
+                          maxHeight: 300,
+                          whiteSpace: "pre-wrap",
+                          margin: 0,
+                        }}
+                      >
+                        {JSON.stringify(tool.tool_schema, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Catálogo de tools disponíveis */}
+      {catalog.filter((c) => !linkedToolIds.has(c.id)).length > 0 && (
+        <div className="lf-panel" style={{ marginTop: 16 }}>
+          <h3 className="lf-panel__title">Catálogo de Tools</h3>
+          <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+            Tools nativas disponíveis para habilitar neste agente.
+          </p>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {catalog
+              .filter((c) => !linkedToolIds.has(c.id))
+              .map((tool) => (
+                <div
+                  key={tool.id}
+                  className="lf-panel lf-panel--ghost"
+                  style={{
+                    border: "1px solid hsl(var(--border))",
+                    background: "hsl(var(--card))",
+                    padding: 14,
+                    margin: 0,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="lf-row" style={{ gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 18 }}>{tool.icon}</span>
+                      <strong style={{ fontSize: 13 }}>{tool.display_name}</strong>
+                      <span className="lf-badge lf-badge--neutral lf-badge--mono">
+                        {tool.category}
+                      </span>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "hsl(var(--muted-foreground))",
+                        margin: 0,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {tool.description}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="lf-btn lf-btn--primary"
+                    style={{ padding: "7px 14px", fontSize: 12, whiteSpace: "nowrap" }}
+                    onClick={() => handleEnable(tool)}
+                  >
+                    + Habilitar
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==================================================================
    TAB MCP — Model Context Protocol
    ================================================================== */
 
-type McpEntry = {
-  id: string; name: string; url: string; description: string;
+type McpRequiredCredential = {
+  key: string; label: string; hint: string; required: boolean;
+};
+
+type McpCatalogEntry = {
+  id: string; name: string; slug: string; url: string;
+  description: string | null; transport: string; enabled: boolean;
+  config: Record<string, string>;
+  required_credentials: McpRequiredCredential[];
+};
+
+type AgentMcpLink = {
+  id: string; agent_id: string; mcp_server_id: string | null;
+  name: string; url: string; description: string;
   enabled: boolean; config: Record<string, string>;
 };
 
 function TabMCP({ agentId }: { agentId: string }) {
-  const [mcps, setMcps] = useState<McpEntry[]>([]);
+  const [catalog, setCatalog] = useState<McpCatalogEntry[]>([]);
+  const [links, setLinks] = useState<AgentMcpLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // New MCP form
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [description, setDescription] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualDesc, setManualDesc] = useState("");
   const [newCreds, setNewCreds] = useState<Array<{ key: string; value: string }>>([]);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("agent_mcp_servers" as any)
-        .select("*")
-        .eq("agent_id", agentId)
-        .order("created_at", { ascending: true });
-      const rows = ((data as any) || []).map((r: any) => ({
-        ...r, config: r.config && typeof r.config === "object" ? r.config : {},
-      }));
-      setMcps(rows);
-      setLoading(false);
-    })();
-  }, [agentId]);
+  const loadData = async () => {
+    const [catalogRes, linksRes] = await Promise.all([
+      supabase.from("mcp_servers" as any).select("*").order("name"),
+      supabase.from("agent_mcp_servers" as any).select("*").eq("agent_id", agentId).order("created_at", { ascending: true }),
+    ]);
+    setCatalog(((catalogRes.data as any) || []).map((r: any) => ({
+      ...r,
+      config: r.config && typeof r.config === "object" ? r.config : {},
+      required_credentials: Array.isArray(r.required_credentials) ? r.required_credentials : [],
+    })));
+    setLinks(((linksRes.data as any) || []).map((r: any) => ({
+      ...r, config: r.config && typeof r.config === "object" ? r.config : {},
+    })));
+    setLoading(false);
+  };
 
-  const handleAdd = async () => {
-    if (!name.trim() || !url.trim()) { toast.error("Nome e URL são obrigatórios"); return; }
+  useEffect(() => { loadData(); }, [agentId]);
+
+  const linkedServerIds = new Set(links.map(l => l.mcp_server_id).filter(Boolean));
+  const availableCatalog = catalog.filter(c => !linkedServerIds.has(c.id));
+
+  const handleLinkCatalog = async (srv: McpCatalogEntry) => {
+    const prefilledConfig: Record<string, string> = {};
+    for (const cred of (srv.required_credentials || [])) {
+      prefilledConfig[cred.key] = "";
+    }
+    const { data, error } = await supabase
+      .from("agent_mcp_servers" as any)
+      .insert({
+        agent_id: agentId, mcp_server_id: srv.id,
+        name: srv.name, url: srv.url,
+        description: srv.description || "", enabled: true, config: prefilledConfig,
+      } as any)
+      .select().single();
+    if (error) { toast.error("Erro ao vincular: " + error.message); return; }
+    const row = data as any;
+    setLinks(prev => [...prev, { ...row, config: row.config || {} }]);
+    setExpandedId(row.id);
+    toast.success(`${srv.name} vinculado — configure as credenciais abaixo`);
+  };
+
+  const handleAddManual = async () => {
+    if (!manualName.trim() || !manualUrl.trim()) { toast.error("Nome e URL sao obrigatorios"); return; }
     const cfg: Record<string, string> = {};
     for (const c of newCreds) { if (c.key.trim()) cfg[c.key.trim()] = c.value; }
     const { data, error } = await supabase
       .from("agent_mcp_servers" as any)
-      .insert({ agent_id: agentId, name: name.trim(), url: url.trim(), description: description.trim(), enabled: true, config: cfg } as any)
-      .select()
-      .single();
+      .insert({
+        agent_id: agentId, name: manualName.trim(), url: manualUrl.trim(),
+        description: manualDesc.trim(), enabled: true, config: cfg,
+      } as any)
+      .select().single();
     if (error) { toast.error("Erro: " + error.message); return; }
-    const row = data as any;
-    setMcps(prev => [...prev, { ...row, config: row.config || {} }]);
-    setName(""); setUrl(""); setDescription(""); setNewCreds([]);
-    toast.success("MCP adicionado");
+    setLinks(prev => [...prev, { ...(data as any), config: (data as any).config || {} }]);
+    setManualName(""); setManualUrl(""); setManualDesc(""); setNewCreds([]);
+    toast.success("MCP adicionado manualmente");
   };
 
   const handleToggle = async (id: string, current: boolean) => {
     const { error } = await supabase.from("agent_mcp_servers" as any).update({ enabled: !current } as any).eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setMcps(prev => prev.map(m => m.id === id ? { ...m, enabled: !current } : m));
+    setLinks(prev => prev.map(m => m.id === id ? { ...m, enabled: !current } : m));
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remover este MCP server?")) return;
+    if (!confirm("Remover este MCP server do agente?")) return;
     const { error } = await supabase.from("agent_mcp_servers" as any).delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setMcps(prev => prev.filter(m => m.id !== id));
+    setLinks(prev => prev.filter(m => m.id !== id));
     toast.success("MCP removido");
   };
 
   const handleSaveConfig = async (id: string, config: Record<string, string>) => {
     const { error } = await supabase.from("agent_mcp_servers" as any).update({ config } as any).eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setMcps(prev => prev.map(m => m.id === id ? { ...m, config } : m));
+    setLinks(prev => prev.map(m => m.id === id ? { ...m, config } : m));
     toast.success("Credenciais salvas");
   };
 
@@ -1214,132 +1844,238 @@ function TabMCP({ agentId }: { agentId: string }) {
   const inputSm: React.CSSProperties = { fontSize: 12, padding: "6px 10px" };
   const mask = (v: string) => v.length <= 6 ? "••••••" : v.slice(0, 3) + "•".repeat(v.length - 6) + v.slice(-3);
 
+  const thStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, padding: "8px 12px", textAlign: "left",
+    color: "hsl(var(--muted-foreground))", borderBottom: "1px solid hsl(var(--border))",
+    whiteSpace: "nowrap",
+  };
+  const tdStyle: React.CSSProperties = {
+    fontSize: 12, padding: "10px 12px", borderBottom: "1px solid hsl(var(--border) / 0.5)",
+    color: "hsl(var(--foreground))", verticalAlign: "top",
+  };
+
   return (
     <div>
+      {/* ── MCP Servers vinculados ao agente (tabela) ── */}
       <div className="lf-panel">
-        <h3 className="lf-panel__title">MCP Servers</h3>
+        <h3 className="lf-panel__title">MCP Servers do Agente</h3>
         <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
-          Configure os Model Context Protocol (MCP) servers que este agente pode acessar.
-          Cada MCP pode ter suas próprias credenciais (API keys, tokens, headers).
+          MCPs vinculados a este agente. Configure credenciais e ative/desative conforme necessario.
         </p>
 
-        {mcps.length === 0 ? (
+        {links.length === 0 ? (
           <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", textAlign: "center", padding: 16 }}>
-            Nenhum MCP configurado para este agente.
+            Nenhum MCP vinculado a este agente. Vincule um do catalogo abaixo ou adicione manualmente.
           </p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-            {mcps.map(mcp => {
-              const isExpanded = expandedId === mcp.id;
-              const configEntries = Object.entries(mcp.config || {});
-              return (
-                <div key={mcp.id} style={{
-                  background: "hsl(var(--card))", border: "1px solid hsl(var(--border))",
-                  borderRadius: 8, opacity: mcp.enabled ? 1 : 0.5, overflow: "hidden",
-                }}>
-                  {/* Header row */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                      background: mcp.enabled ? "var(--lf-success, #22c55e)" : "hsl(var(--muted-foreground))",
-                    }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "hsl(var(--foreground))" }}>
-                        {mcp.name}
-                        {configEntries.length > 0 && (
-                          <span style={{ fontSize: 10, fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 6 }}>
-                            ({configEntries.length} credencia{configEntries.length === 1 ? "l" : "is"})
-                          </span>
+          <div style={{ overflowX: "auto", marginBottom: 16, borderRadius: 8, border: "1px solid hsl(var(--border))" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "hsl(var(--card))" }}>
+              <thead>
+                <tr style={{ background: "hsl(var(--muted) / 0.3)" }}>
+                  <th style={thStyle}>Status</th>
+                  <th style={thStyle}>Nome</th>
+                  <th style={thStyle}>URL</th>
+                  <th style={thStyle}>Credenciais</th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {links.map(link => {
+                  const isExpanded = expandedId === link.id;
+                  const configCount = Object.keys(link.config || {}).length;
+                  const catalogMatch = catalog.find(c => c.id === link.mcp_server_id);
+                  return (
+                    <tr key={link.id} style={{ opacity: link.enabled ? 1 : 0.5 }}>
+                      <td style={tdStyle}>
+                        <div style={{
+                          display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11,
+                          padding: "2px 8px", borderRadius: 12,
+                          background: link.enabled ? "rgba(34,197,94,0.1)" : "rgba(156,163,175,0.1)",
+                          color: link.enabled ? "#22c55e" : "hsl(var(--muted-foreground))",
+                        }}>
+                          <span style={{
+                            width: 6, height: 6, borderRadius: "50%",
+                            background: link.enabled ? "#22c55e" : "hsl(var(--muted-foreground))",
+                          }} />
+                          {link.enabled ? "Ativo" : "Inativo"}
+                        </div>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{link.name}</div>
+                        {link.description && (
+                          <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{link.description}</div>
                         )}
-                      </div>
-                      <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {mcp.url}
-                      </div>
-                      {mcp.description && (
-                        <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{mcp.description}</div>
-                      )}
-                    </div>
-                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
-                      onClick={() => setExpandedId(isExpanded ? null : mcp.id)}
-                    >
-                      {isExpanded ? "▲ Fechar" : "⚙ Credenciais"}
-                    </button>
-                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
-                      onClick={() => handleToggle(mcp.id, mcp.enabled)}
-                    >
-                      {mcp.enabled ? "Desativar" : "Ativar"}
-                    </button>
-                    <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
-                      onClick={() => handleDelete(mcp.id)}
-                    >
-                      Remover
-                    </button>
-                  </div>
+                        {catalogMatch && (
+                          <div style={{
+                            fontSize: 9, color: "hsl(var(--muted-foreground))", marginTop: 2,
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            background: "hsl(var(--muted) / 0.3)", padding: "1px 6px", borderRadius: 4,
+                          }}>
+                            catalogo: {catalogMatch.slug}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {link.url}
+                      </td>
+                      <td style={tdStyle}>
+                        <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
+                          onClick={() => setExpandedId(isExpanded ? null : link.id)}
+                        >
+                          {isExpanded ? "▲ Fechar" : `⚙ ${configCount} credencia${configCount === 1 ? "l" : "is"}`}
+                        </button>
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "center", whiteSpace: "nowrap" }}>
+                        <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px" }}
+                          onClick={() => handleToggle(link.id, link.enabled)}
+                        >
+                          {link.enabled ? "Desativar" : "Ativar"}
+                        </button>
+                        <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
+                          onClick={() => handleDelete(link.id)}
+                        >
+                          Remover
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-                  {/* Expanded credentials panel */}
-                  {isExpanded && (
-                    <McpCredentialsEditor
-                      config={mcp.config}
-                      onSave={(cfg) => handleSaveConfig(mcp.id, cfg)}
-                      mask={mask}
-                      inputSm={inputSm}
-                    />
-                  )}
-                </div>
+            {expandedId && links.find(l => l.id === expandedId) && (() => {
+              const expandedLink = links.find(l => l.id === expandedId)!;
+              const catalogMatch = catalog.find(c => c.id === expandedLink.mcp_server_id);
+              return (
+                <McpCredentialsEditor
+                  config={expandedLink.config}
+                  requiredCredentials={catalogMatch?.required_credentials || []}
+                  onSave={(cfg) => handleSaveConfig(expandedId, cfg)}
+                  mask={mask}
+                  inputSm={inputSm}
+                />
               );
-            })}
+            })()}
           </div>
         )}
+      </div>
 
-        {/* Add new MCP */}
-        <div style={{
-          borderTop: "1px solid hsl(var(--border))", paddingTop: 16,
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
-        }}>
+      {/* ── Catalogo global de MCPs disponiveis ── */}
+      <div className="lf-panel" style={{ marginTop: 16 }}>
+        <h3 className="lf-panel__title">Catalogo de MCPs Disponiveis</h3>
+        <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+          MCPs cadastrados no sistema. Clique em "Vincular" para adicionar ao agente.
+        </p>
+
+        {catalog.length === 0 ? (
+          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", textAlign: "center", padding: 16 }}>
+            Nenhum MCP cadastrado no sistema.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto", marginBottom: 16, borderRadius: 8, border: "1px solid hsl(var(--border))" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "hsl(var(--card))" }}>
+              <thead>
+                <tr style={{ background: "hsl(var(--muted) / 0.3)" }}>
+                  <th style={thStyle}>Nome</th>
+                  <th style={thStyle}>URL</th>
+                  <th style={thStyle}>Transporte</th>
+                  <th style={thStyle}>Status Global</th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>Acao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalog.map(srv => {
+                  const alreadyLinked = linkedServerIds.has(srv.id);
+                  return (
+                    <tr key={srv.id} style={{ opacity: srv.enabled ? 1 : 0.6 }}>
+                      <td style={tdStyle}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{srv.name}</div>
+                        {srv.description && (
+                          <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>{srv.description}</div>
+                        )}
+                      </td>
+                      <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {srv.url}
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 4,
+                          background: "hsl(var(--muted) / 0.5)", color: "hsl(var(--foreground))",
+                        }}>
+                          {srv.transport}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 12,
+                          background: srv.enabled ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                          color: srv.enabled ? "#22c55e" : "#ef4444",
+                        }}>
+                          {srv.enabled ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "center" }}>
+                        {alreadyLinked ? (
+                          <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}>Ja vinculado</span>
+                        ) : (
+                          <button type="button" className="lf-btn lf-btn--primary" style={{ fontSize: 11, padding: "4px 12px" }}
+                            onClick={() => handleLinkCatalog(srv)}
+                          >
+                            + Vincular
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Adicionar MCP manual ── */}
+      <div className="lf-panel" style={{ marginTop: 16 }}>
+        <h3 className="lf-panel__title">Adicionar MCP Manualmente</h3>
+        <p className="lf-panel__hint" style={{ marginBottom: 16 }}>
+          Adicione um MCP customizado que nao esta no catalogo.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div className="lf-field">
             <label className="lf-field__label">Nome do MCP *</label>
-            <input className="lf-input" style={inputSm} value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Supabase MCP" />
+            <input className="lf-input" style={inputSm} value={manualName} onChange={e => setManualName(e.target.value)} placeholder="Ex: Supabase MCP" />
           </div>
           <div className="lf-field">
             <label className="lf-field__label">URL / Endpoint *</label>
-            <input className="lf-input" style={inputSm} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://mcp.example.com" />
+            <input className="lf-input" style={inputSm} value={manualUrl} onChange={e => setManualUrl(e.target.value)} placeholder="https://mcp.example.com" />
           </div>
           <div className="lf-field" style={{ gridColumn: "1 / -1" }}>
-            <label className="lf-field__label">Descrição (opcional)</label>
-            <input className="lf-input" style={inputSm} value={description} onChange={e => setDescription(e.target.value)} placeholder="O que este MCP faz..." />
+            <label className="lf-field__label">Descricao (opcional)</label>
+            <input className="lf-input" style={inputSm} value={manualDesc} onChange={e => setManualDesc(e.target.value)} placeholder="O que este MCP faz..." />
           </div>
 
-          {/* Credentials for new MCP */}
           <div style={{ gridColumn: "1 / -1" }}>
             <label className="lf-field__label" style={{ marginBottom: 6, display: "block" }}>
-              Credenciais / Variáveis de Configuração
+              Credenciais / Variaveis de Configuracao
             </label>
             {newCreds.map((c, i) => (
               <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                <input
-                  className="lf-input" style={{ ...inputSm, flex: 1 }}
-                  value={c.key} placeholder="Nome (ex: SUPABASE_URL)"
-                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, key: e.target.value } : cc))}
-                />
-                <input
-                  className="lf-input" style={{ ...inputSm, flex: 1 }}
-                  value={c.value} placeholder="Valor (ex: https://xxx.supabase.co)"
-                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, value: e.target.value } : cc))}
-                />
+                <input className="lf-input" style={{ ...inputSm, flex: 1 }} value={c.key} placeholder="Nome (ex: SUPABASE_URL)"
+                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, key: e.target.value } : cc))} />
+                <input className="lf-input" style={{ ...inputSm, flex: 1 }} value={c.value} placeholder="Valor"
+                  onChange={e => setNewCreds(prev => prev.map((cc, ii) => ii === i ? { ...cc, value: e.target.value } : cc))} />
                 <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "3px 8px", color: "#ef4444" }}
-                  onClick={() => setNewCreds(prev => prev.filter((_, ii) => ii !== i))}
-                >✕</button>
+                  onClick={() => setNewCreds(prev => prev.filter((_, ii) => ii !== i))}>✕</button>
               </div>
             ))}
             <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 11, padding: "4px 10px" }}
-              onClick={() => setNewCreds(prev => [...prev, { key: "", value: "" }])}
-            >
+              onClick={() => setNewCreds(prev => [...prev, { key: "", value: "" }])}>
               + Adicionar credencial
             </button>
           </div>
 
           <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="lf-btn lf-btn--primary" onClick={handleAdd}>
+            <button type="button" className="lf-btn lf-btn--primary" onClick={handleAddManual}>
               + Adicionar MCP
             </button>
           </div>
@@ -1351,18 +2087,30 @@ function TabMCP({ agentId }: { agentId: string }) {
 
 /* Inline credentials editor for an existing MCP */
 function McpCredentialsEditor({
-  config, onSave, mask, inputSm,
+  config, requiredCredentials, onSave, mask, inputSm,
 }: {
   config: Record<string, string>;
+  requiredCredentials: McpRequiredCredential[];
   onSave: (cfg: Record<string, string>) => void;
   mask: (v: string) => string;
   inputSm: React.CSSProperties;
 }) {
-  const [entries, setEntries] = useState<Array<{ key: string; value: string; revealed: boolean }>>(
-    () => Object.entries(config).map(([k, v]) => ({ key: k, value: v, revealed: false }))
-  );
+  const [entries, setEntries] = useState<Array<{
+    key: string; value: string; revealed: boolean;
+    label?: string; hint?: string; isRequired?: boolean; fromSchema?: boolean;
+  }>>(() => {
+    const schemaKeys = new Set(requiredCredentials.map(c => c.key));
+    const fromSchema = requiredCredentials.map(c => ({
+      key: c.key, value: config[c.key] || "", revealed: !config[c.key],
+      label: c.label, hint: c.hint, isRequired: c.required, fromSchema: true,
+    }));
+    const extra = Object.entries(config)
+      .filter(([k]) => !schemaKeys.has(k))
+      .map(([k, v]) => ({ key: k, value: v, revealed: false, fromSchema: false }));
+    return [...fromSchema, ...extra];
+  });
 
-  const addRow = () => setEntries(prev => [...prev, { key: "", value: "", revealed: true }]);
+  const addRow = () => setEntries(prev => [...prev, { key: "", value: "", revealed: true, fromSchema: false }]);
   const removeRow = (i: number) => setEntries(prev => prev.filter((_, ii) => ii !== i));
   const updateRow = (i: number, field: "key" | "value", val: string) =>
     setEntries(prev => prev.map((e, ii) => ii === i ? { ...e, [field]: val } : e));
@@ -1375,51 +2123,94 @@ function McpCredentialsEditor({
     onSave(cfg);
   };
 
+  const missingRequired = entries.filter(e => e.isRequired && !e.value.trim());
+
   return (
-    <div style={{ padding: "10px 14px", borderTop: "1px solid hsl(var(--border) / 0.3)", background: "hsl(var(--card) / 0.5)" }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "hsl(var(--foreground))", marginBottom: 8 }}>
-        Credenciais &amp; Variáveis
+    <div style={{ padding: "14px 14px", borderTop: "1px solid hsl(var(--border) / 0.3)", background: "hsl(var(--card) / 0.5)" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "hsl(var(--foreground))", marginBottom: 10 }}>
+        Credenciais &amp; Variaveis
       </div>
+
       {entries.length === 0 && (
         <p style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", margin: "4px 0 8px" }}>
           Nenhuma credencial configurada.
         </p>
       )}
+
       {entries.map((e, i) => (
-        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-          <input
-            className="lf-input" style={{ ...inputSm, flex: 1, fontFamily: "monospace", fontSize: 11 }}
-            value={e.key} placeholder="CHAVE"
-            onChange={ev => updateRow(i, "key", ev.target.value)}
-          />
-          <input
-            className="lf-input" style={{ ...inputSm, flex: 1.5, fontFamily: "monospace", fontSize: 11 }}
-            value={e.revealed ? e.value : mask(e.value)} placeholder="valor"
-            onChange={ev => { updateRow(i, "value", ev.target.value); if (!e.revealed) toggleReveal(i); }}
-            onFocus={() => { if (!e.revealed) toggleReveal(i); }}
-          />
-          <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px" }}
-            onClick={() => toggleReveal(i)} title={e.revealed ? "Ocultar" : "Revelar"}
-          >
-            {e.revealed ? "🙈" : "👁"}
-          </button>
-          <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px", color: "#ef4444" }}
-            onClick={() => removeRow(i)}
-          >✕</button>
+        <div key={i} style={{ marginBottom: e.fromSchema ? 12 : 6 }}>
+          {e.fromSchema && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "hsl(var(--foreground))" }}>
+                {e.label || e.key}
+              </span>
+              {e.isRequired && (
+                <span style={{
+                  fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 600,
+                  background: "rgba(239,68,68,0.15)", color: "#ef4444",
+                }}>obrigatorio</span>
+              )}
+              {!e.isRequired && (
+                <span style={{
+                  fontSize: 9, padding: "1px 6px", borderRadius: 4,
+                  background: "hsl(var(--muted) / 0.3)", color: "hsl(var(--muted-foreground))",
+                }}>opcional</span>
+              )}
+            </div>
+          )}
+          {e.fromSchema && e.hint && (
+            <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", marginBottom: 4, lineHeight: 1.4 }}>
+              {e.hint}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {e.fromSchema ? (
+              <span style={{
+                ...inputSm, flex: 0.8, fontFamily: "monospace", fontSize: 11,
+                background: "hsl(var(--muted) / 0.3)", borderRadius: 6, display: "inline-flex",
+                alignItems: "center", color: "hsl(var(--muted-foreground))",
+                border: "1px solid hsl(var(--border) / 0.5)", padding: "6px 10px",
+              }}>
+                {e.key}
+              </span>
+            ) : (
+              <input className="lf-input" style={{ ...inputSm, flex: 0.8, fontFamily: "monospace", fontSize: 11 }}
+                value={e.key} placeholder="CHAVE" onChange={ev => updateRow(i, "key", ev.target.value)} />
+            )}
+            <input
+              className="lf-input"
+              style={{
+                ...inputSm, flex: 1.2, fontFamily: "monospace", fontSize: 11,
+                borderColor: e.isRequired && !e.value.trim() ? "rgba(239,68,68,0.5)" : undefined,
+              }}
+              value={e.revealed ? e.value : mask(e.value)}
+              placeholder={e.fromSchema ? `Insira o ${e.label || e.key}...` : "valor"}
+              onChange={ev => { updateRow(i, "value", ev.target.value); if (!e.revealed) toggleReveal(i); }}
+              onFocus={() => { if (!e.revealed) toggleReveal(i); }}
+            />
+            <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px" }}
+              onClick={() => toggleReveal(i)} title={e.revealed ? "Ocultar" : "Revelar"}>
+              {e.revealed ? "🙈" : "👁"}
+            </button>
+            {!e.fromSchema && (
+              <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 10, padding: "2px 6px", color: "#ef4444" }}
+                onClick={() => removeRow(i)}>✕</button>
+            )}
+          </div>
         </div>
       ))}
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
         <button type="button" className="lf-btn lf-btn--ghost" style={{ fontSize: 11, padding: "4px 10px" }}
-          onClick={addRow}
-        >
-          + Adicionar variável
-        </button>
+          onClick={addRow}>+ Adicionar variavel</button>
         <span style={{ flex: 1 }} />
+        {missingRequired.length > 0 && (
+          <span style={{ fontSize: 10, color: "#ef4444" }}>
+            {missingRequired.length} campo{missingRequired.length > 1 ? "s" : ""} obrigatorio{missingRequired.length > 1 ? "s" : ""} pendente{missingRequired.length > 1 ? "s" : ""}
+          </span>
+        )}
         <button type="button" className="lf-btn lf-btn--primary" style={{ fontSize: 11, padding: "4px 14px" }}
-          onClick={handleSave}
-        >
-          Salvar credenciais
-        </button>
+          onClick={handleSave}>Salvar credenciais</button>
       </div>
     </div>
   );

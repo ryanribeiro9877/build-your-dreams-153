@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import WelcomeScreen from "@/components/WelcomeScreen";
@@ -50,8 +50,31 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
+// Linha de status discreta para etapas da orquestracao (N1->N2->N3).
+function StageLine({ msg }: { msg: JcChatMessage }) {
+  const icon = msg.stage === "routing_n1" ? "🧭"
+    : msg.stage === "routing_n2" ? "⛓"
+    : msg.stage === "executing_n3" ? "✍"
+    : msg.stage === "validating_n2" || msg.stage === "validating_n1" ? "🔍"
+    : "•";
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, padding: "4px 12px",
+      margin: "2px 0", fontSize: 11, color: "var(--text3, #8a8a9a)",
+      fontStyle: "italic", opacity: 0.85,
+    }}>
+      <span aria-hidden>{icon}</span>
+      <span>{msg.content}</span>
+    </div>
+  );
+}
+
 function MessageBubble({ msg }: { msg: JcChatMessage }) {
   const { user } = useAuth();
+  // Etapa intermediaria da orquestracao: renderiza como status, nao balao.
+  if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {
+    return <StageLine msg={msg} />;
+  }
   const agentColors: Record<string, string> = {
     "Meu Assistente": "#EAB308",
     "Pesquisador Jurídico": "#CA8A04",
@@ -89,9 +112,35 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
           </div>
         )}
         <div className="jc-msg-bubble">
-          {msg.content && (
-            <SafeMarkdown className="jc-msg-text">{msg.content}</SafeMarkdown>
-          )}
+          {msg.content && (() => {
+            const fileMatch = msg.content.match(/\[Arquivos:\s*(.+?)\]/);
+            const fileNames = fileMatch ? fileMatch[1].split(",").map((n: string) => n.trim()).filter(Boolean) : [];
+            const cleanContent = msg.content.replace(/\n?\[Arquivos:\s*.+?\]/, "").trim();
+            return (
+              <>
+                {fileNames.length > 0 && (
+                  <div style={{
+                    display: "flex", flexWrap: "wrap", gap: 4, marginBottom: cleanContent ? 8 : 0,
+                  }}>
+                    {fileNames.map((name: string, i: number) => (
+                      <span key={i} style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        padding: "3px 8px", borderRadius: 6, fontSize: 10,
+                        background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)",
+                        color: "#eab308", maxWidth: 180, overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        📎 {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {cleanContent && (
+                  <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>
+                )}
+              </>
+            );
+          })()}
           {msg.card?.type === "briefing" && <BriefingCard card={msg.card} />}
           {msg.card?.type === "process-list" && <ProcessListCard processes={msg.card.processes} />}
         </div>
@@ -153,14 +202,40 @@ export default function JurisChatPanel({
 }: JurisChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  // Envia anexando os nomes dos arquivos a mensagem (mesmo padrao do WelcomeScreen).
+  const doSend = (text?: string) => {
+    const base = (text ?? inputVal).trim();
+    if (!base && attachedFiles.length === 0) return;
+    let msg = base;
+    if (attachedFiles.length > 0) {
+      const names = attachedFiles.map((f) => f.name).join(", ");
+      msg = msg ? `${msg}\n[Arquivos: ${names}]` : `[Arquivos: ${names}]`;
+    }
+    handleSend(msg);
+    setAttachedFiles([]);
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(); }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fl = e.target.files;
+    if (!fl || fl.length === 0) return;
+    const captured = Array.from(fl);
+    e.target.value = "";
+    setAttachedFiles((prev) => [...prev, ...captured]);
+  };
+
+  const removeAttachedFile = (i: number) =>
+    setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i));
 
   return (
     <>
@@ -197,7 +272,42 @@ export default function JurisChatPanel({
               );
             })}
           </div>
+          {attachedFiles.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 0 8px" }}>
+              {attachedFiles.map((f, i) => (
+                <div key={`${f.name}-${i}`} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "4px 10px", borderRadius: 8, fontSize: 11,
+                  background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)",
+                  color: "#EAB308", maxWidth: 200,
+                }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                    📎 {f.name}
+                  </span>
+                  <button type="button" onClick={() => removeAttachedFile(i)}
+                    style={{ background: "none", border: "none", color: "#EAB308", cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.7, flexShrink: 0 }}
+                    aria-label={`Remover ${f.name}`}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="jc-input-row">
+            <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileChange} aria-hidden="true" />
+            <button
+              className="jc-mic-btn"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Anexar arquivo"
+              type="button"
+              title="Anexar arquivo"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.2"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span className="jc-sr-only">Anexar arquivo</span>
+            </button>
             <textarea ref={textareaRef} className="jc-textarea"
               placeholder={`Fale com os agentes do ${activeDeptLabel}...`}
               value={inputVal}
@@ -232,8 +342,8 @@ export default function JurisChatPanel({
             </button>
             <button
               className="jc-send-btn"
-              onClick={() => handleSend()}
-              disabled={thinking || !inputVal.trim()}
+              onClick={() => doSend()}
+              disabled={thinking || (!inputVal.trim() && attachedFiles.length === 0)}
               aria-label="Enviar"
               type="button"
             >

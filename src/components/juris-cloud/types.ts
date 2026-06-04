@@ -55,12 +55,16 @@ export interface ProcessListPayload {
 export type AssistantChatCard = BriefingCardPayload | ProcessListPayload;
 
 export interface JcChatMessage {
-  id: number;
+  id: number | string;
   role: string;
   agent?: string;
   content?: string | null;
   timestamp: string;
   card?: AssistantChatCard;
+  // V23 orquestracao: 'stage' = etapa intermediaria (linha de status);
+  // 'final' = resposta do agente; 'error' = falha.
+  kind?: "stage" | "final" | "error";
+  stage?: string;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
 }
 

@@ -62,11 +62,18 @@ export function useAgentLLMConfig() {
     // Os tipos gerados pelo Supabase ficam desatualizados em relação ao
     // schema real (a tabela `agents` tem colunas de config IA que não
     // aparecem nos tipos). Cast via `as never` mantém runtime intacto.
-    const { error } = await supabase
+    // .select() para detectar 0 linhas afetadas: quando a RLS bloqueia um UPDATE,
+    // o Supabase NAO retorna erro — retorna 0 linhas. Sem isto, um salvamento
+    // bloqueado parecia sucesso ("falso positivo").
+    const { data, error } = await supabase
       .from("agents")
       .update(update as never)
-      .eq("id", agentId);
+      .eq("id", agentId)
+      .select("id");
     if (error) return { ok: false, error: error.message };
+    if (!data || data.length === 0) {
+      return { ok: false, error: "Nada foi salvo — voce nao tem permissao para editar este agente (ou ele nao existe)." };
+    }
     return { ok: true };
   }, []);
 

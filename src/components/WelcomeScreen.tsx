@@ -78,6 +78,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   });
   const [loading, setLoading] = useState(true);
   const [value, setValue] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   // ── Recording state ────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
@@ -157,17 +158,23 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   // ── Submit ─────────────────────────────────────────────────────────────
   const handleSubmit = useCallback((overrideValue?: string) => {
     const v = (overrideValue ?? value).trim();
-    if (!v) return;
+    if (!v && attachedFiles.length === 0) return;
     trackUiEvent("cta_click", {
       surface: "welcome",
       target_id: "welcome_chat_submit",
       target_label: "Chat inicial",
       section: "primary_cta",
     });
-    if (onSubmit) onSubmit(v);
+    let msg = v;
+    if (attachedFiles.length > 0) {
+      const names = attachedFiles.map((f) => f.name).join(", ");
+      msg = msg ? `${msg}\n[Arquivos: ${names}]` : `[Arquivos: ${names}]`;
+    }
+    if (onSubmit) onSubmit(msg);
     else onDismiss();
     setValue("");
-  }, [value, onSubmit, onDismiss]);
+    setAttachedFiles([]);
+  }, [value, attachedFiles, onSubmit, onDismiss]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -180,16 +187,22 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   const handleAttach = () => fileInputRef.current?.click();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    trackUiEvent("cta_click", {
-      surface: "welcome",
-      target_id: "welcome_attach_files",
-      target_label: `${files.length} arquivo(s)`,
-    });
-    const names = Array.from(files).map((f) => f.name).join(", ");
-    setValue((cur) => (cur ? `${cur}\n[Arquivos: ${names}]` : `[Arquivos: ${names}]`));
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const captured = Array.from(fileList);
     e.target.value = "";
+    setAttachedFiles((prev) => [...prev, ...captured]);
+    try {
+      trackUiEvent("cta_click", {
+        surface: "welcome",
+        target_id: "welcome_attach_files",
+        target_label: `${captured.length} arquivo(s)`,
+      });
+    } catch { /* tracking nao deve bloquear upload */ }
+  };
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   // ── Recording — start ───────────────────────────────────────────────────
@@ -344,58 +357,120 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
 
         {/* Composer — dois modos: idle e recording */}
         {!isRecording ? (
-          <div className={`ws-composer ${greetingDone ? "ws-composer--enter" : "ws-composer--hidden"}`}>
-            <button
-              type="button"
-              className="ws-btn ws-attach"
-              onClick={handleAttach}
-            >
-              <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
-              <span className="ws-sr-only">Anexar arquivos</span>
-            </button>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={handleFileChange}
-              aria-hidden="true"
-            />
-
-            <textarea
-              ref={textareaRef}
-              className="ws-textarea"
-              placeholder="Pergunte alguma coisa"
-              value={value}
-              onChange={(e) => {
-                setValue(e.target.value);
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
-              }}
-              onKeyDown={handleKeyDown}
-              rows={1}
-            />
-
-            {value.trim() ? (
-              <button
-                type="button"
-                className="ws-btn ws-send"
-                onClick={() => handleSubmit()}
-              >
-                <Send size={16} strokeWidth={2.4} aria-hidden="true" />
-                <span className="ws-sr-only">Enviar</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="ws-btn ws-mic"
-                onClick={startRecording}
-              >
-                <Mic size={18} strokeWidth={2.2} aria-hidden="true" />
-                <span className="ws-sr-only">Gravar áudio</span>
-              </button>
+          <div className={`ws-composer-wrapper ${greetingDone ? "ws-composer--enter" : "ws-composer--hidden"}`}>
+            {attachedFiles.length > 0 && (
+              <div style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                padding: "8px 12px",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: "12px 12px 0 0",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderBottom: "none",
+                maxWidth: 620,
+                width: "100%",
+                boxSizing: "border-box",
+              }}>
+                {attachedFiles.map((f, i) => (
+                  <div
+                    key={`${f.name}-${i}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 10px",
+                      borderRadius: 8,
+                      background: "rgba(234,179,8,0.12)",
+                      border: "1px solid rgba(234,179,8,0.25)",
+                      fontSize: 11,
+                      color: "#eab308",
+                      maxWidth: 200,
+                    }}
+                  >
+                    <span style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                    }}>
+                      {f.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachedFile(i)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#eab308",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: 14,
+                        lineHeight: 1,
+                        opacity: 0.7,
+                        flexShrink: 0,
+                      }}
+                      aria-label={`Remover ${f.name}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
+            <div className="ws-composer" style={attachedFiles.length > 0 ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : undefined}>
+              <button
+                type="button"
+                className="ws-btn ws-attach"
+                onClick={handleAttach}
+              >
+                <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
+                <span className="ws-sr-only">Anexar arquivos</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={handleFileChange}
+                aria-hidden="true"
+              />
+
+              <textarea
+                ref={textareaRef}
+                className="ws-textarea"
+                placeholder="Pergunte alguma coisa"
+                value={value}
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+                }}
+                onKeyDown={handleKeyDown}
+                rows={1}
+              />
+
+              {value.trim() || attachedFiles.length > 0 ? (
+                <button
+                  type="button"
+                  className="ws-btn ws-send"
+                  onClick={() => handleSubmit()}
+                >
+                  <Send size={16} strokeWidth={2.4} aria-hidden="true" />
+                  <span className="ws-sr-only">Enviar</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="ws-btn ws-mic"
+                  onClick={startRecording}
+                >
+                  <Mic size={18} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="ws-sr-only">Gravar áudio</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="ws-composer ws-composer--recording ws-composer--enter">
@@ -492,6 +567,12 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
             opacity: 1;
             transform: translateY(0) scale(1);
           }
+        }
+        .ws-composer-wrapper {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
         }
         .ws-composer {
           display: flex; align-items: center; gap: 8px;

@@ -31,6 +31,9 @@ export interface AgentRecord {
   description: string | null;
   permissions: string[];
   level: number;              // 1-4 nivel hierarquico
+  ownerUserId: string | null;
+  ownerName: string | null;
+  isPersonal: boolean;
 }
 
 interface AgentRow {
@@ -47,6 +50,8 @@ interface AgentRow {
   reports_to: number | null;
   description: string | null;
   level: number;
+  owner_user_id: string | null;
+  is_personal: boolean;
   departments: { name: string } | null;
   agent_permissions: { permission: string }[] | null;
 }
@@ -58,6 +63,7 @@ async function fetchAgents(): Promise<AgentRecord[]> {
       id, external_id, name, color, role, status,
       department_id, can_orchestrate, max_concurrent_tasks,
       current_tasks, reports_to, description, level,
+      owner_user_id, is_personal,
       departments ( name ),
       agent_permissions ( permission )
     `)
@@ -67,6 +73,21 @@ async function fetchAgents(): Promise<AgentRecord[]> {
   if (error) throw new Error(error.message);
 
   const rows = (data || []) as unknown as AgentRow[];
+
+  const ownerIds = [...new Set(rows.map(r => r.owner_user_id).filter(Boolean))] as string[];
+  let ownerMap: Record<string, string> = {};
+  if (ownerIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, full_name")
+      .in("user_id", ownerIds);
+    if (profiles) {
+      for (const p of profiles as { user_id: string; display_name: string; full_name: string | null }[]) {
+        ownerMap[p.user_id] = p.full_name || p.display_name || "";
+      }
+    }
+  }
+
   return rows.map(r => ({
     id: r.id,
     externalId: r.external_id,
@@ -83,6 +104,9 @@ async function fetchAgents(): Promise<AgentRecord[]> {
     description: r.description,
     permissions: (r.agent_permissions ?? []).map(p => p.permission),
     level: r.level ?? 4,
+    ownerUserId: r.owner_user_id,
+    ownerName: r.owner_user_id ? (ownerMap[r.owner_user_id] || null) : null,
+    isPersonal: r.is_personal ?? false,
   }));
 }
 

@@ -552,7 +552,7 @@ export default function Clients() {
               <>
                 <div><label style={labelStyle}>CPF</label><input required style={inputStyle} value={form.cpf} onChange={e => setForm({...form, cpf: formatCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} /></div>
                 <div><label style={labelStyle}>RG</label><input required style={inputStyle} value={form.rg} onChange={e => setForm({...form, rg: formatRG(e.target.value)})} placeholder="00.000.000-0" maxLength={12} /></div>
-                <div><label style={labelStyle}>Órgão Emissor</label><input required style={inputStyle} value={form.rg_issuer} onChange={e => setForm({...form, rg_issuer: toUpper(e.target.value)})} placeholder="SSP" /></div>
+                <div><label style={labelStyle}>Órgão Emissor</label><input style={inputStyle} value={form.rg_issuer} onChange={e => setForm({...form, rg_issuer: toUpper(e.target.value)})} placeholder="SSP" /></div>
                 <div>
                   <label style={labelStyle}>UF do RG</label>
                   <select style={selectStyle} value={form.rg_uf} onChange={e => setForm({...form, rg_uf: e.target.value})} required>
@@ -590,9 +590,9 @@ export default function Clients() {
                   </select>
                 </div>
                 <div><label style={labelStyle}>Profissão</label><input required style={inputStyle} value={form.profession} onChange={e => setForm({...form, profession: toUpper(e.target.value)})} /></div>
-                <div><label style={labelStyle}>Nome da Mãe</label><input required style={inputStyle} value={form.mother_name} onChange={e => setForm({...form, mother_name: toUpper(e.target.value)})} /></div>
-                <div><label style={labelStyle}>Nome do Pai</label><input required style={inputStyle} value={form.father_name} onChange={e => setForm({...form, father_name: toUpper(e.target.value)})} /></div>
-                <div><label style={labelStyle}>PIS / NIT</label><input required style={inputStyle} value={form.pis_nit} onChange={e => setForm({...form, pis_nit: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>Nome da Mãe</label><input style={inputStyle} value={form.mother_name} onChange={e => setForm({...form, mother_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>Nome do Pai</label><input style={inputStyle} value={form.father_name} onChange={e => setForm({...form, father_name: toUpper(e.target.value)})} /></div>
+                <div><label style={labelStyle}>PIS / NIT</label><input style={inputStyle} value={form.pis_nit} onChange={e => setForm({...form, pis_nit: toUpper(e.target.value)})} /></div>
               </>
             )}
 

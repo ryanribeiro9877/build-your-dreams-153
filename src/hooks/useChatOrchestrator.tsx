@@ -24,6 +24,23 @@ export interface StartSessionResult {
   error: ChatOrchestratorError | null;
 }
 
+/**
+ * Garante que a sessao do Supabase tenha um access_token valido.
+ * Se o token expirou (ou esta a < 60s de expirar), forca refresh usando o
+ * refresh_token. Previne os 401 `invalid_jwt` no orchestrator e no PostgREST.
+ */
+async function ensureFreshSession(): Promise<boolean> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return false;
+  const expiresAtMs = (session.expires_at ?? 0) * 1000;
+  const needsRefresh = expiresAtMs - Date.now() < 60_000; // margem de 60s
+  if (needsRefresh) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session) return false;
+  }
+  return true;
+}
+
 export function useChatOrchestrator() {
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<ChatOrchestratorError | null>(null);
@@ -34,6 +51,7 @@ export function useChatOrchestrator() {
     options?: { clientId?: string; title?: string }
   ): Promise<StartSessionResult> => {
     setLastError(null);
+    await ensureFreshSession();
     // @ts-expect-error - RPC criada na Onda 2
     const { data, error } = await supabase.rpc("start_chat_session", {
       p_entry_agent_id: entryAgentId,
@@ -59,22 +77,43 @@ export function useChatOrchestrator() {
     setPending(true);
     setLastError(null);
 
-    try {
-      const { data, error } = await supabase.functions.invoke("chat-orchestrator", {
+    const invokeOnce = async () => {
+      return supabase.functions.invoke("chat-orchestrator", {
         body: { sessionId, message },
       });
+    };
 
+    const parseInvokeError = (error: unknown): ChatOrchestratorError => {
+      const errorBody = (error as { context?: { body?: string } }).context?.body;
+      if (errorBody) {
+        try {
+          return JSON.parse(errorBody) as ChatOrchestratorError;
+        } catch {
+          // ignore
+        }
+      }
+      return { error: "request_failed", message: (error as Error).message };
+    };
+
+    try {
+      // Garante token valido antes de chamar.
+      await ensureFreshSession();
+
+      let { data, error } = await invokeOnce();
+
+      // Se falhou por JWT invalido/expirado, forca refresh e tenta de novo 1x.
       if (error) {
-        const errorBody = (error as unknown as { context?: { body?: string } }).context?.body;
-        let parsed: ChatOrchestratorError | null = null;
-        if (errorBody) {
-          try {
-            parsed = JSON.parse(errorBody) as ChatOrchestratorError;
-          } catch {
-            // ignore
+        const parsed = parseInvokeError(error);
+        if (parsed.error === "invalid_jwt") {
+          const refreshed = await supabase.auth.refreshSession();
+          if (!refreshed.error && refreshed.data.session) {
+            ({ data, error } = await invokeOnce());
           }
         }
-        const e = parsed || { error: "request_failed", message: error.message };
+      }
+
+      if (error) {
+        const e = parseInvokeError(error);
         setLastError(e);
         return { response: null, error: e };
       }
@@ -98,7 +137,46 @@ export function useChatOrchestrator() {
     }
   }, []);
 
-  return { pending, lastError, startSession, sendMessage };
+  /**
+   * V23: dispara a orquestracao assincrona (modo start). Retorna assim que o
+   * backend aceita (202 { runId }). As etapas e a resposta final chegam via
+   * Realtime em chat_messages — NAO espera o conteudo aqui.
+   */
+  const startOrchestration = useCallback(async (
+    sessionId: string,
+    message: string,
+  ): Promise<{ ok: boolean; runId?: string; error?: ChatOrchestratorError }> => {
+    if (!message.trim()) return { ok: false, error: { error: "invalid_request", message: "Mensagem vazia" } };
+    setLastError(null);
+    const invokeOnce = () => supabase.functions.invoke("chat-orchestrator", { body: { sessionId, message } });
+    const parseErr = (error: unknown): ChatOrchestratorError => {
+      const b = (error as { context?: { body?: string } }).context?.body;
+      if (b) { try { return JSON.parse(b) as ChatOrchestratorError; } catch { /* ignore */ } }
+      return { error: "request_failed", message: (error as Error).message };
+    };
+    try {
+      await ensureFreshSession();
+      let { data, error } = await invokeOnce();
+      if (error) {
+        const parsed = parseErr(error);
+        if (parsed.error === "invalid_jwt") {
+          const refreshed = await supabase.auth.refreshSession();
+          if (!refreshed.error && refreshed.data.session) ({ data, error } = await invokeOnce());
+        }
+      }
+      if (error) { const e = parseErr(error); setLastError(e); return { ok: false, error: e }; }
+      if (data && typeof data === "object" && "error" in data) {
+        const e = data as ChatOrchestratorError; setLastError(e); return { ok: false, error: e };
+      }
+      return { ok: true, runId: (data as { runId?: string })?.runId };
+    } catch (e) {
+      const err: ChatOrchestratorError = { error: "network_error", message: (e as Error)?.message || "Erro de rede" };
+      setLastError(err);
+      return { ok: false, error: err };
+    }
+  }, []);
+
+  return { pending, lastError, startSession, sendMessage, startOrchestration };
 }
 
 /** Mensagens user-friendly para os codigos de erro mais comuns. */
