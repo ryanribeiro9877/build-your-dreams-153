@@ -9,6 +9,7 @@ import { useInboxCount } from "@/hooks/useUserTasks";
 import { useInterAssistantCount } from "@/hooks/useInterAssistant";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
+import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
@@ -745,7 +746,7 @@ export default function JurisCloudOS() {
     setIsRecording(true);
   };
 
-  const handleSend = async (text?: string) => {
+  const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
     if (!val) return;
     const { cost, label } = getTokenCost(val);
@@ -792,6 +793,25 @@ export default function JurisCloudOS() {
         if (!sessionId) { await refundAndNotify(friendlyError(startErr)); return; }
         setAssistantSessionId(sessionId); // dispara a assinatura Realtime
         sid = sessionId;
+      }
+      // Canal A: sobe e extrai os DOCUMENTOS DO CASO ANTES de orquestrar, para que
+      // o especialista (N3) leia o conteudo real (nao apenas os nomes dos arquivos).
+      if (files && files.length > 0 && user) {
+        try {
+          const ing = await ingestChatAttachments(sid, user.id, files);
+          if (ing.failedUpload.length || ing.failedExtraction.length) {
+            const parts: string[] = [];
+            if (ing.failedUpload.length) parts.push(`falha ao enviar: ${ing.failedUpload.join(", ")}`);
+            if (ing.failedExtraction.length) parts.push(`sem texto legivel (use PDF/DOCX/TXT pesquisavel): ${ing.failedExtraction.join(", ")}`);
+            setMessages(prev => [...prev, {
+              id: `local_attach_${Date.now()}`, role: "assistant", agent: "Sistema",
+              content: `⚠ Anexos — ${parts.join(" · ")}.`,
+              timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+            }]);
+          }
+        } catch (e) {
+          console.warn("[handleSend] ingestao de anexos falhou:", e);
+        }
       }
       // Dispara a orquestracao assincrona. As mensagens chegam via Realtime.
       const { ok, error: sendErr } = await startOrchestration(sid, val);

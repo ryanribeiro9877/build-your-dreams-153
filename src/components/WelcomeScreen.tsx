@@ -40,7 +40,7 @@ interface TaskSummary {
 
 interface WelcomeScreenProps {
   onDismiss: () => void;
-  onSubmit?: (message: string) => void;
+  onSubmit?: (message: string, files?: File[]) => void;
 }
 
 const WAVEFORM_BARS = 40;
@@ -166,11 +166,12 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
       section: "primary_cta",
     });
     let msg = v;
+    const filesToSend = attachedFiles.length ? [...attachedFiles] : undefined;
     if (attachedFiles.length > 0) {
       const names = attachedFiles.map((f) => f.name).join(", ");
       msg = msg ? `${msg}\n[Arquivos: ${names}]` : `[Arquivos: ${names}]`;
     }
-    if (onSubmit) onSubmit(msg);
+    if (onSubmit) onSubmit(msg, filesToSend);
     else onDismiss();
     setValue("");
     setAttachedFiles([]);

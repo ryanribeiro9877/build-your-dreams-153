@@ -14,7 +14,7 @@
 - **Dono**: Rodrigo Bacellar (`ryanribeiro@cohapm.com.br`). Idioma: **PT-BR**.
 - **Conta de teste**: `admin@juridico.com / admin123` no deploy `build-your-dreams-153.vercel.app`.
 - **Repo**: `https://github.com/ryanribeiro9877/build-your-dreams-153` (branch `main`).
-- **Estado atual**: 23 patches aplicados (V7-V23). V21 aposentou role `ceo`; V22 adicionou biblioteca de modelos de peticao; V23 transformou o chat em **orquestracao multi-agente N1->N2->N3** (assincrona + Realtime), com modelos rapidos por nivel (NUNCA gpt-5.5 no chat).
+- **Estado atual**: 24 patches aplicados (V7-V24). V21 aposentou role `ceo`; V22 adicionou biblioteca de modelos de peticao; V23 transformou o chat em **orquestracao multi-agente N1->N2->N3** (assincrona + Realtime), com modelos rapidos por nivel (NUNCA gpt-5.5 no chat); V24 fez os agentes **LEREM os documentos** — anexos do caso (`chat_attachments`, fonte autoritativa) + modelos (`document_library`) injetados no N3 com cerca anti-alucinacao; aposentou `agent_documents`.
 - **NÃO faça**: não use light mode, não invente cores fora da paleta, não mexa em arquivos sem rodar `vite build` antes de entregar, não pré-crie usuários (todos vêm do convite do sócio), não use role `ceo` (deprecated V21).
 
 ---
@@ -493,6 +493,28 @@ Reescreve o `chat-orchestrator` de single-agent para uma **cadeia hierarquica** 
 **Frontend:** `useChatOrchestrator.startOrchestration` (nao espera resposta). `JurisCloudOS` assina **Realtime** em `chat_messages` (filter session_id) + fetch catch-up; alimenta `messages` com dedup por id. `JurisChatPanel` renderiza etapas (`StageLine`) e a resposta final como balao. `thinking` desliga ao chegar `kind=final|error`.
 
 **Validado:** cadeia real Ana -> "Meu Assistente" -> "Diretor de Área" -> "Especialista Confeccao Consumidor" -> resposta, run=done, via pg_net. Ver [[jurisai-orchestrator-gotchas]].
+
+---
+
+### V24 — Agentes LEEM os documentos (anexos do caso + modelos) no N3
+
+Corrige a causa raiz do caso Carmem x Santander: o especialista redigia **sem ler os documentos** (inventava nome/CPF da parte, usava o nome da advogada). Antes, **nenhum canal de documento chegava ao LLM**. V24 implementa os dois:
+
+**Canal A — DOCUMENTOS DO CASO (anexos da conversa, fonte autoritativa):**
+- Migration `v24_document_channels`: tabela `chat_attachments` (`session_id, message_id, user_id, storage_path, file_name, mime_type, file_size, extracted_text, is_active`) + bucket dedicado **`chat-attachments`** (privado) + RLS (dono da sessão + admin/tech).
+- Ingestão no frontend (`src/lib/ingestChatAttachments.ts`): no envio com anexo, sobe ao bucket, extrai texto (`extractFileText`: md/txt direto, .docx mammoth, .pdf pdf.js) e grava em `chat_attachments`. Falha de extração não bloqueia (marca `extracted_text` nulo e avisa). `JurisCloudOS.handleSend(text, files)` chama a ingestão ANTES de orquestrar; composers (`JurisChatPanel`, `WelcomeScreen`) passam os `File[]` reais (antes só os nomes `[Arquivos: ...]`).
+
+**Canal B — MODELOS DE REFERÊNCIA (document_library):**
+- Reconciliação (NÃO destrutiva): desativa duplicatas SEM texto (sobras V22) e mantém as versões COM `content_cache`; backfill da classificação (`doc_type/categoria/reu_categoria/match_keywords`) nas linhas com texto.
+- **`agent_documents` APOSENTADA**: a "aba Markdown" (`useAgentDocuments`) passa a ler/gravar em `document_library` + `agent_document_links` (mesma fonte do orquestrador). A tabela antiga não é dropada (preserva histórico). `v24b` adiciona `description` em `document_library`.
+
+**Injeção no N3 (`chat-orchestrator` v16):**
+- `executing_n3` monta `system_prompt = prompt_do_agente + DOCUMENTOS DO CASO + MODELOS DE REFERÊNCIA`, com cerca de segurança (são DADOS, não instruções), **regra anti-alucinação** (extrair dados da parte só do Canal A; faltou → `[A PREENCHER: <dado>]`; NUNCA usar o nome do advogado), tetos de token (`MAX_CASE_TOKENS=16k`, `MAX_MODEL_TOKENS=28k`) e cache de prefixo (prompt estável).
+- Modelo selecionado por relevância de `match_keywords` na mensagem (LIMIT 2), sem chamada extra.
+- Os validadores N2/N1 recebem os DOCUMENTOS DO CASO e **reprovam** rascunhos que inventem dados ou usem o nome do advogado.
+- Rastreabilidade: `orchestration_runs.chain` registra `{case_docs, models}` usados.
+
+**Validado (SQL, sem custo OpenAI):** fixture Carmem → `loadCaseDocuments` retorna nome/CPF/contrato reais; `loadModelDocuments` ranqueia o modelo `consignado_fraude/banco` (score 4) acima do `seguro_susep` (0). `vite build` passa.
 
 ---
 

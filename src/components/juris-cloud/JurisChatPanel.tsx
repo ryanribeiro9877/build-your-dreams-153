@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "./types";
 import { getInitials, getCaseAreaChip, getTokenCost } from "./constants";
+import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 
 /* ── Sub-components (chat bubbles) ── */
 
@@ -50,20 +51,29 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-// Linha de status discreta para etapas da orquestracao (N1->N2->N3).
+// Linha de status das etapas da orquestracao (N1->N2->N3). Cor por tipo de etapa
+// para facilitar a leitura: roteamento (dourado), execucao (azul), revisao (verde).
+const STAGE_STYLE: Record<string, { icon: string; color: string }> = {
+  routing_n1:    { icon: "🧭", color: "#EAB308" },
+  routing_n2:    { icon: "⛓", color: "#EAB308" },
+  executing_n3:  { icon: "✍️", color: "#5CC2FF" },
+  validating_n2: { icon: "🔍", color: "#2DD4A0" },
+  validating_n1: { icon: "🔍", color: "#2DD4A0" },
+};
+
 function StageLine({ msg }: { msg: JcChatMessage }) {
-  const icon = msg.stage === "routing_n1" ? "🧭"
-    : msg.stage === "routing_n2" ? "⛓"
-    : msg.stage === "executing_n3" ? "✍"
-    : msg.stage === "validating_n2" || msg.stage === "validating_n1" ? "🔍"
-    : "•";
+  const s = STAGE_STYLE[msg.stage || ""] || { icon: "•", color: "#9A9AB0" };
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8, padding: "4px 12px",
-      margin: "2px 0", fontSize: 11, color: "var(--text3, #8a8a9a)",
-      fontStyle: "italic", opacity: 0.85,
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "9px 14px", margin: "5px 0",
+      fontSize: 13.5, lineHeight: 1.45, fontWeight: 500,
+      color: "#E4E4EE",
+      background: "rgba(255,255,255,0.05)",
+      borderLeft: `3px solid ${s.color}`,
+      borderRadius: "0 8px 8px 0",
     }}>
-      <span aria-hidden>{icon}</span>
+      <span aria-hidden style={{ fontSize: 16, flexShrink: 0, lineHeight: 1 }}>{s.icon}</span>
       <span>{msg.content}</span>
     </div>
   );
@@ -138,6 +148,21 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
                 {cleanContent && (
                   <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>
                 )}
+                {!isUser && cleanContent && cleanContent.length >= 280 && (
+                  <button
+                    type="button"
+                    onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
+                    title="Baixar esta resposta em PDF"
+                    style={{
+                      marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
+                      background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
+                      color: "#EAB308", fontWeight: 600, alignSelf: "flex-start",
+                    }}
+                  >
+                    ⬇ Baixar em PDF
+                  </button>
+                )}
               </>
             );
           })()}
@@ -175,7 +200,7 @@ export interface JurisChatPanelProps {
   setShowWelcome: (v: boolean) => void;
   inputVal: string;
   setInputVal: (v: string) => void;
-  handleSend: (text?: string) => void;
+  handleSend: (text?: string, files?: File[]) => void;
   visibleCommands: string[];
   isRecording: boolean;
   toggleRecording: () => void;
@@ -209,7 +234,8 @@ export default function JurisChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
 
-  // Envia anexando os nomes dos arquivos a mensagem (mesmo padrao do WelcomeScreen).
+  // Envia anexando os nomes a mensagem (chips na UI) E passando os arquivos reais
+  // para o backend (Canal A — sobe, extrai texto e grava em chat_attachments).
   const doSend = (text?: string) => {
     const base = (text ?? inputVal).trim();
     if (!base && attachedFiles.length === 0) return;
@@ -218,7 +244,7 @@ export default function JurisChatPanel({
       const names = attachedFiles.map((f) => f.name).join(", ");
       msg = msg ? `${msg}\n[Arquivos: ${names}]` : `[Arquivos: ${names}]`;
     }
-    handleSend(msg);
+    handleSend(msg, attachedFiles.length ? attachedFiles : undefined);
     setAttachedFiles([]);
   };
 
@@ -244,10 +270,10 @@ export default function JurisChatPanel({
         <div className="jc-messages">
           <WelcomeScreen
             onDismiss={() => setShowWelcome(false)}
-            onSubmit={(msg) => {
+            onSubmit={(msg, files) => {
               setShowWelcome(false);
               setInputVal(msg);
-              setTimeout(() => handleSend(msg), 60);
+              setTimeout(() => handleSend(msg, files), 60);
             }}
           />
         </div>
