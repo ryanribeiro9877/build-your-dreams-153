@@ -43,6 +43,15 @@ function errResp(status: number, code: string, message: string) {
 
 const MAX_ITERATIONS = 2;
 
+// Timeout das chamadas de LLM. NÃO impomos limite artificial baixo: deixamos cada
+// passo levar o tempo que precisar, até o teto da plataforma (wall-clock do Edge
+// Function: 150s no plano Free, 400s no Pro). Como cada passo da cadeia é uma
+// INVOCAÇÃO separada (state machine), a conversa inteira pode levar muitos minutos
+// — só uma chamada de LLM isolada é que precisa caber na janela do worker.
+// Por isso o trabalho roda em segundo plano (EdgeRuntime.waitUntil) e a requisição
+// responde na hora, evitando o idle timeout de 150s da requisição.
+const LLM_TIMEOUT_MS = 380_000; // ~teto do Pro (400s); no Free a plataforma corta em 150s.
+
 // Tetos de contexto (estimativa ~4 chars/token). Protegem janela e orçamento.
 const CHARS_PER_TOKEN = 4;
 const MAX_CASE_TOKENS = 16000;          // ~64k chars de documentos do caso (autoritativo)
@@ -78,7 +87,7 @@ async function callOpenAI(opts: {
   }
   if (opts.jsonMode) body.response_format = { type: "json_object" };
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 110_000);
+  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? LLM_TIMEOUT_MS);
   try {
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -227,7 +236,7 @@ async function chooseAgent(apiKey: string, router: AgentRow, userMsg: string, ca
     const r = await callOpenAI({
       apiKey, model: router.model || "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Solicitacao do usuario:\n${userMsg}\n\nAgentes disponiveis:\n${list}`,
-      temperature: 0, top_p: null, maxTokens: 100, timeoutMs: 25_000, jsonMode: true,
+      temperature: 0, top_p: null, maxTokens: 100, timeoutMs: LLM_TIMEOUT_MS, jsonMode: true,
     });
     const parsed = JSON.parse(r.content) as { agent_id?: string };
     const found = candidates.find((c) => c.id === parsed.agent_id);
@@ -254,7 +263,7 @@ async function validateDraft(apiKey: string, validator: AgentRow, userMsg: strin
     const r = await callOpenAI({
       apiKey, model: validator.model || "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Solicitacao:\n${userMsg}\n\nRascunho a avaliar:\n${draft}`,
-      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: 30_000, jsonMode: true,
+      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: LLM_TIMEOUT_MS, jsonMode: true,
     });
     const p = JSON.parse(r.content) as { approved?: boolean; feedback?: string };
     return { approved: p.approved === true, feedback: p.feedback || "" };
@@ -339,7 +348,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         history: [], userMessage: run.original_message + corr,
         temperature: n3.temperature, top_p: n3.top_p,
         maxTokens: Math.min(Math.max(n3.max_tokens ?? 8192, 8192), 16000),
-        timeoutMs: 110_000,
+        timeoutMs: LLM_TIMEOUT_MS,
       });
       const ctxNote = { level: 3, agent: n3.name, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
       await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
@@ -403,8 +412,13 @@ serve(async (req) => {
     let body: { runId?: string };
     try { body = await req.json(); } catch { return errResp(400, "invalid_request", "JSON invalido"); }
     if (!body.runId) return errResp(400, "invalid_request", "runId obrigatorio");
-    await processStep(admin, body.runId, supabaseUrl, serviceKey);
-    return json(200, { ok: true });
+    // Processa em SEGUNDO PLANO e responde na hora: a chamada de LLM do passo pode
+    // ser longa e NÃO deve esbarrar no idle timeout de 150s da requisição. O worker
+    // permanece vivo (waitUntil) até o passo terminar ou atingir o wall-clock do
+    // plano (150s Free / 400s Pro). O próximo passo é uma nova invocação.
+    // @ts-ignore EdgeRuntime existe no runtime do Supabase
+    EdgeRuntime.waitUntil(processStep(admin, body.runId, supabaseUrl, serviceKey));
+    return json(202, { ok: true, background: true });
   }
 
   // ── Modo START (frontend) ──

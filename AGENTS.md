@@ -514,6 +514,8 @@ Corrige a causa raiz do caso Carmem x Santander: o especialista redigia **sem le
 - Os validadores N2/N1 recebem os DOCUMENTOS DO CASO e **reprovam** rascunhos que inventem dados ou usem o nome do advogado.
 - Rastreabilidade: `orchestration_runs.chain` registra `{case_docs, models}` usados.
 
+**Timeout (cada passo leva o tempo que precisar):** sem limite artificial — `LLM_TIMEOUT_MS=380s` (rotear/validar/redigir). O passo (`step`) roda em **segundo plano** (`EdgeRuntime.waitUntil`) e responde 202 na hora, então a chamada de LLM não esbarra no **idle timeout de 150s** da requisição. Teto REAL é o wall-clock do worker: **150s no plano Free, 400s no Pro** (a plataforma mata o worker nesse limite, independente do código). Como cada passo é uma invocação separada, a conversa inteira pode levar muitos minutos; só uma chamada de LLM isolada precisa caber na janela. ⚠️ No Free, um passo que precise de >150s (ex.: gpt-5.5 redigindo peça longa) é cortado pela plataforma e o run pode ficar preso — upgrade para Pro sobe o teto para 400s.
+
 **Validado (SQL, sem custo OpenAI):** fixture Carmem → `loadCaseDocuments` retorna nome/CPF/contrato reais; `loadModelDocuments` ranqueia o modelo `consignado_fraude/banco` (score 4) acima do `seguro_susep` (0). `vite build` passa.
 
 ---
