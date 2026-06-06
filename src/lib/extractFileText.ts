@@ -1,4 +1,5 @@
 import mammoth from "mammoth";
+import PdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 export async function extractFileText(file: File): Promise<string | null> {
   const mime = file.type || "";
@@ -23,7 +24,8 @@ export async function extractFileText(file: File): Promise<string | null> {
   if (mime === "application/pdf") {
     try {
       const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      // Worker empacotado localmente via Vite (evita 404 do CDN p/ v6.x)
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorkerUrl;
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const pages: string[] = [];
@@ -36,7 +38,8 @@ export async function extractFileText(file: File): Promise<string | null> {
         pages.push(pageText);
       }
       return pages.join("\n\n") || null;
-    } catch {
+    } catch (err) {
+      console.error("[extractFileText] Falha ao extrair texto do PDF:", err);
       return null;
     }
   }

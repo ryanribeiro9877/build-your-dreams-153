@@ -19,7 +19,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
-  Deno.env.get("ALLOWED_ORIGIN") || "https://app.jurisai.com.br",
+  Deno.env.get("ALLOWED_ORIGIN") || "https://build-your-dreams-153.vercel.app",
+  "https://build-your-dreams-153.vercel.app",
+  "https://app.jurisai.com.br",
   "http://localhost:8080",
   "http://localhost:5173",
 ];
@@ -225,12 +227,48 @@ async function insertStage(admin: SupabaseClient, sessionId: string, userId: str
   });
 }
 
+// ─── regras de roteamento de intenção (N2→N3) ──────────────────────────────
+const ROUTING_INTENT_RULES = `
+REGRAS DE ROTEAMENTO POR INTENCAO (obedeça rigorosamente):
+1. REDIGIR/CONFECCIONAR: se o usuario pede para CRIAR, REDIGIR, CONFECCIONAR, ELABORAR ou FAZER uma peça, petição, contestação, recurso, notificação, ou qualquer documento jurídico → escolha um "Especialista Confecção [Área]" (Bancário, Civil, Consumidor, Plano de Saúde, Tributário). NUNCA mande para "Especialista Atendimento" — Atendimento faz SONDAGEM de cliente, não redige.
+2. ATENDER/SONDAR: se o usuario pede para ATENDER, SONDAR, FECHAR um cliente, ou fazer triagem → "Especialista Atendimento" ou "Especialista Triagem".
+3. PROTOCOLAR: se pede para protocolar, distribuir, juntar → "Especialista Cadastro ProJuris" ou especialista de protocolo.
+4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
+5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
+6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
+`;
+
+// Aplica routing_exclusivities: réus exclusivos do sócio.
+async function applyExclusivities(admin: SupabaseClient, userMsg: string, candidates: AgentRow[]): Promise<AgentRow[]> {
+  const { data: excl } = await admin.from("routing_exclusivities").select("reu_pattern, owner_role");
+  if (!excl || excl.length === 0) return candidates;
+  const msg = userMsg.toLowerCase();
+  for (const rule of excl as { reu_pattern: string; owner_role: string }[]) {
+    const pattern = (rule.reu_pattern || "").replace(/%/g, "").toLowerCase();
+    if (pattern && msg.includes(pattern)) {
+      // Filtra para agentes do sócio (role contém "socio" ou "sócio" no owner)
+      // Na prática, os especialistas do sócio têm "Rodrigo" no system_prompt
+      const socioAgents = candidates.filter((c) =>
+        c.system_prompt?.toLowerCase().includes("rodrigo") ||
+        c.system_prompt?.toLowerCase().includes("sócio") ||
+        c.system_prompt?.toLowerCase().includes("socio")
+      );
+      if (socioAgents.length > 0) {
+        console.log(`[routing] exclusividade réu "${pattern}" → filtrado para ${socioAgents.length} agentes do sócio`);
+        return socioAgents;
+      }
+    }
+  }
+  return candidates;
+}
+
 // LLM roteador escolhe um agente da lista; retorna o AgentRow escolhido (ou o 1o como fallback).
-async function chooseAgent(apiKey: string, router: AgentRow, userMsg: string, candidates: AgentRow[]): Promise<AgentRow> {
+async function chooseAgent(apiKey: string, router: AgentRow, userMsg: string, candidates: AgentRow[], intentRules?: string): Promise<AgentRow> {
   if (candidates.length === 0) throw new Error("Sem sub-agentes para delegar");
   if (candidates.length === 1) return candidates[0];
   const list = candidates.map((c) => `- id:${c.id} | ${c.name} | ${c.description || c.system_prompt?.slice(0, 120) || c.role}`).join("\n");
   const sys = (router.system_prompt || "Voce e um roteador.") +
+    (intentRules ? "\n\n" + intentRules : "") +
     "\n\nEscolha QUAL agente da lista deve receber esta solicitacao. Responda APENAS JSON: {\"agent_id\":\"<uuid>\"}.";
   try {
     const r = await callOpenAI({
@@ -279,9 +317,17 @@ function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
   EdgeRuntime.waitUntil(
     fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-internal-step": serviceKey },
+      headers: {
+        "content-type": "application/json",
+        "x-internal-step": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+      },
       body: JSON.stringify({ runId }),
-    }).catch(() => {}),
+    }).then((resp) => {
+      if (!resp.ok) console.error(`[fireNextStep] run=${runId} status=${resp.status}`);
+    }).catch((err) => {
+      console.error(`[fireNextStep] run=${runId} fetch error:`, err?.message || err);
+    }),
   );
 }
 
@@ -307,8 +353,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     const apiKey = await resolveKey(admin, n1.provider || "openai");
     if (!apiKey) return await fail("Sem chave de provider");
 
-    const upd = (patch: Record<string, unknown>) =>
-      admin.from("orchestration_runs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", runId);
+    const upd = async (patch: Record<string, unknown>) => {
+      const { error: updErr } = await admin.from("orchestration_runs")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", runId);
+      if (updErr) {
+        console.error(`[upd] run=${runId} patch=${JSON.stringify(patch)} error:`, updErr.message);
+        throw new Error(`Update run failed: ${updErr.message}`);
+      }
+    };
 
     if (run.status === "routing_n1") {
       const directors = await loadSubAgents(admin, n1.owner_user_id, ["director"]);
@@ -324,9 +377,11 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
     } else if (run.status === "routing_n2") {
       const router = run.target_n2_id ? (await loadAgent(admin, run.target_n2_id)) || n1 : n1;
-      const specialists = await loadSubAgents(admin, n1.owner_user_id, ["specialist", "monitor", "executor"]);
+      let specialists = await loadSubAgents(admin, n1.owner_user_id, ["specialist", "monitor", "executor"]);
       if (specialists.length === 0) return await fail("Nenhum especialista disponivel");
-      const n3 = await chooseAgent(apiKey, router, run.original_message, specialists);
+      // Aplica exclusividades de réu (Agiproteg/Agibank/Facta → sócio)
+      specialists = await applyExclusivities(admin, run.original_message, specialists);
+      const n3 = await chooseAgent(apiKey, router, run.original_message, specialists, ROUTING_INTENT_RULES);
       await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, "executing_n3", n3);
       await upd({ status: "executing_n3", target_n3_id: n3.id, chain: [...(run.chain || []), { level: 3, agent: n3.name }] });
       return fireNextStep(runId, supabaseUrl, serviceKey);

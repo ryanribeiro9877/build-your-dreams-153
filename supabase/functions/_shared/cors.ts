@@ -1,5 +1,7 @@
 const ALLOWED_ORIGINS = [
-  Deno.env.get('ALLOWED_ORIGIN') || 'https://app.jurisai.com.br',
+  Deno.env.get('ALLOWED_ORIGIN') || 'https://build-your-dreams-153.vercel.app',
+  'https://build-your-dreams-153.vercel.app',
+  'https://app.jurisai.com.br',
   'http://localhost:8080',
   'http://localhost:5173',
 ];
