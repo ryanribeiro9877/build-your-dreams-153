@@ -870,41 +870,36 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n1") {
-      const caseDocs = await loadCaseDocuments(admin, run.session_id);
-      const caseCtx = buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
-      const verdict = await validateDraft(admin, n1, run.original_message, run.draft || "", caseCtx);
-      if (verdict.approved || run.iterations >= MAX_ITERATIONS) {
-        const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
-        const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
-        if (run.stream_message_id) {
-          // Já existe a linha streamada: vira a resposta FINAL (sem inserir duplicata).
-          await admin.from("chat_messages")
-            .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta })
-            .eq("id", run.stream_message_id);
-        } else {
-          const seq = await nextSeq(admin, run.session_id);
-          await admin.from("chat_messages").insert({
-            session_id: run.session_id, user_id: run.user_id, role: "assistant",
-            agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
-            metadata: finalMeta,
-          });
-        }
-        await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
-        await upd({ status: "done" });
-        // Resumo rolante (memória "eterna"): se a conversa passou da janela de N
-        // mensagens, condensa as mais antigas em chat_sessions.summary. Em segundo
-        // plano — não atrasa a resposta ao usuário. Fail-open.
-        const histLimit = n1.history_limit ?? 10;
-        const prevSummary = await loadSessionSummary(admin, run.session_id);
-        // @ts-ignore EdgeRuntime existe no runtime do Supabase
-        EdgeRuntime.waitUntil(
-          updateRollingSummary(admin, n1.model || "gpt-4o-mini", run.session_id, histLimit, prevSummary),
-        );
+      // FINALIZAÇÃO (sem 2a validação): só se chega aqui quando o N2 já aprovou
+      // (ou atingiu o teto de iterações). Evita uma chamada de LLM redundante no
+      // caminho feliz — a validação única do N2 já cobriu qualidade + anti-alucinação
+      // + alçada + citação. Reduz a latência da cadeia.
+      const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
+      const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
+      if (run.stream_message_id) {
+        // Já existe a linha streamada: vira a resposta FINAL (sem inserir duplicata).
+        await admin.from("chat_messages")
+          .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta })
+          .eq("id", run.stream_message_id);
       } else {
-        await insertStage(admin, run.session_id, run.user_id, `Meu Assistente pediu refinamento (rodada ${run.iterations + 1}).`, "executing_n3", n1);
-        await upd({ status: "executing_n3", feedback: verdict.feedback, iterations: run.iterations + 1 });
-        return fireNextStep(runId, supabaseUrl, serviceKey);
+        const seq = await nextSeq(admin, run.session_id);
+        await admin.from("chat_messages").insert({
+          session_id: run.session_id, user_id: run.user_id, role: "assistant",
+          agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
+          metadata: finalMeta,
+        });
       }
+      await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+      await upd({ status: "done" });
+      // Resumo rolante (memória "eterna"): se a conversa passou da janela de N
+      // mensagens, condensa as mais antigas em chat_sessions.summary. Em segundo
+      // plano — não atrasa a resposta ao usuário. Fail-open.
+      const histLimit = n1.history_limit ?? 10;
+      const prevSummary = await loadSessionSummary(admin, run.session_id);
+      // @ts-ignore EdgeRuntime existe no runtime do Supabase
+      EdgeRuntime.waitUntil(
+        updateRollingSummary(admin, n1.model || "gpt-4o-mini", run.session_id, histLimit, prevSummary),
+      );
     }
   } catch (e) {
     await fail((e as Error)?.message || "erro interno");
