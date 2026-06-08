@@ -81,7 +81,7 @@ export default function Tokens() {
             aria-label="Voltar ao sistema"
           >
             <ArrowLeft className="w-4 h-4" strokeWidth={2.5} />
-            Voltar
+            Voltar ao sistema
           </Button>
           <Coins className="w-6 h-6 text-[#eab308]" />
           <h1 className="text-2xl font-bold text-[#eab308]">Meus Tokens</h1>
