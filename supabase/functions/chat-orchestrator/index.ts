@@ -609,6 +609,38 @@ function extractFixedFacts(text: string): { body: string; facts: string | null }
   return { body, facts: facts || null };
 }
 
+// CAMADA 1 (origem): regra anexada a CADA bloco proibindo meta-texto/costura.
+const BLOCK_CLEAN_RULE =
+  "\n\n═══ REGRAS DE SAÍDA (OBRIGATÓRIAS) ═══\n" +
+  "Produza SOMENTE a prosa jurídica limpa desta seção, pronta para protocolo. NÃO escreva NENHUM meta-texto: " +
+  "nada de 'CONTINUAÇÃO DA PETIÇÃO INICIAL', 'Bloco X/5', 'Continuação na próxima resposta', 'continuação direta " +
+  "do texto já redigido', nem qualquer cabeçalho de bloco. NÃO inclua seções de 'SINALIZAÇÕES AO ADVOGADO' por bloco " +
+  "— as pendências vão SOMENTE no CHECKLIST consolidado ao final da peça (último bloco), com o título 'CHECKLIST DE " +
+  "PENDÊNCIAS'. NÃO use glifos/emojis decorativos (ex.: '& þ'). Comece DIRETO no conteúdo da seção.";
+
+// CAMADA 2 (montagem): remove qualquer andaime de costura que tenha vazado num bloco.
+// Denylist por linha (case-insensitive) + corte da seção "SINALIZAÇÕES ... BLOCO x/5"
+// até o fim do bloco + remoção de glifos de ruído.
+function sanitizeBlockText(text: string): string {
+  if (!text) return "";
+  let t = text.replace(/\r\n/g, "\n");
+  // Corta a seção de avisos por bloco ("SINALIZAÇÕES AO ADVOGADO ... BLOCO x/5") até o fim do bloco.
+  const sinal = t.match(/^.*sinaliza[cç][oõ]es?\s+ao\s+advogad[oa].*bloco.*$/im);
+  if (sinal && sinal.index !== undefined) t = t.slice(0, sinal.index);
+  // Remove linhas de andaime de continuação/bloco.
+  const deny: RegExp[] = [
+    /^.*continua[cç][aã]o\s+da\s+peti[cç][aã]o\s+inicial.*$/i,
+    /^\s*\[?\s*continua[cç][aã]o\s+na\s+pr[oó]xima\s+resposta.*$/i,
+    /^.*bloco\s*\d\s*\/\s*5.*$/i,
+    /^\s*\(?\s*se[cç][oõ]es?\s+iii\..*continua[cç][aã]o\s+direta.*$/i,
+  ];
+  t = t.split("\n").filter((line) => !deny.some((re) => re.test(line))).join("\n");
+  // Remove glifos de ruído ("& þ", "þ") usados como ornamento antes de títulos.
+  t = t.replace(/&\s*þ/g, "").replace(/þ/g, "");
+  // Colapsa linhas em branco excessivas e apara.
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Bloco MODELOS DE REFERÊNCIA com cerca de segurança.
 function buildModelBlock(modelDocs: DocPiece[], maxTokens: number): string {
   if (modelDocs.length === 0) return "";
@@ -942,7 +974,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       const fixed = run.fixed_facts ? `\n\nFATOS FIXADOS (use EXATAMENTE estes dados; não invente):\n${run.fixed_facts}\n` : "";
       const done = N3_BLOCKS.slice(0, blockIdx).map((b) => b.label).join("; ");
       const progress = done ? `\n\nJÁ REDIGIDO (NÃO repita): ${done}.` : "";
-      const userMessage = `${run.original_message}${fixed}${progress}\n\nINSTRUÇÃO DESTE BLOCO (${blockIdx + 1}/${N3_BLOCKS.length}):\n${spec.instruction}`;
+      const userMessage = `${run.original_message}${fixed}${progress}\n\nINSTRUÇÃO DESTE BLOCO (${blockIdx + 1}/${N3_BLOCKS.length}):\n${spec.instruction}${BLOCK_CLEAN_RULE}`;
 
       await insertStage(admin, run.session_id, run.user_id, `Redigindo ${spec.label} (${blockIdx + 1} de ${N3_BLOCKS.length})...`, "executing_n3", n3);
       const t0 = Date.now();
@@ -956,6 +988,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         blockText = ext.body;
         fixedFacts = ext.facts ?? fixedFacts;
       }
+      blockText = sanitizeBlockText(blockText);      // CAMADA 2: remove costura que tenha vazado
       blocksAcc[blockIdx] = blockText;
       const prevU = (run.n3_usage as { input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
       const usage = {
