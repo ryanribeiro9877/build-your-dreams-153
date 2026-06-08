@@ -244,7 +244,7 @@ export default function JurisSidebar({
                           fontSize: 12, fontWeight: 500, flex: 1, minWidth: 0,
                           color: isActive ? "#EAB308" : "var(--text1)",
                         }}>{s.title}</span>
-                        <span style={{ fontSize: 9, color: "var(--text3)", flexShrink: 0 }}>{dateStr}</span>
+                        <span style={{ fontSize: 9.5, color: "var(--text2)", flexShrink: 0 }}>{dateStr}</span>
                         <button
                           type="button"
                           className="jc-session-del"
@@ -263,7 +263,7 @@ export default function JurisSidebar({
                       </div>
                       {s.preview && (
                         <span style={{
-                          fontSize: 10.5, color: "var(--text3)", lineHeight: 1.35,
+                          fontSize: 11, color: "var(--text2)", lineHeight: 1.4,
                           overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
                           WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                         }}>{s.preview}</span>
