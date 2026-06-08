@@ -699,7 +699,11 @@ export default function JurisCloudOS() {
         (payload) => {
           const row = payload.new as Record<string, any>;
           upsert([mapRow(row)]);
-          if (row.metadata?.kind === "final" || row.metadata?.kind === "error") setThinking(false);
+          if (row.metadata?.kind === "final" || row.metadata?.kind === "error") {
+            setThinking(false);
+            // Atualiza a lista de conversas (título automático/last_message_at).
+            loadSessions();
+          }
         })
       .subscribe();
 
