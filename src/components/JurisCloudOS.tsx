@@ -546,6 +546,50 @@ export default function JurisCloudOS() {
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
 
+  // ── Histórico de conversas ──
+  type SessionSummary = { id: string; title: string; lastMessageAt: string; messageCount: number };
+  const [chatSessions, setChatSessions] = useState<SessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // Carrega sessões do usuário
+  const loadSessions = async () => {
+    if (!user) return;
+    setSessionsLoading(true);
+    const { data } = await supabase
+      // @ts-expect-error Tabelas chat_sessions ainda não estão nos tipos gerados.
+      .from("chat_sessions")
+      .select("id, title, last_message_at, message_count")
+      .eq("user_id" as never, user.id)
+      .eq("status" as never, "active")
+      .order("last_message_at", { ascending: false })
+      .limit(30);
+    if (data) {
+      setChatSessions((data as unknown as { id: string; title: string | null; last_message_at: string; message_count: number }[]).map(r => ({
+        id: r.id, title: r.title || "Nova conversa",
+        lastMessageAt: r.last_message_at, messageCount: r.message_count,
+      })));
+    }
+    setSessionsLoading(false);
+  };
+
+  useEffect(() => { loadSessions(); }, [user, assistantSessionId]);
+
+  // Trocar para uma sessão existente
+  const switchSession = async (sessionId: string) => {
+    setShowWelcome(false);
+    setThinking(false);
+    setMessages([]);
+    setAssistantSessionId(sessionId);
+  };
+
+  // Iniciar nova conversa
+  const startNewChat = () => {
+    setAssistantSessionId(null);
+    setMessages(INITIAL_MESSAGES);
+    setShowWelcome(true);
+    setThinking(false);
+  };
+
   const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
     ? AGENTS_FALLBACK
     : dbAgents.map(a => ({
@@ -997,6 +1041,10 @@ export default function JurisCloudOS() {
           openTooltipCount={openTooltipCount}
           setOpenTooltipCount={setOpenTooltipCount}
           hasRole={hasRole}
+          chatSessions={chatSessions}
+          activeSessionId={assistantSessionId}
+          onSwitchSession={switchSession}
+          onNewChat={startNewChat}
         />
 
         {/* MAIN */}

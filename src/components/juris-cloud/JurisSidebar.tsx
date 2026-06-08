@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  Search, Sparkles, Settings, Network, Circle,
+  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare,
 } from "lucide-react";
 import type { Agent, SidebarItem, MenuItem } from "./types";
 import { DEPT_ICONS, getHierarchyColor, getInitials } from "./constants";
+
+type SessionSummary = { id: string; title: string; lastMessageAt: string; messageCount: number };
 
 export interface JurisSidebarProps {
   sidebarOpen: boolean;
@@ -32,6 +34,10 @@ export interface JurisSidebarProps {
   openTooltipCount: number;
   setOpenTooltipCount: React.Dispatch<React.SetStateAction<number>>;
   hasRole: (role: string) => boolean;
+  chatSessions?: SessionSummary[];
+  activeSessionId?: string | null;
+  onSwitchSession?: (sessionId: string) => void;
+  onNewChat?: () => void;
 }
 
 export default function JurisSidebar({
@@ -49,6 +55,10 @@ export default function JurisSidebar({
   openTooltipCount,
   setOpenTooltipCount,
   hasRole,
+  chatSessions = [],
+  activeSessionId,
+  onSwitchSession,
+  onNewChat,
 }: JurisSidebarProps) {
   const navigate = useNavigate();
 
@@ -167,6 +177,66 @@ export default function JurisSidebar({
               dept.id
             );
           })}
+
+          {/* ── Histórico de conversas ── */}
+          <div className="jc-section-label" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>Conversas</span>
+            {!sidebarCollapsed && onNewChat && (
+              <button
+                type="button"
+                onClick={() => { onNewChat(); setSidebarOpen(false); }}
+                title="Nova conversa"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  background: "rgba(234,179,8,0.15)", border: "1px solid rgba(234,179,8,0.3)",
+                  color: "#EAB308", cursor: "pointer", lineHeight: 1.4,
+                }}
+              >
+                <Plus size={10} /> Nova
+              </button>
+            )}
+          </div>
+          {sidebarCollapsed ? (
+            withTooltip("Nova conversa",
+              <div className="jc-nav-item" onClick={() => { onNewChat?.(); setSidebarOpen(false); }} role="button" tabIndex={0}>
+                <Plus size={16} style={{ color: "#EAB308", flexShrink: 0 }} />
+              </div>,
+              "new_chat"
+            )
+          ) : (
+            <div style={{ maxHeight: 200, overflowY: "auto", overflowX: "hidden", marginBottom: 4 }}>
+              {chatSessions.length === 0 ? (
+                <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text3)", fontStyle: "italic" }}>
+                  Nenhuma conversa ainda
+                </div>
+              ) : chatSessions.map(s => {
+                const isActive = s.id === activeSessionId;
+                const dateStr = s.lastMessageAt
+                  ? new Date(s.lastMessageAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                  : "";
+                return (
+                  <div
+                    key={s.id}
+                    className={`jc-nav-item ${isActive ? "active" : ""}`}
+                    onClick={() => { onSwitchSession?.(s.id); setSidebarOpen(false); }}
+                    role="button"
+                    tabIndex={0}
+                    title={s.title}
+                    style={{ gap: 8 }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { onSwitchSession?.(s.id); setSidebarOpen(false); } }}
+                  >
+                    <MessageSquare size={13} style={{ color: isActive ? "#EAB308" : "var(--text3)", flexShrink: 0 }} />
+                    <span className="jc-nav-label" style={{
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      fontSize: 11.5, flex: 1,
+                    }}>{s.title}</span>
+                    <span style={{ fontSize: 9, color: "var(--text3)", flexShrink: 0 }}>{dateStr}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
           {menuItems.filter(m => m.show).map(item => {
