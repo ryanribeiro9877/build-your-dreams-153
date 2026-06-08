@@ -250,8 +250,8 @@ export default function JurisSidebar({
                           className="jc-session-del"
                           onClick={handleDelete}
                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleDelete(e); }}
-                          title="Excluir conversa"
-                          aria-label={`Excluir conversa ${s.title}`}
+                          title="Excluir"
+                          aria-label="Excluir"
                           style={{
                             display: "inline-flex", alignItems: "center", justifyContent: "center",
                             background: "none", border: "none", cursor: "pointer", padding: 2,
