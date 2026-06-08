@@ -115,6 +115,7 @@ async function callOpenAICompatible(opts: {
   history: { role: string; content: string }[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
   jsonMode?: boolean; cacheableSystem?: string | null;
+  onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const messages: Record<string, unknown>[] = [];
   const canCache = opts.provider === "openrouter" && /anthropic|claude/i.test(opts.model);
@@ -139,6 +140,11 @@ async function callOpenAICompatible(opts: {
     if (opts.top_p !== null) body.top_p = opts.top_p;
   }
   if (opts.jsonMode) body.response_format = { type: "json_object" };
+  const streaming = !!opts.onDelta;
+  if (streaming) {
+    body.stream = true;
+    if (opts.provider === "openai") body.stream_options = { include_usage: true };
+  }
   const headers: Record<string, string> = {
     Authorization: `Bearer ${opts.apiKey}`, "content-type": "application/json",
   };
@@ -154,6 +160,37 @@ async function callOpenAICompatible(opts: {
       method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
     if (!resp.ok) { const e = await resp.text(); throw new Error(`${opts.provider} ${resp.status}: ${e.slice(0, 300)}`); }
+
+    // ── Modo STREAM (SSE) — chunks "data: {...}" com choices[].delta.content ──
+    if (streaming && resp.body) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "", full = "", inTok = 0, outTok = 0, rawModel = opts.model;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          const s = line.trim();
+          if (!s.startsWith("data:")) continue;
+          const payload = s.slice(5).trim();
+          if (payload === "[DONE]") continue;
+          try {
+            const j = JSON.parse(payload);
+            const delta = j.choices?.[0]?.delta?.content;
+            if (delta) { full += delta; opts.onDelta!(full); }
+            if (j.usage) { inTok = j.usage.prompt_tokens ?? inTok; outTok = j.usage.completion_tokens ?? outTok; }
+            if (j.model) rawModel = j.model;
+          } catch { /* chunk parcial — ignora */ }
+        }
+      }
+      if (!full) throw new Error(`${opts.provider}: resposta vazia (stream)`);
+      return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel };
+    }
+
+    // ── Modo normal (resposta única) ──
     const data = (await resp.json()) as {
       choices?: { message?: { content?: string } }[];
       usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string;
@@ -170,7 +207,7 @@ async function callLLM(admin: SupabaseClient, opts: {
   model: string; systemPrompt: string | null;
   history: { role: string; content: string }[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
-  jsonMode?: boolean; cacheableSystem?: string | null;
+  jsonMode?: boolean; cacheableSystem?: string | null; onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const provider = providerFromModel(opts.model);
   const apiKey = await resolveKey(admin, provider);
@@ -688,12 +725,20 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
   const fail = async (msg: string) => {
     await admin.from("orchestration_runs").update({ status: "failed", error: msg, updated_at: new Date().toISOString() }).eq("id", runId);
-    const seq = await nextSeq(admin, run.session_id);
-    await admin.from("chat_messages").insert({
-      session_id: run.session_id, user_id: run.user_id, role: "assistant",
-      content: "Nao consegui concluir a orquestracao agora. Tente novamente.", sequence_number: seq,
-      metadata: { kind: "error", error: msg },
-    });
+    const errContent = "Nao consegui concluir a orquestracao agora. Tente novamente.";
+    // Se havia uma linha de streaming, converte-a em erro (evita bolha órfã); senão insere.
+    if (run.stream_message_id) {
+      await admin.from("chat_messages")
+        .update({ content: errContent, metadata: { kind: "error", error: msg } })
+        .eq("id", run.stream_message_id);
+    } else {
+      const seq = await nextSeq(admin, run.session_id);
+      await admin.from("chat_messages").insert({
+        session_id: run.session_id, user_id: run.user_id, role: "assistant",
+        content: errContent, sequence_number: seq,
+        metadata: { kind: "error", error: msg },
+      });
+    }
   };
 
   try {
@@ -767,6 +812,28 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
+
+      // STREAMING (Opção A): garante uma linha de mensagem 'streaming' e atualiza
+      // seu conteúdo conforme os tokens chegam (throttle ~700ms). A UI assina UPDATE.
+      let streamMsgId: string | null = run.stream_message_id ?? null;
+      if (!streamMsgId) {
+        const seqS = await nextSeq(admin, run.session_id);
+        const { data: sm } = await admin.from("chat_messages").insert({
+          session_id: run.session_id, user_id: run.user_id, role: "assistant",
+          agent_id: n3.id, content: "", sequence_number: seqS,
+          metadata: { kind: "streaming", agent_name: n3.name },
+        }).select("id").single();
+        streamMsgId = (sm as { id: string } | null)?.id ?? null;
+        if (streamMsgId) await upd({ stream_message_id: streamMsgId });
+      }
+      let lastWrite = 0;
+      const onDelta = streamMsgId ? (full: string) => {
+        const now = Date.now();
+        if (now - lastWrite < 700) return;
+        lastWrite = now;
+        admin.from("chat_messages").update({ content: full }).eq("id", streamMsgId as string).then(() => {}, () => {});
+      } : undefined;
+
       const r = await callLLM(admin, {
         model: n3.model || "gpt-4o",
         cacheableSystem: stableSystem,   // marcado p/ cache (Anthropic via OpenRouter)
@@ -775,7 +842,14 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         temperature: n3.temperature, top_p: n3.top_p,
         maxTokens: Math.min(Math.max(n3.max_tokens ?? 8192, 8192), 16000),
         timeoutMs: LLM_TIMEOUT_MS,
+        onDelta,
       });
+      // Flush final do conteúdo completo na linha de streaming.
+      if (streamMsgId) {
+        await admin.from("chat_messages")
+          .update({ content: r.content, metadata: { kind: "streaming", agent_name: n3.name } })
+          .eq("id", streamMsgId);
+      }
       console.log(`[N3] prompt: stable=${stableSystem.length}c volatile=${summaryBlock.length}c history=${history.length}msgs model=${n3.model}`);
       const ctxNote = { level: 3, agent: n3.name, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
       await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
@@ -801,12 +875,20 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       const verdict = await validateDraft(admin, n1, run.original_message, run.draft || "", caseCtx);
       if (verdict.approved || run.iterations >= MAX_ITERATIONS) {
         const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
-        const seq = await nextSeq(admin, run.session_id);
-        await admin.from("chat_messages").insert({
-          session_id: run.session_id, user_id: run.user_id, role: "assistant",
-          agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
-          metadata: { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" },
-        });
+        const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
+        if (run.stream_message_id) {
+          // Já existe a linha streamada: vira a resposta FINAL (sem inserir duplicata).
+          await admin.from("chat_messages")
+            .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta })
+            .eq("id", run.stream_message_id);
+        } else {
+          const seq = await nextSeq(admin, run.session_id);
+          await admin.from("chat_messages").insert({
+            session_id: run.session_id, user_id: run.user_id, role: "assistant",
+            agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
+            metadata: finalMeta,
+          });
+        }
         await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
         await upd({ status: "done" });
         // Resumo rolante (memória "eterna"): se a conversa passou da janela de N

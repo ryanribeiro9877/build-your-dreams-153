@@ -744,6 +744,25 @@ export default function JurisCloudOS() {
       });
       return add.length ? [...prev, ...add] : prev;
     });
+    // Streaming: aplica uma linha que pode ser NOVA ou ATUALIZADA (replace por id).
+    const applyRow = (row: Record<string, any>) => {
+      const m = mapRow(row);
+      setMessages(prev => {
+        const idx = prev.findIndex(x => String(x.id) === String(m.id));
+        if (idx >= 0) {
+          const next = prev.slice();
+          next[idx] = { ...prev[idx], content: m.content, kind: m.kind, agent: m.agent };
+          return next;
+        }
+        // Linha nova: aplica a mesma regra de dedup da otimista do usuário.
+        if (m.role === "user" && prev.some(x => String(x.id).startsWith("local_user_"))) return prev;
+        return [...prev, m];
+      });
+      const k = row.metadata?.kind;
+      // Sai do "thinking" assim que o texto começa a streamar (ou conclui/erro).
+      if (k === "final" || k === "error" || (k === "streaming" && row.content)) setThinking(false);
+      if (k === "final" || k === "error") loadSessions();
+    };
 
     (async () => {
       const { data } = await supabase.from("chat_messages")
@@ -758,15 +777,10 @@ export default function JurisCloudOS() {
     const channel = supabase.channel(`chat:${assistantSessionId}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${assistantSessionId}` },
-        (payload) => {
-          const row = payload.new as Record<string, any>;
-          upsert([mapRow(row)]);
-          if (row.metadata?.kind === "final" || row.metadata?.kind === "error") {
-            setThinking(false);
-            // Atualiza a lista de conversas (título automático/last_message_at).
-            loadSessions();
-          }
-        })
+        (payload) => applyRow(payload.new as Record<string, any>))
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `session_id=eq.${assistantSessionId}` },
+        (payload) => applyRow(payload.new as Record<string, any>))
       .subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
