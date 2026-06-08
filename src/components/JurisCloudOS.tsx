@@ -567,17 +567,19 @@ export default function JurisCloudOS() {
   useEffect(() => {
     if (agentsLoading || dbAgents.length === 0) return;
     (async () => {
-      const ceo = dbAgents.find((a) => a.role === "ceo");
       const { data: configured } = await supabase
         .from("agents")
         .select("id")
         .not("provider" as never, "is", null)
         .not("model" as never, "is", null);
       const configuredIds = new Set(((configured as unknown as { id: string }[]) || []).map((r) => r.id));
-      const pick = ceo && configuredIds.has(ceo.id)
-        ? ceo
-        : dbAgents.find((a) => configuredIds.has(a.id));
-      if (pick) setEntryAgentId(pick.id);
+      // Prioridade: assistant_root → ceo → primeiro configurado
+      const root = dbAgents.find((a) => (a.role === "assistant_root" || a.role === "ceo") && configuredIds.has(a.id));
+      const pick = root ?? dbAgents.find((a) => configuredIds.has(a.id));
+      if (pick) {
+        if (!root) console.warn("[JurisCloudOS] Nenhum assistant_root/ceo configurado; usando fallback:", pick.name);
+        setEntryAgentId(pick.id);
+      }
     })();
   }, [agentsLoading, dbAgents]);
 
@@ -627,7 +629,20 @@ export default function JurisCloudOS() {
     });
     const upsert = (rows: JcChatMessage[]) => setMessages(prev => {
       const seen = new Set(prev.map(m => String(m.id)));
-      const add = rows.filter(r => !seen.has(String(r.id)));
+      // Se ja temos a user message otimista (local_user_*), substituimos pelo
+      // registro real do banco (mantendo a posicao) em vez de duplicar.
+      const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
+      const add: JcChatMessage[] = [];
+      let replaced = false;
+      for (const r of rows) {
+        if (seen.has(String(r.id))) continue;
+        if (hasOptimistic && !replaced && r.role === "user") {
+          // Substitui a otimista pela real inline
+          replaced = true;
+          continue; // ja esta na lista como local_user_*
+        }
+        add.push(r);
+      }
       return add.length ? [...prev, ...add] : prev;
     });
 
@@ -764,9 +779,14 @@ export default function JurisCloudOS() {
       return;
     }
 
-    // V23: a user message, as etapas e a resposta final chegam via Realtime
-    // (inseridas pelo backend). Nao inserimos a conversa localmente — apenas
-    // mensagens de SISTEMA locais (saldo/estorno) que nao passam pelo banco.
+    // Insere a mensagem do usuario localmente de imediato (otimista) para
+    // que ela apareca no chat ANTES do indicador de "processando".
+    const optimisticId = `local_user_${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: optimisticId, role: "user",
+      content: val,
+      timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    }]);
     setInputVal("");
     setThinking(true);
 
@@ -1008,7 +1028,7 @@ export default function JurisCloudOS() {
           <JurisChatPanel
             messages={messages}
             thinking={thinking}
-            thinkingAgentName={AGENTS[Math.floor(Math.random() * 5)]?.name || "Assistente"}
+            thinkingAgentName="Meu Assistente"
             showWelcome={showWelcome}
             setShowWelcome={setShowWelcome}
             inputVal={inputVal}

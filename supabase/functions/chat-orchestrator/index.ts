@@ -526,8 +526,26 @@ serve(async (req) => {
     if (session.status !== "active") return errResp(409, "session_not_active", "Conversa encerrada");
     if (!session.entry_agent_id) return errResp(409, "agent_llm_not_configured", "Sessao sem agente");
 
-    const agent = await loadAgent(admin, session.entry_agent_id);
+    let agent = await loadAgent(admin, session.entry_agent_id);
     if (!agent || !agent.is_active) return errResp(409, "agent_inactive", "Agente indisponivel");
+
+    // Guard-rail: N1 deve ser assistant_root (ou ceo). Se o entry_agent for um
+    // specialist/director, resolver o assistant_root do mesmo owner e usar esse.
+    if (agent.role !== "assistant_root" && agent.role !== "ceo") {
+      console.warn(`[START] entry_agent ${agent.id} (${agent.name}) tem role=${agent.role}, corrigindo para assistant_root`);
+      const ownerId = agent.owner_user_id || session.user_id;
+      const roots = await loadSubAgents(admin, ownerId, ["assistant_root", "ceo"]);
+      const root = roots.find(r => r.is_active && r.provider && r.model);
+      if (root) {
+        agent = root;
+        // Corrige a sessao para futuras invocacoes
+        await admin.from("chat_sessions").update({ entry_agent_id: root.id }).eq("id", body.sessionId);
+      } else {
+        return errResp(409, "entry_must_be_assistant_root",
+          "O agente de entrada deve ser o Meu Assistente (assistant_root). Nenhum assistant_root configurado encontrado.");
+      }
+    }
+
     if (!agent.provider || !agent.model) return errResp(409, "agent_llm_not_configured", "Agente sem provider/model");
     const key = await resolveKey(admin, agent.provider);
     if (!key) return errResp(409, "provider_not_configured", `Sem chave para ${agent.provider}`);
