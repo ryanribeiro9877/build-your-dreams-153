@@ -59,6 +59,10 @@ const MAX_ITERATIONS = 2;
 const LLM_TIMEOUT_MS = Number(Deno.env.get("LLM_TIMEOUT_MS")) || 120_000;
 // Timeout menor para chamadas auxiliares (resumo de anexo, roteamento, validação).
 const LLM_AUX_TIMEOUT_MS = Number(Deno.env.get("LLM_AUX_TIMEOUT_MS")) || 45_000;
+// Timeout do N3 (redator): peça completa (~12k tokens) pode levar 2-4 min. No plano
+// Pro o wall-clock é 400s — deixamos 360s p/ caber a peça inteira sem cortar, e o
+// consumo em STREAMING mantém a conexão ativa (não bate no idle timeout de 150s).
+const LLM_N3_TIMEOUT_MS = Number(Deno.env.get("LLM_N3_TIMEOUT_MS")) || 360_000;
 
 // Tetos de contexto (estimativa ~4 chars/token). Protegem janela e orçamento.
 const CHARS_PER_TOKEN = 4;
@@ -836,6 +840,18 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
       // HONRA agents.max_tokens (piso 8000 p/ não truncar peça; teto de segurança 32000).
       const n3MaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
+      // STREAMING (consumo): lê a resposta da Sonnet token a token — mantém a conexão
+      // ATIVA (não bate no idle de 150s) e permite a peça completa rodar até 360s.
+      // O onDelta NÃO escreve o parcial na UI (a resposta aparece completa, conforme
+      // pedido); só renova orchestration_runs.updated_at (~5s) p/ o watchdog não matar
+      // uma geração legitimamente em curso.
+      let lastTouch = 0;
+      const onDelta = (_full: string) => {
+        const now = Date.now();
+        if (now - lastTouch < 5000) return;
+        lastTouch = now;
+        admin.from("orchestration_runs").update({ updated_at: new Date().toISOString() }).eq("id", runId).then(() => {}, () => {});
+      };
       const t0 = Date.now();
       const r = await callLLM(admin, {
         model: n3.model || "gpt-4o",
@@ -844,7 +860,8 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         history, userMessage: run.original_message + corr,
         temperature: n3.temperature, top_p: n3.top_p,
         maxTokens: n3MaxTokens,
-        timeoutMs: LLM_TIMEOUT_MS,
+        timeoutMs: LLM_N3_TIMEOUT_MS,
+        onDelta,
       });
       const durationMs = Date.now() - t0;
       // Grava o conteúdo completo + REGISTRO DE USO (continua oculto até virar 'final').
