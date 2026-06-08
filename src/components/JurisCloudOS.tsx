@@ -191,6 +191,9 @@ const GlobalStyles = () => (
     }
     .jc-nav-item:hover { background: var(--bg4); }
     .jc-nav-item.active { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.15); }
+    .jc-session-del { opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; }
+    .jc-session-item:hover .jc-session-del, .jc-session-item:focus-within .jc-session-del { opacity: 0.7; }
+    .jc-session-del:hover { opacity: 1 !important; color: #ef4444 !important; background: rgba(239,68,68,0.12) !important; }
     .jc-nav-label { font-size: 13px; font-weight: 400; color: var(--text1); flex: 1; }
     .jc-nav-label--brand { font-family: var(--font-spartan); font-weight: 700; letter-spacing: -0.01em; font-size: 14px; }
     .jc-nav-badge {
@@ -588,6 +591,27 @@ export default function JurisCloudOS() {
     setMessages(INITIAL_MESSAGES);
     setShowWelcome(true);
     setThinking(false);
+  };
+
+  // Excluir uma conversa (mensagens + sessão). RLS garante que só o dono apaga.
+  const deleteSession = async (sessionId: string) => {
+    // Remove otimisticamente da lista
+    setChatSessions(prev => prev.filter(s => s.id !== sessionId));
+    // Apaga as mensagens primeiro (caso não haja ON DELETE CASCADE), depois a sessão.
+    await supabase
+      // @ts-expect-error Tabelas chat_messages ainda não estão nos tipos gerados.
+      .from("chat_messages").delete().eq("session_id" as never, sessionId);
+    const { error } = await supabase
+      // @ts-expect-error Tabelas chat_sessions ainda não estão nos tipos gerados.
+      .from("chat_sessions").delete().eq("id" as never, sessionId);
+    if (error) {
+      console.warn("[deleteSession] falha:", error.message);
+      loadSessions(); // restaura a lista real em caso de erro
+      return;
+    }
+    // Se a conversa aberta foi a excluída, volta para tela inicial.
+    if (assistantSessionId === sessionId) startNewChat();
+    loadSessions();
   };
 
   const AGENTS: Agent[] = agentsLoading || dbAgents.length === 0
@@ -1049,6 +1073,7 @@ export default function JurisCloudOS() {
           activeSessionId={assistantSessionId}
           onSwitchSession={switchSession}
           onNewChat={startNewChat}
+          onDeleteSession={deleteSession}
         />
 
         {/* MAIN */}

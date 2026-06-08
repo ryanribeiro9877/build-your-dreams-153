@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare,
+  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare, Trash2,
 } from "lucide-react";
 import type { Agent, SidebarItem, MenuItem } from "./types";
 import { DEPT_ICONS, getHierarchyColor, getInitials } from "./constants";
@@ -38,6 +38,7 @@ export interface JurisSidebarProps {
   activeSessionId?: string | null;
   onSwitchSession?: (sessionId: string) => void;
   onNewChat?: () => void;
+  onDeleteSession?: (sessionId: string) => void;
 }
 
 export default function JurisSidebar({
@@ -59,6 +60,7 @@ export default function JurisSidebar({
   activeSessionId,
   onSwitchSession,
   onNewChat,
+  onDeleteSession,
 }: JurisSidebarProps) {
   const navigate = useNavigate();
 
@@ -215,10 +217,17 @@ export default function JurisSidebar({
                 const dateStr = s.lastMessageAt
                   ? new Date(s.lastMessageAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
                   : "";
+                const handleDelete = (e: React.MouseEvent | React.KeyboardEvent) => {
+                  e.stopPropagation();
+                  if (!onDeleteSession) return;
+                  if (window.confirm(`Excluir a conversa "${s.title}"? Esta ação não pode ser desfeita.`)) {
+                    onDeleteSession(s.id);
+                  }
+                };
                 return (
                   <div
                     key={s.id}
-                    className={`jc-nav-item ${isActive ? "active" : ""}`}
+                    className={`jc-nav-item jc-session-item ${isActive ? "active" : ""}`}
                     onClick={() => { onSwitchSession?.(s.id); setSidebarOpen(false); }}
                     role="button"
                     tabIndex={0}
@@ -232,6 +241,21 @@ export default function JurisSidebar({
                       fontSize: 11.5, flex: 1,
                     }}>{s.title}</span>
                     <span style={{ fontSize: 9, color: "var(--text3)", flexShrink: 0 }}>{dateStr}</span>
+                    <button
+                      type="button"
+                      className="jc-session-del"
+                      onClick={handleDelete}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleDelete(e); }}
+                      title="Excluir conversa"
+                      aria-label={`Excluir conversa ${s.title}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        background: "none", border: "none", cursor: "pointer", padding: 2,
+                        color: "var(--text3)", flexShrink: 0, borderRadius: 4,
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 );
               })}
