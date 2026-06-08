@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { BILLING_ENABLED } from "@/config/billing";
 
 interface TokenBalance {
   balance: number;
@@ -56,6 +57,7 @@ export function useTokenBalance(navigate?: (to: string) => void) {
   const warnedThisRenderRef = useRef(false);
 
   const checkLowBalance = useCallback((balance: number) => {
+    if (!BILLING_ENABLED) return; // cobrança desligada: sem avisos de saldo
     if (typeof window === "undefined") return;
     const threshold = getLowBalanceThreshold();
     const zeroWarned = window.sessionStorage.getItem(WARNED_ZERO_KEY) === "1";
@@ -129,6 +131,7 @@ export function useTokenBalance(navigate?: (to: string) => void) {
   }, [user]);
 
   const consumeTokens = useCallback(async (amount: number, description: string = "Mensagem enviada") => {
+    if (!BILLING_ENABLED) return true; // tokens infinitos: não cobra
     if (!user) return false;
     const { data, error } = await supabase.rpc("consume_tokens", {
       p_user_id: user.id,
@@ -142,6 +145,7 @@ export function useTokenBalance(navigate?: (to: string) => void) {
 
   // Charge with a reference_id so a later refund can be tied to this request.
   const consumeTokensWithRef = useCallback(async (amount: number, description: string, referenceId: string) => {
+    if (!BILLING_ENABLED) return true; // tokens infinitos: não cobra
     if (!user) return false;
     const { data, error } = await supabase.rpc("consume_tokens_with_ref" as never, {
       p_user_id: user.id,
@@ -156,6 +160,7 @@ export function useTokenBalance(navigate?: (to: string) => void) {
 
   // Refund tokens for a failed/placeholder response. Idempotent on referenceId.
   const refundTokens = useCallback(async (amount: number, referenceId: string, description: string = "Estorno: resposta nao entregue") => {
+    if (!BILLING_ENABLED) return true; // sem cobrança: nada a estornar
     if (!user) return false;
     const { data, error } = await supabase.rpc("refund_own_tokens" as never, {
       p_amount: amount,

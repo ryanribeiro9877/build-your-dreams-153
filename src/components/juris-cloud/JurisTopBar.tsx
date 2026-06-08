@@ -9,6 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { Agent, SidebarItem } from "./types";
 import { DEPT_ICONS, ALERTS, ACCENT, ACCENT_SOFT } from "./constants";
+import { BILLING_ENABLED, UNLIMITED_LABEL } from "@/config/billing";
 
 /* ── Alert Icon helper ── */
 function AlertIcon({ type }: { type: string }) {
@@ -184,7 +185,7 @@ export default function JurisTopBar({
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
               background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", flexShrink: 0 }}>
             <Coins size={14} />
-            {tokenBalance.balance.toLocaleString()}
+            {BILLING_ENABLED ? tokenBalance.balance.toLocaleString() : UNLIMITED_LABEL}
           </button>
 
           <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/perfil"); } }}>
