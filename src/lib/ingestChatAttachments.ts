@@ -15,6 +15,7 @@ export interface IngestResult {
   uploaded: number;
   failedExtraction: string[]; // arquivos que subiram mas não tiveram texto extraído
   failedUpload: string[];     // arquivos que nem subiram
+  skipped: string[];          // arquivos já anexados nesta sessão (dedup) — não reanexados
 }
 
 function sanitizeName(name: string): string {
@@ -43,9 +44,22 @@ export async function ingestChatAttachments(
   userId: string,
   files: File[],
 ): Promise<IngestResult> {
-  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [] };
+  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [] };
 
   for (const file of files) {
+    // Trava anti-duplicação: se o mesmo arquivo já está anexado e ativo NESTA sessão
+    // (mesmo nome + tamanho), não reanexa — evita acúmulo e contexto duplicado.
+    const { data: existing } = await supabase
+      .from("chat_attachments")
+      .select("id")
+      .eq("session_id", sessionId)
+      .eq("file_name", file.name)
+      .eq("file_size", file.size)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (existing) { result.skipped.push(file.name); continue; }
+
     const path = `${userId}/${sessionId}/${Date.now()}_${sanitizeName(file.name)}`;
 
     const { error: upErr } = await supabase.storage
