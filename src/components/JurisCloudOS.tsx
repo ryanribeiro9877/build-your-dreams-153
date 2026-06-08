@@ -629,20 +629,13 @@ export default function JurisCloudOS() {
     });
     const upsert = (rows: JcChatMessage[]) => setMessages(prev => {
       const seen = new Set(prev.map(m => String(m.id)));
-      // Se ja temos a user message otimista (local_user_*), substituimos pelo
-      // registro real do banco (mantendo a posicao) em vez de duplicar.
       const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
-      const add: JcChatMessage[] = [];
-      let replaced = false;
-      for (const r of rows) {
-        if (seen.has(String(r.id))) continue;
-        if (hasOptimistic && !replaced && r.role === "user") {
-          // Substitui a otimista pela real inline
-          replaced = true;
-          continue; // ja esta na lista como local_user_*
-        }
-        add.push(r);
-      }
+      const add = rows.filter(r => {
+        if (seen.has(String(r.id))) return false;
+        // Ignora user messages do banco se ja temos a otimista local
+        if (hasOptimistic && r.role === "user") return false;
+        return true;
+      });
       return add.length ? [...prev, ...add] : prev;
     });
 
@@ -848,8 +841,9 @@ export default function JurisCloudOS() {
         if (!data) return;
         setMessages(prev => {
           const seen = new Set(prev.map(m => String(m.id)));
+          const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
           const add = (data as Record<string, any>[])
-            .filter(r => !seen.has(String(r.id)))
+            .filter(r => !seen.has(String(r.id)) && !(hasOptimistic && r.role === "user"))
             .map(r => ({
               id: r.id, role: r.role,
               agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
