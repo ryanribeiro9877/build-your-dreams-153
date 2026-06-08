@@ -78,7 +78,6 @@ export default function Tokens() {
             variant="outline"
             onClick={() => navigate("/sistema")}
             className="shrink-0 gap-2 border-[#eab308] bg-[#eab308]/15 text-[#facc15] font-semibold hover:bg-[#eab308]/28 hover:text-[#fde047] hover:border-[#facc15] shadow-[0_0_12px_rgba(234,179,8,0.2)]"
-            aria-label="Voltar ao sistema"
           >
             <ArrowLeft className="w-4 h-4" strokeWidth={2.5} />
             Voltar ao sistema
