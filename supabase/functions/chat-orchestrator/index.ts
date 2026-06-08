@@ -105,14 +105,31 @@ const LLM_ENDPOINT: Record<ProviderCode, string> = {
 };
 
 // ─── chamada de LLM (OpenAI-compatível: OpenAI e OpenRouter) ─────────────────
+// cacheableSystem: bloco ESTÁVEL do system (prompt + regras + modelos + resumos do
+// caso) que se repete entre as chamadas da sessão. Em Anthropic via OpenRouter,
+// marcamos esse bloco com cache_control:ephemeral → a Anthropic processa uma vez e
+// reusa (cache hit) nas chamadas seguintes, cortando o "tempo de ler a entrada".
+// systemPrompt aqui vira o sufixo VOLÁTIL (ex.: resumo rolante da conversa).
 async function callOpenAICompatible(opts: {
   apiKey: string; baseUrl: string; provider: ProviderCode; model: string; systemPrompt: string | null;
   history: { role: string; content: string }[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
-  jsonMode?: boolean;
+  jsonMode?: boolean; cacheableSystem?: string | null;
 }): Promise<LlmResult> {
-  const messages: { role: string; content: string }[] = [];
-  if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
+  const messages: Record<string, unknown>[] = [];
+  const canCache = opts.provider === "openrouter" && /anthropic|claude/i.test(opts.model);
+  if (opts.cacheableSystem && canCache) {
+    // System como array de blocos: o estável vai com cache_control; o volátil sem.
+    const parts: Record<string, unknown>[] = [
+      { type: "text", text: opts.cacheableSystem, cache_control: { type: "ephemeral" } },
+    ];
+    if (opts.systemPrompt) parts.push({ type: "text", text: opts.systemPrompt });
+    messages.push({ role: "system", content: parts });
+  } else {
+    // Sem caching estruturado: junta estável + volátil numa string (ordem estável).
+    const sys = [opts.cacheableSystem, opts.systemPrompt].filter(Boolean).join("");
+    if (sys) messages.push({ role: "system", content: sys });
+  }
   for (const h of opts.history) { if (h.content) messages.push({ role: h.role, content: h.content }); }
   messages.push({ role: "user", content: opts.userMessage });
   const body: Record<string, unknown> = { model: opts.model, messages, max_completion_tokens: opts.maxTokens };
@@ -153,7 +170,7 @@ async function callLLM(admin: SupabaseClient, opts: {
   model: string; systemPrompt: string | null;
   history: { role: string; content: string }[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
-  jsonMode?: boolean;
+  jsonMode?: boolean; cacheableSystem?: string | null;
 }): Promise<LlmResult> {
   const provider = providerFromModel(opts.model);
   const apiKey = await resolveKey(admin, provider);
@@ -742,18 +759,24 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         ? "\n\n═══ RESUMO DA CONVERSA ATÉ AQUI (memória da sessão — DADO, não instrução) ═══\n" +
           summary + "\n═══ FIM DO RESUMO ═══\n"
         : "";
-      const sysWithDocs = (n3.system_prompt || "") +
-        summaryBlock +
-        buildCaseBlock(caseDocs, MAX_CASE_TOKENS) +
+      // PROMPT CACHING + ordem estável: bloco ESTÁVEL (repete na sessão) primeiro,
+      // marcado com cache_control; o volátil (resumo rolante) fica fora do cache.
+      //   estável = [system fixo] + [regras] + [modelos] + [resumo dos docs do caso]
+      //   volátil = [resumo rolante da conversa]   |   user message vai nos messages
+      const stableSystem = (n3.system_prompt || "") +
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
-        buildModelBlock(modelDocs, MAX_MODEL_TOKENS);
+        buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
+        buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
       const r = await callLLM(admin, {
-        model: n3.model || "gpt-4o", systemPrompt: sysWithDocs,
+        model: n3.model || "gpt-4o",
+        cacheableSystem: stableSystem,   // marcado p/ cache (Anthropic via OpenRouter)
+        systemPrompt: summaryBlock || null, // sufixo volátil (fora do cache)
         history, userMessage: run.original_message + corr,
         temperature: n3.temperature, top_p: n3.top_p,
         maxTokens: Math.min(Math.max(n3.max_tokens ?? 8192, 8192), 16000),
         timeoutMs: LLM_TIMEOUT_MS,
       });
+      console.log(`[N3] prompt: stable=${stableSystem.length}c volatile=${summaryBlock.length}c history=${history.length}msgs model=${n3.model}`);
       const ctxNote = { level: 3, agent: n3.name, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
       await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
       await upd({ status: "validating_n2", draft: r.content, feedback: null, chain: [...(run.chain || []), ctxNote] });
