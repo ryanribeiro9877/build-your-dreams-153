@@ -744,8 +744,12 @@ export default function JurisCloudOS() {
       });
       return add.length ? [...prev, ...add] : prev;
     });
-    // Streaming: aplica uma linha que pode ser NOVA ou ATUALIZADA (replace por id).
+    // Resposta COMPLETA (sem escrita em tempo real): ignoramos linhas 'streaming'
+    // (rascunho sendo gerado) e só exibimos quando a mensagem vira 'final'/'error'.
+    // O indicador de "processando" + as etapas ao vivo seguem aparecendo até lá.
     const applyRow = (row: Record<string, any>) => {
+      const k = row.metadata?.kind;
+      if (k === "streaming") return; // não mostra o parcial — espera a resposta pronta
       const m = mapRow(row);
       setMessages(prev => {
         const idx = prev.findIndex(x => String(x.id) === String(m.id));
@@ -758,10 +762,7 @@ export default function JurisCloudOS() {
         if (m.role === "user" && prev.some(x => String(x.id).startsWith("local_user_"))) return prev;
         return [...prev, m];
       });
-      const k = row.metadata?.kind;
-      // Sai do "thinking" assim que o texto começa a streamar (ou conclui/erro).
-      if (k === "final" || k === "error" || (k === "streaming" && row.content)) setThinking(false);
-      if (k === "final" || k === "error") loadSessions();
+      if (k === "final" || k === "error") { setThinking(false); loadSessions(); }
     };
 
     (async () => {
@@ -770,7 +771,8 @@ export default function JurisCloudOS() {
         .eq("session_id", assistantSessionId)
         .order("sequence_number", { ascending: true });
       if (cancelled || !data) return;
-      upsert((data as Record<string, any>[]).map(mapRow));
+      // Não exibe linhas 'streaming' (rascunho em geração) no catch-up inicial.
+      upsert((data as Record<string, any>[]).filter(r => r.metadata?.kind !== "streaming").map(mapRow));
       if ((data as Record<string, any>[]).some(r => r.metadata?.kind === "final" || r.metadata?.kind === "error")) setThinking(false);
     })();
 
@@ -967,7 +969,7 @@ export default function JurisCloudOS() {
           const seen = new Set(prev.map(m => String(m.id)));
           const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
           const add = (data as Record<string, any>[])
-            .filter(r => !seen.has(String(r.id)) && !(hasOptimistic && r.role === "user"))
+            .filter(r => !seen.has(String(r.id)) && !(hasOptimistic && r.role === "user") && r.metadata?.kind !== "streaming")
             .map(r => ({
               id: r.id, role: r.role,
               agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),

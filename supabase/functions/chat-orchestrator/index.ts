@@ -818,8 +818,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
-      // STREAMING (Opção A): garante uma linha de mensagem 'streaming' e atualiza
-      // seu conteúdo conforme os tokens chegam (throttle ~700ms). A UI assina UPDATE.
+      // RESPOSTA COMPLETA (sem escrita em tempo real): geramos a peça inteira e só
+      // então gravamos. Mantemos uma linha placeholder ('streaming', oculta na UI)
+      // como alvo do registro de uso e da finalização — a UI só exibe quando vira
+      // 'final'. (Sem onDelta → chamada não-stream; sem updates parciais.)
       let streamMsgId: string | null = run.stream_message_id ?? null;
       if (!streamMsgId) {
         const seqS = await nextSeq(admin, run.session_id);
@@ -831,13 +833,6 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         streamMsgId = (sm as { id: string } | null)?.id ?? null;
         if (streamMsgId) await upd({ stream_message_id: streamMsgId });
       }
-      let lastWrite = 0;
-      const onDelta = streamMsgId ? (full: string) => {
-        const now = Date.now();
-        if (now - lastWrite < 700) return;
-        lastWrite = now;
-        admin.from("chat_messages").update({ content: full }).eq("id", streamMsgId as string).then(() => {}, () => {});
-      } : undefined;
 
       // HONRA agents.max_tokens (piso 8000 p/ não truncar peça; teto de segurança 32000).
       const n3MaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
@@ -850,10 +845,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         temperature: n3.temperature, top_p: n3.top_p,
         maxTokens: n3MaxTokens,
         timeoutMs: LLM_TIMEOUT_MS,
-        onDelta,
       });
       const durationMs = Date.now() - t0;
-      // Flush final do conteúdo completo + REGISTRO DE USO (model/tokens/duração).
+      // Grava o conteúdo completo + REGISTRO DE USO (continua oculto até virar 'final').
       if (streamMsgId) {
         await admin.from("chat_messages")
           .update({
