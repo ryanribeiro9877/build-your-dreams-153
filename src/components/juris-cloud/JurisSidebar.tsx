@@ -17,7 +17,7 @@ import {
 import type { Agent, SidebarItem, MenuItem } from "./types";
 import { DEPT_ICONS, getHierarchyColor, getInitials } from "./constants";
 
-type SessionSummary = { id: string; title: string; lastMessageAt: string; messageCount: number };
+type SessionSummary = { id: string; title: string; preview?: string; lastMessageAt: string; messageCount: number };
 
 export interface JurisSidebarProps {
   sidebarOpen: boolean;
@@ -224,6 +224,7 @@ export default function JurisSidebar({
                     onDeleteSession(s.id);
                   }
                 };
+                const tooltipText = s.preview ? `${s.title}\n\n${s.preview}` : s.title;
                 return (
                   <div
                     key={s.id}
@@ -231,31 +232,43 @@ export default function JurisSidebar({
                     onClick={() => { onSwitchSession?.(s.id); setSidebarOpen(false); }}
                     role="button"
                     tabIndex={0}
-                    title={s.title}
-                    style={{ gap: 8 }}
+                    title={tooltipText}
+                    style={{ gap: 8, alignItems: "flex-start", padding: "8px 10px" }}
                     onKeyDown={(e) => { if (e.key === "Enter") { onSwitchSession?.(s.id); setSidebarOpen(false); } }}
                   >
-                    <MessageSquare size={13} style={{ color: isActive ? "#EAB308" : "var(--text3)", flexShrink: 0 }} />
-                    <span className="jc-nav-label" style={{
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      fontSize: 11.5, flex: 1,
-                    }}>{s.title}</span>
-                    <span style={{ fontSize: 9, color: "var(--text3)", flexShrink: 0 }}>{dateStr}</span>
-                    <button
-                      type="button"
-                      className="jc-session-del"
-                      onClick={handleDelete}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleDelete(e); }}
-                      title="Excluir conversa"
-                      aria-label={`Excluir conversa ${s.title}`}
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        background: "none", border: "none", cursor: "pointer", padding: 2,
-                        color: "var(--text3)", flexShrink: 0, borderRadius: 4,
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <MessageSquare size={13} style={{ color: isActive ? "#EAB308" : "var(--text3)", flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="jc-nav-label" style={{
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          fontSize: 12, fontWeight: 500, flex: 1, minWidth: 0,
+                          color: isActive ? "#EAB308" : "var(--text1)",
+                        }}>{s.title}</span>
+                        <span style={{ fontSize: 9, color: "var(--text3)", flexShrink: 0 }}>{dateStr}</span>
+                        <button
+                          type="button"
+                          className="jc-session-del"
+                          onClick={handleDelete}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleDelete(e); }}
+                          title="Excluir conversa"
+                          aria-label={`Excluir conversa ${s.title}`}
+                          style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            background: "none", border: "none", cursor: "pointer", padding: 2,
+                            color: "var(--text3)", flexShrink: 0, borderRadius: 4,
+                          }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      {s.preview && (
+                        <span style={{
+                          fontSize: 10.5, color: "var(--text3)", lineHeight: 1.35,
+                          overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
+                          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                        }}>{s.preview}</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

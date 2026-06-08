@@ -550,28 +550,66 @@ export default function JurisCloudOS() {
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
 
   // ── Histórico de conversas ──
-  type SessionSummary = { id: string; title: string; lastMessageAt: string; messageCount: number };
+  type SessionSummary = { id: string; title: string; preview: string; lastMessageAt: string; messageCount: number };
   const [chatSessions, setChatSessions] = useState<SessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
-  // Carrega sessões do usuário
+  // Deriva um título curto e legível a partir de um texto (1a mensagem do usuário).
+  const deriveTitle = (text: string): string => {
+    const clean = (text || "").replace(/\n?\[Arquivos:.*?\]/gi, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return "Nova conversa";
+    let t = clean.split(" ").slice(0, 9).join(" ");
+    if (t.length > 52) t = t.slice(0, 49) + "…";
+    else if (clean.length > t.length) t += "…";
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+
+  // Carrega sessões do usuário + enriquece com proposta (1a msg) e contexto (resumo/última resposta).
   const loadSessions = async () => {
     if (!user) return;
     setSessionsLoading(true);
     const { data } = await supabase
       // @ts-expect-error Tabelas chat_sessions ainda não estão nos tipos gerados.
       .from("chat_sessions")
-      .select("id, title, last_message_at, message_count")
+      .select("id, title, summary, last_message_at, message_count")
       .eq("user_id" as never, user.id)
       .eq("status" as never, "active")
       .order("last_message_at", { ascending: false })
       .limit(30);
-    if (data) {
-      setChatSessions((data as unknown as { id: string; title: string | null; last_message_at: string; message_count: number }[]).map(r => ({
-        id: r.id, title: r.title || "Nova conversa",
-        lastMessageAt: r.last_message_at, messageCount: r.message_count,
-      })));
+    const rows = (data as unknown as { id: string; title: string | null; summary: string | null; last_message_at: string; message_count: number }[]) || [];
+    if (rows.length === 0) { setChatSessions([]); setSessionsLoading(false); return; }
+
+    // Busca as mensagens (user + assistant final) dessas sessões para montar proposta + contexto.
+    const ids = rows.map(r => r.id);
+    const { data: msgs } = await supabase
+      // @ts-expect-error Tabelas chat_messages ainda não estão nos tipos gerados.
+      .from("chat_messages")
+      .select("session_id, role, content, metadata, sequence_number")
+      .in("session_id" as never, ids as never)
+      .order("sequence_number", { ascending: true });
+    const firstUser: Record<string, string> = {};
+    const lastAssistant: Record<string, string> = {};
+    for (const m of (msgs as unknown as { session_id: string; role: string; content: string; metadata: any }[]) || []) {
+      if (!m.content) continue;
+      if (m.role === "user" && !firstUser[m.session_id]) firstUser[m.session_id] = m.content;
+      if (m.role === "assistant" && (m.metadata?.kind === "final" || m.metadata?.kind == null)) lastAssistant[m.session_id] = m.content;
     }
+
+    const placeholders = ["", "nova conversa", "meu assistente"];
+    setChatSessions(rows.map(r => {
+      const stored = (r.title || "").trim();
+      const isPlaceholder = placeholders.includes(stored.toLowerCase());
+      const title = !isPlaceholder && stored
+        ? stored
+        : (firstUser[r.id] ? deriveTitle(firstUser[r.id]) : "Nova conversa");
+      // Contexto/"o que foi feito": resumo rolante > última resposta > 1a mensagem.
+      const ctxSource = (r.summary && r.summary.trim())
+        ? r.summary
+        : (lastAssistant[r.id] || firstUser[r.id] || "");
+      let preview = ctxSource.replace(/\n?\[Arquivos:.*?\]/gi, " ").replace(/\s+/g, " ").trim();
+      if (preview.length > 90) preview = preview.slice(0, 87) + "…";
+      return { id: r.id, title, preview, lastMessageAt: r.last_message_at, messageCount: r.message_count };
+    }));
     setSessionsLoading(false);
   };
 
