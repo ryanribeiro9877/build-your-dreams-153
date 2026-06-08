@@ -133,7 +133,12 @@ async function callOpenAICompatible(opts: {
   }
   for (const h of opts.history) { if (h.content) messages.push({ role: h.role, content: h.content }); }
   messages.push({ role: "user", content: opts.userMessage });
-  const body: Record<string, unknown> = { model: opts.model, messages, max_completion_tokens: opts.maxTokens };
+  // Limite de saída: OpenAI usa max_completion_tokens (modelos novos rejeitam
+  // max_tokens); OpenRouter/Anthropic usa max_tokens. Mandar o nome errado faz o
+  // provedor ignorar e aplicar um default baixo (~4096) → peça truncada no meio.
+  const body: Record<string, unknown> = { model: opts.model, messages };
+  if (opts.provider === "openrouter") body.max_tokens = opts.maxTokens;
+  else body.max_completion_tokens = opts.maxTokens;
   const restricted = /^(gpt-5|o\d)/i.test(opts.model); // GPT-5+/o* so aceitam temperature default
   if (!restricted) {
     if (opts.temperature !== null) body.temperature = opts.temperature;
@@ -834,23 +839,31 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         admin.from("chat_messages").update({ content: full }).eq("id", streamMsgId as string).then(() => {}, () => {});
       } : undefined;
 
+      // HONRA agents.max_tokens (piso 8000 p/ não truncar peça; teto de segurança 32000).
+      const n3MaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
+      const t0 = Date.now();
       const r = await callLLM(admin, {
         model: n3.model || "gpt-4o",
         cacheableSystem: stableSystem,   // marcado p/ cache (Anthropic via OpenRouter)
         systemPrompt: summaryBlock || null, // sufixo volátil (fora do cache)
         history, userMessage: run.original_message + corr,
         temperature: n3.temperature, top_p: n3.top_p,
-        maxTokens: Math.min(Math.max(n3.max_tokens ?? 8192, 8192), 16000),
+        maxTokens: n3MaxTokens,
         timeoutMs: LLM_TIMEOUT_MS,
         onDelta,
       });
-      // Flush final do conteúdo completo na linha de streaming.
+      const durationMs = Date.now() - t0;
+      // Flush final do conteúdo completo + REGISTRO DE USO (model/tokens/duração).
       if (streamMsgId) {
         await admin.from("chat_messages")
-          .update({ content: r.content, metadata: { kind: "streaming", agent_name: n3.name } })
+          .update({
+            content: r.content, metadata: { kind: "streaming", agent_name: n3.name },
+            model_used: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens,
+            duration_ms: durationMs,
+          })
           .eq("id", streamMsgId);
       }
-      console.log(`[N3] prompt: stable=${stableSystem.length}c volatile=${summaryBlock.length}c history=${history.length}msgs model=${n3.model}`);
+      console.log(`[N3] model=${r.rawModel} maxTokens=${n3MaxTokens} out=${r.outputTokens}tok in=${r.inputTokens}tok dur=${durationMs}ms chars=${r.content.length} stable=${stableSystem.length}c`);
       const ctxNote = { level: 3, agent: n3.name, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
       await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
       await upd({ status: "validating_n2", draft: r.content, feedback: null, chain: [...(run.chain || []), ctxNote] });
