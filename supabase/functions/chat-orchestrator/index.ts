@@ -52,7 +52,13 @@ const MAX_ITERATIONS = 2;
 // — só uma chamada de LLM isolada é que precisa caber na janela do worker.
 // Por isso o trabalho roda em segundo plano (EdgeRuntime.waitUntil) e a requisição
 // responde na hora, evitando o idle timeout de 150s da requisição.
-const LLM_TIMEOUT_MS = 380_000; // ~teto do Pro (400s); no Free a plataforma corta em 150s.
+// Timeout EXPLÍCITO por chamada de LLM (configurável). Tem que ser MENOR que o
+// wall-clock do worker, senão a chamada pendura, o worker morre e o run fica preso
+// em executing_n3 sem desfecho. Com timeout, a chamada aborta, o erro é capturado e
+// o run vira failed (com mensagem) — nunca pendura. Default 120s.
+const LLM_TIMEOUT_MS = Number(Deno.env.get("LLM_TIMEOUT_MS")) || 120_000;
+// Timeout menor para chamadas auxiliares (resumo de anexo, roteamento, validação).
+const LLM_AUX_TIMEOUT_MS = Number(Deno.env.get("LLM_AUX_TIMEOUT_MS")) || 45_000;
 
 // Tetos de contexto (estimativa ~4 chars/token). Protegem janela e orçamento.
 const CHARS_PER_TOKEN = 4;
@@ -240,7 +246,7 @@ async function updateRollingSummary(
       `MENSAGENS A INCORPORAR AO RESUMO:\n${convoText}`;
     const r = await callLLM(admin, {
       model: model || "gpt-4o-mini", systemPrompt: sys, history: [],
-      userMessage: userMsg, temperature: 0, top_p: null, maxTokens: 500, timeoutMs: 60_000,
+      userMessage: userMsg, temperature: 0, top_p: null, maxTokens: 500, timeoutMs: LLM_AUX_TIMEOUT_MS,
     });
     if (r.content && r.content.trim()) {
       await admin.from("chat_sessions").update({ summary: r.content.trim() }).eq("id", sessionId);
@@ -262,8 +268,9 @@ interface DocPiece { file_name: string; text: string; doc_type?: string | null; 
 interface CaseDoc { id: string; file_name: string; raw: string; summary: string | null; summaryAt: string | null; }
 
 // Máximo de chars do texto BRUTO enviado ao sumarizador (uma vez por doc, cacheado).
-// gpt-4o-mini aceita 128k tokens; 240k chars ≈ 60k tokens — cabe com folga p/ saída.
-const SUMMARY_INPUT_MAX_CHARS = 240000;
+// Input do sumarizador clampado para caber em uma chamada rápida (~30k tokens).
+// Menor = resumo mais rápido (não estoura o wall-clock do worker ao gerar vários).
+const SUMMARY_INPUT_MAX_CHARS = 120000;
 
 // Remove o lixo de extração que hoje ocupa o TOPO de todo documento do PROJUDI:
 // "Assinado eletronicamente por: <nome>; Código de validação... PROJUDI - TJBA."
@@ -346,7 +353,7 @@ async function ensureCaseSummary(admin: SupabaseClient, doc: CaseDoc): Promise<s
       model: "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Documento: ${doc.file_name}\nTipo: ${docType}\n\nTAREFA: ${summaryInstruction(docType)}${truncatedNote}\n\n` +
         `=== TEXTO DO DOCUMENTO ===\n${cleaned.slice(0, SUMMARY_INPUT_MAX_CHARS)}`,
-      temperature: 0, top_p: null, maxTokens: 1200, timeoutMs: 120_000,
+      temperature: 0, top_p: null, maxTokens: 1200, timeoutMs: LLM_AUX_TIMEOUT_MS,
     });
     const summary = (r.content || "").trim();
     if (summary) {
@@ -563,7 +570,7 @@ async function chooseAgent(admin: SupabaseClient, router: AgentRow, userMsg: str
     const r = await callLLM(admin, {
       model: router.model || "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Solicitacao do usuario:\n${userMsg}\n\nAgentes disponiveis:\n${list}`,
-      temperature: 0, top_p: null, maxTokens: 100, timeoutMs: LLM_TIMEOUT_MS, jsonMode: true,
+      temperature: 0, top_p: null, maxTokens: 100, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
     });
     const parsed = JSON.parse(r.content) as { agent_id?: string };
     const found = candidates.find((c) => c.id === parsed.agent_id);
@@ -598,7 +605,7 @@ async function validateDraft(admin: SupabaseClient, validator: AgentRow, userMsg
     const r = await callLLM(admin, {
       model: validator.model || "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Solicitacao:\n${userMsg}\n\nRascunho a avaliar:\n${draft}`,
-      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: LLM_TIMEOUT_MS, jsonMode: true,
+      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
     });
     const p = JSON.parse(r.content) as { approved?: boolean; feedback?: string };
     return { approved: p.approved === true, feedback: p.feedback || "" };
