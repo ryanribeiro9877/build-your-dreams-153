@@ -311,6 +311,8 @@ async function validateDraft(apiKey: string, validator: AgentRow, userMsg: strin
 }
 
 // Dispara o proximo passo (fire-and-forget) reinvocando esta funcao em modo step.
+// GUARD: se a reinvocacao for recusada (ex.: 401 do gateway), marca o run como failed
+// e publica a mensagem de erro — assim o fluxo nunca fica pendurado em silencio.
 function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
   const url = `${supabaseUrl}/functions/v1/chat-orchestrator`;
   // @ts-ignore EdgeRuntime existe no runtime do Supabase
@@ -323,8 +325,34 @@ function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
         "Authorization": `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({ runId }),
-    }).then((resp) => {
-      if (!resp.ok) console.error(`[fireNextStep] run=${runId} status=${resp.status}`);
+    }).then(async (resp) => {
+      if (resp.ok) return;
+      console.error(`[fireNextStep] run=${runId} status=${resp.status}`);
+      try {
+        const admin = createClient(supabaseUrl, serviceKey);
+        const { data: r } = await admin.from("orchestration_runs")
+          .select("session_id, user_id, status").eq("id", runId).maybeSingle();
+        const run = r as { session_id: string; user_id: string; status: string } | null;
+        if (run && run.status !== "done" && run.status !== "failed") {
+          await admin.from("orchestration_runs").update({
+            status: "failed",
+            error: `Reinvocacao do passo recusada (HTTP ${resp.status})`,
+            updated_at: new Date().toISOString(),
+          }).eq("id", runId);
+          const { data: last } = await admin.from("chat_messages")
+            .select("sequence_number").eq("session_id", run.session_id)
+            .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+          const seq = (((last as { sequence_number?: number } | null)?.sequence_number) ?? 0) + 1;
+          await admin.from("chat_messages").insert({
+            session_id: run.session_id, user_id: run.user_id, role: "assistant",
+            content: "Nao consegui concluir a orquestracao agora. Tente novamente.",
+            sequence_number: seq,
+            metadata: { kind: "error", error: `fireNextStep HTTP ${resp.status}` },
+          });
+        }
+      } catch (e) {
+        console.error(`[fireNextStep] cleanup run=${runId}:`, (e as Error)?.message || e);
+      }
     }).catch((err) => {
       console.error(`[fireNextStep] run=${runId} fetch error:`, err?.message || err);
     }),
