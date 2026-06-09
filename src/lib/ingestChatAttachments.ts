@@ -9,12 +9,18 @@
 // devolve o nome do arquivo em `failedExtraction` para a UI avisar.
 
 import { supabase } from "@/integrations/supabase/client";
-import { extractFileText } from "@/lib/extractFileText";
+import { extractFileText, sanitizeExtractedText } from "@/lib/extractFileText";
+
+// Limite de tamanho do bucket `chat-attachments` (15 MiB). DEVE bater com o
+// file_size_limit do bucket no Supabase Storage — se um lado mudar sem o outro,
+// volta a falhar no upload. Validamos no cliente ANTES de subir para dar um erro
+// claro (em vez de um 400 silencioso do storage).
+export const BUCKET_FILE_SIZE_LIMIT = 15 * 1024 * 1024; // 15.728.640 bytes
 
 export interface IngestResult {
   uploaded: number;
   failedExtraction: string[]; // arquivos que subiram mas não tiveram texto extraído
-  failedUpload: string[];     // arquivos que nem subiram
+  failedUpload: string[];     // arquivos que nem subiram (erro de upload ou acima do limite)
   skipped: string[];          // arquivos já anexados nesta sessão (dedup) — não reanexados
 }
 
@@ -27,14 +33,16 @@ function sanitizeName(name: string): string {
 }
 
 // Fallback de extração por extensão quando o mime vem vazio (comum em .md/.txt).
+// Todo caminho passa por sanitizeExtractedText: NUNCA devolver texto cru (o byte 0
+// / surrogates soltos causam 400 no insert de chat_attachments).
 async function extractWithFallback(file: File): Promise<string | null> {
   try {
-    const direct = await extractFileText(file);
+    const direct = await extractFileText(file); // já sanitizado internamente
     if (direct && direct.trim()) return direct;
   } catch { /* tenta fallback abaixo */ }
   const lower = file.name.toLowerCase();
   if (lower.endsWith(".md") || lower.endsWith(".txt") || lower.endsWith(".markdown")) {
-    try { return await file.text(); } catch { return null; }
+    try { return sanitizeExtractedText(await file.text()); } catch { return null; }
   }
   return null;
 }
@@ -60,6 +68,12 @@ export async function ingestChatAttachments(
       .maybeSingle();
     if (existing) { result.skipped.push(file.name); continue; }
 
+    // Guarda-corpo: rejeita no cliente o que o bucket recusaria, com erro claro.
+    if (file.size > BUCKET_FILE_SIZE_LIMIT) {
+      result.failedUpload.push(file.name);
+      continue;
+    }
+
     const path = `${userId}/${sessionId}/${Date.now()}_${sanitizeName(file.name)}`;
 
     const { error: upErr } = await supabase.storage
@@ -73,7 +87,11 @@ export async function ingestChatAttachments(
 
     let text: string | null = null;
     try { text = await extractWithFallback(file); } catch { text = null; }
-    if (!text || !text.trim()) result.failedExtraction.push(file.name);
+    // Defensivo: re-sanitiza no ponto do insert. Garante que nenhum texto cru
+    // (byte 0 / surrogate solto) chegue ao Postgres mesmo se um caminho novo de
+    // extração esquecer de sanitizar. Sem isto o insert volta a dar 400.
+    const safeText = sanitizeExtractedText(text);
+    if (!safeText) result.failedExtraction.push(file.name);
 
     const { error: insErr } = await supabase.from("chat_attachments").insert({
       session_id: sessionId,
@@ -82,7 +100,7 @@ export async function ingestChatAttachments(
       file_name: file.name,
       mime_type: file.type || null,
       file_size: file.size,
-      extracted_text: text && text.trim() ? text : null,
+      extracted_text: safeText,
     });
 
     if (insErr) { result.failedUpload.push(file.name); continue; }

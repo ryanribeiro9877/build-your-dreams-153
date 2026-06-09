@@ -168,6 +168,30 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
           })()}
           {msg.card?.type === "briefing" && <BriefingCard card={msg.card} />}
           {msg.card?.type === "process-list" && <ProcessListCard processes={msg.card.processes} />}
+          {msg.actions && msg.actions.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+              {msg.actions.map((a, i) => {
+                const ghost = a.tone === "ghost";
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={a.onClick}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "6px 14px", borderRadius: 8, fontSize: 11.5, cursor: "pointer",
+                      fontWeight: 600,
+                      background: ghost ? "transparent" : "rgba(234,179,8,0.14)",
+                      border: `1px solid ${ghost ? "rgba(148,163,184,0.35)" : "rgba(234,179,8,0.4)"}`,
+                      color: ghost ? "#94A3B8" : "#EAB308",
+                    }}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -239,6 +263,16 @@ export default function JurisChatPanel({
   const doSend = (text?: string) => {
     const base = (text ?? inputVal).trim();
     if (!base && attachedFiles.length === 0) return;
+    // Guarda-corpo de volume: muitos anexos numa só leva aumentam o risco de
+    // resumo lossy. Acima de 25, exige confirmação explícita antes de enviar.
+    if (attachedFiles.length > 25) {
+      const ok = window.confirm(
+        `Você anexou ${attachedFiles.length} arquivos. Volume alto aumenta o risco de o conteúdo ` +
+        `precisar ser resumido (com perda) ao analisar. Recomendado enviar em levas menores.\n\n` +
+        `Deseja enviar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
     let msg = base;
     if (attachedFiles.length > 0) {
       const names = attachedFiles.map((f) => f.name).join(", ");

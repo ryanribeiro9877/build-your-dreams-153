@@ -880,6 +880,82 @@ export default function JurisCloudOS() {
     setIsRecording(true);
   };
 
+  // Catch-up: garante que a user message e as etapas apareçam mesmo se o canal
+  // Realtime assinou após o INSERT inicial. Compartilhado entre handleSend e o
+  // caminho de confirmação do gate de anexos.
+  const scheduleCatchUp = (sid: string) => {
+    setTimeout(async () => {
+      const { data } = await supabase.from("chat_messages")
+        .select("id, role, content, metadata, created_at, sequence_number")
+        .eq("session_id", sid).order("sequence_number", { ascending: true });
+      if (!data) return;
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => String(m.id)));
+        const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
+        const add = (data as Record<string, any>[])
+          .filter(r => !seen.has(String(r.id)) && !(hasOptimistic && r.role === "user") && r.metadata?.kind !== "streaming")
+          .map(r => ({
+            id: r.id, role: r.role,
+            agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
+            content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
+            timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          } as JcChatMessage));
+        return add.length ? [...prev, ...add] : prev;
+      });
+    }, 1200);
+  };
+
+  // Dispara a geração numa sessão já existente: cobra tokens, opcionalmente
+  // injeta um aviso de DOCUMENTOS AUSENTES (quando o usuário decide gerar mesmo
+  // sem os anexos que falharam) e orquestra. Usado pelo botão do gate de anexos.
+  const proceedGeneration = async (sid: string, val: string, missingDocs: string[] = []) => {
+    const { cost, label } = getTokenCost(val);
+    const requestId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const charged = await consumeTokensWithRef(cost, `${label}: ${val.slice(0, 50)}`, requestId);
+    if (!charged) {
+      setMessages(prev => [...prev, {
+        id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
+        content: formatInsufficientBalanceMessage(cost, label),
+        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+      return;
+    }
+    setThinking(true);
+    const reason = (msg: string) => `Estorno automatico: ${msg}`;
+    const message = missingDocs.length
+      ? `[AVISO DO SISTEMA — DOCUMENTOS AUSENTES]\n` +
+        `Os seguintes documentos NÃO foram ingeridos e estão AUSENTES desta análise: ${missingDocs.join(", ")}.\n` +
+        `Registre no TOPO da análise pré-redação quais documentos estão ausentes e NÃO afirme como certo nada que dependa deles.\n` +
+        `------------------------------\n${val}`
+      : val;
+    try {
+      const { ok, error: sendErr } = await startOrchestration(sid, message);
+      if (!ok) {
+        const msg = friendlyError(sendErr ?? { error: "request_failed", message: "agente nao respondeu" });
+        await refundTokens(cost, requestId, reason(msg));
+        setThinking(false);
+        setMessages(prev => [...prev, {
+          id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
+          content: formatTokenRefundMessage(cost, msg),
+          timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+        return;
+      }
+      scheduleCatchUp(sid);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "erro de rede";
+      await refundTokens(cost, requestId, reason(msg));
+      setThinking(false);
+      setMessages(prev => [...prev, {
+        id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
+        content: formatTokenRefundMessage(cost, msg),
+        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    }
+  };
+
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
     if (!val) return;
@@ -935,21 +1011,48 @@ export default function JurisCloudOS() {
       }
       // Canal A: sobe e extrai os DOCUMENTOS DO CASO ANTES de orquestrar, para que
       // o especialista (N3) leia o conteudo real (nao apenas os nomes dos arquivos).
+      //
+      // GATE BLOQUEANTE: se QUALQUER anexo desta leva falhou (não subiu OU subiu
+      // sem texto legível), a geração NÃO prossegue. Um anexo sem texto é invisível
+      // para o agente — gerar assim produziria peça com premissa incompleta. Em vez
+      // de gerar, estorna os tokens e exibe mensagem listando TODOS os arquivos que
+      // falharam, com a opção explícita de gerar mesmo assim (registrando a ausência).
       if (files && files.length > 0 && user) {
+        let ing: Awaited<ReturnType<typeof ingestChatAttachments>> | null = null;
         try {
-          const ing = await ingestChatAttachments(sid, user.id, files);
-          if (ing.failedUpload.length || ing.failedExtraction.length) {
-            const parts: string[] = [];
-            if (ing.failedUpload.length) parts.push(`falha ao enviar: ${ing.failedUpload.join(", ")}`);
-            if (ing.failedExtraction.length) parts.push(`sem texto legivel (use PDF/DOCX/TXT pesquisavel): ${ing.failedExtraction.join(", ")}`);
-            setMessages(prev => [...prev, {
-              id: `local_attach_${Date.now()}`, role: "assistant", agent: "Sistema",
-              content: `⚠ Anexos — ${parts.join(" · ")}.`,
-              timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-            }]);
-          }
+          ing = await ingestChatAttachments(sid, user.id, files);
         } catch (e) {
           console.warn("[handleSend] ingestao de anexos falhou:", e);
+          // Falha total da ingestão também é bloqueante.
+          await refundAndNotify("falha ao processar os anexos — reenvie os arquivos");
+          return;
+        }
+        const failedAll = [...ing.failedUpload, ...ing.failedExtraction];
+        if (failedAll.length > 0) {
+          await refundTokens(cost, requestId, "Estorno automatico: anexos falharam — geração bloqueada");
+          setThinking(false);
+          const lines: string[] = [];
+          if (ing.failedUpload.length) {
+            lines.push(`**Não foram enviados** (falha de upload ou acima de 15 MB):\n${ing.failedUpload.map(n => `• ${n}`).join("\n")}`);
+          }
+          if (ing.failedExtraction.length) {
+            lines.push(`**Enviados, mas sem texto legível** (use PDF/DOCX/TXT pesquisável, não imagem escaneada):\n${ing.failedExtraction.map(n => `• ${n}`).join("\n")}`);
+          }
+          setMessages(prev => [...prev, {
+            id: `local_attach_block_${Date.now()}`, role: "assistant", agent: "Sistema",
+            content:
+              `🚫 **Geração bloqueada — anexos não ingeridos**\n\n${lines.join("\n\n")}\n\n` +
+              `A peça **não** foi gerada para não basear a análise em documentos faltando. ` +
+              `**Reenvie** os arquivos acima e mande novamente — ou, se preferir, gere mesmo sem eles ` +
+              `(a análise registrará no topo quais documentos estão ausentes).`,
+            timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+            actions: [{
+              label: "Gerar mesmo assim, sem esses documentos",
+              tone: "ghost",
+              onClick: () => proceedGeneration(sid, val, failedAll),
+            }],
+          }]);
+          return;
         }
       }
       // Dispara a orquestracao assincrona. As mensagens chegam via Realtime.
@@ -960,25 +1063,7 @@ export default function JurisCloudOS() {
       }
       // Catch-up: garante que a user message e a 1a etapa aparecam mesmo se o
       // canal assinou apos o INSERT inicial.
-      setTimeout(async () => {
-        const { data } = await supabase.from("chat_messages")
-          .select("id, role, content, metadata, created_at, sequence_number")
-          .eq("session_id", sid).order("sequence_number", { ascending: true });
-        if (!data) return;
-        setMessages(prev => {
-          const seen = new Set(prev.map(m => String(m.id)));
-          const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
-          const add = (data as Record<string, any>[])
-            .filter(r => !seen.has(String(r.id)) && !(hasOptimistic && r.role === "user") && r.metadata?.kind !== "streaming")
-            .map(r => ({
-              id: r.id, role: r.role,
-              agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
-              content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
-              timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-            } as JcChatMessage));
-          return add.length ? [...prev, ...add] : prev;
-        });
-      }, 1200);
+      scheduleCatchUp(sid);
     } catch (e: unknown) {
       await refundAndNotify(e instanceof Error ? e.message : "erro de rede");
     }

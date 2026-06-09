@@ -66,6 +66,9 @@ export interface JcChatMessage {
   kind?: "stage" | "final" | "error";
   stage?: string;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
+  // Ações inline (ex.: botão "gerar mesmo assim" no gate de anexos). Só para
+  // mensagens locais do sistema — não vem do banco.
+  actions?: { label: string; onClick: () => void; tone?: "primary" | "ghost" }[];
 }
 
 export type SidebarItem = { id: string; label: string; color: string; badge: number; isVirtual?: boolean };
