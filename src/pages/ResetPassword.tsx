@@ -65,11 +65,11 @@ export default function ResetPassword() {
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nova senha</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" minLength={8} style={inputCss} />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" minLength={8} autoComplete="new-password" style={inputCss} />
             </div>
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Confirmar senha</label>
-              <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repita a senha" minLength={8} style={inputCss} />
+              <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repita a senha" minLength={8} autoComplete="new-password" style={inputCss} />
             </div>
             <button type="submit" disabled={submitting} style={{
               width: "100%", padding: "12px 0", borderRadius: 8, border: "none", cursor: "pointer",

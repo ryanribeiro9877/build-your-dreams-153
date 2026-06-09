@@ -26,6 +26,7 @@ export default function Auth() {
       if (mode === "login") {
         const { error } = await signIn(email, password);
         if (error) { toast.error(error.message); return; }
+        setPassword(""); // limpa a senha do estado/DOM após autenticar (higiene)
         toast.success("Login realizado com sucesso!");
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -110,13 +111,13 @@ export default function Auth() {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Email</label>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@escritorio.com" style={inputCss} />
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@escritorio.com" autoComplete="username" style={inputCss} />
           </div>
 
           {mode !== "forgot" && (
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#9898b0", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>Senha</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} style={inputCss} />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} autoComplete="current-password" style={inputCss} />
             </div>
           )}
 
