@@ -556,11 +556,15 @@ function parseBrlNumber(v: string): number {
   return Number((v || "").replace(/\./g, "").replace(",", "."));
 }
 
-// TRAVA do indébito — leitura DETERMINÍSTICA por RÓTULO. SEMPRE devolve valor lido
-// OU status="ambiguo" (nunca um chute, nunca a soma das células). Conservadora:
-// só retorna "lido" quando há uma leitura inequívoca; qualquer dúvida vira ambíguo.
+// TRAVA do indébito — leitura DETERMINÍSTICA por RÓTULO, LINHA A LINHA. SEMPRE devolve
+// valor lido OU status="ambiguo" (nunca um chute, nunca a soma das células). Alta
+// confiança = rótulo de total inequívoco + EXATAMENTE um valor R$ NA MESMA LINHA
+// (depende da extração geométrica do PDF, que põe rótulo e valor na mesma linha).
+// Qualquer dúvida (rótulo numa linha com vários valores, relação de dobro indecidível,
+// múltiplos totais) → ambíguo → [A PREENCHER]. Nunca escolher "o valor mais provável".
 function analyzePlanilhaIndebito(caseDocs: CaseDoc[]): PlanilhaIndebito | null {
-  const labelRe = /(total\s+em\s+dobro|ind[eé]bito|valor\s+a\s+restituir|total\s+a\s+restituir|total\s+pago)\D{0,40}?(\d{1,3}(?:\.\d{3})*,\d{2})/gi;
+  const labelRe = /(total\s+em\s+dobro|ind[eé]bito|valor\s+a\s+restituir|total\s+a\s+restituir|total\s+pago)/i;
+  const valRe = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
   const round2 = (n: number) => Math.round(n * 100) / 100;
   for (const d of caseDocs) {
     const raw = d.raw || "";
@@ -575,13 +579,20 @@ function analyzePlanilhaIndebito(caseDocs: CaseDoc[]): PlanilhaIndebito | null {
       origem: `planilha ${d.file_name}`, evidencia, sourceFile: d.file_name,
     });
 
+    // Só aceita rótulo casado com UM único valor R$ na MESMA linha (alta confiança).
     const labeled: { label: string; num: number }[] = [];
-    for (const mt of raw.matchAll(labelRe)) {
-      const num = parseBrlNumber(mt[2]);
-      if (!Number.isNaN(num) && num > 0) labeled.push({ label: mt[1].toLowerCase(), num });
+    let dirtyLabelLine = false; // rótulo de total numa linha com vários valores
+    for (const line of raw.split(/\r?\n/)) {
+      const lm = line.match(labelRe);
+      if (!lm) continue;
+      const vals = (line.match(valRe) || []).map(parseBrlNumber).filter((n) => !Number.isNaN(n) && n > 0);
+      if (vals.length === 1) labeled.push({ label: lm[1].toLowerCase(), num: vals[0] });
+      else if (vals.length > 1) dirtyLabelLine = true;
     }
     if (!labeled.length) {
-      return ambiguo("nenhum rótulo de total legível na planilha (texto provavelmente corrompido na extração do PDF) — conferir o total diretamente na planilha original.");
+      return ambiguo(dirtyLabelLine
+        ? "os rótulos de total da planilha aparecem em linhas com vários valores R$ — não dá para associar rótulo↔valor com segurança; conferir manualmente."
+        : "nenhum rótulo de total casado com um único valor na mesma linha (texto da planilha mal posicionado ou corrompido) — conferir o total na planilha original.");
     }
 
     // (1) Rótulo explícito de DOBRO é o sinal mais forte: o valor JÁ é o dobro.

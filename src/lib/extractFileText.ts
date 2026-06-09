@@ -38,6 +38,66 @@ export function sanitizeExtractedText(s: string | null): string | null {
   return out.length ? out : null;
 }
 
+// Reconstrói o layout de uma página de PDF usando a GEOMETRIA dos fragmentos.
+//
+// PRINCÍPIO: preencher do anexo SOMENTE com dado lido com alta confiança. O join(" ")
+// puro achata a tabela e separa rótulo do valor (ex.: "INDÉBITO:" longe de "1.386,54"),
+// jogando campos para [A PREENCHER] indevidamente. Aqui reagrupamos por LINHA (y) e
+// ordenamos por COLUNA (x), inserindo " | " em saltos horizontais grandes — assim
+// rótulo e valor voltam à mesma linha, parseáveis, SEM inventar nada.
+//
+// Se algum item não trouxer geometria (transform), lança erro → o chamador cai no
+// método antigo (join por espaço). Nunca quebrar; pior caso = comportamento atual.
+function reconstructPageText(items: any[]): string {
+  interface Pos { str: string; x: number; y: number; w: number }
+  const positioned: Pos[] = [];
+  for (const it of items) {
+    const t = it?.transform;
+    if (!t || typeof t[4] !== "number" || typeof t[5] !== "number") {
+      throw new Error("sem geometria (transform) — usar fallback");
+    }
+    const str = it.str;
+    if (!str || !str.trim().length) continue;
+    positioned.push({ str, x: t[4], y: t[5], w: typeof it.width === "number" ? it.width : 0 });
+  }
+  if (!positioned.length) return "";
+
+  // Largura média de caractere → base dos limiares (tolerância de linha e gap de coluna).
+  let charWSum = 0, charWN = 0;
+  for (const p of positioned) {
+    if (p.w > 0 && p.str.length) { charWSum += p.w / p.str.length; charWN++; }
+  }
+  const avgCharW = charWN ? charWSum / charWN : 5;
+  const colGap = Math.max(avgCharW * 2.5, 12); // salto horizontal que separa colunas
+  const yTol = 3;                              // itens com y dentro disto = mesma linha
+
+  // y cresce de baixo p/ cima em PDF → ordenar DECRESCENTE (topo→base).
+  const sorted = [...positioned].sort((a, b) => b.y - a.y);
+  const lines: Pos[][] = [];
+  for (const p of sorted) {
+    const cur = lines[lines.length - 1];
+    if (cur && Math.abs(cur[0].y - p.y) <= yTol) cur.push(p);
+    else lines.push([p]);
+  }
+
+  const out: string[] = [];
+  for (const line of lines) {
+    line.sort((a, b) => a.x - b.x); // esquerda → direita
+    let s = "";
+    let prevRight: number | null = null;
+    for (const p of line) {
+      if (prevRight !== null) {
+        const gap = p.x - prevRight;
+        s += gap > colGap ? " | " : " ";
+      }
+      s += p.str;
+      prevRight = p.x + (p.w > 0 ? p.w : p.str.length * avgCharW);
+    }
+    out.push(s.replace(/[ \t]{2,}/g, " ").trim());
+  }
+  return out.join("\n");
+}
+
 export async function extractFileText(file: File): Promise<string | null> {
   const mime = file.type || "";
 
@@ -69,9 +129,14 @@ export async function extractFileText(file: File): Promise<string | null> {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(" ");
+        let pageText: string;
+        try {
+          // Reconstrução geométrica (rótulo↔valor na mesma linha em tabelas).
+          pageText = reconstructPageText(textContent.items as any[]);
+        } catch {
+          // Fallback: método antigo (join por espaço) se faltar geometria.
+          pageText = (textContent.items as any[]).map((item) => item.str).join(" ");
+        }
         pages.push(pageText);
       }
       return sanitizeExtractedText(pages.join("\n\n") || null);
