@@ -514,6 +514,107 @@ function buildCaseContextForValidator(caseDocs: CaseDoc[], maxTokens: number): s
   return clampChars(parts.join("\n\n"), maxTokens);
 }
 
+// ─── Mudança 4A: DADOS CANÔNICOS (extração determinística por regex do texto CRU) ──
+// Extrai VERBATIM os dados que não podem depender do resumo LLM (que trunca/parafraseia):
+// CPF, CNPJ, RG, nº de contrato, nº de benefício, valores, datas e nomes da parte.
+// Lê o texto CRU (d.raw), nunca o resumo. Só captura o que casa LITERALMENTE — ausência
+// != invenção. Este bloco prevalece sobre os resumos para qualquer dado de identidade/número.
+interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
+interface CanonicalFacts {
+  cpfs: Map<string, string>;       // valor -> arquivo de origem
+  cnpjs: Map<string, string>;
+  rgs: Map<string, string>;
+  contratos: Map<string, string>;
+  beneficios: Map<string, string>;
+  nomes: Map<string, string>;
+  datas: Map<string, string>;
+  valores: CanonicalValue[];
+}
+
+// Planilha de indébito: o total declarado nela é a fonte CANÔNICA do indébito (não o
+// somatório do contrato). Identificada pelo nome do arquivo.
+function isPlanilhaIndebito(fileName: string): boolean {
+  return /ind[eé]bito|planilha/i.test(fileName || "");
+}
+
+function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
+  const facts: CanonicalFacts = {
+    cpfs: new Map(), cnpjs: new Map(), rgs: new Map(), contratos: new Map(),
+    beneficios: new Map(), nomes: new Map(), datas: new Map(), valores: [],
+  };
+  const CAP = 60; // teto por lista (evita bloat em históricos com centenas de datas)
+  const addOnce = (m: Map<string, string>, key: string | undefined, file: string) => {
+    const k = (key || "").trim();
+    if (k && !m.has(k) && m.size < CAP) m.set(k, file);
+  };
+  for (const d of caseDocs) {
+    const raw = d.raw || "";
+    if (!raw) continue;
+    const file = d.file_name;
+    const planilha = isPlanilhaIndebito(file);
+
+    for (const mt of raw.matchAll(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g)) addOnce(facts.cpfs, mt[0], file);
+    for (const mt of raw.matchAll(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g)) addOnce(facts.cnpjs, mt[0], file);
+    for (const mt of raw.matchAll(/\bRG\b[^0-9]{0,12}([\d.\-xX]{6,14})/gi)) addOnce(facts.rgs, mt[1], file);
+    for (const mt of raw.matchAll(/(?:contrato|averba[cç][aã]o|n[uú]mero)\D{0,8}(\d{6,})/gi)) addOnce(facts.contratos, mt[1], file);
+    for (const mt of raw.matchAll(/(?:benef[ií]cio|NB)\D{0,6}(\d[\d.\-]{6,})/gi)) addOnce(facts.beneficios, mt[1], file);
+    for (const mt of raw.matchAll(/\b\d{2}\/\d{2}\/\d{4}\b/g)) addOnce(facts.datas, mt[0], file);
+
+    for (const mt of raw.matchAll(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g)) {
+      const v = mt[0].replace(/\s+/g, " ").trim();
+      if (facts.valores.length < 120 && !facts.valores.some((x) => x.value === v && x.file === file)) {
+        facts.valores.push({ value: v, file, fromPlanilha: planilha });
+      }
+    }
+    // Nome após rótulos da parte. Heurística (candidato): exige 2+ palavras começando
+    // por maiúscula; serve para conferência, não substitui o resumo.
+    for (const mt of raw.matchAll(/(?:autor|autora|outorgante|requerente|nome)\s*[:\-]?\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\s]{4,60})/gi)) {
+      const nome = (mt[1] || "").replace(/\s{2,}/g, " ").trim().replace(/[.,;]+$/, "");
+      if (nome && nome.split(/\s+/).length >= 2 && /^[A-ZÀ-Ý]/.test(nome)) addOnce(facts.nomes, nome, file);
+    }
+  }
+  return facts;
+}
+
+// Monta o bloco DADOS CANÔNICOS. É pequeno por natureza; tem teto PRÓPRIO (não passa
+// pelo clamp de MAX_CASE_TOKENS), garantindo que o número canônico nunca seja cortado.
+function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
+  const hasAny = facts.cpfs.size || facts.cnpjs.size || facts.rgs.size || facts.contratos.size ||
+    facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length;
+  if (!hasAny) return "";
+  const fmtMap = (m: Map<string, string>) =>
+    [...m.entries()].map(([v, f]) => `    • ${v}  (origem: ${f})`).join("\n");
+  const lines: string[] = [];
+  if (facts.nomes.size) lines.push("  - Nome(s) da parte (candidatos — confira no texto):\n" + fmtMap(facts.nomes));
+  if (facts.cpfs.size) lines.push("  - CPF(s):\n" + fmtMap(facts.cpfs));
+  if (facts.cnpjs.size) lines.push("  - CNPJ(s):\n" + fmtMap(facts.cnpjs));
+  if (facts.rgs.size) lines.push("  - RG(s):\n" + fmtMap(facts.rgs));
+  if (facts.contratos.size) lines.push("  - Contrato(s):\n" + fmtMap(facts.contratos));
+  if (facts.beneficios.size) lines.push("  - Benefício(s):\n" + fmtMap(facts.beneficios));
+  if (facts.datas.size) lines.push("  - Datas encontradas:\n" + fmtMap(facts.datas));
+  if (facts.valores.length) {
+    const byFile = new Map<string, CanonicalValue[]>();
+    for (const v of facts.valores) {
+      const arr = byFile.get(v.file) || []; arr.push(v); byFile.set(v.file, arr);
+    }
+    const valLines: string[] = [];
+    for (const [f, arr] of byFile.entries()) {
+      const tag = arr[0].fromPlanilha ? "  [PLANILHA DE INDÉBITO — fonte canônica do indébito]" : "";
+      valLines.push(`    • ${f}${tag}:\n` + arr.map((v) => `        ${v.value}`).join("\n"));
+    }
+    lines.push("  - Valores encontrados (por documento):\n" + valLines.join("\n"));
+  }
+  const block = "\n\n═══ DADOS CANÔNICOS (extraídos LITERALMENTE dos documentos — FONTE SUPREMA) ═══\n" +
+    "Estes valores foram lidos diretamente do texto dos documentos, SEM resumo. Para nome, CPF, CNPJ, RG, " +
+    "número de contrato, número de benefício, valores e datas da parte, use SOMENTE o que está aqui. " +
+    "Se um dado não estiver listado, escreva [A PREENCHER]. Os resumos abaixo servem para narrativa e teses, " +
+    "NÃO para sobrescrever estes números.\n" +
+    lines.join("\n") +
+    "\n═══ FIM DOS DADOS CANÔNICOS ═══\n";
+  // Teto próprio (~1800 tokens) — independente do clamp de 16000 dos resumos.
+  return clampChars(block, 1800);
+}
+
 // Formata número como moeda BRL (R$ 60.720,00).
 function brl(v: number): string {
   return "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -542,6 +643,15 @@ function buildDraftingRules(): string {
     "domicílio da autora de forma consistente; não troque de comarca entre peças.\n" +
     "6. PEDIDOS: em ação de consumo individual no JEC, NÃO inclua por padrão pedido de ofício/intimação do Ministério " +
     "Público (em regra não cabe). Inclua só se houver justificativa específica.\n" +
+    "7. PLANILHA DE INDÉBITO É CANÔNICA: se houver entre os documentos uma PLANILHA DE INDÉBITO (nome contendo " +
+    "'indébito'/'indebito' ou 'planilha'), o valor de INDÉBITO/TOTAL declarado NELA é a fonte CANÔNICA do indébito. " +
+    "NÃO substitua esse valor pela soma das parcelas do contrato de empréstimo. Se a planilha traz o total a restituir, " +
+    "USE-O; a repetição em dobro (art. 42, p.ú., CDC) = 2 × esse total. O somatório de TODAS as parcelas do contrato " +
+    "(ex.: campo 'somatório das parcelas' da CCB) é o CUSTO TOTAL do crédito, NÃO o indébito.\n" +
+    "8. NÃO INCLUIR PARCELAS FUTURAS NO INDÉBITO: a repetição de indébito incide APENAS sobre o que já foi efetivamente " +
+    "PAGO/DESCONTADO. NÃO some parcelas com vencimento posterior à data de hoje. Se a planilha e o contrato divergirem, " +
+    "PREVALECE a planilha de indébito — NUNCA escolha 'o número maior por ser mais completo'. Em dúvida real, escreva " +
+    "[A PREENCHER] e sinalize, em vez de chutar o maior.\n" +
     "═══ FIM DAS REGRAS DE REDAÇÃO ═══\n";
 }
 
@@ -908,9 +1018,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           summary + "\n═══ FIM DO RESUMO ═══\n"
         : "";
       // Bloco ESTÁVEL (cacheável) — IDÊNTICO entre os blocos → cache hit nos blocos 2-5.
+      // O bloco DADOS CANÔNICOS (verbatim, teto próprio) vem ACIMA dos resumos e
+      // prevalece sobre eles para qualquer dado de identidade/número.
+      const canonicalBlock = caseDocs.length > 0
+        ? buildCanonicalFactsBlock(extractCanonicalFacts(caseDocs))
+        : "";
       const stableSystem = (n3.system_prompt || "") +
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
+        canonicalBlock +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
       // Renova updated_at durante a geração (watchdog não mata geração viva).

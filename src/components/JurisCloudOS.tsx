@@ -45,6 +45,11 @@ import {
    Orchestrator — composes sidebar, topbar, chat, right panel.
 ───────────────────────────────────────────────────────────── */
 
+// Orçamento de tokens do Canal A — DEVE bater com MAX_CASE_TOKENS da edge
+// function chat-orchestrator. Acima disto, o servidor resume (lossy) os anexos;
+// o cliente avisa o usuário antes de gerar (Mudança 4C). ~4 chars/token.
+const CLIENT_MAX_CASE_TOKENS = 16000;
+
 // V11: tema único — GlobalStyles não precisa mais receber prop.
 const GlobalStyles = () => (
   <style>{`
@@ -1053,6 +1058,50 @@ export default function JurisCloudOS() {
             }],
           }]);
           return;
+        }
+
+        // Mudança 4C: aviso de ORÇAMENTO DE TOKENS. Soma os tokens estimados
+        // (chars/4) do extracted_text ATIVO da sessão. Se exceder MAX_CASE_TOKENS,
+        // o conteúdo será resumido (lossy) no servidor — os dados canônicos são
+        // preservados, mas o usuário precisa SABER da compressão e confirmar.
+        try {
+          const { data: actives } = await supabase
+            .from("chat_attachments")
+            .select("file_name, extracted_text")
+            .eq("session_id", sid).eq("is_active", true)
+            .not("extracted_text", "is", null);
+          const rows = ((actives || []) as { file_name: string; extracted_text: string | null }[]);
+          const totalChars = rows.reduce((a, r) => a + (r.extracted_text?.length || 0), 0);
+          const estTokens = Math.round(totalChars / 4);
+          if (estTokens > CLIENT_MAX_CASE_TOKENS) {
+            await refundTokens(cost, requestId, "Estorno automatico: confirmacao de orcamento de tokens");
+            setThinking(false);
+            const largest = [...rows]
+              .sort((a, b) => (b.extracted_text?.length || 0) - (a.extracted_text?.length || 0))
+              .slice(0, 5)
+              .map(r => `• ${r.file_name} (~${Math.round((r.extracted_text?.length || 0) / 4000)}k tokens)`)
+              .join("\n");
+            setMessages(prev => [...prev, {
+              id: `local_budget_${Date.now()}`, role: "assistant", agent: "Sistema",
+              content:
+                `⚠ **Documentos excedem o orçamento de contexto**\n\n` +
+                `Os anexos ativos somam ~${Math.round(estTokens / 1000)}k tokens e ultrapassam o limite de ` +
+                `${Math.round(CLIENT_MAX_CASE_TOKENS / 1000)}k. Para caber, o conteúdo será **resumido (com perda)** — ` +
+                `os **dados canônicos** (CPF, contrato, valores) são preservados intactos, mas o detalhamento textual ` +
+                `será comprimido.\n\nMaiores anexos:\n${largest}\n\nRemova anexos grandes para evitar a compressão, ` +
+                `ou confirme para prosseguir.`,
+              timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+              actions: [{
+                label: "Gerar mesmo assim (conteúdo será resumido)",
+                tone: "ghost",
+                onClick: () => proceedGeneration(sid, val, []),
+              }],
+            }]);
+            return;
+          }
+        } catch (e) {
+          // Falha ao estimar orçamento não deve bloquear o envio; segue normalmente.
+          console.warn("[handleSend] estimativa de orcamento falhou:", e);
         }
       }
       // Dispara a orquestracao assincrona. As mensagens chegam via Realtime.
