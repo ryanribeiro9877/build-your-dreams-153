@@ -48,7 +48,7 @@ import {
 // Orçamento de tokens do Canal A — DEVE bater com MAX_CASE_TOKENS da edge
 // function chat-orchestrator. Acima disto, o servidor resume (lossy) os anexos;
 // o cliente avisa o usuário antes de gerar (Mudança 4C). ~4 chars/token.
-const CLIENT_MAX_CASE_TOKENS = 16000;
+const CLIENT_MAX_CASE_TOKENS = 35000;
 
 // V11: tema único — GlobalStyles não precisa mais receber prop.
 const GlobalStyles = () => (

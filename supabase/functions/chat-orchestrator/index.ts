@@ -66,7 +66,7 @@ const LLM_N3_TIMEOUT_MS = Number(Deno.env.get("LLM_N3_TIMEOUT_MS")) || 380_000;
 
 // Tetos de contexto (estimativa ~4 chars/token). Protegem janela e orçamento.
 const CHARS_PER_TOKEN = 4;
-const MAX_CASE_TOKENS = 16000;          // ~64k chars de documentos do caso (autoritativo)
+const MAX_CASE_TOKENS = 35000;          // ~140k chars de documentos do caso (autoritativo)
 const MAX_MODEL_TOKENS = 28000;         // ~112k chars de modelos de referência
 const MAX_VALIDATOR_CASE_TOKENS = 6000; // resumo do caso p/ os validadores (gpt-4o-mini)
 

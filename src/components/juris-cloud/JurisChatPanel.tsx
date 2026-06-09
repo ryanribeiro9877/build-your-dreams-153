@@ -9,6 +9,27 @@ import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "
 import { getInitials, getCaseAreaChip, getTokenCost } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 
+// Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
+// procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
+// aviso do sistema. Só nesses casos faz sentido oferecer "Baixar em PDF".
+// Heurística: exige um marcador FORTE de fechamento de peça, ou 2+ sinais estruturais.
+function looksLikePeticao(text: string): boolean {
+  if (!text || text.length < 500) return false;
+  const t = text.toLowerCase();
+  const markers = [
+    /excelent[ií]ssim|exmo\.?\s|merit[ií]ssim/,
+    /peti[cç][aã]o inicial|reclama[cç][aã]o trabalhista|contesta[cç][aã]o|r[eé]plica|embargos|recurso (?:inominado|ordin[aá]rio|de apela[cç][aã]o)|notifica[cç][aã]o extrajudicial/,
+    /dos fatos|do direito|do m[eé]rito|dos pedidos|das preliminares/,
+    /nestes termos|termos em que|pede deferimento|p\.\s*deferimento/,
+    /\bvara\b|juizado especial|comarca de/,
+    /outorgante|outorgad[oa]|instrumento particular|cl[aá]usula/,
+  ];
+  const strong = /nestes termos|pede deferimento|p\.\s*deferimento/.test(t);
+  if (strong) return true;
+  const hits = markers.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0);
+  return hits >= 2;
+}
+
 /* ── Sub-components (chat bubbles) ── */
 
 function BriefingCard({ card }: { card: BriefingCardPayload }) {
@@ -148,7 +169,7 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
                 {cleanContent && (
                   <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>
                 )}
-                {!isUser && cleanContent && cleanContent.length >= 280 && (
+                {!isUser && msg.agent !== "Sistema" && cleanContent && looksLikePeticao(cleanContent) && (
                   <button
                     type="button"
                     onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
