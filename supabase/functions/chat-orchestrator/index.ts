@@ -520,6 +520,16 @@ function buildCaseContextForValidator(caseDocs: CaseDoc[], maxTokens: number): s
 // Lê o texto CRU (d.raw), nunca o resumo. Só captura o que casa LITERALMENTE — ausência
 // != invenção. Este bloco prevalece sobre os resumos para qualquer dado de identidade/número.
 interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
+// Resultado da leitura DETERMINÍSTICA da planilha de indébito (Mudança calculo 1B):
+// lê o TOTAL declarado em vez de deixar o LLM re-somar as células (que mistura
+// mensais + subtotais + total e gera double-count).
+interface PlanilhaIndebito {
+  sourceFile: string;
+  total: string | null;     // total/indébito declarado (string verbatim, ex.: "1.386,54")
+  emDobro: string | null;   // valor já em dobro, se a planilha o declarar
+  ambiguous: boolean;       // true => não dá para ler com segurança; marcar [A PREENCHER]
+  note: string;             // memória da leitura (campo usado / aviso anti-double-count)
+}
 interface CanonicalFacts {
   cpfs: Map<string, string>;       // valor -> arquivo de origem
   cnpjs: Map<string, string>;
@@ -529,6 +539,8 @@ interface CanonicalFacts {
   nomes: Map<string, string>;
   datas: Map<string, string>;
   valores: CanonicalValue[];
+  indebitoPlanilha: PlanilhaIndebito | null;
+  naturezaOperacao: string | null; // sinais de CCB/pessoal vs consignado/INSS nos documentos
 }
 
 // Planilha de indébito: o total declarado nela é a fonte CANÔNICA do indébito (não o
@@ -537,10 +549,103 @@ function isPlanilhaIndebito(fileName: string): boolean {
   return /ind[eé]bito|planilha/i.test(fileName || "");
 }
 
+// "1.386,54" -> 1386.54 (NaN se não parsear)
+function parseBrlNumber(v: string): number {
+  return Number((v || "").replace(/\./g, "").replace(",", "."));
+}
+
+// Mudança calculo 1B — leitura DETERMINÍSTICA do total da planilha de indébito.
+// Estratégia: (i) usar o valor adjacente a um rótulo de total (INDÉBITO / TOTAL A
+// RESTITUIR / VALOR A RESTITUIR / TOTAL EM DOBRO / TOTAL PAGO); (ii) anti-double-count:
+// se a soma de TODAS as células for muito maior que o rótulo, confiar no rótulo;
+// (iii) se a estrutura for ambígua (texto garbled), NÃO somar — marcar ambíguo.
+function analyzePlanilhaIndebito(caseDocs: CaseDoc[]): PlanilhaIndebito | null {
+  const labelRe = /(total\s+em\s+dobro|ind[eé]bito|valor\s+a\s+restituir|total\s+a\s+restituir|total\s+pago)\D{0,40}?(\d{1,3}(?:\.\d{3})*,\d{2})/gi;
+  for (const d of caseDocs) {
+    const raw = d.raw || "";
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    const byName = isPlanilhaIndebito(d.file_name);
+    const hasLabels = /ind[eé]bito|a\s+restituir|total\s+em\s+dobro/.test(lower);
+    if (!byName && !hasLabels) continue;
+
+    const labeled: { label: string; raw: string; num: number }[] = [];
+    for (const mt of raw.matchAll(labelRe)) {
+      const num = parseBrlNumber(mt[2]);
+      if (!Number.isNaN(num)) labeled.push({ label: mt[1].toLowerCase(), raw: mt[2], num });
+    }
+    const allCells: number[] = [];
+    for (const mt of raw.matchAll(/(\d{1,3}(?:\.\d{3})*,\d{2})/g)) {
+      const n = parseBrlNumber(mt[1]);
+      if (!Number.isNaN(n)) allCells.push(n);
+    }
+
+    const pick = (re: RegExp) => labeled.filter((v) => re.test(v.label)).sort((a, b) => b.num - a.num)[0];
+    const dobro = pick(/dobro/);
+    const indeb = pick(/ind[eé]bito|restituir/);
+    let total: string | null = null, emDobro: string | null = null, note = "";
+
+    if (dobro) {
+      emDobro = dobro.raw;
+      total = indeb ? indeb.raw : null;
+      note = `campo 'total em dobro' da planilha = R$ ${dobro.raw}` + (indeb ? `; indébito simples = R$ ${indeb.raw}` : "");
+    } else if (indeb) {
+      total = indeb.raw;
+      note = `campo indébito/restituir da planilha = R$ ${indeb.raw}`;
+    } else if (labeled.length) {
+      const best = [...labeled].sort((a, b) => b.num - a.num)[0];
+      total = best.raw;
+      note = `maior valor rotulado (${best.label}) = R$ ${best.raw}`;
+    }
+
+    if (total || emDobro) {
+      const ref = parseBrlNumber((emDobro || total) as string);
+      const sumAll = allCells.reduce((a, b) => a + b, 0);
+      if (ref > 0 && sumAll > ref * 1.5) {
+        note += `. ATENÇÃO: a soma de TODAS as células (${brl(sumAll)}) é bem maior que o total rotulado — a planilha mistura mensais, subtotais e total; USE o valor rotulado, NÃO some as células.`;
+      }
+      return { sourceFile: d.file_name, total, emDobro, ambiguous: false, note };
+    }
+    // Parece planilha mas sem rótulo de total legível (texto garbled): NÃO somar.
+    return {
+      sourceFile: d.file_name, total: null, emDobro: null, ambiguous: true,
+      note: "estrutura AMBÍGUA (texto da planilha ilegível ou sem rótulo de total claro) — NÃO somar as células; marcar [A PREENCHER: confirmar total da planilha de indébito] e conferir manualmente.",
+    };
+  }
+  return null;
+}
+
+// Infere a NATUREZA da operação a partir dos DOCUMENTOS (não da peça): empréstimo
+// pessoal/CCB/débito em conta vs consignado em benefício/INSS. Reporta o que FOI e o
+// que NÃO foi encontrado — base factual para o validador checar premissa sem lastro.
+function inferOperationNature(caseDocs: CaseDoc[]): string | null {
+  let consignado = false, pessoal = false, beneficioDoc = false;
+  for (const d of caseDocs) {
+    const t = (d.raw || "").toLowerCase();
+    if (!t) continue;
+    if (/consignad|margem consign|\brmc\b/.test(t)) consignado = true;
+    if (/aposentad|pens[aã]o|benef[ií]cio\s+(?:previdenci|do\s+inss|junto)|extrato\s+de\s+benef/.test(t)) beneficioDoc = true;
+    if (/c[eé]dula de cr[eé]dito banc[aá]rio|\bccb\b|empr[eé]stimo pessoal|d[eé]bito em conta|conta corrente/.test(t)) pessoal = true;
+  }
+  const achados: string[] = [];
+  if (pessoal) achados.push("empréstimo pessoal / CCB / débito em conta");
+  if (consignado) achados.push("consignado");
+  if (beneficioDoc) achados.push("benefício previdenciário / INSS");
+  if (achados.length === 0) return null;
+  const ausentes: string[] = [];
+  if (!consignado) ausentes.push("consignação em benefício");
+  if (!beneficioDoc) ausentes.push("extrato de benefício do INSS");
+  let line = "NATUREZA DA OPERAÇÃO (sinais NOS DOCUMENTOS) — encontrado(s): " + achados.join("; ") + ".";
+  if (ausentes.length) line += " NÃO encontrado nos documentos: " + ausentes.join("; ") + ".";
+  line += " Se a peça afirmar benefício/INSS/consignado sem documento que sustente, é premissa SEM LASTRO.";
+  return line;
+}
+
 function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   const facts: CanonicalFacts = {
     cpfs: new Map(), cnpjs: new Map(), rgs: new Map(), contratos: new Map(),
     beneficios: new Map(), nomes: new Map(), datas: new Map(), valores: [],
+    indebitoPlanilha: null, naturezaOperacao: null,
   };
   const CAP = 60; // teto por lista (evita bloat em históricos com centenas de datas)
   const addOnce = (m: Map<string, string>, key: string | undefined, file: string) => {
@@ -573,18 +678,33 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
       if (nome && nome.split(/\s+/).length >= 2 && /^[A-ZÀ-Ý]/.test(nome)) addOnce(facts.nomes, nome, file);
     }
   }
+  // Interpretação determinística (não-LLM): total da planilha + natureza da operação.
+  facts.indebitoPlanilha = analyzePlanilhaIndebito(caseDocs);
+  facts.naturezaOperacao = inferOperationNature(caseDocs);
   return facts;
+}
+
+// Formata a linha do indébito da planilha para os blocos (N3 e validador).
+function formatIndebitoPlanilhaLine(p: PlanilhaIndebito): string {
+  if (p.ambiguous) return `INDÉBITO (planilha ${p.sourceFile}): ${p.note}`;
+  const dobroPart = p.emDobro ? ` [em dobro: R$ ${p.emDobro}]` : "";
+  const totPart = p.total ? `R$ ${p.total}` : "(ver nota)";
+  return `INDÉBITO (da planilha ${p.sourceFile}, fonte canônica — LER o total declarado, NÃO re-somar células): ${totPart}${dobroPart}. ${p.note}`;
 }
 
 // Monta o bloco DADOS CANÔNICOS. É pequeno por natureza; tem teto PRÓPRIO (não passa
 // pelo clamp de MAX_CASE_TOKENS), garantindo que o número canônico nunca seja cortado.
 function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   const hasAny = facts.cpfs.size || facts.cnpjs.size || facts.rgs.size || facts.contratos.size ||
-    facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length;
+    facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length ||
+    facts.indebitoPlanilha || facts.naturezaOperacao;
   if (!hasAny) return "";
   const fmtMap = (m: Map<string, string>) =>
     [...m.entries()].map(([v, f]) => `    • ${v}  (origem: ${f})`).join("\n");
   const lines: string[] = [];
+  // Interpretações de alto valor primeiro (natureza + total da planilha).
+  if (facts.naturezaOperacao) lines.push("  - " + facts.naturezaOperacao);
+  if (facts.indebitoPlanilha) lines.push("  - " + formatIndebitoPlanilhaLine(facts.indebitoPlanilha));
   if (facts.nomes.size) lines.push("  - Nome(s) da parte (candidatos — confira no texto):\n" + fmtMap(facts.nomes));
   if (facts.cpfs.size) lines.push("  - CPF(s):\n" + fmtMap(facts.cpfs));
   if (facts.cnpjs.size) lines.push("  - CNPJ(s):\n" + fmtMap(facts.cnpjs));
@@ -613,6 +733,19 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
     "\n═══ FIM DOS DADOS CANÔNICOS ═══\n";
   // Teto próprio (~1800 tokens) — independente do clamp de 16000 dos resumos.
   return clampChars(block, 1800);
+}
+
+// Cabeçalho canônico curto para o VALIDADOR — dá a ele a NATUREZA da operação e o
+// total da planilha (verbatim), sem os quais as checagens de premissa-sem-lastro e
+// indébito-vs-planilha não têm como rodar.
+function buildValidatorCanonicalHeader(facts: CanonicalFacts): string {
+  const parts: string[] = [];
+  if (facts.naturezaOperacao) parts.push(facts.naturezaOperacao);
+  if (facts.indebitoPlanilha) parts.push(formatIndebitoPlanilhaLine(facts.indebitoPlanilha));
+  if (facts.cpfs.size) parts.push("CPF(s) nos documentos: " + [...facts.cpfs.keys()].join(", "));
+  if (facts.contratos.size) parts.push("Contrato(s) nos documentos: " + [...facts.contratos.keys()].join(", "));
+  if (!parts.length) return "";
+  return "DADOS CANÔNICOS (verbatim dos documentos):\n- " + parts.join("\n- ") + "\n\n";
 }
 
 // Formata número como moeda BRL (R$ 60.720,00).
@@ -652,6 +785,24 @@ function buildDraftingRules(): string {
     "PAGO/DESCONTADO. NÃO some parcelas com vencimento posterior à data de hoje. Se a planilha e o contrato divergirem, " +
     "PREVALECE a planilha de indébito — NUNCA escolha 'o número maior por ser mais completo'. Em dúvida real, escreva " +
     "[A PREENCHER] e sinalize, em vez de chutar o maior.\n" +
+    "9. LER O TOTAL DA PLANILHA — NÃO RE-SOMAR AS CÉLULAS: a planilha de indébito JÁ TRAZ o total. LEIA o valor do campo " +
+    "final (rótulos como 'INDÉBITO', 'TOTAL A RESTITUIR', 'VALOR A RESTITUIR', 'TOTAL EM DOBRO'). NUNCA some todas as células: " +
+    "ela contém valores MENSAIS + SUBTOTAIS + TOTAIS; somar tudo conta o mesmo valor várias vezes (double-count). Distinga " +
+    "valor mensal (linha) × subtotal (soma de meses) × total pago × total em dobro, e use APENAS o total final declarado. " +
+    "Se a planilha já apresenta o valor EM DOBRO, esse é o valor da repetição em dobro — NÃO dobre de novo. Em dúvida sobre " +
+    "qual campo é o total, escreva [A PREENCHER: confirmar total da planilha de indébito] — não some tudo no chute. " +
+    "Quando o bloco DADOS CANÔNICOS trouxer a linha 'INDÉBITO (da planilha ...)', cite esse valor e o campo usado " +
+    "(ex.: 'conforme campo INDÉBITO da planilha: R$ ...').\n" +
+    "10. NATUREZA DA OPERAÇÃO TEM DE BATER COM O DOCUMENTO: NÃO afirme benefício previdenciário/INSS/consignado/aposentadoria/pensão " +
+    "nem 'desconto em benefício' se os documentos mostram empréstimo PESSOAL/CCB com débito em conta (sem extrato de benefício do INSS). " +
+    "Use o enquadramento que o documento sustenta; não peça ofício ao INSS se não há consignação em benefício.\n" +
+    "11. NÃO RODE TESES CONTRADITÓRIAS: inexistência/nulidade do contrato (negócio nulo, Escada Ponteana) e revisão por abusividade " +
+    "(que pressupõe contrato válido) são INCOMPATÍVEIS como pedidos principais simultâneos. Escolha UMA linha; se quiser as duas, " +
+    "estruture a revisão como pedido SUBSIDIÁRIO explícito ao de inexistência.\n" +
+    "12. INCAPAZ → REPRESENTAÇÃO NA QUALIFICAÇÃO: se a parte autora for MENOR/incapaz (conforme data de nascimento nos documentos), " +
+    "qualifique-a REPRESENTADA/ASSISTIDA pelo representante legal (ex.: 'representada por seu pai FULANO, CPF ...'; art. 71 do CPC, " +
+    "arts. 3º/4º do CC) — não a traga sozinha 'por seu advogado'. Se a identidade da parte não estiver clara nos documentos, " +
+    "suspenda e peça confirmação em vez de inventar.\n" +
     "═══ FIM DAS REGRAS DE REDAÇÃO ═══\n";
 }
 
@@ -865,7 +1016,12 @@ async function validateDraft(admin: SupabaseClient, validator: AgentRow, userMsg
       `\n- ALÇADA JEC: se a peça é de Juizado Especial Cível e o valor da causa ultrapassa ${brl(JEC_TETO_VALOR)} ` +
       `(${JEC_TETO_SALARIOS} salários mínimos) sem o agente ter sinalizado a incompatibilidade, REPROVE.` +
       "\n- JURISPRUDÊNCIA: se há sentenças nos documentos do caso e o rascunho não cita NOMINALMENTE ao menos uma (nº+vara), REPROVE." +
-      "\n- FORO: a comarca deve ser a do domicílio do consumidor (autora). Se divergir sem justificativa, REPROVE."
+      "\n- FORO: a comarca deve ser a do domicílio do consumidor (autora). Se divergir sem justificativa, REPROVE." +
+      "\n- PREMISSA SEM LASTRO DOCUMENTAL: se o rascunho afirmar como FATO benefício previdenciário/INSS/consignado/aposentadoria/pensão, ou 'desconto em benefício', ou pedir ofício ao INSS para suspender consignação, MAS os documentos do caso mostram empréstimo PESSOAL/CCB com débito em conta (sem extrato de benefício do INSS), REPROVE: a NATUREZA da operação não bate com o documento (veja a linha NATUREZA DA OPERAÇÃO acima). Instrua a corrigir o enquadramento." +
+      "\n- TESES CONTRADITÓRIAS: se o rascunho sustentar AO MESMO TEMPO a INEXISTÊNCIA/NULIDADE do contrato (negócio nulo, ausência de manifestação de vontade, Escada Ponteana, art. 104 CC) E a REVISÃO/abusividade do MESMO contrato (que pressupõe contrato VÁLIDO) como pedidos PRINCIPAIS simultâneos, REPROVE — são incompatíveis. Exija escolher UMA linha, ou estruturar a revisão como pedido SUBSIDIÁRIO explícito ao de inexistência." +
+      "\n- INCAPAZ SEM REPRESENTAÇÃO: se algum documento indicar que a autora é MENOR de idade (data de nascimento que resulta em <18 anos) ou incapaz e a QUALIFICAÇÃO a trouxer SOZINHA ('por seu advogado') sem representação pelo representante legal (ex.: 'representada por seu pai FULANO, CPF...'; art. 71 do CPC, arts. 3º/4º do CC), REPROVE. (Se o especialista SUSPENDEU a redação pedindo confirmação factual da identidade da parte, isso NÃO é vício — é o correto; não reprove por isso.)" +
+      "\n- INDÉBITO x PLANILHA: se houver planilha de indébito e o valor do indébito na peça divergir de forma relevante (sobretudo para MAIOR) do total declarado na planilha (veja a linha INDÉBITO acima), REPROVE pedindo conferência — é provável re-soma indevida da tabela (somar mensais + subtotais + total)." +
+      "\n\nANTI-PÊNDULO (não reprovar por falso positivo): só reprove por defeito VERIFICÁVEL contra os documentos que você tem. [A PREENCHER: ...] e dado-padrão do escritório NÃO são vício. NÃO re-roteie peça já vinda do especialista certo. Se a peça estiver coerente e completa com pendências apenas em [A PREENCHER], APROVE. Ao reprovar, liste cada vício com a localização e a correção objetiva."
     : "";
   const sys = (validator.system_prompt || "Voce e um validador.") +
     "\n\nAvalie se o RASCUNHO atende a solicitacao com qualidade e correcao tecnica." + fence +
@@ -874,7 +1030,7 @@ async function validateDraft(admin: SupabaseClient, validator: AgentRow, userMsg
     const r = await callLLM(admin, {
       model: validator.model || "gpt-4o-mini", systemPrompt: sys, history: [],
       userMessage: `Solicitacao:\n${userMsg}\n\nRascunho a avaliar:\n${draft}`,
-      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
+      temperature: 0, top_p: null, maxTokens: 700, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
     });
     const p = JSON.parse(r.content) as { approved?: boolean; feedback?: string };
     return { approved: p.approved === true, feedback: p.feedback || "" };
@@ -1132,7 +1288,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // um aviso [REVISAR] ao final e FINALIZA — não regenera (evita refazer 5 blocos).
       const n2 = run.target_n2_id ? await loadAgent(admin, run.target_n2_id) : n1;
       const caseDocs = await loadCaseDocuments(admin, run.session_id);
-      const caseCtx = buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
+      // Prepende o cabeçalho canônico (natureza da operação + total da planilha) ao
+      // contexto do validador — habilita as checagens de premissa-sem-lastro e indébito.
+      const caseCtx = caseDocs.length > 0
+        ? buildValidatorCanonicalHeader(extractCanonicalFacts(caseDocs)) +
+          buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS)
+        : buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
       const verdict = await validateDraft(admin, n2 || n1, run.original_message, run.draft || "", caseCtx);
       let draft = run.draft || "";
       if (!verdict.approved && verdict.feedback) {
