@@ -520,15 +520,17 @@ function buildCaseContextForValidator(caseDocs: CaseDoc[], maxTokens: number): s
 // Lê o texto CRU (d.raw), nunca o resumo. Só captura o que casa LITERALMENTE — ausência
 // != invenção. Este bloco prevalece sobre os resumos para qualquer dado de identidade/número.
 interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
-// Resultado da leitura DETERMINÍSTICA da planilha de indébito (Mudança calculo 1B):
-// lê o TOTAL declarado em vez de deixar o LLM re-somar as células (que mistura
-// mensais + subtotais + total e gera double-count).
+// Resultado da leitura DETERMINÍSTICA da planilha de indébito (TRAVA do indébito).
+// O código lê o TOTAL declarado e CALCULA o dobro; o N3 não produz nenhum número.
+// status="ambiguo" (indebito=dobro=null) é um resultado VÁLIDO e esperado para
+// planilhas garbled — vira [A PREENCHER], nunca um chute.
 interface PlanilhaIndebito {
+  indebito: number | null;  // valor simples a restituir (lido)
+  dobro: number | null;     // 2 × indebito (calculado em código)
+  status: "lido" | "ambiguo";
+  origem: string;           // ex.: "campo TOTAL EM DOBRO da planilha X"
+  evidencia: string;        // memória da leitura / motivo da ambiguidade
   sourceFile: string;
-  total: string | null;     // total/indébito declarado (string verbatim, ex.: "1.386,54")
-  emDobro: string | null;   // valor já em dobro, se a planilha o declarar
-  ambiguous: boolean;       // true => não dá para ler com segurança; marcar [A PREENCHER]
-  note: string;             // memória da leitura (campo usado / aviso anti-double-count)
 }
 interface CanonicalFacts {
   cpfs: Map<string, string>;       // valor -> arquivo de origem
@@ -554,63 +556,76 @@ function parseBrlNumber(v: string): number {
   return Number((v || "").replace(/\./g, "").replace(",", "."));
 }
 
-// Mudança calculo 1B — leitura DETERMINÍSTICA do total da planilha de indébito.
-// Estratégia: (i) usar o valor adjacente a um rótulo de total (INDÉBITO / TOTAL A
-// RESTITUIR / VALOR A RESTITUIR / TOTAL EM DOBRO / TOTAL PAGO); (ii) anti-double-count:
-// se a soma de TODAS as células for muito maior que o rótulo, confiar no rótulo;
-// (iii) se a estrutura for ambígua (texto garbled), NÃO somar — marcar ambíguo.
+// TRAVA do indébito — leitura DETERMINÍSTICA por RÓTULO. SEMPRE devolve valor lido
+// OU status="ambiguo" (nunca um chute, nunca a soma das células). Conservadora:
+// só retorna "lido" quando há uma leitura inequívoca; qualquer dúvida vira ambíguo.
 function analyzePlanilhaIndebito(caseDocs: CaseDoc[]): PlanilhaIndebito | null {
   const labelRe = /(total\s+em\s+dobro|ind[eé]bito|valor\s+a\s+restituir|total\s+a\s+restituir|total\s+pago)\D{0,40}?(\d{1,3}(?:\.\d{3})*,\d{2})/gi;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   for (const d of caseDocs) {
     const raw = d.raw || "";
     if (!raw) continue;
     const lower = raw.toLowerCase();
     const byName = isPlanilhaIndebito(d.file_name);
-    const hasLabels = /ind[eé]bito|a\s+restituir|total\s+em\s+dobro/.test(lower);
+    const hasLabels = /ind[eé]bito|a\s+restituir|total\s+em\s+dobro|total\s+pago/.test(lower);
     if (!byName && !hasLabels) continue;
 
-    const labeled: { label: string; raw: string; num: number }[] = [];
+    const ambiguo = (evidencia: string): PlanilhaIndebito => ({
+      indebito: null, dobro: null, status: "ambiguo",
+      origem: `planilha ${d.file_name}`, evidencia, sourceFile: d.file_name,
+    });
+
+    const labeled: { label: string; num: number }[] = [];
     for (const mt of raw.matchAll(labelRe)) {
       const num = parseBrlNumber(mt[2]);
-      if (!Number.isNaN(num)) labeled.push({ label: mt[1].toLowerCase(), raw: mt[2], num });
+      if (!Number.isNaN(num) && num > 0) labeled.push({ label: mt[1].toLowerCase(), num });
     }
-    const allCells: number[] = [];
-    for (const mt of raw.matchAll(/(\d{1,3}(?:\.\d{3})*,\d{2})/g)) {
-      const n = parseBrlNumber(mt[1]);
-      if (!Number.isNaN(n)) allCells.push(n);
+    if (!labeled.length) {
+      return ambiguo("nenhum rótulo de total legível na planilha (texto provavelmente corrompido na extração do PDF) — conferir o total diretamente na planilha original.");
     }
 
-    const pick = (re: RegExp) => labeled.filter((v) => re.test(v.label)).sort((a, b) => b.num - a.num)[0];
-    const dobro = pick(/dobro/);
-    const indeb = pick(/ind[eé]bito|restituir/);
-    let total: string | null = null, emDobro: string | null = null, note = "";
-
-    if (dobro) {
-      emDobro = dobro.raw;
-      total = indeb ? indeb.raw : null;
-      note = `campo 'total em dobro' da planilha = R$ ${dobro.raw}` + (indeb ? `; indébito simples = R$ ${indeb.raw}` : "");
-    } else if (indeb) {
-      total = indeb.raw;
-      note = `campo indébito/restituir da planilha = R$ ${indeb.raw}`;
-    } else if (labeled.length) {
-      const best = [...labeled].sort((a, b) => b.num - a.num)[0];
-      total = best.raw;
-      note = `maior valor rotulado (${best.label}) = R$ ${best.raw}`;
+    // (1) Rótulo explícito de DOBRO é o sinal mais forte: o valor JÁ é o dobro.
+    const dobroVals = labeled.filter((v) => /dobro/.test(v.label)).map((v) => v.num).sort((a, b) => b - a);
+    if (dobroVals.length) {
+      const dobro = dobroVals[0];
+      const indebito = round2(dobro / 2);
+      return {
+        indebito, dobro, status: "lido",
+        origem: `campo TOTAL EM DOBRO da planilha ${d.file_name}`,
+        evidencia: `total em dobro lido = ${brl(dobro)}; indébito simples = dobro / 2 = ${brl(indebito)}`,
+        sourceFile: d.file_name,
+      };
     }
 
-    if (total || emDobro) {
-      const ref = parseBrlNumber((emDobro || total) as string);
-      const sumAll = allCells.reduce((a, b) => a + b, 0);
-      if (ref > 0 && sumAll > ref * 1.5) {
-        note += `. ATENÇÃO: a soma de TODAS as células (${brl(sumAll)}) é bem maior que o total rotulado — a planilha mistura mensais, subtotais e total; USE o valor rotulado, NÃO some as células.`;
+    // (2) Armadilha do dobro: se dois valores rotulados estão em relação 2× e não há
+    // rótulo "em dobro" para desempatar, NÃO dá para saber qual é o simples → ambíguo
+    // (não arriscar dobrar um valor que já pode ser o dobro).
+    const nums = [...new Set(labeled.map((v) => v.num))];
+    for (const x of nums) {
+      for (const y of nums) {
+        if (x !== y && Math.abs(x - 2 * y) < 0.02) {
+          return ambiguo(`a planilha traz valores rotulados em relação de dobro (${brl(y)} e ${brl(x)}) sem um campo 'TOTAL EM DOBRO' explícito — não dá para decidir com segurança qual é o indébito simples; conferir manualmente.`);
+        }
       }
-      return { sourceFile: d.file_name, total, emDobro, ambiguous: false, note };
     }
-    // Parece planilha mas sem rótulo de total legível (texto garbled): NÃO somar.
-    return {
-      sourceFile: d.file_name, total: null, emDobro: null, ambiguous: true,
-      note: "estrutura AMBÍGUA (texto da planilha ilegível ou sem rótulo de total claro) — NÃO somar as células; marcar [A PREENCHER: confirmar total da planilha de indébito] e conferir manualmente.",
-    };
+
+    // (3) Rótulos de indébito/restituir/total pago apontando UM único valor → lido.
+    const simplesNums = [...new Set(
+      labeled.filter((v) => /ind[eé]bito|restituir|total\s+pago/.test(v.label)).map((v) => v.num),
+    )];
+    if (simplesNums.length === 1) {
+      const indebito = simplesNums[0];
+      const dobro = round2(indebito * 2);
+      return {
+        indebito, dobro, status: "lido",
+        origem: `campo de total da planilha ${d.file_name}`,
+        evidencia: `total/indébito lido = ${brl(indebito)}; repetição em dobro = 2 × indébito = ${brl(dobro)}`,
+        sourceFile: d.file_name,
+      };
+    }
+
+    // (4) Mais de um valor de total rotulado, sem como decidir → ambíguo.
+    return ambiguo(`a planilha traz mais de um valor de total rotulado (${nums.map(brl).join(", ")}) sem campo único de indébito/total a restituir — conferir manualmente.`);
   }
   return null;
 }
@@ -684,12 +699,15 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   return facts;
 }
 
-// Formata a linha do indébito da planilha para os blocos (N3 e validador).
+// Formata a linha de INDÉBITO inequívoca para os blocos (N3 e validador). É a ÚNICA
+// fonte de indébito/dobro/valor da causa que o N3 pode usar.
 function formatIndebitoPlanilhaLine(p: PlanilhaIndebito): string {
-  if (p.ambiguous) return `INDÉBITO (planilha ${p.sourceFile}): ${p.note}`;
-  const dobroPart = p.emDobro ? ` [em dobro: R$ ${p.emDobro}]` : "";
-  const totPart = p.total ? `R$ ${p.total}` : "(ver nota)";
-  return `INDÉBITO (da planilha ${p.sourceFile}, fonte canônica — LER o total declarado, NÃO re-somar células): ${totPart}${dobroPart}. ${p.note}`;
+  if (p.status === "ambiguo") {
+    return "INDÉBITO: [A PREENCHER: total do indébito — a planilha de indébito anexada não pôde ser lida com segurança " +
+      `(${p.evidencia})]. NÃO estime este valor; carregue [A PREENCHER] no indébito, no dobro e no valor da causa.`;
+  }
+  return `INDÉBITO (fonte canônica, lido da planilha — USE EXATAMENTE ESTE VALOR): ${brl(p.indebito as number)}` +
+    ` | REPETIÇÃO EM DOBRO (calculada em código): ${brl(p.dobro as number)} | origem: ${p.origem}`;
 }
 
 // Monta o bloco DADOS CANÔNICOS. É pequeno por natureza; tem teto PRÓPRIO (não passa
@@ -803,6 +821,16 @@ function buildDraftingRules(): string {
     "qualifique-a REPRESENTADA/ASSISTIDA pelo representante legal (ex.: 'representada por seu pai FULANO, CPF ...'; art. 71 do CPC, " +
     "arts. 3º/4º do CC) — não a traga sozinha 'por seu advogado'. Se a identidade da parte não estiver clara nos documentos, " +
     "suspenda e peça confirmação em vez de inventar.\n" +
+    "\n⛔ TRAVA DO INDÉBITO (regra INVIOLÁVEL, acima de todas as demais): o indébito, a repetição em dobro e o valor da causa " +
+    "DEVEM usar EXCLUSIVAMENTE os valores da linha 'INDÉBITO (fonte canônica ...)' do bloco DADOS CANÔNICOS. É TERMINANTEMENTE " +
+    "PROIBIDO calcular, estimar, inferir, somar parcelas ou usar QUALQUER outro número como indébito ou como dobro. O dobro JÁ vem " +
+    "calculado nessa linha — NÃO multiplique nada você mesmo.\n" +
+    "- Se a linha canônica de INDÉBITO trouxer [A PREENCHER], a peça DEVE carregar [A PREENCHER] no indébito, no dobro E no valor " +
+    "da causa — NUNCA um número — e o checklist final DEVE sinalizar que a planilha de indébito precisa ser conferida manualmente.\n" +
+    "- O somatório das parcelas do contrato (ex.: R$ 6.261,75) é CUSTO DO CRÉDITO, JAMAIS o indébito — não use como indébito em " +
+    "hipótese alguma.\n" +
+    "- NÃO apresente nenhum valor monetário 'intermediário' (lucro do banco, diferença de juros, etc.) como se fosse o valor a " +
+    "restituir; o ÚNICO valor a restituir é o da linha canônica de INDÉBITO.\n" +
     "═══ FIM DAS REGRAS DE REDAÇÃO ═══\n";
 }
 
@@ -1020,7 +1048,11 @@ async function validateDraft(admin: SupabaseClient, validator: AgentRow, userMsg
       "\n- PREMISSA SEM LASTRO DOCUMENTAL: se o rascunho afirmar como FATO benefício previdenciário/INSS/consignado/aposentadoria/pensão, ou 'desconto em benefício', ou pedir ofício ao INSS para suspender consignação, MAS os documentos do caso mostram empréstimo PESSOAL/CCB com débito em conta (sem extrato de benefício do INSS), REPROVE: a NATUREZA da operação não bate com o documento (veja a linha NATUREZA DA OPERAÇÃO acima). Instrua a corrigir o enquadramento." +
       "\n- TESES CONTRADITÓRIAS: se o rascunho sustentar AO MESMO TEMPO a INEXISTÊNCIA/NULIDADE do contrato (negócio nulo, ausência de manifestação de vontade, Escada Ponteana, art. 104 CC) E a REVISÃO/abusividade do MESMO contrato (que pressupõe contrato VÁLIDO) como pedidos PRINCIPAIS simultâneos, REPROVE — são incompatíveis. Exija escolher UMA linha, ou estruturar a revisão como pedido SUBSIDIÁRIO explícito ao de inexistência." +
       "\n- INCAPAZ SEM REPRESENTAÇÃO: se algum documento indicar que a autora é MENOR de idade (data de nascimento que resulta em <18 anos) ou incapaz e a QUALIFICAÇÃO a trouxer SOZINHA ('por seu advogado') sem representação pelo representante legal (ex.: 'representada por seu pai FULANO, CPF...'; art. 71 do CPC, arts. 3º/4º do CC), REPROVE. (Se o especialista SUSPENDEU a redação pedindo confirmação factual da identidade da parte, isso NÃO é vício — é o correto; não reprove por isso.)" +
-      "\n- INDÉBITO x PLANILHA: se houver planilha de indébito e o valor do indébito na peça divergir de forma relevante (sobretudo para MAIOR) do total declarado na planilha (veja a linha INDÉBITO acima), REPROVE pedindo conferência — é provável re-soma indevida da tabela (somar mensais + subtotais + total)." +
+      "\n- INDÉBITO TRAVADO (compare com a linha 'INDÉBITO' do bloco DADOS CANÔNICOS acima): (i) se a linha canônica trouxer um VALOR, " +
+      "REPROVE se o indébito, o dobro ou o valor da causa citados na peça DIVERGIREM desse valor canônico — o dobro deve ser EXATAMENTE " +
+      "2× o indébito canônico. (ii) Se a linha canônica for [A PREENCHER], REPROVE se a peça cravar QUALQUER número de indébito/dobro/" +
+      "valor da causa em vez de manter [A PREENCHER]. (iii) REPROVE se a peça usar o somatório das parcelas do contrato (custo do crédito) " +
+      "como indébito, ou apresentar valor 'intermediário' (lucro do banco, diferença de juros) como valor a restituir." +
       "\n\nANTI-PÊNDULO (não reprovar por falso positivo): só reprove por defeito VERIFICÁVEL contra os documentos que você tem. [A PREENCHER: ...] e dado-padrão do escritório NÃO são vício. NÃO re-roteie peça já vinda do especialista certo. Se a peça estiver coerente e completa com pendências apenas em [A PREENCHER], APROVE. Ao reprovar, liste cada vício com a localização e a correção objetiva."
     : "";
   const sys = (validator.system_prompt || "Voce e um validador.") +
