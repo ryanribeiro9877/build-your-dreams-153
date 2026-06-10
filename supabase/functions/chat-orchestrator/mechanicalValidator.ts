@@ -728,17 +728,78 @@ function checkDataAnteriorContrato(text: string, fixedFacts: string | null | und
 
 // ─── orquestração do validador ───────────────────────────────────────────────
 
+// V25.3 (Item 1): recorta a peça ao CORPO, removendo as seções de checklist —
+// tanto o "CHECKLIST DE PENDÊNCIAS" do N3 quanto o "_CHECKLIST DO VALIDADOR
+// MECÂNICO_" anexado por uma rodada anterior. O validador NÃO pode ler os
+// próprios checklists nem o do N3: senão acusa frases como "Súmula 13 do STJ
+// removida" ou um período de parcelas descrito no checklist (ACHADO 1 do run
+// 9a5483a5 — violações auto-infligidas). Corta no PRIMEIRO marcador; o fecho e
+// a assinatura vêm ANTES do checklist, então permanecem no corpo.
+export function stripChecklists(peca: string): string {
+  if (!peca) return peca;
+  const f = fold(peca);
+  const markers = ["checklist de pendencias", "checklist do validador"];
+  let cut = -1;
+  for (const mk of markers) {
+    const idx = f.indexOf(mk);
+    if (idx >= 0 && (cut < 0 || idx < cut)) cut = idx;
+  }
+  if (cut < 0) return peca;
+  const lineStart = peca.lastIndexOf("\n", cut);
+  const head = peca.slice(0, lineStart < 0 ? cut : lineStart);
+  // remove o separador "---" e linhas em branco que antecediam o checklist
+  return head.replace(/\n*\s*-{3,}\s*$/, "").trimEnd();
+}
+
 export function runMechanicalValidator(peca: string, ctx: MechContext = {}): MechViolation[] {
   if (!peca || !peca.trim()) return [];
+  const corpo = stripChecklists(peca); // V25.3: todos os checks varrem só o corpo
   const out: MechViolation[] = [];
-  out.push(...checkNumeralExtenso(peca));            // Check 1
-  out.push(...checkInvariantesEscritorio(peca));     // Check 2
-  out.push(...checkSinteseVsCorpo(peca));            // Check 3
-  out.push(...checkLexicoProibido(peca, ctx.acaoTipo)); // Check 4
-  out.push(...checkCalcConsistency(ctx.fixedFacts)); // Check 5
-  out.push(...checkSumulas(peca));                   // Check 6
-  out.push(...checkDataAnteriorContrato(peca, ctx.fixedFacts)); // Check 7 (V25.2)
+  out.push(...checkNumeralExtenso(corpo));            // Check 1
+  out.push(...checkInvariantesEscritorio(corpo));     // Check 2
+  out.push(...checkSinteseVsCorpo(corpo));            // Check 3
+  out.push(...checkLexicoProibido(corpo, ctx.acaoTipo)); // Check 4
+  out.push(...checkCalcConsistency(ctx.fixedFacts));  // Check 5 (usa fixedFacts)
+  out.push(...checkSumulas(corpo));                   // Check 6
+  out.push(...checkDataAnteriorContrato(corpo, ctx.fixedFacts)); // Check 7
   return out;
+}
+
+// V25.3 (Item 3): reconcilia o CALC_JSON emitido pelo N3 no bloco 1.
+// - Ancora o indébito no valor CANÔNICO da planilha quando disponível
+//   (canonicalIndebitoCentavos) — corrige o fator-10 do run 9a5483a5
+//   (693270 = R$ 6.932,70 em vez de 69327 = R$ 693,27).
+// - Sem canônico, impõe coerência: indébito = parcelas × valor_mensal.
+// - Deriva parcelas = round(indébito / valor_mensal) (a contagem exata na
+//   vigência fica para a conferência humana).
+// - SEMPRE recalcula dobro (2×indébito) e valor_causa (dobro + danos), nunca
+//   copiando os valores do LLM. Unidade preservada em centavos.
+export function reconcileCalcJson(fixedFacts: string, canonicalIndebitoCentavos: number | null): string {
+  if (!fixedFacts) return fixedFacts;
+  const m = fixedFacts.match(/CALC_JSON\s*:?\s*(\{[\s\S]*?\})/);
+  if (!m || m.index === undefined) return fixedFacts;
+  let calc: Record<string, unknown>;
+  try { calc = JSON.parse(m[1]); } catch { return fixedFacts; }
+  const intOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v)) ? Math.round(v) : null;
+  const vm = intOrNull(calc.valor_mensal);
+  const danos = intOrNull(calc.danos_morais);
+  let parcelas = intOrNull(calc.parcelas_computadas);
+  let ind = intOrNull(calc.indebito_total);
+
+  if (canonicalIndebitoCentavos !== null && Number.isFinite(canonicalIndebitoCentavos)) {
+    ind = Math.round(canonicalIndebitoCentavos);           // âncora canônica (corrige escala)
+  } else if (parcelas !== null && vm !== null) {
+    ind = parcelas * vm;                                    // coerência count × mensal
+  }
+  if (ind !== null && vm !== null && vm > 0) parcelas = Math.round(ind / vm);
+  const dobro = ind !== null ? 2 * ind : intOrNull(calc.dobro);
+  const valorCausa = dobro !== null ? dobro + (danos ?? 0) : intOrNull(calc.valor_causa);
+
+  const reconciled = {
+    parcelas_computadas: parcelas, valor_mensal: vm, indebito_total: ind,
+    dobro, danos_morais: danos, valor_causa: valorCausa,
+  };
+  return fixedFacts.slice(0, m.index) + "CALC_JSON: " + JSON.stringify(reconciled) + fixedFacts.slice(m.index + m[0].length);
 }
 
 // Feedback objetivo para devolver ao N3 (loop de correção existente).

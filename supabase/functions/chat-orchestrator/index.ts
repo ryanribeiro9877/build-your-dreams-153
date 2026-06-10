@@ -24,7 +24,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import {
   MechViolation, runMechanicalValidator, regenerateSintese,
   formatViolationsFeedback, formatWarningsChecklist,
-  extractTitlesForAudit, violationKey,
+  extractTitlesForAudit, violationKey, stripChecklists, reconcileCalcJson,
 } from "./mechanicalValidator.ts";
 
 const ALLOWED_ORIGINS = [
@@ -1328,9 +1328,8 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // Bloco ESTÁVEL (cacheável) — IDÊNTICO entre os blocos → cache hit nos blocos 2-5.
       // O bloco DADOS CANÔNICOS (verbatim, teto próprio) vem ACIMA dos resumos e
       // prevalece sobre eles para qualquer dado de identidade/número.
-      const canonicalBlock = caseDocs.length > 0
-        ? buildCanonicalFactsBlock(extractCanonicalFacts(caseDocs))
-        : "";
+      const canonFacts = caseDocs.length > 0 ? extractCanonicalFacts(caseDocs) : null;
+      const canonicalBlock = canonFacts ? buildCanonicalFactsBlock(canonFacts) : "";
       const stableSystem = (n3.system_prompt || "") +
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
@@ -1361,7 +1360,11 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // os 5 blocos. Depois volta a validating_n2 (revalida mecanicamente).
       if (segment && run.feedback && run.draft) {
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (violações do validador mecânico)...`, "executing_n3", n3);
-        const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${run.feedback}\n\n═══ PEÇA ATUAL ═══\n${run.draft}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
+        // V25.3 (Item 2): remove qualquer checklist (do N3 ou do validador)
+        // antes de devolver a peça ao N3 — evita empilhar checklists entre
+        // rodadas e o N3 reescreve o seu ao final.
+        const pecaAtual = stripChecklists(run.draft);
+        const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${run.feedback}\n\n═══ PEÇA ATUAL ═══\n${pecaAtual}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
         const corrMaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
         const t0 = Date.now();
         const r = await callWithRetry(userMessage, corrMaxTokens, LLM_N3_TIMEOUT_MS);
@@ -1440,6 +1443,14 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         const ext = extractFixedFacts(blockText);   // separa os dados canônicos do texto da peça
         blockText = ext.body;
         fixedFacts = ext.facts ?? fixedFacts;
+        // V25.3 (Item 3): reconcilia o CALC_JSON do bloco 1 ancorando o indébito
+        // no valor canônico da planilha (TRAVA) e recalculando dobro/valor_causa.
+        if (fixedFacts) {
+          const p = canonFacts?.indebitoPlanilha;
+          const canonIndCent = p && p.status === "lido" && typeof p.indebito === "number"
+            ? Math.round(p.indebito * 100) : null;
+          fixedFacts = reconcileCalcJson(fixedFacts, canonIndCent);
+        }
       }
       blockText = sanitizeBlockText(blockText);      // CAMADA 2: remove costura que tenha vazado
       blocksAcc[blockIdx] = blockText;
@@ -1504,7 +1515,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         const round: Record<string, unknown> = {
           at: new Date().toISOString(), iteration: iter, acao_tipo: run.acao_tipo ?? null,
           errors: errors.length, warnings: warnings.length,
-          titles_extracted: extractTitlesForAudit(run.draft), // V25.1 (Item 2c)
+          titles_extracted: extractTitlesForAudit(stripChecklists(run.draft)), // V25.1/V25.3
           violations: violations.slice(0, 40),
           ...(earlyStop ? { early_stop: earlyStop } : {}),
         };
