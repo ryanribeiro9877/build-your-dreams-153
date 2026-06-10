@@ -584,28 +584,145 @@ function checkCalcConsistency(fixedFacts: string | null | undefined): MechViolat
   return out;
 }
 
-// ─── Check 6: súmulas fora do catálogo ───────────────────────────────────────
+// ─── Check 6: súmulas fora do catálogo (POR TRIBUNAL) ─────────────────────────
 
-const SUMULAS_PERMITIDAS = new Set([43, 54, 297, 362, 382, 479, 596]); // STJ 43,54,297,362,382,479; STF 596
+// V25.2 (Item 1): catálogo de pares (tribunal:numero). Um número solto é
+// ambíguo — só é válido COM o tribunal (Súmula 13 é do TJBA; Súmula 530 é do
+// STJ). Os enunciados literais constam do prompt do agente; aqui só autorizamos
+// a CITAÇÃO do par tribunal+número.
+const SUMULAS_CATALOGO = new Set([
+  "stj:43", "stj:54", "stj:297", "stj:362", "stj:382", "stj:479", "stj:530",
+  "stf:596",
+  "tjba:13",
+]);
+const SUMULAS_CATALOGO_LABEL = "STJ 43,54,297,362,382,479,530; STF 596; TJBA 13";
+
+// Resolve o nome do tribunal que segue a citação (texto já vem folded: lower,
+// sem acento). Vazio = não identificado.
+function normTribunal(raw: string): string {
+  if (/tjba|tribunal de justica da bahia|tj\s*-?\s*ba\b/.test(raw)) return "tjba";
+  if (/stf|supremo/.test(raw)) return "stf";
+  if (/stj|superior tribunal de justica/.test(raw)) return "stj";
+  return "";
+}
 
 function checkSumulas(text: string): MechViolation[] {
   const out: MechViolation[] = [];
   const f = fold(text);
-  const re = /sumula\s+(?:n[o.º°]?\s*\.?\s*)?(\d{1,4})/g;
+  // Captura o número e, opcionalmente, o tribunal que o segue (até ~40 chars).
+  const re = /sumula\s+(?:n[o.º°]?\s*\.?\s*)?(\d{1,4})(\s+(?:do|da|de|dos|das)\s+[a-z. ]{2,40})?/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(f)) !== null) {
     const n = Number(m[1]);
-    if (SUMULAS_PERMITIDAS.has(n)) continue;
+    // Ausência de tribunal → STJ por padrão (default histórico), mas o par
+    // resultante ainda precisa estar no catálogo.
+    const trib = normTribunal(m[2] || "") || "stj";
+    if (SUMULAS_CATALOGO.has(`${trib}:${n}`)) continue;
     // Exceção: ocorrência dentro de um marcador [CONFERIR ...] não viola.
     const back = f.slice(Math.max(0, m.index - 200), m.index);
     const conf = back.lastIndexOf("[conferir");
     if (conf >= 0 && !back.slice(conf).includes("]")) continue;
     out.push({
       code: "SUMULA_FORA_CATALOGO", severity: "error",
-      excerpt: excerptAt(text, Math.max(0, m.index - 30), m.index + m[0].length + 60),
-      hint: `Súmula ${n} está FORA do catálogo permitido (STJ 43, 54, 297, 362, 382, 479; STF 596). Remova a citação ou substitua por súmula do catálogo com enunciado correto.`,
+      excerpt: excerptAt(text, Math.max(0, m.index - 30), m.index + m[0].length + 30),
+      hint: `Súmula ${n} do ${trib.toUpperCase()} está FORA do catálogo permitido (${SUMULAS_CATALOGO_LABEL}). Remova a citação ou substitua por súmula do catálogo com enunciado correto.`,
     });
   }
+  return out;
+}
+
+// ─── Check 7: coerência de datas vs início do contrato (V25.2 Item 2) ─────────
+// Pega a alucinação de período do Haiku (ex.: "descontos de janeiro a março de
+// 2025, anterior ao início do contrato em 05/09/2025"). Warning, não bloqueia.
+
+const MESES_PT: Record<string, number> = {
+  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+};
+
+interface YMD { ord: number; day: number | null; } // ord = ano*12 + (mes-1)
+function ymd(year: number, month: number, day: number | null): YMD | null {
+  if (year < 1900 || year > 2200 || month < 1 || month > 12) return null;
+  if (day !== null && (day < 1 || day > 31)) return null;
+  return { ord: year * 12 + (month - 1), day };
+}
+// Anterior ESTRITO. Sem dia para desempatar no mesmo mês → não considera anterior.
+function isBeforeYMD(a: YMD, b: YMD): boolean {
+  if (a.ord !== b.ord) return a.ord < b.ord;
+  if (a.day !== null && b.day !== null) return a.day < b.day;
+  return false;
+}
+function fmtYMD(d: YMD): string {
+  const year = Math.floor(d.ord / 12);
+  const mm = String((d.ord % 12) + 1).padStart(2, "0");
+  return d.day !== null ? `${String(d.day).padStart(2, "0")}/${mm}/${year}` : `${mm}/${year}`;
+}
+
+// Primeira data (numérica DD/MM/AAAA ou extenso "DD de mês de AAAA"/"mês de AAAA")
+// num segmento já folded.
+function parseDateInSegment(seg: string): YMD | null {
+  let m = seg.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return ymd(+m[3], +m[2], +m[1]);
+  m = seg.match(/(?:(\d{1,2})\s+de\s+)?([a-z]+)\s+de\s+(\d{4})/);
+  if (m && MESES_PT[m[2]] !== undefined) return ymd(+m[3], MESES_PT[m[2]], m[1] ? +m[1] : null);
+  return null;
+}
+
+// Início do contrato: 1º do fixedFacts (data de início/vigência), senão do corpo.
+function findContractStart(f: string, ff: string): YMD | null {
+  const re = /(inicio|vigencia|firmad[oa]|celebrad[oa]|iniciad[oa]|contratad[oa]|data de contrata)/g;
+  for (const src of [ff, f]) {
+    if (!src) continue;
+    re.lastIndex = 0;
+    let mm: RegExpExecArray | null;
+    while ((mm = re.exec(src)) !== null) {
+      const d = parseDateInSegment(src.slice(mm.index, mm.index + 70));
+      if (d) return d;
+    }
+  }
+  return null;
+}
+
+function checkDataAnteriorContrato(text: string, fixedFacts: string | null | undefined): MechViolation[] {
+  const f = fold(text);
+  const ff = fixedFacts ? fold(fixedFacts) : "";
+  const contractStart = findContractStart(f, ff);
+  if (!contractStart) return []; // tolerância: sem referência, não roda
+  const out: MechViolation[] = [];
+  const DESC = /(desconto|parcela|indebito|planilha)/;
+  const JURIS = /(resp|agint|aresp|recurso especial|sumula|tribunal|\bstj\b|\bstf\b|tjba|cnj|\d{7}-\d{2}\.\d{4})/;
+  const seenLines = new Set<number>(); // 1 warning por linha
+  const emit = (idx: number, d: YMD | null) => {
+    if (!d || !isBeforeYMD(d, contractStart)) return;
+    const lineStart = f.lastIndexOf("\n", idx) + 1;
+    if (seenLines.has(lineStart)) return;
+    const win = f.slice(Math.max(0, idx - 120), Math.min(f.length, idx + 120));
+    if (!DESC.test(win)) return; // só janelas de desconto/parcela/indébito/planilha
+    if (JURIS.test(f.slice(Math.max(0, idx - 50), idx + 50))) return; // pula jurisprudência/fecho
+    seenLines.add(lineStart);
+    const winStart = Math.max(0, idx - 100), winEnd = Math.min(text.length, idx + 100);
+    out.push({
+      code: "DATA_ANTERIOR_AO_CONTRATO", severity: "warning",
+      excerpt: excerptAt(text, winStart, winEnd, 140),
+      hint: `Há menção a desconto/parcela/indébito em data anterior ao início do contrato (referência: ${fmtYMD(contractStart)}). Lançamentos anteriores ao início do contrato não pertencem a ele — confira o cruzamento de vigência e o período do indébito.`,
+    });
+  };
+  // Período "mês a mês de AAAA" (usa o mês inicial do intervalo).
+  let m: RegExpExecArray | null;
+  const rePeriodo = /([a-z]+)\s+a\s+([a-z]+)\s+de\s+(\d{4})/g;
+  while ((m = rePeriodo.exec(f)) !== null) {
+    const mes1 = MESES_PT[m[1]];
+    if (mes1 !== undefined) emit(m.index, ymd(+m[3], mes1, null));
+  }
+  // Extenso "DD de mês de AAAA" ou "mês de AAAA".
+  const reExt = /(?:(\d{1,2})\s+de\s+)?([a-z]+)\s+de\s+(\d{4})/g;
+  while ((m = reExt.exec(f)) !== null) {
+    const mes = MESES_PT[m[2]];
+    if (mes !== undefined) emit(m.index, ymd(+m[3], mes, m[1] ? +m[1] : null));
+  }
+  // Numérico DD/MM/AAAA.
+  const reNum = /(\d{1,2})\/(\d{1,2})\/(\d{4})/g;
+  while ((m = reNum.exec(f)) !== null) emit(m.index, ymd(+m[3], +m[2], +m[1]));
   return out;
 }
 
@@ -620,6 +737,7 @@ export function runMechanicalValidator(peca: string, ctx: MechContext = {}): Mec
   out.push(...checkLexicoProibido(peca, ctx.acaoTipo)); // Check 4
   out.push(...checkCalcConsistency(ctx.fixedFacts)); // Check 5
   out.push(...checkSumulas(peca));                   // Check 6
+  out.push(...checkDataAnteriorContrato(peca, ctx.fixedFacts)); // Check 7 (V25.2)
   return out;
 }
 
