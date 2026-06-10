@@ -1,6 +1,10 @@
 // supabase/functions/chat-orchestrator/index.ts
 //
-// Orquestrador multi-agente N1->N2->N3 (JurisAI / Patch V23).
+// Orquestrador multi-agente N1->N2->N3 (JurisAI / Patch V25).
+//
+// V25: validador MECÂNICO pós-N3 (mechanicalValidator.ts — checks determinísticos
+// em código, loop de correção até 2 rodadas), síntese regenerada mecanicamente,
+// sanity de idade no Canal A e classificação/roteamento por acao_tipo.
 //
 // Dois modos:
 //   - START (chamado pelo frontend com JWT): valida, insere a user message,
@@ -17,6 +21,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  MechViolation, runMechanicalValidator, regenerateSintese,
+  formatViolationsFeedback, formatWarningsChecklist,
+} from "./mechanicalValidator.ts";
 
 const ALLOWED_ORIGINS = [
   Deno.env.get("ALLOWED_ORIGIN") || "https://build-your-dreams-153.vercel.app",
@@ -453,15 +461,26 @@ async function loadCaseDocuments(admin: SupabaseClient, sessionId: string): Prom
 
 // Canal B — MODELOS DE REFERÊNCIA: document_library vinculado ao agente, com texto.
 // Ordena por relevância (palavras-chave presentes na mensagem) e limita a 2.
-async function loadModelDocuments(admin: SupabaseClient, agentId: string, userMsg: string): Promise<DocPiece[]> {
+// V25: se o run tem acao_tipo classificado E existe modelo daquele tipo, filtra
+// por ele; senão mantém o comportamento atual e devolve um warning para o run
+// (raiz dos resíduos de fraude na revisional de 10/06).
+async function loadModelDocuments(
+  admin: SupabaseClient, agentId: string, userMsg: string, acaoTipo?: string | null,
+): Promise<{ docs: DocPiece[]; acaoTipoWarning: string | null }> {
   const { data: links } = await admin.from("agent_document_links").select("document_id").eq("agent_id", agentId);
   const ids = (((links as { document_id: string }[]) || []).map((l) => l.document_id));
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return { docs: [], acaoTipoWarning: null };
   const { data } = await admin.from("document_library")
-    .select("file_name, doc_type, categoria, reu_categoria, match_keywords, content_cache, sort_order")
+    .select("file_name, doc_type, categoria, reu_categoria, match_keywords, content_cache, sort_order, acao_tipo")
     .in("id", ids).eq("is_active", true).not("content_cache", "is", null);
-  const rows = (((data as Record<string, unknown>[]) || [])
+  let rows = (((data as Record<string, unknown>[]) || [])
     .filter((r) => typeof r.content_cache === "string" && (r.content_cache as string).trim().length > 0));
+  let acaoTipoWarning: string | null = null;
+  if (acaoTipo) {
+    const matching = rows.filter((r) => (r.acao_tipo as string | null) === acaoTipo);
+    if (matching.length > 0) rows = matching;
+    else if (rows.length > 0) acaoTipoWarning = `sem modelo para acao_tipo ${acaoTipo} — usando seleção padrão por keywords`;
+  }
   const msg = (userMsg || "").toLowerCase();
   const scored = rows.map((r) => {
     const kws = (r.match_keywords as string[]) || [];
@@ -469,10 +488,11 @@ async function loadModelDocuments(admin: SupabaseClient, agentId: string, userMs
     return { r, score };
   });
   scored.sort((a, b) => (b.score - a.score) || (((a.r.sort_order as number) ?? 0) - ((b.r.sort_order as number) ?? 0)));
-  return scored.slice(0, 2).map(({ r }) => ({
+  const docs = scored.slice(0, 2).map(({ r }) => ({
     file_name: r.file_name as string, text: r.content_cache as string,
     doc_type: r.doc_type as string | null, categoria: r.categoria as string | null,
   }));
+  return { docs, acaoTipoWarning };
 }
 
 // Bloco DOCUMENTOS DO CASO: injeta os RESUMOS ESTRUTURADOS (não o texto cru), com
@@ -543,6 +563,42 @@ interface CanonicalFacts {
   valores: CanonicalValue[];
   indebitoPlanilha: PlanilhaIndebito | null;
   naturezaOperacao: string | null; // sinais de CCB/pessoal vs consignado/INSS nos documentos
+  idadeFlag: string | null;        // V25 FRENTE 2: idade implausível (<18 ou >100) detectada em código
+}
+
+// ─── V25 FRENTE 2: sanity de idade no Canal A (código, sem LLM) ──────────────
+// Detecta data de nascimento nos textos CRUS e calcula a idade na data corrente
+// (a data do contrato raramente é identificável com segurança em código). Idade
+// <18 ou >100 → flag textual destacada nos dados canônicos do bloco 1; o run
+// NÃO é bloqueado — o prompt do N3 sabe o que fazer com a flag.
+function parseDateBr(s: string): Date | null {
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+  if (d < 1 || d > 31 || mo < 1 || mo > 12 || y < 1850 || y > 2200) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+function buildIdadeFlag(caseDocs: CaseDoc[]): string | null {
+  const nascRe = /(?:data\s+de\s+nascimento|nascimento|nascid[oa]\s+em)\D{0,20}?(\d{1,2}\/\d{1,2}\/\d{4})/gi;
+  for (const d of caseDocs) {
+    const raw = d.raw || "";
+    if (!raw) continue;
+    for (const mt of raw.matchAll(nascRe)) {
+      const nasc = parseDateBr(mt[1]);
+      if (!nasc) continue;
+      const ref = new Date();
+      let idade = ref.getUTCFullYear() - nasc.getUTCFullYear();
+      const dm = ref.getUTCMonth() - nasc.getUTCMonth();
+      if (dm < 0 || (dm === 0 && ref.getUTCDate() < nasc.getUTCDate())) idade--;
+      if (idade < 18 || idade > 100) {
+        return `ATENÇÃO: idade implausível para tomador (${idade} anos; data de nascimento lida: ${mt[1]}, em ${d.file_name}). ` +
+          "Causa provável: data de EMISSÃO do RG lida como data de nascimento. Tratar a data como não confirmada " +
+          "([A PREENCHER]) e NÃO construir teses de menoridade/representação.";
+      }
+    }
+  }
+  return null;
 }
 
 // Planilha de indébito: o total declarado nela é a fonte CANÔNICA do indébito (não o
@@ -671,7 +727,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   const facts: CanonicalFacts = {
     cpfs: new Map(), cnpjs: new Map(), rgs: new Map(), contratos: new Map(),
     beneficios: new Map(), nomes: new Map(), datas: new Map(), valores: [],
-    indebitoPlanilha: null, naturezaOperacao: null,
+    indebitoPlanilha: null, naturezaOperacao: null, idadeFlag: null,
   };
   const CAP = 60; // teto por lista (evita bloat em históricos com centenas de datas)
   const addOnce = (m: Map<string, string>, key: string | undefined, file: string) => {
@@ -707,6 +763,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   // Interpretação determinística (não-LLM): total da planilha + natureza da operação.
   facts.indebitoPlanilha = analyzePlanilhaIndebito(caseDocs);
   facts.naturezaOperacao = inferOperationNature(caseDocs);
+  facts.idadeFlag = buildIdadeFlag(caseDocs); // V25 FRENTE 2
   return facts;
 }
 
@@ -726,12 +783,13 @@ function formatIndebitoPlanilhaLine(p: PlanilhaIndebito): string {
 function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   const hasAny = facts.cpfs.size || facts.cnpjs.size || facts.rgs.size || facts.contratos.size ||
     facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length ||
-    facts.indebitoPlanilha || facts.naturezaOperacao;
+    facts.indebitoPlanilha || facts.naturezaOperacao || facts.idadeFlag;
   if (!hasAny) return "";
   const fmtMap = (m: Map<string, string>) =>
     [...m.entries()].map(([v, f]) => `    • ${v}  (origem: ${f})`).join("\n");
   const lines: string[] = [];
-  // Interpretações de alto valor primeiro (natureza + total da planilha).
+  // Interpretações de alto valor primeiro (idade + natureza + total da planilha).
+  if (facts.idadeFlag) lines.push("  - " + facts.idadeFlag);
   if (facts.naturezaOperacao) lines.push("  - " + facts.naturezaOperacao);
   if (facts.indebitoPlanilha) lines.push("  - " + formatIndebitoPlanilhaLine(facts.indebitoPlanilha));
   if (facts.nomes.size) lines.push("  - Nome(s) da parte (candidatos — confira no texto):\n" + fmtMap(facts.nomes));
@@ -769,6 +827,7 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
 // indébito-vs-planilha não têm como rodar.
 function buildValidatorCanonicalHeader(facts: CanonicalFacts): string {
   const parts: string[] = [];
+  if (facts.idadeFlag) parts.push(facts.idadeFlag); // evita falso "incapaz sem representação" no N2
   if (facts.naturezaOperacao) parts.push(facts.naturezaOperacao);
   if (facts.indebitoPlanilha) parts.push(formatIndebitoPlanilhaLine(facts.indebitoPlanilha));
   if (facts.cpfs.size) parts.push("CPF(s) nos documentos: " + [...facts.cpfs.keys()].join(", "));
@@ -867,7 +926,11 @@ const N3_BLOCKS: BlockSpec[] = [
       "Ao FINAL da resposta, acrescente um bloco técnico delimitado EXATAMENTE por " + FATOS_INI + " e " + FATOS_FIM +
       " contendo, em texto curto, os DADOS CANÔNICOS para os próximos blocos usarem sem reinventar: nome e CPF da autora, " +
       "nº do contrato fraudulento, réu, comarca/foro, benefício/matrícula, total descontado (ou [A PREENCHER]), e a lista " +
-      "de marcadores [A PREENCHER] já decididos. Esse bloco técnico NÃO faz parte da peça.",
+      "de marcadores [A PREENCHER] já decididos. Dentro desse bloco técnico, inclua TAMBÉM uma linha iniciada por " +
+      "CALC_JSON: seguida de JSON estrito com os números do cálculo EM CENTAVOS (inteiros), usando null para o que não " +
+      "existir/não estiver confirmado: {\"parcelas_computadas\": <int|null>, \"valor_mensal\": <centavos|null>, " +
+      "\"indebito_total\": <centavos|null>, \"dobro\": <centavos|null>, \"danos_morais\": <centavos|null>, " +
+      "\"valor_causa\": <centavos|null>}. Esse bloco técnico NÃO faz parte da peça.",
   },
   {
     label: "fundamentação III.1–III.3",
@@ -1039,6 +1102,45 @@ async function chooseAgent(admin: SupabaseClient, router: AgentRow, userMsg: str
   }
 }
 
+// ─── V25 FRENTE 4: classificação do tipo de ação no passo do Diretor (N2) ────
+// O Diretor, além de escolher o N3, classifica o acao_tipo do pedido (saída
+// estruturada). O tipo é persistido no run (auditoria do roteamento), filtra a
+// injeção de modelos da document_library e alimenta o Check 4 do validador
+// mecânico (léxico proibido por tipo de ação).
+const ACAO_TIPOS = ["fraude_inexistencia", "revisional_juros", "rmc_rcc", "portabilidade", "seguro_atrelado", "outro"];
+const ACAO_TIPO_RULES = `
+CLASSIFICAÇÃO DO TIPO DE AÇÃO (acao_tipo) — escolha exatamente UM:
+- "fraude_inexistencia": contrato NÃO reconhecido pela parte; fraude; inexistência de relação jurídica/contrato.
+- "revisional_juros": contrato VÁLIDO e reconhecido; pedido de revisão de juros/encargos abusivos.
+- "rmc_rcc": reserva de margem consignável / cartão de crédito consignado (RMC/RCC).
+- "portabilidade": portabilidade de empréstimo consignado.
+- "seguro_atrelado": seguro embutido/venda casada em contrato de crédito.
+- "outro": qualquer outro caso (ou quando a solicitação não é confecção de peça).`;
+
+async function chooseSpecialistAndAcaoTipo(
+  admin: SupabaseClient, router: AgentRow, userMsg: string, candidates: AgentRow[], intentRules: string,
+): Promise<{ agent: AgentRow; acaoTipo: string | null }> {
+  if (candidates.length === 0) throw new Error("Sem sub-agentes para delegar");
+  const list = candidates.map((c) => `- id:${c.id} | ${c.name} | ${c.description || c.system_prompt?.slice(0, 120) || c.role}`).join("\n");
+  const sys = (router.system_prompt || "Voce e um roteador.") +
+    "\n\n" + intentRules + "\n" + ACAO_TIPO_RULES +
+    "\n\nEscolha QUAL agente da lista deve receber esta solicitacao E classifique o tipo de ação. " +
+    `Responda APENAS JSON: {"agent_id":"<uuid>","acao_tipo":"<um de: ${ACAO_TIPOS.join("|")}>"}.`;
+  try {
+    const r = await callLLM(admin, {
+      model: router.model || "gpt-4o-mini", systemPrompt: sys, history: [],
+      userMessage: `Solicitacao do usuario:\n${userMsg}\n\nAgentes disponiveis:\n${list}`,
+      temperature: 0, top_p: null, maxTokens: 150, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
+    });
+    const parsed = JSON.parse(r.content) as { agent_id?: string; acao_tipo?: string };
+    const found = candidates.find((c) => c.id === parsed.agent_id);
+    const acaoTipo = ACAO_TIPOS.includes(parsed.acao_tipo || "") ? (parsed.acao_tipo as string) : null;
+    return { agent: found || candidates[0], acaoTipo };
+  } catch {
+    return { agent: candidates[0], acaoTipo: null };
+  }
+}
+
 // LLM validador avalia o draft; retorna { approved, feedback }.
 // Se caseContext for fornecido, o validador também faz o controle anti-alucinação
 // (reprova se o rascunho inventou dados da parte ou usou o nome do advogado).
@@ -1189,9 +1291,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       if (specialists.length === 0) return await fail("Nenhum especialista disponivel");
       // Aplica exclusividades de réu (Agiproteg/Agibank/Facta → sócio)
       specialists = await applyExclusivities(admin, run.original_message, specialists);
-      const n3 = await chooseAgent(admin, router, run.original_message, specialists, ROUTING_INTENT_RULES);
+      // V25: o Diretor escolhe o N3 E classifica o acao_tipo (persistido no run).
+      const { agent: n3, acaoTipo } = await chooseSpecialistAndAcaoTipo(admin, router, run.original_message, specialists, ROUTING_INTENT_RULES);
       await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, "executing_n3", n3);
-      await upd({ status: "executing_n3", target_n3_id: n3.id, chain: [...(run.chain || []), { level: 3, agent: n3.name }] });
+      await upd({
+        status: "executing_n3", target_n3_id: n3.id, acao_tipo: acaoTipo,
+        chain: [...(run.chain || []), { level: 3, agent: n3.name, ...(acaoTipo ? { acao_tipo: acaoTipo } : {}) }],
+      });
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "executing_n3") {
@@ -1208,7 +1314,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} analisando os documentos do caso...`, "executing_n3", n3);
         await ensureAllCaseSummaries(admin, caseDocs);
       }
-      const modelDocs = await loadModelDocuments(admin, n3.id, run.original_message);
+      // V25: injeção de modelos filtrada pelo acao_tipo classificado no Diretor.
+      const { docs: modelDocs, acaoTipoWarning } = await loadModelDocuments(admin, n3.id, run.original_message, run.acao_tipo ?? null);
+      if (acaoTipoWarning) console.warn(`[modelos] run=${runId}: ${acaoTipoWarning}`);
       const histLimit = n1.history_limit ?? n3.history_limit ?? 10;
       const summary = await loadSessionSummary(admin, run.session_id);
       const history = await loadSessionHistory(admin, run.session_id, histLimit, run.user_message_id);
@@ -1246,6 +1354,31 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         catch (e) { console.warn(`[N3] retry após erro: ${(e as Error)?.message}`); return await callOnce(userMessage, maxTokens, timeoutMs); }
       };
 
+      // ── V25: modo CORREÇÃO (retorno do validador mecânico) ──
+      // A peça completa já existe (run.draft) e o validador devolveu violações
+      // objetivas (run.feedback). UMA chamada corrige a peça inteira — não refaz
+      // os 5 blocos. Depois volta a validating_n2 (revalida mecanicamente).
+      if (segment && run.feedback && run.draft) {
+        await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (violações do validador mecânico)...`, "executing_n3", n3);
+        const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${run.feedback}\n\n═══ PEÇA ATUAL ═══\n${run.draft}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
+        const corrMaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
+        const t0 = Date.now();
+        const r = await callWithRetry(userMessage, corrMaxTokens, LLM_N3_TIMEOUT_MS);
+        const durationMs = Date.now() - t0;
+        const corrected = regenerateSintese(sanitizeBlockText(r.content));
+        const prevU = (run.n3_usage as { input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
+        const usage = {
+          model: r.rawModel,
+          input_tokens: (prevU.input_tokens || 0) + r.inputTokens,
+          output_tokens: (prevU.output_tokens || 0) + r.outputTokens,
+          duration_ms: (prevU.duration_ms || 0) + durationMs,
+        };
+        console.log(`[N3-correcao] out=${r.outputTokens}tok dur=${durationMs}ms chars=${corrected.length}`);
+        await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu a correção. Em revisao...`, "validating_n2", n3);
+        await upd({ status: "validating_n2", draft: corrected, feedback: null, n3_usage: usage });
+        return fireNextStep(runId, supabaseUrl, serviceKey);
+      }
+
       if (!segment) {
         // ── Modo CHAMADA ÚNICA (agentes de resposta curta) ──
         const corr = run.feedback ? `\n\nINSTRUCOES DE CORRECAO:\n${run.feedback}\n\nReescreva atendendo a essas correcoes.` : "";
@@ -1271,7 +1404,11 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           }).eq("id", streamMsgId);
         }
         console.log(`[N3-single] model=${r.rawModel} out=${r.outputTokens}tok dur=${durationMs}ms chars=${r.content.length}`);
-        const ctxNote = { level: 3, agent: n3.name, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
+        const ctxNote = {
+          level: 3, agent: n3.name,
+          used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) },
+          ...(acaoTipoWarning ? { model_warning: acaoTipoWarning } : {}),
+        };
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
         await upd({ status: "validating_n2", draft: r.content, feedback: null, n3_usage: usage, chain: [...(run.chain || []), ctxNote] });
         return fireNextStep(runId, supabaseUrl, serviceKey);
@@ -1319,16 +1456,59 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         await upd({ blocks: blocksAcc, block_index: nextIdx, fixed_facts: fixedFacts, n3_usage: usage });
         return fireNextStep(runId, supabaseUrl, serviceKey); // próximo bloco (nova invocação)
       }
-      // Último bloco: CONCATENA os blocos num documento único.
-      const full = blocksAcc.filter(Boolean).join("\n\n");
-      const ctxNote = { level: 3, agent: n3.name, blocks: N3_BLOCKS.length, used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) } };
+      // Último bloco: CONCATENA os blocos num documento único e REGENERA a
+      // SÍNTESE DA INICIAL a partir dos títulos REAIS do corpo (V25 FRENTE 3 —
+      // pós-processamento mecânico; o Check 3 vira rede de segurança).
+      const full = regenerateSintese(blocksAcc.filter(Boolean).join("\n\n"));
+      const ctxNote = {
+        level: 3, agent: n3.name, blocks: N3_BLOCKS.length,
+        used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) },
+        ...(acaoTipoWarning ? { model_warning: acaoTipoWarning } : {}),
+      };
       await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu a peça (${N3_BLOCKS.length} blocos). Em revisao...`, "validating_n2", n3);
       await upd({ status: "validating_n2", draft: full, feedback: null, blocks: blocksAcc, block_index: nextIdx, fixed_facts: fixedFacts, n3_usage: usage, chain: [...(run.chain || []), ctxNote] });
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n2") {
-      // VALIDAÇÃO CONSULTIVA (decisão do usuário): valida 1x; se houver ressalva, anexa
-      // um aviso [REVISAR] ao final e FINALIZA — não regenera (evita refazer 5 blocos).
+      // ── V25 FRENTE 1: validador MECÂNICO pós-N3 (código, sem LLM) ──
+      // Roda sobre a peça CONCATENADA do Caminho B ANTES do validador LLM (N2).
+      // Violações "error" devolvem ao N3 com feedback objetivo (até MAX_ITERATIONS
+      // rodadas de correção); "warning" não bloqueia — entra no checklist final.
+      // Resultado auditado em orchestration_runs.mech_report (jsonb).
+      const isCaminhoB = Array.isArray(run.blocks) && run.blocks.filter(Boolean).length > 0;
+      let mechPending: MechViolation[] = [];
+      let mechReportPatch: Record<string, unknown> = {};
+      if (isCaminhoB && run.draft) {
+        const violations = runMechanicalValidator(run.draft, {
+          acaoTipo: run.acao_tipo ?? null, fixedFacts: run.fixed_facts ?? null,
+        });
+        const errors = violations.filter((v) => v.severity === "error");
+        const warnings = violations.filter((v) => v.severity === "warning");
+        const iter = run.iterations ?? 0;
+        const round = {
+          at: new Date().toISOString(), iteration: iter, acao_tipo: run.acao_tipo ?? null,
+          errors: errors.length, warnings: warnings.length, violations: violations.slice(0, 40),
+        };
+        const history = [...(((run.mech_report as { history?: unknown[] } | null)?.history) || []), round].slice(-5);
+        console.log(`[mech] run=${runId} iter=${iter} errors=${errors.length} warnings=${warnings.length}`);
+        if (errors.length > 0 && iter < MAX_ITERATIONS) {
+          await insertStage(admin, run.session_id, run.user_id,
+            `Validador mecânico encontrou ${errors.length} violação(ões). Devolvendo ao especialista para correção (rodada ${iter + 1}/${MAX_ITERATIONS})...`,
+            "executing_n3");
+          await upd({
+            status: "executing_n3", feedback: formatViolationsFeedback(errors),
+            iterations: iter + 1, mech_report: { iterations: iter + 1, history },
+          });
+          return fireNextStep(runId, supabaseUrl, serviceKey);
+        }
+        // Sem erros (ou teto de rodadas atingido): segue ao N2. Warnings — e erros
+        // remanescentes, se o teto foi atingido — entram no checklist final.
+        mechPending = errors.length > 0 ? violations : warnings;
+        mechReportPatch = { mech_report: { iterations: iter, history } };
+      }
+      // VALIDAÇÃO CONSULTIVA do N2 (LLM) — recebe a peça JÁ aprovada nos checks
+      // mecânicos: valida 1x; se houver ressalva, anexa um aviso [REVISAR] ao
+      // final e FINALIZA — não regenera (evita refazer 5 blocos).
       const n2 = run.target_n2_id ? await loadAgent(admin, run.target_n2_id) : n1;
       const caseDocs = await loadCaseDocuments(admin, run.session_id);
       // Prepende o cabeçalho canônico (natureza da operação + total da planilha) ao
@@ -1342,7 +1522,8 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       if (!verdict.approved && verdict.feedback) {
         draft += `\n\n---\n_[REVISAR — observações do validador: ${verdict.feedback}]_`;
       }
-      await upd({ status: "validating_n1", draft });
+      if (mechPending.length > 0) draft += formatWarningsChecklist(mechPending);
+      await upd({ status: "validating_n1", draft, ...mechReportPatch });
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n1") {
