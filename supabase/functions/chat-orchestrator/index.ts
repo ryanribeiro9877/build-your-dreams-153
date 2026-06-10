@@ -24,6 +24,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import {
   MechViolation, runMechanicalValidator, regenerateSintese,
   formatViolationsFeedback, formatWarningsChecklist,
+  extractTitlesForAudit, violationKey,
 } from "./mechanicalValidator.ts";
 
 const ALLOWED_ORIGINS = [
@@ -1485,13 +1486,32 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         const errors = violations.filter((v) => v.severity === "error");
         const warnings = violations.filter((v) => v.severity === "warning");
         const iter = run.iterations ?? 0;
-        const round = {
+        const prevHistory = (((run.mech_report as { history?: any[] } | null)?.history) || []);
+        const prevRound = prevHistory[prevHistory.length - 1] as { violations?: { code: string; excerpt: string }[] } | undefined;
+
+        // V25.1 (Item 3): curto-circuito de deadlock. Se o conjunto de erros
+        // atual é IGUAL ou SUBCONJUNTO do da rodada anterior, uma nova chamada
+        // de correção (~20k tokens) não vai resolver — encerra o loop e despeja
+        // os remanescentes como [REVISAR] no checklist.
+        let earlyStop: string | null = null;
+        if (errors.length > 0 && prevRound?.violations?.length) {
+          const prevKeys = new Set(prevRound.violations.map((v) => violationKey(v)));
+          if (errors.every((v) => prevKeys.has(violationKey(v)))) {
+            earlyStop = "violacoes_identicas_a_rodada_anterior";
+          }
+        }
+
+        const round: Record<string, unknown> = {
           at: new Date().toISOString(), iteration: iter, acao_tipo: run.acao_tipo ?? null,
-          errors: errors.length, warnings: warnings.length, violations: violations.slice(0, 40),
+          errors: errors.length, warnings: warnings.length,
+          titles_extracted: extractTitlesForAudit(run.draft), // V25.1 (Item 2c)
+          violations: violations.slice(0, 40),
+          ...(earlyStop ? { early_stop: earlyStop } : {}),
         };
-        const history = [...(((run.mech_report as { history?: unknown[] } | null)?.history) || []), round].slice(-5);
-        console.log(`[mech] run=${runId} iter=${iter} errors=${errors.length} warnings=${warnings.length}`);
-        if (errors.length > 0 && iter < MAX_ITERATIONS) {
+        const history = [...prevHistory, round].slice(-5);
+        console.log(`[mech] run=${runId} iter=${iter} errors=${errors.length} warnings=${warnings.length}${earlyStop ? " EARLY_STOP" : ""}`);
+
+        if (errors.length > 0 && iter < MAX_ITERATIONS && !earlyStop) {
           await insertStage(admin, run.session_id, run.user_id,
             `Validador mecânico encontrou ${errors.length} violação(ões). Devolvendo ao especialista para correção (rodada ${iter + 1}/${MAX_ITERATIONS})...`,
             "executing_n3");
@@ -1501,10 +1521,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           });
           return fireNextStep(runId, supabaseUrl, serviceKey);
         }
-        // Sem erros (ou teto de rodadas atingido): segue ao N2. Warnings — e erros
-        // remanescentes, se o teto foi atingido — entram no checklist final.
+        // Sem erros, teto de rodadas atingido, ou deadlock detectado: segue ao
+        // N2. Warnings — e erros remanescentes — entram no checklist final.
         mechPending = errors.length > 0 ? violations : warnings;
-        mechReportPatch = { mech_report: { iterations: iter, history } };
+        mechReportPatch = { mech_report: { iterations: iter, history, ...(earlyStop ? { early_stop: earlyStop } : {}) } };
       }
       // VALIDAÇÃO CONSULTIVA do N2 (LLM) — recebe a peça JÁ aprovada nos checks
       // mecânicos: valida 1x; se houver ressalva, anexa um aviso [REVISAR] ao

@@ -57,6 +57,13 @@ function excerptAt(text: string, start: number, end: number, max = 120): string 
     .replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+// Chave de identidade de uma violação (code + excerpt normalizado). Usada para
+// detectar deadlock no loop de correção (rodadas com violações idênticas).
+export function violationKey(v: { code: string; excerpt: string }): string {
+  return v.code + "|" + (v.excerpt || "").normalize("NFD").replace(COMBINING_RE, "")
+    .toUpperCase().replace(/\s+/g, " ").trim();
+}
+
 // ─── Check 1: numeral × extenso ──────────────────────────────────────────────
 
 // "1.386,54" -> centavos (pt-BR: ponto = milhar, vírgula = decimal). null se não parsear.
@@ -152,7 +159,17 @@ interface TitleLine { num: string; text: string; lineIdx: number; charStart: num
 
 // Linha de título: numeração romana (com subnível .n opcional), separador
 // (— – - . : ) ou apenas espaço, como na síntese "I Preliminares"), texto.
-const TITLE_RE = /^\s*[-•]?\s*([IVXLC]{1,5}(?:\.\d{1,2})*)(?:\s*[—–\-.:)]+\s*|\s+)(.+?)\s*$/;
+// V25.1: tolera prefixo markdown (#, ##, ###, **, >, bullets) e markdown ao
+// final (** de bold, # de heading) — o N3 às vezes emite títulos como
+// "**III.1 — DA ...**" ou "## III — DO DIREITO". Sem isso o título escapa do
+// extrator, a síntese é regenerada sem ele E o Check 3 compara o resultado
+// quebrado consigo mesmo (um bug, dois sintomas — run real 25adb4a6).
+const TITLE_RE = /^[\s>#*•\-]*([IVXLC]{1,5}(?:\.\d{1,2})*)(?:\s*[—–\-.:)]+\s*|\s+)(.+?)[\s*#]*$/;
+
+// Remove ornamentos markdown (**, #) do texto capturado e colapsa espaços.
+function cleanTitleText(s: string): string {
+  return (s || "").replace(/\*+/g, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim();
+}
 
 function isUpperDominant(s: string): boolean {
   const letters = s.replace(/[^A-Za-zÀ-ÿ]/g, "");
@@ -162,12 +179,16 @@ function isUpperDominant(s: string): boolean {
   return upper / letters.length >= 0.7;
 }
 
-// Título de SEÇÃO do corpo: curto, sem pontuação final de frase, em caixa alta
-// dominante OU começando com "Da/Do/Das/Dos/De" (evita capturar itens de pedido
-// longos tipo "I. CONDENAR o réu ... ;").
+// Título de SEÇÃO do corpo: em caixa alta dominante OU começando com
+// "Da/Do/Das/Dos/De", sem terminar em marcador de item de lista (; ,).
+// V25.1: o cap de comprimento subiu de 90 → 200. Títulos legítimos de seção
+// são multi-cláusula e longos (ex.: "III.1 — DA APLICAÇÃO DO CÓDIGO DE DEFESA
+// DO CONSUMIDOR. RELAÇÃO DE CONSUMO. RESPONSABILIDADE OBJETIVA DO RÉU", ~99
+// chars) — o cap de 90 os descartava silenciosamente. A discriminação contra
+// itens de pedido ("I) CONDENAR ... ;") já vem de isUpperDominant + fim em ; ,.
 function isBodyTitle(num: string, text: string): boolean {
-  if (text.length > 90) return false;
-  if (/[;,.]$/.test(text.trim())) return false;
+  if (text.length > 200) return false;
+  if (/[;,]$/.test(text.trim())) return false;
   return isUpperDominant(text) || /^d[aoe]s?\s/i.test(text);
 }
 
@@ -215,7 +236,7 @@ function analyzeSintese(text: string): SinteseLayout {
       const numKey = m[1].toUpperCase();
       if (seen.has(numKey)) break; // numeração repetiu → começo do corpo
       seen.add(numKey);
-      layout.items.push({ num: numKey, text: m[2], lineIdx: i, charStart: starts[i], charEnd: starts[i] + line.length });
+      layout.items.push({ num: numKey, text: cleanTitleText(m[2]), lineIdx: i, charStart: starts[i], charEnd: starts[i] + line.length });
       lastWasTitle = i;
     }
     layout.itemsEndLine = i;
@@ -235,8 +256,9 @@ function analyzeSintese(text: string): SinteseLayout {
   for (let i = corpoStartLine; i < lines.length; i++) {
     const m = lines[i].match(TITLE_RE);
     if (!m) continue;
-    if (!isBodyTitle(m[1], m[2])) continue;
-    layout.corpoTitles.push({ num: m[1].toUpperCase(), text: m[2], lineIdx: i, charStart: starts[i], charEnd: starts[i] + lines[i].length });
+    const text = cleanTitleText(m[2]);
+    if (!isBodyTitle(m[1], text)) continue;
+    layout.corpoTitles.push({ num: m[1].toUpperCase(), text, lineIdx: i, charStart: starts[i], charEnd: starts[i] + lines[i].length });
   }
   return layout;
 }
@@ -253,6 +275,18 @@ export function regenerateSintese(text: string): string {
   const before = lines.slice(0, layout.itemsStartLine);
   const after = lines.slice(Math.max(layout.itemsEndLine, layout.itemsStartLine));
   return [...before, "", ...itemLines, ""].join("\n") + (after.length ? "\n" + after.join("\n") : "");
+}
+
+// V25.1 (Item 2c): auditoria do extrator — expõe os títulos que o validador
+// enxergou na síntese e no corpo. Gravado em mech_report a cada rodada; sem
+// isso, um bug do extrator (síntese regenerada == corpo extraído) fica
+// invisível, pois o Check 3 compara o resultado quebrado consigo mesmo.
+export function extractTitlesForAudit(text: string): { sintese: string[]; corpo: string[] } {
+  const layout = analyzeSintese(text);
+  return {
+    sintese: layout.items.map((t) => `${t.num} ${t.text}`),
+    corpo: layout.corpoTitles.map((t) => `${t.num} ${t.text}`),
+  };
 }
 
 // ─── Check 3: síntese × corpo + tese duplicada ───────────────────────────────
@@ -423,22 +457,77 @@ const FORBIDDEN_BY_TIPO: Record<string, string[]> = {
   fraude_inexistencia: ["acao revisional", "revisao da clausula de juros"],
 };
 
+// V25.1 (Item 1a): o Check 4 varre SOMENTE o corpo da petição — do primeiro
+// "EXCELENTÍSSIMO" (endereçamento) até antes de qualquer checklist/análise
+// anexada. A ANÁLISE PRÉ-REDAÇÃO (acima do endereçamento), o CHECKLIST DE
+// PENDÊNCIAS e o checklist do próprio validador ficam FORA — neles o termo
+// proibido aparece de forma legítima (o N3 DECLARA "revisional, não fraude").
+function corpoPeticaoRange(text: string): { start: number; end: number } {
+  const f = fold(text);
+  let start = f.indexOf("excelentissimo");
+  if (start < 0) start = 0;
+  let end = text.length;
+  // Corta em qualquer seção anexada após o corpo (checklist/análise).
+  for (const mk of ["checklist de pendencias", "checklist do validador", "analise pre-redacao", "analise pre redacao"]) {
+    const idx = f.indexOf(mk, start + 1);
+    if (idx > start && idx < end) end = idx;
+  }
+  return { start, end };
+}
+
+// V25.1 (Item 1b): padrões de negação. Uma ocorrência precedida (até 30 chars)
+// por um destes NÃO é violação ("não é fraude", "(não fraude)", "NÃO de fraude").
+const NEGATION_PATTERNS = ["nao e", "nao se trata de", "nao configura", "(nao", "nao de", "sem que haja"];
+
+// V25.1 (Item 1c): ocorrência dentro de aspas (", ", «») ou de bloco de citação
+// (linha iniciada por ">") é citação literal de norma/súmula — rebaixa de error
+// para warning (o termo pode constar legitimamente do texto citado).
+function isInsideQuoteOrCitation(text: string, idx: number): boolean {
+  const lineStart = text.lastIndexOf("\n", idx) + 1;
+  const lineEndRaw = text.indexOf("\n", idx);
+  const line = text.slice(lineStart, lineEndRaw < 0 ? text.length : lineEndRaw);
+  if (/^\s*>/.test(line)) return true; // bloco de citação markdown
+  // Aspas: examina o parágrafo do match e testa se o índice cai num par de aspas.
+  const paraStart = Math.max(text.lastIndexOf("\n\n", idx) + 2, 0);
+  const paraEndRaw = text.indexOf("\n\n", idx);
+  const para = text.slice(paraStart, paraEndRaw < 0 ? text.length : paraEndRaw);
+  const rel = idx - paraStart;
+  let open = -1;
+  for (let i = 0; i < para.length; i++) {
+    const ch = para[i];
+    if (ch === '"' || ch === "“" || ch === "”" || ch === "«" || ch === "»") {
+      if (open < 0) { open = i; }
+      else { if (rel > open && rel < i) return true; open = -1; }
+    }
+  }
+  return false;
+}
+
 function checkLexicoProibido(text: string, acaoTipo: string | null | undefined): MechViolation[] {
   const out: MechViolation[] = [];
   const terms = acaoTipo ? FORBIDDEN_BY_TIPO[acaoTipo] : null;
   if (!terms) return out;
-  const f = fold(text);
+  const { start, end } = corpoPeticaoRange(text);
+  const corpo = text.slice(start, end);
+  const f = fold(corpo);
   for (const term of terms) {
     let from = 0, hits = 0;
     while (hits < 5) { // teto por termo (evita inundar o feedback)
       const idx = f.indexOf(term, from);
       if (idx < 0) break;
-      hits++;
       from = idx + term.length;
+      // Negação (Item 1b): ignora a ocorrência por completo.
+      const before = f.slice(Math.max(0, idx - 30), idx);
+      if (NEGATION_PATTERNS.some((n) => before.includes(n))) continue;
+      hits++;
+      // Citação (Item 1c): rebaixa error → warning.
+      const inQuote = isInsideQuoteOrCitation(corpo, idx);
       out.push({
-        code: "LEXICO_PROIBIDO", severity: "error",
-        excerpt: excerptAt(text, Math.max(0, idx - 40), idx + term.length + 60),
-        hint: `O termo "${term}" é INCOMPATÍVEL com a ação do tipo "${acaoTipo}". Remova o trecho/tese e mantenha apenas a linha argumentativa correta para este tipo de ação.`,
+        code: "LEXICO_PROIBIDO", severity: inQuote ? "warning" : "error",
+        excerpt: excerptAt(corpo, Math.max(0, idx - 40), idx + term.length + 60),
+        hint: inQuote
+          ? `O termo "${term}" aparece em CITAÇÃO LITERAL no corpo. Confirme que a citação (norma/súmula) é pertinente à ação "${acaoTipo}"; se for tese própria, remova.`
+          : `O termo "${term}" é INCOMPATÍVEL com a ação do tipo "${acaoTipo}". Remova o trecho/tese e mantenha apenas a linha argumentativa correta para este tipo de ação.`,
       });
     }
   }
