@@ -8,6 +8,7 @@ import {
 import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "./types";
 import { getInitials, getCaseAreaChip, getTokenCost } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
+import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -170,19 +171,37 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
                   <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>
                 )}
                 {!isUser && msg.agent !== "Sistema" && cleanContent && looksLikePeticao(cleanContent) && (
-                  <button
-                    type="button"
-                    onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
-                    title="Baixar esta resposta em PDF"
-                    style={{
-                      marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
-                      background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
-                      color: "#EAB308", fontWeight: 600, alignSelf: "flex-start",
-                    }}
-                  >
-                    ⬇ Baixar em PDF
-                  </button>
+                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignSelf: "flex-start" }}>
+                    <button
+                      type="button"
+                      onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
+                      title="Baixar esta resposta em PDF"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
+                        background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
+                        color: "#EAB308", fontWeight: 600,
+                      }}
+                    >
+                      ⬇ Baixar em PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadMessageAsDocx(cleanContent, { title: "peca" })
+                          .catch((e) => console.error("[docx] falha ao exportar:", e));
+                      }}
+                      title="Baixar no padrão Bacellar (.docx com logo e marca d'água)"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
+                        background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)",
+                        color: "#60A5FA", fontWeight: 600,
+                      }}
+                    >
+                      ⬇ Baixar em DOCX (padrão Bacellar)
+                    </button>
+                  </div>
                 )}
               </>
             );
