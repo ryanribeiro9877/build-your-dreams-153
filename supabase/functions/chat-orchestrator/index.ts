@@ -659,6 +659,7 @@ interface CanonicalFacts {
   nomes: Map<string, string>;
   datas: Map<string, string>;
   valores: CanonicalValue[];
+  enderecos: CanonicalValue[];     // V25.7: trecho de endereço (verbatim, ancorado no CEP)
   indebitoPlanilha: PlanilhaIndebito | null;
   naturezaOperacao: string | null; // sinais de CCB/pessoal vs consignado/INSS nos documentos
   idadeFlag: string | null;        // V25 FRENTE 2: idade implausível (<18 ou >100) detectada em código
@@ -825,6 +826,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   const facts: CanonicalFacts = {
     cpfs: new Map(), cnpjs: new Map(), rgs: new Map(), contratos: new Map(),
     beneficios: new Map(), nomes: new Map(), datas: new Map(), valores: [],
+    enderecos: [],
     indebitoPlanilha: null, naturezaOperacao: null, idadeFlag: null,
   };
   const CAP = 60; // teto por lista (evita bloat em históricos com centenas de datas)
@@ -857,6 +859,16 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
       const nome = (mt[1] || "").replace(/\s{2,}/g, " ").trim().replace(/[.,;]+$/, "");
       if (nome && nome.split(/\s+/).length >= 2 && /^[A-ZÀ-Ý]/.test(nome)) addOnce(facts.nomes, nome, file);
     }
+    // V25.7: ENDEREÇO verbatim ancorado no CEP. Captura o trecho da linha que termina
+    // no CEP (logradouro/bairro, CIDADE, UF, CEP), para o N3 copiar cidade/UF EXATAS em
+    // vez de inferir/abreviar. Só captura o que casa literalmente — ausência != invenção.
+    for (const mt of raw.matchAll(/[^\n]{0,160}\bCEP\b[:\s]*\d{2}\.?\d{3}-?\d{3}/gi)) {
+      const seg = mt[0].replace(/\s+/g, " ").replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").trim();
+      if (seg.length >= 14 && facts.enderecos.length < 20 &&
+          !facts.enderecos.some((x) => x.value === seg && x.file === file)) {
+        facts.enderecos.push({ value: seg, file, fromPlanilha: false });
+      }
+    }
   }
   // Interpretação determinística (não-LLM): total da planilha + natureza da operação.
   facts.indebitoPlanilha = analyzePlanilhaIndebito(caseDocs);
@@ -881,6 +893,7 @@ function formatIndebitoPlanilhaLine(p: PlanilhaIndebito): string {
 function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   const hasAny = facts.cpfs.size || facts.cnpjs.size || facts.rgs.size || facts.contratos.size ||
     facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length ||
+    facts.enderecos.length ||
     facts.indebitoPlanilha || facts.naturezaOperacao || facts.idadeFlag;
   if (!hasAny) return "";
   const fmtMap = (m: Map<string, string>) =>
@@ -891,6 +904,14 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   if (facts.naturezaOperacao) lines.push("  - " + facts.naturezaOperacao);
   if (facts.indebitoPlanilha) lines.push("  - " + formatIndebitoPlanilhaLine(facts.indebitoPlanilha));
   if (facts.nomes.size) lines.push("  - Nome(s) da parte (candidatos — confira no texto):\n" + fmtMap(facts.nomes));
+  if (facts.enderecos.length) {
+    lines.push(
+      "  - Endereço(s) da parte (VERBATIM dos documentos — use a CIDADE e a UF EXATAS daqui; " +
+      "corrija apenas caixa e separador para o formato 'Cidade – UF, CEP NN.NNN-NNN'; NUNCA troque a " +
+      "cidade ou a UF, NUNCA abrevie o nome da cidade, NUNCA deduza UF a partir do CEP):\n" +
+      facts.enderecos.map((e) => `    • ${e.value}  (origem: ${e.file})`).join("\n"),
+    );
+  }
   if (facts.cpfs.size) lines.push("  - CPF(s):\n" + fmtMap(facts.cpfs));
   if (facts.cnpjs.size) lines.push("  - CNPJ(s):\n" + fmtMap(facts.cnpjs));
   if (facts.rgs.size) lines.push("  - RG(s):\n" + fmtMap(facts.rgs));
@@ -911,13 +932,13 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   }
   const block = "\n\n═══ DADOS CANÔNICOS (extraídos LITERALMENTE dos documentos — FONTE SUPREMA) ═══\n" +
     "Estes valores foram lidos diretamente do texto dos documentos, SEM resumo. Para nome, CPF, CNPJ, RG, " +
-    "número de contrato, número de benefício, valores e datas da parte, use SOMENTE o que está aqui. " +
-    "Se um dado não estiver listado, escreva [A PREENCHER]. Os resumos abaixo servem para narrativa e teses, " +
-    "NÃO para sobrescrever estes números.\n" +
+    "número de contrato, número de benefício, valores, datas, ENDEREÇO/CIDADE/UF/CEP da parte, use SOMENTE o que está " +
+    "aqui. Se um dado não estiver listado, escreva [A PREENCHER] — NUNCA invente, infira (ex.: UF a partir do CEP) ou " +
+    "abrevie. Os resumos abaixo servem para narrativa e teses, NÃO para sobrescrever estes dados.\n" +
     lines.join("\n") +
     "\n═══ FIM DOS DADOS CANÔNICOS ═══\n";
-  // Teto próprio (~1800 tokens) — independente do clamp de 16000 dos resumos.
-  return clampChars(block, 1800);
+  // Teto próprio (~2400 tokens) — independente do clamp dos resumos.
+  return clampChars(block, 2400);
 }
 
 // Cabeçalho canônico curto para o VALIDADOR — dá a ele a NATUREZA da operação e o
