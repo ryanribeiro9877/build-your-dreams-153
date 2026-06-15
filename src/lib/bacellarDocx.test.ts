@@ -168,6 +168,33 @@ describe("buildCorpoXml — correções V25.5 do classificador", () => {
   });
 });
 
+describe("buildCorpoXml — V25.6 marcador de lista na síntese", () => {
+  // subseção da síntese listada como item markdown ("- I.1 ...") deve virar caixa
+  it("'- I.1 - DA JUSTIÇA GRATUITA' vira CAIXA, sem o hífen literal", () => {
+    const xml = buildCorpoXml(`- I.1 - DA JUSTIÇA GRATUITA`);
+    expect(xml).toContain("<w:tbl>");                 // caixa de seção (regra 4)
+    expect(xml).toContain("I.1 - DA JUSTIÇA GRATUITA");
+    // hífen de lista não vaza: caixa não começa o texto com "- "
+    expect(xml).not.toContain('preserve">- I.1');
+  });
+
+  // regressão V25.5: item de pedido (letra+parêntese) não é afetado
+  it("pedido 'a) A concessão...' continua petitumItem (não caixa, sem alteração)", () => {
+    const xml = buildCorpoXml(`a) A concessão da gratuidade da justiça;`);
+    expect(xml).not.toContain("<w:tbl>");             // não virou caixa
+    expect(xml).toContain('<w:ind w:left="425" w:firstLine="0"/>'); // petitumItem
+    expect(xml).toContain("a) A concessão da gratuidade da justiça;");
+  });
+
+  // item de corpo legítimo com "-": permanece bodyPara, hífen preservado no render
+  it("'- Número do contrato: X' no corpo continua bodyPara com o hífen", () => {
+    const xml = buildCorpoXml(`- Número do contrato: 8348265`);
+    expect(xml).not.toContain("<w:tbl>");             // não virou caixa
+    expect(xml).toContain('w:firstLine="850"');       // bodyPara
+    expect(xml).toContain("- Número do contrato: 8348265"); // hífen preservado
+  });
+});
+
 describe("injectBodyIntoTemplate — template intacto", () => {
   const tplPath = resolve(__dirname, "../../public/templates/peticao_bacellar_template.docx");
   const tplBytes = readFileSync(tplPath);

@@ -51,13 +51,16 @@ function curlyQuotes(s: string): string {
   return s.replace(/"/g, () => { open = !open; return open ? "“" : "”"; });
 }
 // Remove markdown inline residual em QUALQUER posição da linha (não só nas
-// âncoras ^...$): blockquote ">", **bold**, __bold__, *itálico*. Usado para
-// CLASSIFICAR (a decisão de tipo nunca depende de markdown) e para os caminhos
-// de render que NÃO passam por inlineTokens (boxTitle/centerPara bold/citação),
-// onde o markdown vazaria literal. Não tocar no texto que vai para runsXml —
-// lá o ** vira <w:b/> e o bold inline legítimo precisa ser preservado.
+// âncoras ^...$): marcador de lista inicial ("- ", "* ", "1. "), blockquote ">",
+// **bold**, __bold__, *itálico*. Usado para CLASSIFICAR (a decisão de tipo nunca
+// depende de markdown) e para os caminhos de render que NÃO passam por
+// inlineTokens (boxTitle/centerPara bold/citação), onde o markdown vazaria
+// literal. Não tocar no texto que vai para runsXml — lá o ** vira <w:b/> e o bold
+// inline legítimo precisa ser preservado; itens de corpo com "-" seguem por
+// bodyPara via noHeading (sem esta limpeza), preservando o hífen no render.
 function stripInlineMd(t: string): string {
   return t
+    .replace(/^\s*(?:[-*+]|\d{1,2}[.)])\s+/, "")        // marcador de lista (- * + 1.)
     .replace(/^\s*>\s?/, "")                            // blockquote inicial
     .replace(/\*\*(.+?)\*\*/g, "$1")                     // **bold**
     .replace(/__(.+?)__/g, "$1")                         // __bold__
