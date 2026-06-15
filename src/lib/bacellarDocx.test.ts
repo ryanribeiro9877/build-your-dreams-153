@@ -132,6 +132,42 @@ describe("buildCorpoXml — classificação da peça inteira", () => {
   });
 });
 
+describe("buildCorpoXml — correções V25.5 do classificador", () => {
+  // (a) citação emitida como blockquote markdown pelo N3
+  it("citação iniciada por '>' vira citação recuada SEM o caractere '>'", () => {
+    const xml = buildCorpoXml(`> **Súmula 13 do TJBA**: "É possível a revisão dos contratos bancários."`);
+    expect(xml).toContain('w:left="2880"');   // recuo de citação (citationPara)
+    expect(xml).toContain("Súmula 13 do TJBA");
+    expect(xml).not.toContain("&gt;");          // nenhum '>' vazou (seria escapado p/ &gt;)
+    expect(xml).not.toContain("**");            // markdown bold não vazou
+    expect(xml).toContain("“");                // dispositivo entre aspas curvas
+  });
+
+  // (b) pedido "j)" vindo com bold parcial do N3 e contendo "OAB"
+  it("pedido '**j)** ...' vira item de lista alinhado, sem '**' e não centralizado/caixa", () => {
+    const xml = buildCorpoXml(
+      `a) Que seja deferida a JUSTIÇA GRATUITA;\n\n**j)** Que **TODAS AS INTIMAÇÕES** sejam feitas em nome do Dr. Rodrigo, OAB/BA nº 80.891;`,
+    );
+    expect(xml).not.toContain("**");                     // markdown não vazou
+    expect(xml).not.toContain("<w:tbl>");                // não virou caixa
+    expect(xml).not.toContain('<w:jc w:val="center"/>'); // não foi centralizado (regra OAB)
+    expect(xml).toContain('<w:jc w:val="both"/>');       // parágrafo de lista justificado
+    expect(xml).toContain("TODAS AS INTIMAÇÕES");        // rótulo preservado
+    expect(xml).toContain("<w:b/>");                     // bold inline do rótulo preservado
+  });
+
+  // (c) regressão: bold inline legítimo no corpo continua saindo em negrito
+  it("bold inline legítimo no corpo (**NOME**) é preservado, sem '**' literal", () => {
+    const xml = buildCorpoXml(
+      `**RAILLANY BASTOS NUNES**, pessoa física, brasileira, inscrita no CPF nº 084.822.105-21.`,
+    );
+    expect(xml).toContain("<w:b/>");
+    expect(xml).toContain("RAILLANY BASTOS NUNES");
+    expect(xml).not.toContain("**");
+    expect(xml).toContain('<w:highlight w:val="yellow"/>'); // CPF segue com highlight
+  });
+});
+
 describe("injectBodyIntoTemplate — template intacto", () => {
   const tplPath = resolve(__dirname, "../../public/templates/peticao_bacellar_template.docx");
   const tplBytes = readFileSync(tplPath);

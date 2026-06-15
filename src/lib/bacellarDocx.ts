@@ -50,6 +50,19 @@ function curlyQuotes(s: string): string {
   let open = false;
   return s.replace(/"/g, () => { open = !open; return open ? "“" : "”"; });
 }
+// Remove markdown inline residual em QUALQUER posição da linha (não só nas
+// âncoras ^...$): blockquote ">", **bold**, __bold__, *itálico*. Usado para
+// CLASSIFICAR (a decisão de tipo nunca depende de markdown) e para os caminhos
+// de render que NÃO passam por inlineTokens (boxTitle/centerPara bold/citação),
+// onde o markdown vazaria literal. Não tocar no texto que vai para runsXml —
+// lá o ** vira <w:b/> e o bold inline legítimo precisa ser preservado.
+function stripInlineMd(t: string): string {
+  return t
+    .replace(/^\s*>\s?/, "")                            // blockquote inicial
+    .replace(/\*\*(.+?)\*\*/g, "$1")                     // **bold**
+    .replace(/__(.+?)__/g, "$1")                         // __bold__
+    .replace(/(?<!\*)\*(?!\*)([^*]+)\*(?!\*)/g, "$1");   // *itálico* (não toca **)
+}
 function isCapsDominant(s: string): boolean {
   const letters = s.replace(/[^A-Za-zÀ-ÿ]/g, "");
   if (letters.length < 3) return false;
@@ -109,7 +122,10 @@ export function boxTitle(text: string): string {
     `<w:p><w:pPr><w:jc w:val="center"/><w:rPr>${CAMBRIA}<w:b/></w:rPr></w:pPr>` +
     `<w:r><w:rPr>${CAMBRIA}<w:b/></w:rPr><w:t xml:space="preserve">${t}</w:t></w:r></w:p>` +
     `</w:tc></w:tr></w:tbl>` +
-    `<w:p><w:pPr><w:rPr>${CAMBRIA}</w:rPr></w:pPr></w:p>`
+    // Word exige um parágrafo após a tabela; um pequeno before/after dá respiro
+    // uniforme entre a caixa e o conteúdo seguinte (transições caixa→fecho e na
+    // sequência de caixas da SÍNTESE DA INICIAL).
+    `<w:p><w:pPr><w:spacing w:before="120" w:after="60"/><w:rPr>${CAMBRIA}</w:rPr></w:pPr></w:p>`
   );
 }
 
@@ -154,6 +170,19 @@ export function citationPara(text: string): string {
   );
 }
 
+// Item de pedido ("a)", "b)" … "j)"): parágrafo de lista justificado, com recuo
+// pequeno à esquerda e SEM recuo de 1ª linha. Passa por runsXml para preservar
+// o bold inline dos rótulos (ex.: "JUSTIÇA GRATUITA") e nunca virar caixa nem
+// linha centralizada (mesmo quando contém "OAB").
+export function petitumItem(text: string): string {
+  return (
+    `<w:p><w:pPr><w:spacing w:line="276" w:lineRule="auto"/>` +
+    `<w:ind w:left="425" w:firstLine="0"/><w:jc w:val="both"/>` +
+    `<w:rPr>${CAMBRIA}</w:rPr></w:pPr>` +
+    runsXml(text) + `</w:p>`
+  );
+}
+
 // ─── limpeza: descarta pré-análise e checklists (não fazem parte da peça) ─────
 function stripNonPeca(content: string): string {
   let t = (content || "").replace(/\r\n/g, "\n");
@@ -183,8 +212,12 @@ export function buildCorpoXml(content: string): string {
     const line = raw.replace(/\t/g, " ").trim();
     if (!line) continue;
     if (/^[-*_]{3,}$/.test(line)) continue; // separador
-    // versão sem heading markdown / bold envolvente, para classificar
-    const cls = line.replace(/^#{1,6}\s*/, "").replace(/^\*\*(.+?)\*\*$/, "$1").replace(/^\*(.+?)\*$/, "$1").trim();
+    // texto sem heading markdown (base de render p/ caminhos via inlineTokens) e
+    // versão totalmente limpa de markdown inline para CLASSIFICAR. O blockquote
+    // é detectado ANTES da limpeza, pois stripInlineMd remove o ">".
+    const noHeading = line.replace(/^#{1,6}\s*/, "");
+    const isBlockquote = /^\s*>/.test(noHeading);
+    const cls = stripInlineMd(noHeading).trim();
     const noAccent = fold(cls);
 
     // 1. Endereçamento (centralizado, bold)
@@ -196,22 +229,26 @@ export function buildCorpoXml(content: string): string {
     // 4. Caixa: título de seção (numeração romana I, II, III.1, IV.2…)
     const sec = cls.match(/^([IVXLC]{1,5}(?:\.\d{1,2})*)\s*[—–.\-:)]+\s*(.+)$/);
     if (sec && isCapsDominant(sec[2])) { blocks.push(boxTitle(cls)); continue; }
-    // 5. Citação de artigo/lei (recuada)
-    if (/^(art\.?|artigo|§|paragrafo|par[áa]grafo)\b/.test(noAccent) || /^["“]/.test(cls)) { blocks.push(citationPara(cls)); continue; }
+    // 5. Citação de artigo/lei (recuada) — inclui blockquote ">" do N3
+    if (isBlockquote || /^(art\.?|artigo|§|paragrafo|par[áa]grafo)\b/.test(noAccent) || /^["“]/.test(cls)) { blocks.push(citationPara(cls)); continue; }
     // 6. Fecho
-    if (/nestes termos|pede deferimento/.test(noAccent)) { blocks.push(centerPara(cls)); continue; }
+    if (/nestes termos|pede deferimento/.test(noAccent)) { blocks.push(centerPara(noHeading)); continue; }
     // 7. Linha de local/data do fecho (centralizada; data pode ter highlight)
     if (/^[A-Za-zÀ-ÿ.\s]{3,40},?\s*(?:ba|\/ba|-\s*ba)\b/i.test(cls) || /\[A PREENCHER:[^\]]*data/i.test(cls)) {
-      blocks.push(centerPara(cls)); continue;
+      blocks.push(centerPara(noHeading)); continue;
     }
-    // 8. Assinatura (OAB ou nome do advogado em CAPS)
+    // 8. Item de pedido ("a)" … "j)") → parágrafo de lista. ANTES da regra de
+    //    assinatura (OAB) e da de nome-em-caps, senão "j) … OAB/BA …" viraria
+    //    assinatura centralizada. Usa noHeading p/ preservar bold inline.
+    if (/^[a-z]\)\s/i.test(cls)) { blocks.push(petitumItem(noHeading)); continue; }
+    // 9. Assinatura (OAB ou nome do advogado em CAPS)
     if (/oab\s*\/?\s*ba|\boab\b/.test(noAccent)) { blocks.push(centerPara(cls, { bold: true })); continue; }
     if (isCapsDominant(cls) && cls.split(/\s+/).length >= 2 && cls.length <= 60 && !/[.:;,]$/.test(cls)) {
       blocks.push(centerPara(cls, { bold: true })); continue;
     }
-    // 9. Parágrafo de corpo (qualificação → nomes em bold ganham highlight)
+    // 10. Parágrafo de corpo (qualificação → nomes em bold ganham highlight)
     const qual = /pessoa f[ií]sica|brasileir|inscrit[oa]\s+no\s+cpf|portador|inscrit[oa]\s+no\s+cnpj|com sede/.test(noAccent);
-    blocks.push(bodyPara(line.replace(/^#{1,6}\s*/, ""), { qual }));
+    blocks.push(bodyPara(noHeading, { qual }));
   }
   return blocks.join("");
 }
