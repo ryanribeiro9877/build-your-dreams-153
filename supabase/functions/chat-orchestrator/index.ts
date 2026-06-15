@@ -1083,7 +1083,17 @@ const BLOCK_CLEAN_RULE =
   "nada de 'CONTINUAÇÃO DA PETIÇÃO INICIAL', 'Bloco X/5', 'Continuação na próxima resposta', 'continuação direta " +
   "do texto já redigido', nem qualquer cabeçalho de bloco. NÃO inclua seções de 'SINALIZAÇÕES AO ADVOGADO' por bloco " +
   "— as pendências vão SOMENTE no CHECKLIST consolidado ao final da peça (último bloco), com o título 'CHECKLIST DE " +
-  "PENDÊNCIAS'. NÃO use glifos/emojis decorativos (ex.: '& þ'). Comece DIRETO no conteúdo da seção.";
+  "PENDÊNCIAS'. NÃO use glifos/emojis decorativos (ex.: '& þ'). Comece DIRETO no conteúdo da seção." +
+  "\n\n═══ FIDELIDADE DE DADOS (OBRIGATÓRIO) ═══\n" +
+  "Todo dado de qualificação e de fato (nome completo, endereço, bairro, CIDADE, UF, CEP, datas, RG, CPF, CNPJ, nº de " +
+  "contrato/benefício, valores) deve ser transcrito EXATAMENTE como consta no documento de origem — sem abreviar, sem " +
+  "cortar palavras, sem 'corrigir' e sem completar de memória. É TERMINANTEMENTE PROIBIDO inventar ou inferir dados: " +
+  "NUNCA deduza cidade/UF a partir do CEP nem de qualquer outro campo; NUNCA abrevie nome de cidade (ex.: 'Simões Filho' " +
+  "jamais vira 'Simões'); NUNCA preencha UF/estado por palpite. Se um dado NÃO estiver confirmado em documento, NÃO " +
+  "escreva nada provisório nem 'candidato/provável' — use o marcador [A PREENCHER: o que falta e onde conferir] e " +
+  "registre a pendência no CHECKLIST final. Cidade/UF no formato 'Cidade – UF' e CEP no formato 'NN.NNN-NNN', seguindo a " +
+  "peça-base do escritório. Exceção única: dados públicos oficiais de réus conhecidos (p.ex. CNPJ/sede de banco conforme " +
+  "Receita Federal) podem ser inseridos se forem o valor REAL e verificável; na dúvida, [A PREENCHER].";
 
 // CAMADA 2 (montagem): remove qualquer andaime de costura que tenha vazado num bloco.
 // Denylist por linha (case-insensitive) + corte da seção "SINALIZAÇÕES ... BLOCO x/5"

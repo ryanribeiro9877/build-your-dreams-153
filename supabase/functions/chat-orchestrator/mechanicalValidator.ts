@@ -808,6 +808,98 @@ export function stripChecklists(peca: string): string {
   return head.replace(/\n*\s*-{3,}\s*$/, "").trimEnd();
 }
 
+// ── V25.6: fidelidade de dados (anti-invenção) ──
+// Check 8: coerência CEP↔UF (faixas oficiais dos Correios). Pega UF inferida/errada
+// (ex.: "Simões/ES, CEP 43.700-000" — 43xxx é BA). Determinístico.
+const CEP_UF_RANGES: Array<[number, number, string]> = [
+  [1000, 19999, "SP"], [20000, 28999, "RJ"], [29000, 29999, "ES"],
+  [30000, 39999, "MG"], [40000, 48999, "BA"], [49000, 49999, "SE"],
+  [50000, 56999, "PE"], [57000, 57999, "AL"], [58000, 58999, "PB"],
+  [59000, 59999, "RN"], [60000, 63999, "CE"], [64000, 64999, "PI"],
+  [65000, 65999, "MA"], [66000, 68899, "PA"], [68900, 68999, "AP"],
+  [69000, 69299, "AM"], [69300, 69389, "RR"], [69400, 69899, "AM"],
+  [69900, 69999, "AC"], [70000, 72799, "DF"], [72800, 72999, "GO"],
+  [73000, 73699, "DF"], [73700, 76799, "GO"], [76800, 76999, "RO"],
+  [77000, 77995, "TO"], [78000, 78899, "MT"], [79000, 79999, "MS"],
+  [80000, 87999, "PR"], [88000, 89999, "SC"], [90000, 99999, "RS"],
+];
+function ufFromCep(cep5: number): string | null {
+  for (const [a, b, uf] of CEP_UF_RANGES) if (cep5 >= a && cep5 <= b) return uf;
+  return null;
+}
+const UF_SET = new Set(
+  "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "),
+);
+function checkCepUf(text: string): MechViolation[] {
+  const out: MechViolation[] = [];
+  const seen = new Set<string>();
+  // <UF> imediatamente antes de "CEP NN.NNN-NNN" (só separadores não-alfanuméricos entre eles).
+  const re = /\b([A-Z]{2})\b[^0-9A-Za-zÀ-ÿ]{0,18}CEP[:\s]*([0-9]{2})\.?([0-9]{3})[-\s]?([0-9]{3})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const uf = m[1];
+    if (!UF_SET.has(uf)) continue;
+    const ufCep = ufFromCep(parseInt(m[2] + m[3], 10));
+    if (!ufCep || ufCep === uf) continue;
+    const cepFmt = `${m[2]}.${m[3]}-${m[4]}`;
+    const key = `${uf}|${cepFmt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      code: "UF_CEP_INCONSISTENTE", severity: "error",
+      excerpt: excerptAt(text, m.index, m.index + m[0].length),
+      hint: `A UF informada ("${uf}") não corresponde ao CEP ${cepFmt}, que pertence a ${ufCep}. ` +
+        `NÃO infira UF/cidade a partir do CEP: corrija para a UF/cidade EXATAS do documento de origem ou, ` +
+        `se não houver dado confirmado, use [A PREENCHER].`,
+    });
+  }
+  return out;
+}
+
+// Check 9: dígito verificador de CPF/CNPJ (warning — vai ao checklist). Pega
+// transcrição incorreta de documento. Não bloqueia (a fonte pode ser [A PREENCHER]).
+function cpfValido(d: string): boolean {
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = (len: number) => {
+    let s = 0; for (let i = 0; i < len; i++) s += parseInt(d[i], 10) * (len + 1 - i);
+    const r = (s * 10) % 11; return r === 10 ? 0 : r;
+  };
+  return dv(9) === parseInt(d[9], 10) && dv(10) === parseInt(d[10], 10);
+}
+function cnpjValido(d: string): boolean {
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const dv = (len: number) => {
+    const w = len === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let s = 0; for (let i = 0; i < len; i++) s += parseInt(d[i], 10) * w[i];
+    const r = s % 11; return r < 2 ? 0 : 11 - r;
+  };
+  return dv(12) === parseInt(d[12], 10) && dv(13) === parseInt(d[13], 10);
+}
+function checkDocumentoChecksum(text: string): MechViolation[] {
+  const out: MechViolation[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  const reCpf = /(?<!\d)(\d{3}\.\d{3}\.\d{3}-\d{2})(?!\d)/g;
+  while ((m = reCpf.exec(text)) !== null) {
+    const fmt = m[1]; if (seen.has(fmt)) continue; seen.add(fmt);
+    if (!cpfValido(fmt.replace(/\D/g, ""))) out.push({
+      code: "CPF_DIGITO_INVALIDO", severity: "warning",
+      excerpt: excerptAt(text, m.index, m.index + fmt.length),
+      hint: `O CPF ${fmt} tem dígito verificador inválido — provável erro de transcrição. Conferir no documento de origem.`,
+    });
+  }
+  const reCnpj = /(?<!\d)(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})(?!\d)/g;
+  while ((m = reCnpj.exec(text)) !== null) {
+    const fmt = m[1]; if (seen.has(fmt)) continue; seen.add(fmt);
+    if (!cnpjValido(fmt.replace(/\D/g, ""))) out.push({
+      code: "CNPJ_DIGITO_INVALIDO", severity: "warning",
+      excerpt: excerptAt(text, m.index, m.index + fmt.length),
+      hint: `O CNPJ ${fmt} tem dígito verificador inválido — conferir o cadastro do réu (Receita Federal).`,
+    });
+  }
+  return out;
+}
+
 export function runMechanicalValidator(peca: string, ctx: MechContext = {}): MechViolation[] {
   if (!peca || !peca.trim()) return [];
   const corpo = stripChecklists(peca); // V25.3: todos os checks varrem só o corpo
@@ -819,6 +911,8 @@ export function runMechanicalValidator(peca: string, ctx: MechContext = {}): Mec
   out.push(...checkCalcConsistency(ctx.fixedFacts));  // Check 5 (usa fixedFacts)
   out.push(...checkSumulas(corpo));                   // Check 6
   out.push(...checkDataAnteriorContrato(corpo, ctx.fixedFacts)); // Check 7
+  out.push(...checkCepUf(corpo));                     // Check 8 (UF↔CEP)
+  out.push(...checkDocumentoChecksum(corpo));         // Check 9 (CPF/CNPJ DV)
   return out;
 }
 
