@@ -949,6 +949,10 @@ function buildDraftingRules(): string {
 const SEGMENT_MIN_MAX_TOKENS = 12000; // só segmenta agentes com max_tokens >= isto
 const N3_BLOCK_MAX_TOKENS = 8000;     // teto por bloco (rede de segurança)
 const N3_BLOCK_TIMEOUT_MS = Number(Deno.env.get("LLM_BLOCK_TIMEOUT_MS")) || 200_000; // por bloco
+// FIX 2: timeout próprio da correção (UMA tentativa, sem retry), abaixo do
+// wall-clock do worker (~400s no Pro). Uma chamada travada aborta aqui e o run
+// vira `failed` na hora (catch→fail), em vez de pendurar até o watchdog (~7min).
+const LLM_CORRECTION_TIMEOUT_MS = Number(Deno.env.get("LLM_CORRECTION_TIMEOUT_MS")) || 300_000;
 const FATOS_INI = "<<<FATOS_FIXADOS>>>";
 const FATOS_FIM = "<<<FIM>>>";
 
@@ -1386,6 +1390,16 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         canonicalBlock +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
+      // FIX 1: contexto ENXUTO para o passo de correção. A peça já está escrita —
+      // então NÃO reinjetamos os modelos de referência (MAX_MODEL_TOKENS) nem o
+      // bloco de documentos do caso (buildCaseBlock, até 200k tokens). Mantemos só
+      // o prompt do agente, as regras de redação e os DADOS CANÔNICOS (identidade/
+      // números). Era a reinjeção desse bloco gigante em cada chamada de correção
+      // que inflava o input (~174k tokens) e travava a chamada (stall de TTFT).
+      const correctionSystem = (n3.system_prompt || "") +
+        (caseDocs.length > 0 ? buildDraftingRules() : "") +
+        canonicalBlock;
+
       // Renova updated_at durante a geração (watchdog não mata geração viva).
       let lastTouch = 0;
       const onDelta = (_full: string) => {
@@ -1403,21 +1417,61 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         try { return await callOnce(userMessage, maxTokens, timeoutMs); }
         catch (e) { console.warn(`[N3] retry após erro: ${(e as Error)?.message}`); return await callOnce(userMessage, maxTokens, timeoutMs); }
       };
+      // FIX 1/2: chamada de CORREÇÃO — system enxuto (correctionSystem) e SEM retry
+      // (uma tentativa só; o retry da redação era o que dobrava o tempo, ~760s, e
+      // estourava o wall-clock). Timeout próprio passado pelo chamador.
+      const callCorrection = (userMessage: string, maxTokens: number, timeoutMs: number) => callLLM(admin, {
+        model: n3.model || "gpt-4o", cacheableSystem: correctionSystem, systemPrompt: summaryBlock || null,
+        history, userMessage, temperature: n3.temperature, top_p: n3.top_p, maxTokens, timeoutMs, onDelta,
+      });
 
-      // ── V25: modo CORREÇÃO (retorno do validador mecânico) ──
-      // A peça completa já existe (run.draft) e o validador devolveu violações
-      // objetivas (run.feedback). UMA chamada corrige a peça inteira — não refaz
-      // os 5 blocos. Depois volta a validating_n2 (revalida mecanicamente).
+      // ── V25.4: modo CORREÇÃO SEGMENTADA (retorno do validador mecânico) ──
+      // FIX 3: corrige BLOCO A BLOCO (uma invocação por bloco), igual à redação,
+      // para cada chamada caber < wall-clock. Antes era UMA chamada reescrevendo a
+      // peça inteira (~51k chars), que estourava o worker e deixava o run órfão.
+      // FIX 1/2: cada chamada usa contexto enxuto (callCorrection) e é única.
       if (segment && run.feedback && run.draft) {
+        const corrBlocks: string[] = Array.isArray(run.blocks) ? [...run.blocks] : [];
+        const hasBlocks = corrBlocks.filter(Boolean).length > 0;
+
+        if (hasBlocks) {
+          const cIdx = run.block_index ?? 0;
+          // Fim da passada: reconcilia a síntese e devolve ao validador.
+          if (cIdx >= N3_BLOCKS.length || cIdx >= corrBlocks.length) {
+            const corrected = regenerateSintese(corrBlocks.filter(Boolean).join("\n\n"));
+            await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu a correção. Em revisao...`, "validating_n2", n3);
+            await upd({ status: "validating_n2", draft: corrected, feedback: null });
+            return fireNextStep(runId, supabaseUrl, serviceKey);
+          }
+          // Corrige UM bloco: passa só o texto deste bloco + as violações da peça.
+          const spec = N3_BLOCKS[cIdx];
+          const curBlock = stripChecklists(corrBlocks[cIdx] || "");
+          const userMessage = `${run.original_message}\n\nVocê está CORRIGINDO uma petição já redigida, BLOCO A BLOCO. ESTE É O BLOCO ${cIdx + 1}/${N3_BLOCKS.length} (${spec.label}).\n\nVIOLAÇÕES DETECTADAS NA PEÇA (aplicam-se ao documento inteiro — corrija SOMENTE as que afetam ESTE bloco):\n${run.feedback}\n\nREGRA CRÍTICA: se NENHUMA violação se aplica a este bloco, devolva o texto IDÊNTICO, sem nenhuma alteração. NÃO reescreva o que está correto, NÃO resuma, NÃO acrescente seções de outros blocos, NÃO inclua checklist.\n\n═══ TEXTO ATUAL DESTE BLOCO ═══\n${curBlock}\n═══ FIM DESTE BLOCO ═══${BLOCK_CLEAN_RULE}`;
+          await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (bloco ${cIdx + 1} de ${N3_BLOCKS.length})...`, "executing_n3", n3);
+          const t0 = Date.now();
+          const r = await callCorrection(userMessage, N3_BLOCK_MAX_TOKENS, N3_BLOCK_TIMEOUT_MS);
+          const durationMs = Date.now() - t0;
+          corrBlocks[cIdx] = sanitizeBlockText(r.content) || corrBlocks[cIdx]; // vazio → mantém o bloco original
+          const prevU = (run.n3_usage as { input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
+          const usage = {
+            model: r.rawModel,
+            input_tokens: (prevU.input_tokens || 0) + r.inputTokens,
+            output_tokens: (prevU.output_tokens || 0) + r.outputTokens,
+            duration_ms: (prevU.duration_ms || 0) + durationMs,
+          };
+          console.log(`[N3-correcao bloco ${cIdx + 1}/${N3_BLOCKS.length}] out=${r.outputTokens}tok dur=${durationMs}ms chars=${corrBlocks[cIdx].length}`);
+          await upd({ blocks: corrBlocks, block_index: cIdx + 1, n3_usage: usage });
+          return fireNextStep(runId, supabaseUrl, serviceKey);
+        }
+
+        // Fallback (run sem estrutura de blocos): UMA chamada, mas enxuta (FIX 1),
+        // com timeout próprio < wall-clock e SEM retry (FIX 2).
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (violações do validador mecânico)...`, "executing_n3", n3);
-        // V25.3 (Item 2): remove qualquer checklist (do N3 ou do validador)
-        // antes de devolver a peça ao N3 — evita empilhar checklists entre
-        // rodadas e o N3 reescreve o seu ao final.
         const pecaAtual = stripChecklists(run.draft);
         const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${run.feedback}\n\n═══ PEÇA ATUAL ═══\n${pecaAtual}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
         const corrMaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
         const t0 = Date.now();
-        const r = await callWithRetry(userMessage, corrMaxTokens, LLM_N3_TIMEOUT_MS);
+        const r = await callCorrection(userMessage, corrMaxTokens, LLM_CORRECTION_TIMEOUT_MS);
         const durationMs = Date.now() - t0;
         const corrected = regenerateSintese(sanitizeBlockText(r.content));
         const prevU = (run.n3_usage as { input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
@@ -1427,7 +1481,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           output_tokens: (prevU.output_tokens || 0) + r.outputTokens,
           duration_ms: (prevU.duration_ms || 0) + durationMs,
         };
-        console.log(`[N3-correcao] out=${r.outputTokens}tok dur=${durationMs}ms chars=${corrected.length}`);
+        console.log(`[N3-correcao-single] out=${r.outputTokens}tok dur=${durationMs}ms chars=${corrected.length}`);
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu a correção. Em revisao...`, "validating_n2", n3);
         await upd({ status: "validating_n2", draft: corrected, feedback: null, n3_usage: usage });
         return fireNextStep(runId, supabaseUrl, serviceKey);
@@ -1579,6 +1633,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           await upd({
             status: "executing_n3", feedback: formatViolationsFeedback(errors),
             iterations: iter + 1, mech_report: { iterations: iter + 1, history },
+            block_index: 0, // FIX 3: reinicia o ponteiro p/ a correção segmentada (bloco 0..N)
           });
           return fireNextStep(runId, supabaseUrl, serviceKey);
         }
