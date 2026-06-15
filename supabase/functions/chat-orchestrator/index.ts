@@ -1700,6 +1700,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         // N2. Warnings — e erros remanescentes — entram no checklist final.
         mechPending = errors.length > 0 ? violations : warnings;
         mechReportPatch = { mech_report: { iterations: iter, history, ...(earlyStop ? { early_stop: earlyStop } : {}) } };
+        // UX: torna VISÍVEL a validação mecânica quando ela NÃO dispara correção.
+        // Sem isto, no caso limpo o usuário só vê "Em revisao..." e depois a peça —
+        // e conclui que a revisão foi pulada (não foi: rodaram os checks, 0 erros).
+        const msgVal = errors.length === 0
+          ? `Validador mecânico: nenhuma violação encontrada — peça aprovada${warnings.length ? ` (${warnings.length} ressalva(s) no checklist)` : ""}.`
+          : `Validador mecânico: ${errors.length} ressalva(s) remanescente(s) após ${iter} rodada(s) de correção — registradas no checklist para revisão humana.`;
+        await insertStage(admin, run.session_id, run.user_id, msgVal, "validating_n2");
       }
       // VALIDAÇÃO CONSULTIVA do N2 (LLM) — recebe a peça JÁ aprovada nos checks
       // mecânicos: valida 1x; se houver ressalva, anexa um aviso [REVISAR] ao
