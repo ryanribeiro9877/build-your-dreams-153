@@ -10,18 +10,18 @@ export function initSentry() {
 
   Sentry.init({
     dsn,
+    environment: import.meta.env.MODE, // "development" | "production"
     integrations: [
       Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration(),
+      // LGPD/sigilo: sistema jurídico. maskAllText + blockAllMedia são OBRIGATÓRIOS
+      // para o replay nunca capturar dados de clientes/petições em texto ou mídia.
+      // NÃO reduzir esse mascaramento.
+      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
     ],
-    // Capture 20% of transactions for performance monitoring
-    tracesSampleRate: 0.2,
-    // Capture 10% of sessions for replay
-    replaysSessionSampleRate: 0.1,
-    // Always capture replays when an error occurs
+    // Performance: amostra menor em produção para não estourar cota.
+    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    // Session Replay: 0 em condições normais, 100% quando houve erro.
+    replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
-    // Send 100% of errors
-    sampleRate: 1.0,
-    environment: import.meta.env.MODE,
   });
 }

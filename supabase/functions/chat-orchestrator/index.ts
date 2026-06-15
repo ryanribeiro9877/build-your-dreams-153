@@ -26,6 +26,43 @@ import {
   formatViolationsFeedback, formatWarningsChecklist,
   extractTitlesForAudit, violationKey, stripChecklists, reconcileCalcJson,
 } from "./mechanicalValidator.ts";
+import * as Sentry from "https://deno.land/x/sentry/index.mjs";
+
+// ─── Sentry (observabilidade) ────────────────────────────────────────────────
+// Init UMA vez, no escopo de módulo. defaultIntegrations:false é OBRIGATÓRIO: o
+// SDK Deno NÃO instrumenta Deno.serve, então não há separação de escopo entre
+// requests; com as integrações default ligadas, breadcrumbs e contexto VAZAM
+// entre execuções reaproveitadas do worker — num pipeline multi-agente isso
+// misturaria runs diferentes. Por isso capturamos SEMPRE via reportError
+// (withScope), que isola o escopo por run. DSN vem 100% do ambiente (secret).
+const SENTRY_DSN = Deno.env.get("SENTRY_DSN");
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    defaultIntegrations: false,
+    environment: Deno.env.get("SB_REGION") ? "production" : "local",
+    tracesSampleRate: 0.2,
+  });
+}
+
+// Captura SEMPRE por aqui (nunca Sentry.captureException direto), com escopo
+// isolado por request/run para evitar o vazamento de contexto descrito acima.
+function reportError(e: unknown, ctx: Record<string, unknown> = {}) {
+  if (!SENTRY_DSN) return;
+  Sentry.withScope((scope) => {
+    scope.setTag("region", Deno.env.get("SB_REGION") || "unknown");
+    scope.setTag("execution_id", Deno.env.get("SB_EXECUTION_ID") || "unknown");
+    scope.setContext("jurisai", ctx); // ex.: { runId, sessionId, stage, model }
+    Sentry.captureException(e instanceof Error ? e : new Error(String(e)));
+  });
+}
+
+async function flushSentry() {
+  if (!SENTRY_DSN) return;
+  // Edge Function é efêmera: forçar o envio antes do worker encerrar, senão o
+  // evento se perde. 2000ms é o recomendado pela doc oficial.
+  try { await Sentry.flush(2000); } catch { /* não bloquear o retorno */ }
+}
 
 const ALLOWED_ORIGINS = [
   Deno.env.get("ALLOWED_ORIGIN") || "https://build-your-dreams-153.vercel.app",
@@ -1203,6 +1240,11 @@ function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
     }).then(async (resp) => {
       if (resp.ok) return;
       console.error(`[fireNextStep] run=${runId} status=${resp.status}`);
+      // Reinvocação recusada (ex.: 401 do gateway): exatamente o sinal de
+      // wall-clock / run preso que antes sumia sem rastro.
+      reportError(new Error(`Reinvocacao do passo recusada (HTTP ${resp.status})`), {
+        where: "step_reinvoke_401", runId, status: resp.status,
+      });
       try {
         const admin = createClient(supabaseUrl, serviceKey);
         const { data: r } = await admin.from("orchestration_runs")
@@ -1228,6 +1270,7 @@ function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
       } catch (e) {
         console.error(`[fireNextStep] cleanup run=${runId}:`, (e as Error)?.message || e);
       }
+      await flushSentry(); // background (waitUntil): flush antes do worker morrer
     }).catch((err) => {
       console.error(`[fireNextStep] run=${runId} fetch error:`, err?.message || err);
     }),
@@ -1239,6 +1282,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
   const { data: runRow } = await admin.from("orchestration_runs").select("*").eq("id", runId).maybeSingle();
   const run = runRow as any;
   if (!run || run.status === "done" || run.status === "failed") return;
+
+  // Model do N3 corrente, para enriquecer o contexto do Sentry no catch externo
+  // (n3 é declarado dentro dos blocos do try, fora de escopo aqui).
+  let ctxModel: string | undefined;
 
   const fail = async (msg: string) => {
     await admin.from("orchestration_runs").update({ status: "failed", error: msg, updated_at: new Date().toISOString() }).eq("id", runId);
@@ -1294,6 +1341,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       specialists = await applyExclusivities(admin, run.original_message, specialists);
       // V25: o Diretor escolhe o N3 E classifica o acao_tipo (persistido no run).
       const { agent: n3, acaoTipo } = await chooseSpecialistAndAcaoTipo(admin, router, run.original_message, specialists, ROUTING_INTENT_RULES);
+      ctxModel = n3?.model;
       await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, "executing_n3", n3);
       await upd({
         status: "executing_n3", target_n3_id: n3.id, acao_tipo: acaoTipo,
@@ -1304,6 +1352,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     } else if (run.status === "executing_n3") {
       const n3 = await loadAgent(admin, run.target_n3_id);
       if (!n3) return await fail("Especialista invalido");
+      ctxModel = n3?.model;
       // Redatores de peça longa (max_tokens alto) entram no modo SEGMENTADO (Caminho B:
       // um bloco/seção por chamada). Os demais (respostas curtas) seguem em chamada única.
       const segment = (n3.max_tokens ?? 0) >= SEGMENT_MIN_MAX_TOKENS;
@@ -1593,7 +1642,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       );
     }
   } catch (e) {
+    // processStep roda em background (waitUntil): se o worker morre por wall-clock,
+    // este é o único lugar onde o erro fica visível. Captura ANTES do fail, com o
+    // contexto do run, e dá flush no fim (worker efêmero).
+    reportError(e, { runId, stage: run?.status, model: ctxModel, n3Id: run?.target_n3_id, where: "processStep" });
     await fail((e as Error)?.message || "erro interno");
+    await flushSentry();
   }
 }
 
@@ -1706,6 +1760,8 @@ serve(async (req) => {
 
     return json(202, { runId, sessionId: body.sessionId, status: "processing" });
   } catch (e) {
+    reportError(e, { where: "start_handler" });
+    await flushSentry();
     return errResp(500, "internal_error", (e as Error)?.message || "erro interno");
   }
 });

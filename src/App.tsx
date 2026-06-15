@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -45,6 +46,32 @@ function PageLoader() {
   return <HexagonLoader variant="fullscreen" />;
 }
 
+// Fallback amigável quando um erro de render escapa (capturado pelo Sentry).
+// Sem detalhes técnicos / dados sensíveis na tela — apenas opção de recarregar.
+function AppErrorFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 16,
+        padding: 24, textAlign: "center",
+      }}
+    >
+      <h1 style={{ fontSize: 20, fontWeight: 600 }}>Algo deu errado</h1>
+      <p style={{ opacity: 0.7, maxWidth: 420 }}>
+        Ocorreu um erro inesperado e nossa equipe foi notificada automaticamente.
+        Tente recarregar a página.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid currentColor", cursor: "pointer", background: "transparent" }}
+      >
+        Recarregar
+      </button>
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -76,6 +103,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner />
+      <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
       <BrowserRouter>
         <AuthProvider>
           <Suspense fallback={<PageLoader />}>
@@ -119,6 +147,7 @@ const App = () => (
           </Suspense>
         </AuthProvider>
       </BrowserRouter>
+      </Sentry.ErrorBoundary>
     </TooltipProvider>
   </QueryClientProvider>
 );
