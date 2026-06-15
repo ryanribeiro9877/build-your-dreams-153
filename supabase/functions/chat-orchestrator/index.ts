@@ -1023,7 +1023,9 @@ const N3_BLOCKS: BlockSpec[] = [
       "Você vai redigir a PETIÇÃO INICIAL em BLOCOS sequenciais. NESTE BLOCO 1, redija APENAS: " +
       "(a) a ANÁLISE PRÉ-REDAÇÃO/alertas; (b) o ENDEREÇAMENTO; (c) a QUALIFICAÇÃO completa das partes; " +
       "(d) o TÍTULO da ação; (e) a SÍNTESE DA INICIAL com ÍNDICE completo de todas as seções (I Preliminares, " +
-      "II Fatos, III.1 a III.9, IV Tutela, V Pedidos e Valor da Causa); (f) I — DAS PRELIMINARES; (g) II — DOS FATOS. " +
+      "II Fatos, III.1 a III.9, IV Tutela, V Pedidos e Valor da Causa) — listada UMA ÚNICA VEZ, como UMA só lista de títulos; " +
+      "NÃO repita o índice, NÃO reapresente a lista de seções em outro formato e NÃO escreva os títulos do corpo antes da seção correspondente; " +
+      "(f) I — DAS PRELIMINARES; (g) II — DOS FATOS. " +
       "NÃO redija o mérito (III) ainda, NÃO redija tutela/pedidos. " +
       "Ao FINAL da resposta, acrescente um bloco técnico delimitado EXATAMENTE por " + FATOS_INI + " e " + FATOS_FIM +
       " contendo, em texto curto, os DADOS CANÔNICOS para os próximos blocos usarem sem reinventar: nome e CPF da autora, " +

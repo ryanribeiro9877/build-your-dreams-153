@@ -278,12 +278,21 @@ function analyzeSintese(text: string): SinteseLayout {
 // formatação de linha do próprio corpo). Pós-processamento — nenhum prompt muda.
 export function regenerateSintese(text: string): string {
   const layout = analyzeSintese(text);
-  if (!layout.found || layout.corpoTitles.length < 2) return text;
   const { lines } = splitLines(text);
-  const itemLines = layout.corpoTitles.map((t) => lines[t.lineIdx].trim());
+  const corpoReal = realCorpoTitles(layout.corpoTitles, lines); // V25.5: ignora reapresentações
+  if (!layout.found || corpoReal.length < 2) return text;
   const before = lines.slice(0, layout.itemsStartLine);
-  const after = lines.slice(Math.max(layout.itemsEndLine, layout.itemsStartLine));
-  return [...before, "", ...itemLines, ""].join("\n") + (after.length ? "\n" + after.join("\n") : "");
+  const realStart = corpoReal[0].lineIdx;
+  const synthLines = corpoReal.map((t) => `- ${t.num} — ${t.text}`);
+  // Entre o fim da síntese e o corpo REAL costumam estar as reapresentações de
+  // índice (linhas de título SEM prosa). Se for só isso, descarta. Se houver
+  // QUALQUER prosa no intervalo, preserva tudo (fallback seguro: nada some).
+  const gap = lines.slice(layout.itemsEndLine, realStart);
+  const gapHasProse = gap.some((l) => l.trim() && !TITLE_RE.test(l));
+  const after = (!gapHasProse && realStart >= layout.itemsEndLine)
+    ? lines.slice(realStart)
+    : lines.slice(Math.max(layout.itemsEndLine, layout.itemsStartLine));
+  return [...before, "", ...synthLines, ""].join("\n") + (after.length ? "\n" + after.join("\n") : "");
 }
 
 // V25.1 (Item 2c): auditoria do extrator — expõe os títulos que o validador
@@ -302,12 +311,48 @@ export function extractTitlesForAudit(text: string): { sintese: string[]; corpo:
 
 function titleKey(t: TitleLine): string { return `${t.num} ${norm(t.text)}`; }
 
+// V25.5: o N3 às vezes emite a estrutura (índice/sumário) MAIS DE UMA VEZ no
+// bloco 1 antes do corpo real (reapresentações). Estes helpers reconciliam isso.
+// realCorpoTitles: para cada numeração, escolhe a ocorrência com MAIOR corpo (a
+// seção de verdade) e descarta as reapresentações; retorna em ordem de documento.
+function realCorpoTitles(corpoTitles: TitleLine[], lines: string[]): TitleLine[] {
+  if (corpoTitles.length === 0) return [];
+  const sorted = [...corpoTitles].sort((a, b) => a.lineIdx - b.lineIdx);
+  const bodyLen = new Map<TitleLine, number>();
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i].lineIdx + 1;
+    const end = i + 1 < sorted.length ? sorted[i + 1].lineIdx : lines.length;
+    let len = 0;
+    for (let l = start; l < end; l++) {
+      const s = lines[l].trim();
+      if (s && !TITLE_RE.test(lines[l])) len += s.length; // só prosa conta como "corpo"
+    }
+    bodyLen.set(sorted[i], len);
+  }
+  const best = new Map<string, TitleLine>();
+  for (const t of sorted) {
+    const k = t.num.toUpperCase();
+    const cur = best.get(k);
+    if (!cur || (bodyLen.get(t) || 0) > (bodyLen.get(cur) || 0)) best.set(k, t);
+  }
+  return [...best.values()].sort((a, b) => a.lineIdx - b.lineIdx);
+}
+
+// Primeira ocorrência por numeração, preservando a ordem (para a síntese).
+function uniqByNumFirst(titles: TitleLine[]): TitleLine[] {
+  const seen = new Set<string>(); const out: TitleLine[] = [];
+  for (const t of titles) { const k = t.num.toUpperCase(); if (!seen.has(k)) { seen.add(k); out.push(t); } }
+  return out;
+}
+
 function checkSinteseVsCorpo(text: string): MechViolation[] {
   const out: MechViolation[] = [];
   const layout = analyzeSintese(text);
-  if (layout.found && layout.items.length > 0 && layout.corpoTitles.length > 0) {
-    const sintese = layout.items.map(titleKey);
-    const corpo = layout.corpoTitles.map(titleKey);
+  const { lines } = splitLines(text);
+  const corpoReal = realCorpoTitles(layout.corpoTitles, lines); // V25.5: ignora reapresentações
+  if (layout.found && layout.items.length > 0 && corpoReal.length > 0) {
+    const sintese = uniqByNumFirst(layout.items).map(titleKey);
+    const corpo = corpoReal.map(titleKey);
     const corpoSet = new Set(corpo), sinteseSet = new Set(sintese);
     const faltam = corpo.filter((k) => !sinteseSet.has(k));
     const sobram = sintese.filter((k) => !corpoSet.has(k));
@@ -327,11 +372,10 @@ function checkSinteseVsCorpo(text: string): MechViolation[] {
   }
   // Tese duplicada: shingles de 5 palavras entre corpos de seções (Jaccard > 0.6).
   const sections: { title: TitleLine; body: string }[] = [];
-  const { lines } = splitLines(text);
-  for (let i = 0; i < layout.corpoTitles.length; i++) {
-    const start = layout.corpoTitles[i].lineIdx + 1;
-    const end = i + 1 < layout.corpoTitles.length ? layout.corpoTitles[i + 1].lineIdx : lines.length;
-    sections.push({ title: layout.corpoTitles[i], body: lines.slice(start, end).join("\n") });
+  for (let i = 0; i < corpoReal.length; i++) {
+    const start = corpoReal[i].lineIdx + 1;
+    const end = i + 1 < corpoReal.length ? corpoReal[i + 1].lineIdx : lines.length;
+    sections.push({ title: corpoReal[i], body: lines.slice(start, end).join("\n") });
   }
   const shingleSets = sections.map((s) => {
     const words = fold(s.body).match(/[a-z0-9]+/g) || [];
