@@ -823,7 +823,7 @@ const CEP_UF_RANGES: Array<[number, number, string]> = [
   [77000, 77995, "TO"], [78000, 78899, "MT"], [79000, 79999, "MS"],
   [80000, 87999, "PR"], [88000, 89999, "SC"], [90000, 99999, "RS"],
 ];
-function ufFromCep(cep5: number): string | null {
+export function ufFromCep(cep5: number): string | null {
   for (const [a, b, uf] of CEP_UF_RANGES) if (cep5 >= a && cep5 <= b) return uf;
   return null;
 }

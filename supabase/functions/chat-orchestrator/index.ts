@@ -25,6 +25,7 @@ import {
   MechViolation, runMechanicalValidator, regenerateSintese,
   formatViolationsFeedback, formatWarningsChecklist,
   extractTitlesForAudit, violationKey, stripChecklists, reconcileCalcJson,
+  ufFromCep,
 } from "./mechanicalValidator.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 
@@ -638,6 +639,16 @@ function buildCaseContextForValidator(caseDocs: CaseDoc[], maxTokens: number): s
 // Lê o texto CRU (d.raw), nunca o resumo. Só captura o que casa LITERALMENTE — ausência
 // != invenção. Este bloco prevalece sobre os resumos para qualquer dado de identidade/número.
 interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
+// V25.7: resolução de CEP → cidade/UF. ViaCEP (B) quando responde; senão a faixa
+// oficial CEP→UF (A, offline, do validador) garante ao menos a UF. Nunca inventa.
+interface CepInfo {
+  cep: string;                 // "43.700-000"
+  uf: string | null;
+  localidade: string | null;   // cidade (só via ViaCEP)
+  bairro: string | null;
+  logradouro: string | null;
+  fonte: "viacep" | "faixa";
+}
 // Resultado da leitura DETERMINÍSTICA da planilha de indébito (TRAVA do indébito).
 // O código lê o TOTAL declarado e CALCULA o dobro; o N3 não produz nenhum número.
 // status="ambiguo" (indebito=dobro=null) é um resultado VÁLIDO e esperado para
@@ -660,6 +671,8 @@ interface CanonicalFacts {
   datas: Map<string, string>;
   valores: CanonicalValue[];
   enderecos: CanonicalValue[];     // V25.7: trecho de endereço (verbatim, ancorado no CEP)
+  ceps: Set<string>;               // V25.7: CEPs (8 dígitos) encontrados nos documentos
+  cepInfos: CepInfo[];             // V25.7: resolução CEP→cidade/UF (ViaCEP + faixa)
   indebitoPlanilha: PlanilhaIndebito | null;
   naturezaOperacao: string | null; // sinais de CCB/pessoal vs consignado/INSS nos documentos
   idadeFlag: string | null;        // V25 FRENTE 2: idade implausível (<18 ou >100) detectada em código
@@ -826,7 +839,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   const facts: CanonicalFacts = {
     cpfs: new Map(), cnpjs: new Map(), rgs: new Map(), contratos: new Map(),
     beneficios: new Map(), nomes: new Map(), datas: new Map(), valores: [],
-    enderecos: [],
+    enderecos: [], ceps: new Set(), cepInfos: [],
     indebitoPlanilha: null, naturezaOperacao: null, idadeFlag: null,
   };
   const CAP = 60; // teto por lista (evita bloat em históricos com centenas de datas)
@@ -869,12 +882,61 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
         facts.enderecos.push({ value: seg, file, fromPlanilha: false });
       }
     }
+    // V25.7: coleta de CEPs (8 dígitos) — robusta a texto corrompido (só precisa do CEP).
+    // Aceita "CEP NN.NNN-NNN" e o formato pontuado "NN.NNN-NNN" isolado.
+    for (const mt of raw.matchAll(/\bCEP\b[:\s]*(\d{2})\.?(\d{3})-?(\d{3})/gi)) {
+      if (facts.ceps.size < 12) facts.ceps.add(mt[1] + mt[2] + mt[3]);
+    }
+    for (const mt of raw.matchAll(/(?<!\d)(\d{2})\.(\d{3})-(\d{3})(?!\d)/g)) {
+      if (facts.ceps.size < 12) facts.ceps.add(mt[1] + mt[2] + mt[3]);
+    }
   }
   // Interpretação determinística (não-LLM): total da planilha + natureza da operação.
   facts.indebitoPlanilha = analyzePlanilhaIndebito(caseDocs);
   facts.naturezaOperacao = inferOperationNature(caseDocs);
   facts.idadeFlag = buildIdadeFlag(caseDocs); // V25 FRENTE 2
   return facts;
+}
+
+// V25.7 (B + A): resolve um CEP em cidade/UF. Tenta ViaCEP (cidade real); em timeout/
+// erro/CEP inexistente, cai na faixa oficial CEP→UF (offline — garante ao menos a UF).
+// NUNCA inventa: sem ViaCEP, localidade fica null (→ [A PREENCHER] na cidade da peça).
+const VIACEP_TIMEOUT_MS = Number(Deno.env.get("VIACEP_TIMEOUT_MS")) || 2500;
+const VIACEP_MAX = 6;
+function fmtCep(cep: string): string { return `${cep.slice(0, 2)}.${cep.slice(2, 5)}-${cep.slice(5)}`; }
+async function resolveCep(cep: string): Promise<CepInfo> {
+  const ufFaixa = ufFromCep(parseInt(cep.slice(0, 5), 10));
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), VIACEP_TIMEOUT_MS);
+    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (resp.ok) {
+      const j = await resp.json() as {
+        erro?: boolean; uf?: string; localidade?: string; bairro?: string; logradouro?: string;
+      };
+      if (j && !j.erro && j.uf) {
+        return {
+          cep: fmtCep(cep), uf: j.uf, localidade: j.localidade || null,
+          bairro: j.bairro || null, logradouro: j.logradouro || null, fonte: "viacep",
+        };
+      }
+    }
+  } catch (_e) { /* rede/timeout/abort → cai na faixa offline */ }
+  return { cep: fmtCep(cep), uf: ufFaixa, localidade: null, bairro: null, logradouro: null, fonte: "faixa" };
+}
+// Enriquece os CEPs coletados (paralelo, com teto). Tolerante a falha: nunca derruba o run.
+async function enrichCepInfo(facts: CanonicalFacts): Promise<void> {
+  const ceps = [...facts.ceps].filter((c) => /^\d{8}$/.test(c)).slice(0, VIACEP_MAX);
+  if (ceps.length === 0) return;
+  try {
+    facts.cepInfos = await Promise.all(ceps.map(resolveCep));
+  } catch (_e) {
+    facts.cepInfos = ceps.map((cep) => ({
+      cep: fmtCep(cep), uf: ufFromCep(parseInt(cep.slice(0, 5), 10)),
+      localidade: null, bairro: null, logradouro: null, fonte: "faixa" as const,
+    }));
+  }
 }
 
 // Formata a linha de INDÉBITO inequívoca para os blocos (N3 e validador). É a ÚNICA
@@ -893,7 +955,7 @@ function formatIndebitoPlanilhaLine(p: PlanilhaIndebito): string {
 function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
   const hasAny = facts.cpfs.size || facts.cnpjs.size || facts.rgs.size || facts.contratos.size ||
     facts.beneficios.size || facts.datas.size || facts.nomes.size || facts.valores.length ||
-    facts.enderecos.length ||
+    facts.enderecos.length || facts.cepInfos.length ||
     facts.indebitoPlanilha || facts.naturezaOperacao || facts.idadeFlag;
   if (!hasAny) return "";
   const fmtMap = (m: Map<string, string>) =>
@@ -910,6 +972,26 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
       "corrija apenas caixa e separador para o formato 'Cidade – UF, CEP NN.NNN-NNN'; NUNCA troque a " +
       "cidade ou a UF, NUNCA abrevie o nome da cidade, NUNCA deduza UF a partir do CEP):\n" +
       facts.enderecos.map((e) => `    • ${e.value}  (origem: ${e.file})`).join("\n"),
+    );
+  }
+  if (facts.cepInfos.length) {
+    const cl = facts.cepInfos.map((c) => {
+      const loc = c.localidade
+        ? `${c.localidade}${c.uf ? "/" + c.uf : ""}`
+        : (c.uf ? `UF ${c.uf} (cidade NÃO confirmada)` : "[indeterminado]");
+      const extra = (c.logradouro || c.bairro)
+        ? `  [${[c.logradouro, c.bairro].filter(Boolean).join(", ")}]` : "";
+      const fonte = c.fonte === "viacep"
+        ? "ViaCEP — oficial"
+        : "faixa CEP→UF (só a UF é confiável; cidade → [A PREENCHER])";
+      return `    • ${c.cep} ⇒ ${loc}${extra}  (fonte: ${fonte})`;
+    }).join("\n");
+    lines.push(
+      "  - CEP → CIDADE/UF (FONTE OFICIAL — PREVALECE sobre o endereço do comprovante, que pode estar " +
+      "corrompido/embaralhado na extração):\n" + cl +
+      "\n    Regra: use a CIDADE e a UF EXATAMENTE como acima, no formato 'Cidade – UF, CEP NN.NNN-NNN'. " +
+      "Se a fonte for 'faixa', a cidade NÃO está confirmada → escreva [A PREENCHER] na cidade (mas a UF é a indicada). " +
+      "NUNCA monte cidade/UF a partir de fragmentos soltos do texto do documento.",
     );
   }
   if (facts.cpfs.size) lines.push("  - CPF(s):\n" + fmtMap(facts.cpfs));
@@ -1475,6 +1557,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // O bloco DADOS CANÔNICOS (verbatim, teto próprio) vem ACIMA dos resumos e
       // prevalece sobre eles para qualquer dado de identidade/número.
       const canonFacts = caseDocs.length > 0 ? extractCanonicalFacts(caseDocs) : null;
+      // V25.7: resolve CEP→cidade/UF (ViaCEP + faixa) só no bloco 0 — onde está a
+      // qualificação. Uma chamada por run; blocos 2-5 não precisam e mantêm o prefixo estável.
+      if (canonFacts && blockIdx === 0) await enrichCepInfo(canonFacts);
       const canonicalBlock = canonFacts ? buildCanonicalFactsBlock(canonFacts) : "";
       const stableSystem = (n3.system_prompt || "") +
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
