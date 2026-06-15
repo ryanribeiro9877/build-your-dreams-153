@@ -187,9 +187,18 @@ function isUpperDominant(s: string): boolean {
 // chars) — o cap de 90 os descartava silenciosamente. A discriminação contra
 // itens de pedido ("I) CONDENAR ... ;") já vem de isUpperDominant + fim em ; ,.
 function isBodyTitle(num: string, text: string): boolean {
-  if (text.length > 200) return false;
   if (/[;,]$/.test(text.trim())) return false;
-  return isUpperDominant(text) || /^d[aoe]s?\s/i.test(text);
+  // V25.5: títulos de seção em CAIXA ALTA dominante podem ser longos e
+  // multi-cláusula (ex.: "III.5 — DA APLICAÇÃO DO CDC. RELAÇÃO DE CONSUMO. …
+  // HIPOSSUFICIÊNCIA DA AUTORA." = 202 chars; "III.6 — DAS NORMAS … DO INSS …"
+  // = 219). O cap fixo de 200 os descartava em silêncio → a síntese era
+  // regenerada SEM eles E o Check 3 ficava cego (mesmo extrator quebrado;
+  // run real 8d33eabc, peça Santander/INSS). Caixa alta é sinal forte de
+  // título (prosa raramente é 70%+ maiúscula), então aqui o cap é folgado
+  // (400). O ramo "Da/Do" minúsculo — que pode casar PROSA — mantém cap apertado.
+  if (isUpperDominant(text)) return text.length <= 400;
+  if (/^d[aoe]s?\s/i.test(text)) return text.length <= 120;
+  return false;
 }
 
 interface Lines { lines: string[]; starts: number[]; }
