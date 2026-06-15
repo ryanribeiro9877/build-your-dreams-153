@@ -174,6 +174,81 @@ export function useTeamTasks(filters?: { status?: UserTaskStatus; assigneeUserId
   return { tasks: data ?? [], loading, error, refresh: refetch };
 }
 
+// ─── Board do Kanban da operação (por fase / org_stage) ───────────────────────
+export interface KanbanCard {
+  id: string;
+  title: string;
+  task_type_id: string;
+  task_type_code: string;
+  task_type_label: string;
+  stage: OrgStage;
+  status: UserTaskStatus;
+  priority: TaskPriority;
+  area: LegalArea | null;
+  client_id: string | null;
+  process_id: string | null;
+  assignee_user_id: string | null;
+  assignee_name: string;
+  assignee_role_label: string;
+  owner_role_code: string | null;
+  owner_role_label: string | null;
+  /** Quando preenchido, o card está "aguardando responsável" do papel indicado. */
+  awaiting_role_code: string | null;
+  assigner_user_id: string | null;
+  assigner_name: string;
+  deadline_at: string | null;
+  is_overdue: boolean;
+  created_at: string;
+}
+
+export function useKanbanBoard(includeCompleted = false) {
+  const { data, loading, error, refetch } = useSupabaseQuery<KanbanCard[]>({
+    queryKey: `kanban-board-${includeCompleted}`,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_board" as never, {
+        p_include_completed: includeCompleted,
+      } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as KanbanCard[]) || [];
+    },
+    realtime: { table: "user_tasks" },
+  });
+
+  return { cards: data ?? [], loading, error, refresh: refetch };
+}
+
+export interface AdvanceResult {
+  new_task_id: string;
+  next_stage: OrgStage;
+  assignee_user_id: string | null;
+  task_type_id: string;
+  awaiting_role: string | null;
+}
+
+/**
+ * Avança um card para a próxima fase (conclui a atual e cria a sucessora).
+ * Se a próxima fase tiver mais de um task_type e nenhum for passado, o backend
+ * lança "choose_task_type:<stage>" — o chamador deve detectar e abrir o seletor.
+ */
+export async function advanceUserTask(
+  taskId: string,
+  nextTaskTypeId?: string | null,
+): Promise<AdvanceResult> {
+  const { data, error } = await supabase.rpc("advance_user_task" as never, {
+    p_task_id: taskId,
+    p_next_task_type_id: nextTaskTypeId ?? null,
+  } as never);
+  if (error) throw error;
+  return data as unknown as AdvanceResult;
+}
+
+/** Extrai o stage de uma mensagem de erro "choose_task_type:<stage>", se houver. */
+export function parseChooseTaskTypeError(err: unknown): OrgStage | null {
+  const msg = (err as { message?: string })?.message ?? "";
+  const m = msg.match(/choose_task_type:(\w+)/);
+  return m ? (m[1] as OrgStage) : null;
+}
+
 // ─── Helpers: criar e atualizar ───────────────────────────────────────────────
 export interface CreateTaskInput {
   task_type_id: string;

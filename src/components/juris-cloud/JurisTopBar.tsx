@@ -4,7 +4,7 @@ import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   Menu, AlertTriangle, AlertCircle, CheckCircle, Info,
   Coins, UserPlus, Users, Network, ClipboardList,
-  MessageSquare, ShieldCheck, Lock,
+  MessageSquare, ShieldCheck, Lock, KanbanSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Agent, SidebarItem } from "./types";
@@ -150,6 +150,15 @@ export default function JurisTopBar({
               >
                 <Network size={15} strokeWidth={2.5} />
                 Equipe
+              </button>
+              <button
+                type="button"
+                className="jc-btn-team-list"
+                onClick={() => navigate("/sistema/kanban")}
+                title="Kanban da operação (board por fase)"
+              >
+                <KanbanSquare size={15} strokeWidth={2.5} />
+                Kanban
               </button>
               <button
                 type="button"

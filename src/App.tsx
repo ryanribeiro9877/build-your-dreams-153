@@ -34,6 +34,7 @@ const AgentDetail = lazy(() => import("./pages/AgentDetail.tsx"));
 const ChatWithAgent = lazy(() => import("./pages/ChatWithAgent.tsx"));
 const MyInbox = lazy(() => import("./pages/MyInbox.tsx"));
 const TeamDashboard = lazy(() => import("./pages/TeamDashboard.tsx"));
+const KanbanBoard = lazy(() => import("./pages/KanbanBoard.tsx"));
 const AssignTask = lazy(() => import("./pages/AssignTask.tsx"));
 const ValidationQueue = lazy(() => import("./pages/ValidationQueue.tsx"));
 const InterAssistantInbox = lazy(() => import("./pages/InterAssistantInbox.tsx"));
@@ -139,6 +140,7 @@ const App = () => (
               <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
               <Route path="/sistema/tarefas" element={<ProtectedRoute><MyInbox /></ProtectedRoute>} />
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />
+              <Route path="/sistema/kanban" element={<ProtectedRoute><KanbanBoard /></ProtectedRoute>} />
               <Route path="/sistema/equipe/atribuir" element={<ProtectedRoute><AssignTask /></ProtectedRoute>} />
               <Route path="/sistema/validar" element={<ProtectedRoute><ValidationQueue /></ProtectedRoute>} />
               <Route path="/sistema/inter-assistente" element={<ProtectedRoute><InterAssistantInbox /></ProtectedRoute>} />
