@@ -109,6 +109,15 @@ const LLM_AUX_TIMEOUT_MS = Number(Deno.env.get("LLM_AUX_TIMEOUT_MS")) || 45_000;
 // plano Pro o wall-clock é 400s — deixamos 380s p/ caber a peça inteira sem cortar,
 // e o consumo em STREAMING mantém a conexão ativa (não bate no idle de 150s).
 const LLM_N3_TIMEOUT_MS = Number(Deno.env.get("LLM_N3_TIMEOUT_MS")) || 380_000;
+// Resiliência a rate limit (429) e indisponibilidade transitória (500/502/503/529)
+// do provedor de LLM. O backoff é LIMITADO pelo deadline da própria chamada
+// (timeoutMs) — nunca estoura o wall-clock do worker. Honra Retry-After quando vem.
+const LLM_MAX_RETRIES = Number(Deno.env.get("LLM_MAX_RETRIES")) || 4;
+const LLM_BACKOFF_BASE_MS = Number(Deno.env.get("LLM_BACKOFF_BASE_MS")) || 800;
+const LLM_BACKOFF_CAP_MS = Number(Deno.env.get("LLM_BACKOFF_CAP_MS")) || 8_000;
+// Guard de concorrência do fan-out de resumos de anexos (antes era Promise.all
+// ilimitado → N anexos = N chamadas simultâneas, multiplicado por usuário).
+const SUMMARY_CONCURRENCY = Number(Deno.env.get("SUMMARY_CONCURRENCY")) || 3;
 
 // Tetos de contexto (estimativa ~4 chars/token). Protegem janela e orçamento.
 const CHARS_PER_TOKEN = 4;
@@ -209,52 +218,88 @@ async function callOpenAICompatible(opts: {
     headers["HTTP-Referer"] = "https://build-your-dreams-153.vercel.app";
     headers["X-Title"] = "JurisAI";
   }
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? LLM_TIMEOUT_MS);
-  try {
-    const resp = await fetch(opts.baseUrl, {
-      method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal,
-    });
-    if (!resp.ok) { const e = await resp.text(); throw new Error(`${opts.provider} ${resp.status}: ${e.slice(0, 300)}`); }
-
-    // ── Modo STREAM (SSE) — chunks "data: {...}" com choices[].delta.content ──
-    if (streaming && resp.body) {
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "", full = "", inTok = 0, outTok = 0, rawModel = opts.model;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          const s = line.trim();
-          if (!s.startsWith("data:")) continue;
-          const payload = s.slice(5).trim();
-          if (payload === "[DONE]") continue;
-          try {
-            const j = JSON.parse(payload);
-            const delta = j.choices?.[0]?.delta?.content;
-            if (delta) { full += delta; opts.onDelta!(full); }
-            if (j.usage) { inTok = j.usage.prompt_tokens ?? inTok; outTok = j.usage.completion_tokens ?? outTok; }
-            if (j.model) rawModel = j.model;
-          } catch { /* chunk parcial — ignora */ }
-        }
-      }
-      if (!full) throw new Error(`${opts.provider}: resposta vazia (stream)`);
-      return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel };
+  const deadline = Date.now() + (opts.timeoutMs ?? LLM_TIMEOUT_MS);
+  let attempt = 0;
+  while (true) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error(`${opts.provider}: deadline excedido antes da resposta`);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), remaining);
+    let resp: Response;
+    try {
+      resp = await fetch(opts.baseUrl, {
+        method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal,
+      });
+    } catch (e) {
+      clearTimeout(t);
+      throw e; // abort por timeout / erro de rede: respeita o deadline, sem retry
     }
 
-    // ── Modo normal (resposta única) ──
-    const data = (await resp.json()) as {
-      choices?: { message?: { content?: string } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string;
-    };
-    const content = data.choices?.[0]?.message?.content ?? "";
-    if (!content) throw new Error(`${opts.provider}: resposta vazia`);
-    return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model };
-  } finally { clearTimeout(t); }
+    if (!resp.ok) {
+      clearTimeout(t);
+      const status = resp.status;
+      const e = await resp.text();
+      const retryable = status === 429 || status === 500 || status === 502 || status === 503 || status === 529;
+      if (!retryable || attempt >= LLM_MAX_RETRIES) {
+        throw new Error(`${opts.provider} ${status}: ${e.slice(0, 300)}`);
+      }
+      // Backoff: Retry-After (s) se vier; senão exponencial + jitter, com teto.
+      const ra = Number(resp.headers.get("retry-after"));
+      const waitBase = Number.isFinite(ra) && ra > 0
+        ? ra * 1000
+        : Math.min(LLM_BACKOFF_BASE_MS * 2 ** attempt, LLM_BACKOFF_CAP_MS);
+      const wait = waitBase + Math.floor(Math.random() * 250);
+      if (Date.now() + wait >= deadline) {
+        throw new Error(`${opts.provider} ${status}: rate limit sem orçamento de tempo para retry`);
+      }
+      attempt++;
+      console.warn(`[LLM] ${opts.provider} ${status} — backoff ${wait}ms (tentativa ${attempt}/${LLM_MAX_RETRIES})`);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
+
+    // resp.ok — processa mantendo o timer ATIVO durante o stream (aborta se
+    // travar); limpa o timer só ao final do processamento.
+    try {
+      // ── Modo STREAM (SSE) — chunks "data: {...}" com choices[].delta.content ──
+      if (streaming && resp.body) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "", full = "", inTok = 0, outTok = 0, rawModel = opts.model;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith("data:")) continue;
+            const payload = s.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const j = JSON.parse(payload);
+              const delta = j.choices?.[0]?.delta?.content;
+              if (delta) { full += delta; opts.onDelta!(full); }
+              if (j.usage) { inTok = j.usage.prompt_tokens ?? inTok; outTok = j.usage.completion_tokens ?? outTok; }
+              if (j.model) rawModel = j.model;
+            } catch { /* chunk parcial — ignora */ }
+          }
+        }
+        if (!full) throw new Error(`${opts.provider}: resposta vazia (stream)`);
+        return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel };
+      }
+
+      // ── Modo normal (resposta única) ──
+      const data = (await resp.json()) as {
+        choices?: { message?: { content?: string } }[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string;
+      };
+      const content = data.choices?.[0]?.message?.content ?? "";
+      if (!content) throw new Error(`${opts.provider}: resposta vazia`);
+      return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model };
+    } finally { clearTimeout(t); }
+  }
 }
 
 // Resolve provedor pelo modelo, pega a chave certa e chama o endpoint certo.
@@ -481,9 +526,23 @@ async function ensureCaseSummary(admin: SupabaseClient, doc: CaseDoc): Promise<s
   }
 }
 
-// Garante resumos de todos os docs do caso (em paralelo; cada um cacheia ao concluir).
+// Executa tarefas com CONCORRÊNCIA LIMITADA (pool de tamanho fixo). Substitui o
+// Promise.all ilimitado, que disparava N chamadas de LLM simultâneas por run.
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<unknown>): Promise<void> {
+  const n = Math.max(1, limit);
+  let i = 0;
+  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      try { await fn(items[idx]); } catch { /* cada tarefa já trata o próprio erro */ }
+    }
+  });
+  await Promise.all(workers);
+}
+
+// Garante resumos de todos os docs do caso (concorrência limitada; cada um cacheia ao concluir).
 async function ensureAllCaseSummaries(admin: SupabaseClient, docs: CaseDoc[]): Promise<void> {
-  await Promise.all(docs.map((d) => ensureCaseSummary(admin, d)));
+  await mapLimit(docs, SUMMARY_CONCURRENCY, (d) => ensureCaseSummary(admin, d));
 }
 
 // Canal A — DOCUMENTOS DO CASO: anexos ativos da sessão (id, nome, bruto, resumo).

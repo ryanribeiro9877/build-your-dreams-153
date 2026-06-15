@@ -609,7 +609,11 @@ const SUMULAS_CATALOGO_LABEL = "STJ 43,54,297,362,382,479,530; STF 596; TJBA 13"
 // Resolve o nome do tribunal que segue a citação (texto já vem folded: lower,
 // sem acento). Vazio = não identificado.
 function normTribunal(raw: string): string {
-  if (/tjba|tribunal de justica da bahia|tj\s*-?\s*ba\b/.test(raw)) return "tjba";
+  // V25.6: tolera o nome por extenso "tribunal de justica DO ESTADO da bahia"
+  // (o ".*" cobre o "do estado" intermediário). Antes só casava o literal
+  // "tribunal de justica da bahia" → a citação válida da Súmula 13 do TJBA caía
+  // no default STJ e era acusada como FORA_CATALOGO indefinidamente (run becfe3be).
+  if (/tjba|tj\s*-?\s*ba\b|tribunal de justica\b.*\bbahia/.test(raw)) return "tjba";
   if (/stf|supremo/.test(raw)) return "stf";
   if (/stj|superior tribunal de justica/.test(raw)) return "stj";
   return "";
@@ -619,7 +623,7 @@ function checkSumulas(text: string): MechViolation[] {
   const out: MechViolation[] = [];
   const f = fold(text);
   // Captura o número e, opcionalmente, o tribunal que o segue (até ~40 chars).
-  const re = /sumula\s+(?:n[o.º°]?\s*\.?\s*)?(\d{1,4})(\s+(?:do|da|de|dos|das)\s+[a-z. ]{2,40})?/g;
+  const re = /sumula\s+(?:n[o.º°]?\s*\.?\s*)?(\d{1,4})(\s+(?:do|da|de|dos|das)\s+[a-z. ]{2,60})?/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(f)) !== null) {
     const n = Number(m[1]);
