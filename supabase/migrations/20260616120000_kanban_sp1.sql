@@ -422,7 +422,7 @@ BEGIN
             ) ||
             COALESCE(
               NULLIF(substring(
-                regexp_replace(trim(COALESCE(pa.full_name, pa.display_name)), '^\\S+\\s*', '')
+                regexp_replace(trim(COALESCE(pa.full_name, pa.display_name)), '^\S+\s*', '')
                 FROM 1 FOR 1
               ), ''),
               ''
