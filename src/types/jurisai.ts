@@ -417,3 +417,73 @@ export interface FindUserMissingAgentsRow {
   agentes_atuais: number;
   faltam: number;
 }
+
+
+// ============================================================================
+// SP1 — Kanban (visão de "situação" + boards configuráveis)
+// ============================================================================
+
+/**
+ * Situação simplificada (5 estados) derivada do `UserTaskStatus` (8 estados).
+ * Espelha o enum SQL `task_situacao`. Mapa e rótulos em src/lib/kanbanSituacao.ts.
+ */
+export type TaskSituacao =
+  | "pendente"
+  | "em_execucao"
+  | "concluida_sucesso"
+  | "concluida_sem_sucesso"
+  | "cancelado";
+
+export interface KanbanBoardSummary {
+  id: string;
+  name: string;
+  is_private: boolean;
+  is_owner: boolean;
+  is_favorite: boolean;
+  can_admin: boolean;
+  card_count: number;
+  hide_completed_after_days: number | null;
+  simplified_cards: boolean;
+  sort_order: number;
+}
+
+export interface KanbanColumn {
+  id: string;
+  board_id: string;
+  name: string;
+  situacao: TaskSituacao;
+  position: number;
+}
+
+export interface KanbanCardV2 {
+  id: string;
+  title: string;
+  situacao: TaskSituacao;
+  status: UserTaskStatus;
+  priority: TaskPriority;
+  area: LegalArea | null;
+  deadline_at: string | null;
+  is_overdue: boolean;
+  assignee_user_id: string | null;
+  assignee_name: string;
+  origin: "processo" | "cliente" | "interna";
+  client_id: string | null;
+  client_name: string | null;
+  process_id: string | null;
+  process_number: string | null;
+  awaiting_role_code: string | null;
+  column_id: string;
+  position: number;
+}
+
+/** Board no detalhe (get_kanban_board): metadados do summary + concessões de acesso. */
+export interface KanbanBoardDetailBoard extends KanbanBoardSummary {
+  grant_user_ids: string[];
+  grant_role_codes: string[];
+}
+
+export interface KanbanBoardDetail {
+  board: KanbanBoardDetailBoard;
+  columns: KanbanColumn[];
+  cards: KanbanCardV2[];
+}

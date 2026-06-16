@@ -35,3 +35,6 @@ dist-ssr
 .tech-debt/
 graphify-out/
 supabase/.temp/
+
+# Brainstorm mockups e rascunhos efêmeros
+.superpowers/
