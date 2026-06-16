@@ -1468,7 +1468,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
   const fail = async (msg: string) => {
     await admin.from("orchestration_runs").update({ status: "failed", error: msg, updated_at: new Date().toISOString() }).eq("id", runId);
-    const errContent = "Nao consegui concluir a orquestracao agora. Tente novamente.";
+    // Mensagem acionável por TIPO de falha. Para 402 (sem crédito) e 401 (chave),
+    // "tente novamente" não resolve — o usuário precisa saber o que fazer.
+    const isCredit = /\b402\b|more credits|can only afford|requires more credits|insufficient_quota|insufficient credits/i.test(msg);
+    const isAuthKey = /\b401\b|invalid api key|incorrect api key|unauthorized|no auth credentials/i.test(msg);
+    const errContent = isCredit
+      ? "Nao foi possivel gerar a peca: os creditos do provedor de IA (OpenRouter) se esgotaram. Recarregue o saldo em openrouter.ai/settings/credits e gere a peca novamente."
+      : isAuthKey
+      ? "Nao foi possivel gerar a peca: a chave de API do provedor de IA foi recusada. Verifique a chave do escritorio nas configuracoes e tente novamente."
+      : "Nao consegui concluir a orquestracao agora. Tente novamente.";
     // Se havia uma linha de streaming, converte-a em erro (evita bolha órfã); senão insere.
     if (run.stream_message_id) {
       await admin.from("chat_messages")
