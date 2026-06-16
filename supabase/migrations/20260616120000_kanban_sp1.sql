@@ -206,9 +206,10 @@ AS $$
       AND (
         public.kanban_can_admin(p_uid)
         OR b.owner_user_id = p_uid
-        OR (
-          b.is_private = false
-          AND EXISTS (
+        -- Quadro público: qualquer autenticado acessa.
+        OR b.is_private = false
+        -- Quadro privado: precisa de concessão (por usuário ou por cargo).
+        OR EXISTS (
             SELECT 1 FROM public.kanban_board_grants g
             WHERE g.board_id = b.id
               AND (
@@ -219,7 +220,6 @@ AS $$
                   WHERE p.user_id = p_uid
                 ))
               )
-          )
         )
       )
   );
@@ -393,6 +393,7 @@ BEGIN
   INTO v_cards
   FROM (
     SELECT jsonb_build_object(
+      'id', ut.id,                 -- KanbanCardV2.id = user_task_id (usado como draggableId e em moveCard)
       'placement_id', cp.id,
       'user_task_id', ut.id,
       'column_id', cp.column_id,
@@ -660,6 +661,16 @@ BEGIN
     v_keep := array_append(v_keep, v_id);
   END LOOP;
 
+  -- Nenhuma coluna restante (array vazio): só é permitido se o quadro não tiver
+  -- cards — senão os placements ficariam órfãos (column_id NOT NULL). (BUG corrigido)
+  IF array_length(v_keep, 1) IS NULL THEN
+    IF EXISTS (SELECT 1 FROM public.kanban_card_placements WHERE board_id = p_board_id) THEN
+      RAISE EXCEPTION 'kanban_set_columns: não é possível remover todas as colunas enquanto há cards no quadro';
+    END IF;
+    DELETE FROM public.kanban_columns WHERE board_id = p_board_id;
+    RETURN;
+  END IF;
+
   -- Move placements das colunas removidas para uma coluna remanescente da mesma
   -- situacao (ou a primeira do quadro) antes de apagar, evitando perder cards.
   UPDATE public.kanban_card_placements cp
@@ -770,7 +781,8 @@ DECLARE
   v_task public.user_tasks;
   v_target public.task_situacao;
   v_current public.task_situacao;
-  v_eff_status public.user_task_status;
+  v_requires_validation BOOLEAN;
+  v_validated_at TIMESTAMPTZ;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -827,14 +839,33 @@ BEGIN
     END IF;
 
   ELSIF v_target = 'concluida_sucesso' THEN
-    -- Roteia por update_user_task_status p/ preservar o desvio V18
-    -- (requires_validation -> awaiting_validation). O trigger sincroniza a
-    -- situacao a partir do status efetivo resultante.
-    v_eff_status := public.update_user_task_status(p_task_id, 'completed', NULL);
-    -- Limpa marcação de sem_sucesso, se havia.
+    -- Limpa a marcação de sem_sucesso ANTES de mexer no status: o trigger
+    -- trg_user_tasks_sync_situacao lê payload.outcome no momento do UPDATE de
+    -- status; se limpássemos depois, a situacao ficaria 'concluida_sem_sucesso'
+    -- residual (BUG corrigido).
     UPDATE public.user_tasks
     SET payload = (payload - 'outcome'), updated_at = now()
     WHERE id = p_task_id AND (payload ? 'outcome');
+
+    -- Conclusão aplicada INLINE (não via update_user_task_status, que exige ser
+    -- dono/responsável da tarefa — aqui o gate correto é acesso ao quadro).
+    -- Preserva o desvio V18: tipos com requires_validation vão p/ awaiting_validation.
+    SELECT COALESCE(tt.requires_validation, false), ut.validated_at
+      INTO v_requires_validation, v_validated_at
+      FROM public.user_tasks ut
+      JOIN public.task_types tt ON tt.id = ut.task_type_id
+      WHERE ut.id = p_task_id;
+
+    IF v_requires_validation AND v_validated_at IS NULL THEN
+      UPDATE public.user_tasks
+      SET status = 'awaiting_validation', situacao = 'em_execucao', updated_at = now()
+      WHERE id = p_task_id;
+    ELSE
+      UPDATE public.user_tasks
+      SET status = 'completed', situacao = 'concluida_sucesso',
+          completed_at = COALESCE(completed_at, now()), updated_at = now()
+      WHERE id = p_task_id;
+    END IF;
 
   ELSIF v_target = 'concluida_sem_sucesso' THEN
     UPDATE public.user_tasks
@@ -987,6 +1018,7 @@ GRANT EXECUTE ON FUNCTION public.kanban_toggle_favorite(UUID) TO authenticated;
 CREATE OR REPLACE FUNCTION public.kanban_sync_situacao_from_status()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = public
 AS $$
 BEGIN
   IF NEW.status = 'completed' AND (NEW.payload->>'outcome') = 'sem_sucesso' THEN

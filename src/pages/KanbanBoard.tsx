@@ -104,7 +104,10 @@ export default function KanbanBoard() {
 
   // ── Drag & drop ────────────────────────────────────────────────────────────
   async function onDragEnd(result: DropResult) {
-    if (!result.destination || !canAdmin) return;
+    // Mover cards é permitido a qualquer usuário com acesso ao quadro (não só
+    // admin) — o acesso já foi gateado por get_kanban_board/kanban_can_access_board.
+    // 'canAdmin' controla apenas a configuração do quadro.
+    if (!result.destination) return;
     const { draggableId, source, destination } = result;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
@@ -265,7 +268,7 @@ export default function KanbanBoard() {
                 key={col.id}
                 column={col}
                 cards={cardsByColumn[col.id] ?? []}
-                canEdit={canAdmin}
+                canEdit={true}
                 simplified={!!board?.simplified_cards}
                 onEditCard={handleEditCard}
                 onDeleteCard={handleDeleteCard}
