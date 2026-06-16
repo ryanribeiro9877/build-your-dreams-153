@@ -21,6 +21,7 @@ import {
 import type { KanbanCardV2, TaskSituacao } from "@/types/jurisai";
 import { BoardSelector } from "@/components/kanban/BoardSelector";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { AddTaskModal } from "@/components/kanban/AddTaskModal";
 import {
   BoardConfigModal,
   type GrantOption,
@@ -55,6 +56,7 @@ export default function KanbanBoard() {
   useEffect(() => { setLocalCards(cards); }, [cards]);
 
   const [showConfig, setShowConfig] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
 
   // Opções e concessões para o modal de configuração.
@@ -239,6 +241,11 @@ export default function KanbanBoard() {
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
           {canAdmin && board && (
+            <button onClick={() => setShowAddTask(true)} style={btnGhost} title="Adicionar tarefa ao quadro">
+              + Adicionar tarefa
+            </button>
+          )}
+          {canAdmin && board && (
             <button onClick={() => setShowConfig(true)} style={btnGhost} title="Configurar quadro">
               ⚙ Configurar
             </button>
@@ -318,6 +325,17 @@ export default function KanbanBoard() {
             await setBoardGrants(board.id, userIds, roleCodes);
             await refreshBoard();
           }}
+        />
+      )}
+
+      {/* Modal de adicionar tarefa ao quadro */}
+      {showAddTask && board && (
+        <AddTaskModal
+          boardId={board.id}
+          columns={orderedColumns}
+          excludeTaskIds={localCards.map((c) => c.id)}
+          onClose={() => setShowAddTask(false)}
+          onAdded={refreshBoard}
         />
       )}
     </div>
