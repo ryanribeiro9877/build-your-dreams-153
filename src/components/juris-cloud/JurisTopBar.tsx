@@ -140,6 +140,18 @@ export default function JurisTopBar({
             )}
           </button>
 
+          {/* Kanban: disponível a todos os autenticados (o board filtra acesso por
+              quadro via kanban_can_access_board; só admin configura/cria quadros). */}
+          <button
+            type="button"
+            className="jc-btn-team-list"
+            onClick={() => navigate("/sistema/kanban")}
+            title="Kanban"
+          >
+            <KanbanSquare size={15} strokeWidth={2.5} />
+            Kanban
+          </button>
+
           {isMaster && (
             <>
               <button
@@ -150,15 +162,6 @@ export default function JurisTopBar({
               >
                 <Network size={15} strokeWidth={2.5} />
                 Equipe
-              </button>
-              <button
-                type="button"
-                className="jc-btn-team-list"
-                onClick={() => navigate("/sistema/kanban")}
-                title="Kanban da operação (board por fase)"
-              >
-                <KanbanSquare size={15} strokeWidth={2.5} />
-                Kanban
               </button>
               <button
                 type="button"
