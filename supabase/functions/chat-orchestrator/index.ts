@@ -644,10 +644,10 @@ interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
 interface CepInfo {
   cep: string;                 // "43.700-000"
   uf: string | null;
-  localidade: string | null;   // cidade (só via ViaCEP)
+  localidade: string | null;   // cidade (via provedor de CEP; null só na faixa offline)
   bairro: string | null;
   logradouro: string | null;
-  fonte: "viacep" | "faixa";
+  fonte: "viacep" | "brasilapi" | "opencep" | "faixa";
 }
 // Resultado da leitura DETERMINÍSTICA da planilha de indébito (TRAVA do indébito).
 // O código lê o TOTAL declarado e CALCULA o dobro; o N3 não produz nenhum número.
@@ -898,38 +898,58 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
   return facts;
 }
 
-// V25.7 (B + A): resolve um CEP em cidade/UF. Tenta ViaCEP (cidade real); em timeout/
-// erro/CEP inexistente, cai na faixa oficial CEP→UF (offline — garante ao menos a UF).
-// NUNCA inventa: sem ViaCEP, localidade fica null (→ [A PREENCHER] na cidade da peça).
+// V25.8: resolve um CEP em cidade/UF por uma CADEIA de provedores. O ViaCEP NÃO
+// indexa o "CEP geral" do município (ex.: 43.700-000 de Simões Filho/BA → erro),
+// então a cidade caía em [A PREENCHER]. BrasilAPI e OpenCEP agregam outras bases e
+// resolvem esses CEPs gerais. Ordem: ViaCEP → BrasilAPI → OpenCEP → faixa offline
+// (garante ao menos a UF). NUNCA inventa: sem provedor, localidade fica null.
+// Obs.: bairro/logradouro só existem para CEP de RUA; em CEP de município são
+// vazios em TODAS as bases — nesses casos o bairro vem do comprovante (endereço
+// verbatim), não do CEP.
 const VIACEP_TIMEOUT_MS = Number(Deno.env.get("VIACEP_TIMEOUT_MS")) || 4000;
 const VIACEP_MAX = 6;
 function fmtCep(cep: string): string { return `${cep.slice(0, 2)}.${cep.slice(2, 5)}-${cep.slice(5)}`; }
+async function fetchCepJson(url: string): Promise<Record<string, unknown> | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), VIACEP_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok) { console.warn(`[cep] ${url} HTTP ${resp.status}`); return null; }
+    return await resp.json() as Record<string, unknown>;
+  } catch (e) {
+    console.warn(`[cep] ${url} falhou (${e instanceof Error ? e.name : "erro"})`);
+    return null;
+  } finally { clearTimeout(timer); }
+}
+function s(v: unknown): string | null { const t = typeof v === "string" ? v.trim() : ""; return t || null; }
 async function resolveCep(cep: string): Promise<CepInfo> {
   const ufFaixa = ufFromCep(parseInt(cep.slice(0, 5), 10));
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), VIACEP_TIMEOUT_MS);
-    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (resp.ok) {
-      const j = await resp.json() as {
-        erro?: boolean; uf?: string; localidade?: string; bairro?: string; logradouro?: string;
-      };
-      if (j && !j.erro && j.uf) {
-        console.log(`[viacep] ${cep} -> ${j.localidade}/${j.uf}`);
-        return {
-          cep: fmtCep(cep), uf: j.uf, localidade: j.localidade || null,
-          bairro: j.bairro || null, logradouro: j.logradouro || null, fonte: "viacep",
-        };
-      }
-      console.warn(`[viacep] ${cep} resposta sem uf/erro=${j?.erro} -> faixa ${ufFaixa}`);
-    } else {
-      console.warn(`[viacep] ${cep} HTTP ${resp.status} -> faixa ${ufFaixa}`);
-    }
-  } catch (e) {
-    console.warn(`[viacep] ${cep} falhou (${e instanceof Error ? e.name : "erro"}) -> faixa ${ufFaixa}`);
+  const fmt = fmtCep(cep);
+
+  // 1) ViaCEP — cidade + bairro/logradouro (quando CEP de rua).
+  const v = await fetchCepJson(`https://viacep.com.br/ws/${cep}/json/`);
+  if (v && !v.erro && s(v.uf)) {
+    console.log(`[cep] viacep ${cep} -> ${s(v.localidade)}/${s(v.uf)}`);
+    return { cep: fmt, uf: s(v.uf), localidade: s(v.localidade), bairro: s(v.bairro), logradouro: s(v.logradouro), fonte: "viacep" };
   }
-  return { cep: fmtCep(cep), uf: ufFaixa, localidade: null, bairro: null, logradouro: null, fonte: "faixa" };
+
+  // 2) BrasilAPI — agrega provedores; resolve o CEP GERAL de município que o ViaCEP não tem.
+  const b = await fetchCepJson(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+  if (b && s(b.city) && s(b.state)) {
+    console.log(`[cep] brasilapi ${cep} -> ${s(b.city)}/${s(b.state)} (${s(b.service) ?? "?"})`);
+    return { cep: fmt, uf: s(b.state), localidade: s(b.city), bairro: s(b.neighborhood), logradouro: s(b.street), fonte: "brasilapi" };
+  }
+
+  // 3) OpenCEP — base alternativa.
+  const o = await fetchCepJson(`https://opencep.com/v1/${cep}`);
+  if (o && s(o.localidade) && s(o.uf)) {
+    console.log(`[cep] opencep ${cep} -> ${s(o.localidade)}/${s(o.uf)}`);
+    return { cep: fmt, uf: s(o.uf), localidade: s(o.localidade), bairro: s(o.bairro), logradouro: s(o.logradouro), fonte: "opencep" };
+  }
+
+  // 4) Faixa offline — garante ao menos a UF; cidade → [A PREENCHER].
+  console.warn(`[cep] ${cep} não resolvido por provedor -> faixa ${ufFaixa}`);
+  return { cep: fmt, uf: ufFaixa, localidade: null, bairro: null, logradouro: null, fonte: "faixa" };
 }
 // Enriquece os CEPs coletados (paralelo, com teto). Tolerante a falha: nunca derruba o run.
 async function enrichCepInfo(facts: CanonicalFacts): Promise<void> {
@@ -987,9 +1007,9 @@ function buildCanonicalFactsBlock(facts: CanonicalFacts): string {
         : (c.uf ? `UF ${c.uf} (cidade NÃO confirmada)` : "[indeterminado]");
       const extra = (c.logradouro || c.bairro)
         ? `  [${[c.logradouro, c.bairro].filter(Boolean).join(", ")}]` : "";
-      const fonte = c.fonte === "viacep"
-        ? "ViaCEP — oficial"
-        : "faixa CEP→UF (só a UF é confiável; cidade → [A PREENCHER])";
+      const fonte = c.fonte === "faixa"
+        ? "faixa CEP→UF (só a UF é confiável; cidade → [A PREENCHER])"
+        : `${c.fonte} — oficial`;
       return `    • ${c.cep} ⇒ ${loc}${extra}  (fonte: ${fonte})`;
     }).join("\n");
     lines.push(
