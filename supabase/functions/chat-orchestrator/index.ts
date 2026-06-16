@@ -901,7 +901,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
 // V25.7 (B + A): resolve um CEP em cidade/UF. Tenta ViaCEP (cidade real); em timeout/
 // erro/CEP inexistente, cai na faixa oficial CEP→UF (offline — garante ao menos a UF).
 // NUNCA inventa: sem ViaCEP, localidade fica null (→ [A PREENCHER] na cidade da peça).
-const VIACEP_TIMEOUT_MS = Number(Deno.env.get("VIACEP_TIMEOUT_MS")) || 2500;
+const VIACEP_TIMEOUT_MS = Number(Deno.env.get("VIACEP_TIMEOUT_MS")) || 4000;
 const VIACEP_MAX = 6;
 function fmtCep(cep: string): string { return `${cep.slice(0, 2)}.${cep.slice(2, 5)}-${cep.slice(5)}`; }
 async function resolveCep(cep: string): Promise<CepInfo> {
@@ -916,13 +916,19 @@ async function resolveCep(cep: string): Promise<CepInfo> {
         erro?: boolean; uf?: string; localidade?: string; bairro?: string; logradouro?: string;
       };
       if (j && !j.erro && j.uf) {
+        console.log(`[viacep] ${cep} -> ${j.localidade}/${j.uf}`);
         return {
           cep: fmtCep(cep), uf: j.uf, localidade: j.localidade || null,
           bairro: j.bairro || null, logradouro: j.logradouro || null, fonte: "viacep",
         };
       }
+      console.warn(`[viacep] ${cep} resposta sem uf/erro=${j?.erro} -> faixa ${ufFaixa}`);
+    } else {
+      console.warn(`[viacep] ${cep} HTTP ${resp.status} -> faixa ${ufFaixa}`);
     }
-  } catch (_e) { /* rede/timeout/abort → cai na faixa offline */ }
+  } catch (e) {
+    console.warn(`[viacep] ${cep} falhou (${e instanceof Error ? e.name : "erro"}) -> faixa ${ufFaixa}`);
+  }
   return { cep: fmtCep(cep), uf: ufFaixa, localidade: null, bairro: null, logradouro: null, fonte: "faixa" };
 }
 // Enriquece os CEPs coletados (paralelo, com teto). Tolerante a falha: nunca derruba o run.

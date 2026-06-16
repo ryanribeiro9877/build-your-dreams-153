@@ -81,6 +81,9 @@ const EXT_UNITS: Record<string, number> = {
   seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13,
   catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezessete: 17,
   dezoito: 18, dezenove: 19,
+  // Variantes do português de Portugal (o N3 às vezes as usa): tratam o MESMO número.
+  // Sem isto, o parser lê "quatrocentos e dezassete" como 400 e acusa EXTENSO_DIVERGENTE falso.
+  dezasseis: 16, dezassete: 17, dezanove: 19,
 };
 const EXT_TENS: Record<string, number> = {
   vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60,
