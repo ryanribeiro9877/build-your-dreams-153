@@ -15,6 +15,9 @@ import type {
   TaskDetail,
   TaskComment,
   TaskPriority,
+  ChecklistItem,
+  WorkflowTemplateSummary,
+  TaskWorkflow,
 } from "@/types/jurisai";
 
 /**
@@ -339,5 +342,81 @@ export async function updateTaskFields(taskId: string, fields: TaskFieldUpdate):
     .from("user_tasks")
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq("id", taskId);
+  if (error) throw error;
+}
+
+// ─── Checklist (SP4) ─────────────────────────────────────────────────────────
+// RPCs ainda não presentes no types.ts gerado → cast até types:regen.
+export function useChecklist(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<ChecklistItem[]>({
+    queryKey: `task-checklist-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_checklist" as never, { p_task_id: taskId } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as ChecklistItem[]) ?? [];
+    },
+  });
+  return { items: data ?? [], loading, error, refresh: refetch };
+}
+
+export async function addChecklistItem(taskId: string, body: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_add_checklist_item" as never, { p_task_id: taskId, p_body: body } as never);
+  if (error) throw error;
+}
+export async function toggleChecklistItem(itemId: string, done: boolean): Promise<void> {
+  const { error } = await supabase.rpc("kanban_toggle_checklist_item" as never, { p_item_id: itemId, p_done: done } as never);
+  if (error) throw error;
+}
+export async function deleteChecklistItem(itemId: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_delete_checklist_item" as never, { p_item_id: itemId } as never);
+  if (error) throw error;
+}
+
+// ─── Workflow (SP4) ──────────────────────────────────────────────────────────
+export function useWorkflowTemplates() {
+  const { user } = useAuth();
+  const { data, loading, error, refetch } = useSupabaseQuery<WorkflowTemplateSummary[]>({
+    queryKey: "workflow-templates",
+    enabled: !!user,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_workflow_templates" as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as WorkflowTemplateSummary[]) ?? [];
+    },
+    realtime: { table: "workflow_templates" },
+  });
+  return { templates: data ?? [], loading, error, refresh: refetch };
+}
+
+export async function createWorkflowTemplate(name: string, steps: string[]): Promise<string> {
+  const { data, error } = await supabase.rpc("kanban_create_workflow_template" as never, { p_name: name, p_steps: steps } as never);
+  if (error) throw error;
+  return data as unknown as string;
+}
+export async function deleteWorkflowTemplate(id: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_delete_workflow_template" as never, { p_id: id } as never);
+  if (error) throw error;
+}
+
+export function useTaskWorkflow(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<TaskWorkflow | null>({
+    queryKey: `task-workflow-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_workflow" as never, { p_task_id: taskId } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as TaskWorkflow) ?? null;
+    },
+  });
+  return { workflow: (data ?? null) as TaskWorkflow | null, loading, error, refresh: refetch };
+}
+
+export async function startWorkflow(taskId: string, templateId: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_start_workflow" as never, { p_task_id: taskId, p_template_id: templateId } as never);
+  if (error) throw error;
+}
+export async function setWorkflowStep(stepStateId: string, done: boolean): Promise<void> {
+  const { error } = await supabase.rpc("kanban_set_workflow_step" as never, { p_step_state_id: stepStateId, p_done: done } as never);
   if (error) throw error;
 }

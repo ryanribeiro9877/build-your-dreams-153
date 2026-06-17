@@ -29,6 +29,7 @@ import { AddTaskModal } from "@/components/kanban/AddTaskModal";
 import { KanbanFilterBar } from "@/components/kanban/KanbanFilterBar";
 import { KanbanFilterModal } from "@/components/kanban/KanbanFilterModal";
 import { TaskDetailModal } from "@/components/kanban/TaskDetailModal";
+import { WorkflowTemplatesModal } from "@/components/kanban/WorkflowTemplatesModal";
 import {
   BoardConfigModal,
   type GrantOption,
@@ -73,6 +74,9 @@ export default function KanbanBoard() {
 
   // Detalhe-hub (SP3).
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+
+  // Fluxos de trabalho (SP4, admin).
+  const [showWorkflows, setShowWorkflows] = useState(false);
 
   // Opções e concessões para o modal de configuração.
   const [memberOptions, setMemberOptions] = useState<GrantOption[]>([]);
@@ -323,6 +327,9 @@ export default function KanbanBoard() {
             </button>
           )}
           {canAdmin && (
+            <button onClick={() => setShowWorkflows(true)} style={btnGhost} title="Gerenciar fluxos de trabalho">⚙ Fluxos</button>
+          )}
+          {canAdmin && (
             <button onClick={handleNewBoard} style={btnPrimary}>+ Novo quadro</button>
           )}
         </div>
@@ -448,6 +455,9 @@ export default function KanbanBoard() {
           onOpenClient={(id) => { setDetailTaskId(null); handleOpenClient(id); }}
         />
       )}
+
+      {/* Modal de gestão de fluxos (SP4, admin) */}
+      {showWorkflows && <WorkflowTemplatesModal onClose={() => setShowWorkflows(false)} />}
     </div>
   );
 }

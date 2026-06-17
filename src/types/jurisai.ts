@@ -570,3 +570,35 @@ export interface TaskComment {
   mentioned_user_ids: string[];
   created_at: string;
 }
+
+// ============================================================================
+// SP4 — Blocos funcionais: checklist e workflow
+// ============================================================================
+
+export interface ChecklistItem {
+  id: string;
+  body: string;
+  done: boolean;
+  position: number;
+}
+
+export interface WorkflowTemplateSummary {
+  id: string;
+  name: string;
+  step_count: number;
+}
+
+export interface WorkflowStepState {
+  id: string;
+  name: string;
+  position: number;
+  done: boolean;
+  done_at: string | null;
+}
+
+export interface TaskWorkflow {
+  instance_id: string;
+  template_name: string;
+  started_at: string;
+  steps: WorkflowStepState[];
+}
