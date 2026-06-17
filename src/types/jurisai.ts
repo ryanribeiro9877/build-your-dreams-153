@@ -465,7 +465,10 @@ export interface KanbanCardV2 {
   deadline_at: string | null;
   is_overdue: boolean;
   assignee_user_id: string | null;
+  assigner_user_id: string | null;
+  validator_user_id: string | null;
   assignee_name: string;
+  task_type_label: string;
   origin: "processo" | "cliente" | "interna";
   client_id: string | null;
   client_name: string | null;
@@ -474,6 +477,7 @@ export interface KanbanCardV2 {
   awaiting_role_code: string | null;
   column_id: string;
   position: number;
+  created_at: string;
 }
 
 /** Board no detalhe (get_kanban_board): metadados do summary + concessões de acesso. */
@@ -486,4 +490,34 @@ export interface KanbanBoardDetail {
   board: KanbanBoardDetailBoard;
   columns: KanbanColumn[];
   cards: KanbanCardV2[];
+}
+
+// ============================================================================
+// SP2 — Filtros do Kanban (client-side) + filtros salvos
+// ============================================================================
+
+export type KanbanInvolvement = "todas" | "responsavel" | "envolvido" | "delegadas";
+export type KanbanSort = "recentes" | "prazo" | "prioridade" | "titulo";
+
+export interface KanbanFilterState {
+  involvement: KanbanInvolvement;
+  search: string;
+  sort: KanbanSort;
+  /** Intervalo por deadline_at (ISO date, inclusivo). */
+  periodStart: string | null;
+  periodEnd: string | null;
+  /** Filtros avançados. */
+  assignees: string[];       // assignee_user_id
+  taskTypes: string[];       // task_type_label (origem da etiqueta de tipo)
+  areas: LegalArea[];
+  situacoes: TaskSituacao[];
+  clientName: string;
+  processNumber: string;
+}
+
+export interface SavedFilter {
+  id: string;
+  name: string;
+  filter: KanbanFilterState;
+  created_at: string;
 }
