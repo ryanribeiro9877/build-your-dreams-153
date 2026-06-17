@@ -147,12 +147,12 @@ export function useTokenBalance(navigate?: (to: string) => void) {
   const consumeTokensWithRef = useCallback(async (amount: number, description: string, referenceId: string) => {
     if (!BILLING_ENABLED) return true; // tokens infinitos: não cobra
     if (!user) return false;
-    const { data, error } = await supabase.rpc("consume_tokens_with_ref" as never, {
+    const { data, error } = await supabase.rpc("consume_tokens_with_ref", {
       p_user_id: user.id,
       p_amount: amount,
       p_description: description,
       p_reference_id: referenceId,
-    } as never);
+    });
     if (error || !data) return false;
     await fetchBalance();
     return true;
@@ -162,11 +162,11 @@ export function useTokenBalance(navigate?: (to: string) => void) {
   const refundTokens = useCallback(async (amount: number, referenceId: string, description: string = "Estorno: resposta nao entregue") => {
     if (!BILLING_ENABLED) return true; // sem cobrança: nada a estornar
     if (!user) return false;
-    const { data, error } = await supabase.rpc("refund_own_tokens" as never, {
+    const { data, error } = await supabase.rpc("refund_own_tokens", {
       p_amount: amount,
       p_reference_id: referenceId,
       p_description: description,
-    } as never);
+    });
     if (error || !data) return false;
     await fetchBalance();
     return true;

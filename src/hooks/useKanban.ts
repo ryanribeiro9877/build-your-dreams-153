@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type {
@@ -38,7 +39,7 @@ export function useKanbanBoards() {
     queryKey: "kanban-boards",
     enabled: !!user,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_kanban_boards" as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_boards");
       if (rpcErr) throw rpcErr;
       return (data as unknown as KanbanBoardSummary[]) || [];
     },
@@ -57,9 +58,9 @@ export function useKanbanBoard(boardId: string | null) {
     queryKey: `kanban-board-${boardId ?? "none"}`,
     enabled: !!boardId,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_kanban_board" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_board", {
         p_board_id: boardId,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return data as unknown as KanbanBoardDetail;
     },
@@ -92,26 +93,26 @@ export async function moveCard(
   columnId: string,
   position: number,
 ): Promise<void> {
-  const { error } = await supabase.rpc("kanban_move_card" as never, {
+  const { error } = await supabase.rpc("kanban_move_card", {
     p_task_id: taskId,
     p_column_id: columnId,
     p_position: position,
-  } as never);
+  });
   if (error) throw error;
 }
 
 export async function addTaskToBoard(taskId: string, columnId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_add_task_to_board" as never, {
+  const { error } = await supabase.rpc("kanban_add_task_to_board", {
     p_task_id: taskId,
     p_column_id: columnId,
-  } as never);
+  });
   if (error) throw error;
 }
 
 export async function removeTaskFromBoard(taskId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_remove_task_from_board" as never, {
+  const { error } = await supabase.rpc("kanban_remove_task_from_board", {
     p_task_id: taskId,
-  } as never);
+  });
   if (error) throw error;
 }
 
@@ -123,12 +124,12 @@ export async function createBoard(
   hideCompletedAfterDays: number | null,
   simplifiedCards: boolean,
 ): Promise<string> {
-  const { data, error } = await supabase.rpc("kanban_create_board" as never, {
+  const { data, error } = await supabase.rpc("kanban_create_board", {
     p_name: name,
     p_is_private: isPrivate,
     p_hide_completed_after_days: hideCompletedAfterDays,
     p_simplified_cards: simplifiedCards,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as string;
 }
@@ -140,20 +141,20 @@ export async function updateBoard(
   hideCompletedAfterDays: number | null,
   simplifiedCards: boolean,
 ): Promise<void> {
-  const { error } = await supabase.rpc("kanban_update_board" as never, {
+  const { error } = await supabase.rpc("kanban_update_board", {
     p_board_id: boardId,
     p_name: name,
     p_is_private: isPrivate,
     p_hide_completed_after_days: hideCompletedAfterDays,
     p_simplified_cards: simplifiedCards,
-  } as never);
+  });
   if (error) throw error;
 }
 
 export async function deleteBoard(boardId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_delete_board" as never, {
+  const { error } = await supabase.rpc("kanban_delete_board", {
     p_board_id: boardId,
-  } as never);
+  });
   if (error) throw error;
 }
 
@@ -165,10 +166,10 @@ export interface SetColumnInput {
 }
 
 export async function setColumns(boardId: string, columns: SetColumnInput[]): Promise<void> {
-  const { error } = await supabase.rpc("kanban_set_columns" as never, {
+  const { error } = await supabase.rpc("kanban_set_columns", {
     p_board_id: boardId,
-    p_columns: columns,
-  } as never);
+    p_columns: columns as unknown as Json,
+  });
   if (error) throw error;
 }
 
@@ -177,18 +178,18 @@ export async function setBoardGrants(
   userIds: string[],
   roleCodes: string[],
 ): Promise<void> {
-  const { error } = await supabase.rpc("kanban_set_board_grants" as never, {
+  const { error } = await supabase.rpc("kanban_set_board_grants", {
     p_board_id: boardId,
     p_user_ids: userIds,
     p_role_codes: roleCodes,
-  } as never);
+  });
   if (error) throw error;
 }
 
 // ─── Favoritos ─────────────────────────────────────────────────────────────────
 export async function toggleFavorite(boardId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_toggle_favorite" as never, {
+  const { error } = await supabase.rpc("kanban_toggle_favorite", {
     p_board_id: boardId,
-  } as never);
+  });
   if (error) throw error;
 }

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type { LegalArea, OrgStage, UserTaskStatus, TaskPriority } from "@/types/jurisai";
@@ -87,9 +88,9 @@ export function useMyInbox(includeCompleted = false) {
     queryKey: `my-inbox-${user?.id ?? "anon"}`,
     enabled: !!user,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_my_inbox" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_my_inbox", {
         p_include_completed: includeCompleted,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return (data as unknown as InboxTask[]) || [];
     },
@@ -111,7 +112,7 @@ export function useInboxCount() {
     queryKey: `inbox-count-${user?.id ?? "anon"}`,
     enabled: !!user,
     fetcher: async () => {
-      const { data } = await supabase.rpc("get_inbox_count" as never);
+      const { data } = await supabase.rpc("get_inbox_count");
       const rows = data as unknown as InboxCount[] | null;
       if (rows && Array.isArray(rows) && rows.length > 0) {
         return rows[0];
@@ -131,7 +132,7 @@ export function useTaskTypes() {
   const { data, loading } = useSupabaseQuery<TaskTypeOption[]>({
     queryKey: "task-types",
     fetcher: async () => {
-      const { data } = await supabase.rpc("get_task_types_by_stage" as never);
+      const { data } = await supabase.rpc("get_task_types_by_stage");
       return (data as unknown as TaskTypeOption[]) || [];
     },
   });
@@ -145,9 +146,9 @@ export function useEligibleAssignees(taskTypeId: string | null) {
     queryKey: `eligible-assignees-${taskTypeId ?? "none"}`,
     enabled: !!taskTypeId,
     fetcher: async () => {
-      const { data } = await supabase.rpc("get_eligible_assignees" as never, {
+      const { data } = await supabase.rpc("get_eligible_assignees", {
         p_task_type_id: taskTypeId,
-      } as never);
+      });
       return (data as unknown as EligibleAssignee[]) || [];
     },
   });
@@ -160,12 +161,12 @@ export function useTeamTasks(filters?: { status?: UserTaskStatus; assigneeUserId
   const { data, loading, error, refetch } = useSupabaseQuery<TeamTask[]>({
     queryKey: `team-tasks-${filters?.status ?? "all"}-${filters?.assigneeUserId ?? "all"}-${filters?.includeCompleted ?? false}`,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_team_tasks" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_team_tasks", {
         p_status: filters?.status ?? null,
         p_assignee_user_id: filters?.assigneeUserId ?? null,
         p_include_completed: filters?.includeCompleted ?? false,
         p_limit: 200,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return (data as unknown as TeamTask[]) || [];
     },
@@ -206,9 +207,9 @@ export function useKanbanBoard(includeCompleted = false) {
   const { data, loading, error, refetch } = useSupabaseQuery<KanbanCard[]>({
     queryKey: `kanban-board-${includeCompleted}`,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_kanban_board" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_board", {
         p_include_completed: includeCompleted,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return (data as unknown as KanbanCard[]) || [];
     },
@@ -235,10 +236,10 @@ export async function advanceUserTask(
   taskId: string,
   nextTaskTypeId?: string | null,
 ): Promise<AdvanceResult> {
-  const { data, error } = await supabase.rpc("advance_user_task" as never, {
+  const { data, error } = await supabase.rpc("advance_user_task", {
     p_task_id: taskId,
     p_next_task_type_id: nextTaskTypeId ?? null,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as AdvanceResult;
 }
@@ -266,7 +267,7 @@ export interface CreateTaskInput {
 }
 
 export async function createUserTask(input: CreateTaskInput): Promise<string> {
-  const { data, error } = await supabase.rpc("create_user_task" as never, {
+  const { data, error } = await supabase.rpc("create_user_task", {
     p_task_type_id: input.task_type_id,
     p_assignee_user_id: input.assignee_user_id,
     p_title: input.title,
@@ -276,9 +277,9 @@ export async function createUserTask(input: CreateTaskInput): Promise<string> {
     p_priority: input.priority ?? "medium",
     p_deadline_at: input.deadline_at ?? null,
     p_area: input.area ?? null,
-    p_payload: input.payload ?? {},
+    p_payload: (input.payload ?? {}) as unknown as Json,
     p_external_kanban_ref: input.external_kanban_ref ?? null,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as string;
 }
@@ -288,10 +289,10 @@ export async function updateUserTaskStatus(
   newStatus: UserTaskStatus,
   notes?: string,
 ): Promise<void> {
-  const { error } = await supabase.rpc("update_user_task_status" as never, {
+  const { error } = await supabase.rpc("update_user_task_status", {
     p_task_id: taskId,
     p_new_status: newStatus,
     p_notes: notes ?? null,
-  } as never);
+  });
   if (error) throw error;
 }

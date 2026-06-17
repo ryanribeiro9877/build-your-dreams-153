@@ -47,7 +47,7 @@ export default function ValidationQueue() {
 
   const fetchQueue = useCallback(async () => {
     setLoading(true);
-    const { data, error: rpcErr } = await supabase.rpc("get_my_validation_queue" as never);
+    const { data, error: rpcErr } = await supabase.rpc("get_my_validation_queue");
     if (rpcErr) {
       setError(rpcErr.message);
       setTasks([]);
@@ -75,11 +75,11 @@ export default function ValidationQueue() {
   const handleAction = async (taskId: string, approve: boolean, notes?: string) => {
     setProcessingId(taskId);
     try {
-      const { error: rpcErr } = await supabase.rpc("validate_user_task" as never, {
+      const { error: rpcErr } = await supabase.rpc("validate_user_task", {
         p_task_id: taskId,
         p_approve: approve,
-        p_notes: notes ?? null,
-      } as never);
+        p_notes: notes ?? undefined,
+      });
       if (rpcErr) throw rpcErr;
       toast.success(approve ? "Tarefa aprovada!" : "Tarefa rejeitada — voltou pro funcionário corrigir");
       setRejectId(null);

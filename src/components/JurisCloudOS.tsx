@@ -541,7 +541,7 @@ export default function JurisCloudOS() {
   useEffect(() => {
     let cancelled = false;
     const fetchValidation = async () => {
-      const { data } = await supabase.rpc("get_validation_count" as never);
+      const { data } = await supabase.rpc("get_validation_count");
       if (!cancelled && typeof data === "number") setValidationCount(data);
     };
     void fetchValidation();
