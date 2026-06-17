@@ -602,3 +602,27 @@ export interface TaskWorkflow {
   started_at: string;
   steps: WorkflowStepState[];
 }
+
+// ============================================================================
+// SP5 — Timesheet + Auditoria por tarefa
+// ============================================================================
+
+export interface TimeEntry {
+  id: string;
+  user_id: string;
+  user_name: string;
+  minutes: number;
+  note: string | null;
+  created_at: string;
+  total_minutes: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_user_id: string | null;
+  actor_name: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+}
