@@ -295,7 +295,7 @@ export async function downloadMessageAsDocx(content: string, opts?: { title?: st
   const buf = await resp.arrayBuffer();
   const corpo = buildCorpoXml(content);
   const bytes = await injectBodyIntoTemplate(buf, corpo);
-  const blob = new Blob([bytes], {
+  const blob = new Blob([bytes as BlobPart], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
   const url = URL.createObjectURL(blob);

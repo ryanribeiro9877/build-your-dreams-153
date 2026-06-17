@@ -112,8 +112,9 @@ export function useInboxCount() {
     enabled: !!user,
     fetcher: async () => {
       const { data } = await supabase.rpc("get_inbox_count" as never);
-      if (data && Array.isArray(data) && data.length > 0) {
-        return data[0] as InboxCount;
+      const rows = data as unknown as InboxCount[] | null;
+      if (rows && Array.isArray(rows) && rows.length > 0) {
+        return rows[0];
       }
       return DEFAULT_INBOX_COUNT;
     },

@@ -52,7 +52,6 @@ export function useChatOrchestrator() {
   ): Promise<StartSessionResult> => {
     setLastError(null);
     await ensureFreshSession();
-    // @ts-expect-error - RPC criada na Onda 2
     const { data, error } = await supabase.rpc("start_chat_session", {
       p_entry_agent_id: entryAgentId,
       p_client_id: options?.clientId ?? null,

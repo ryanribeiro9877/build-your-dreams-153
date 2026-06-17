@@ -574,7 +574,6 @@ export default function JurisCloudOS() {
     if (!user) return;
     setSessionsLoading(true);
     const { data } = await supabase
-      // @ts-expect-error Tabelas chat_sessions ainda não estão nos tipos gerados.
       .from("chat_sessions")
       .select("id, title, summary, last_message_at, message_count")
       .eq("user_id" as never, user.id)
@@ -587,7 +586,6 @@ export default function JurisCloudOS() {
     // Busca as mensagens (user + assistant final) dessas sessões para montar proposta + contexto.
     const ids = rows.map(r => r.id);
     const { data: msgs } = await supabase
-      // @ts-expect-error Tabelas chat_messages ainda não estão nos tipos gerados.
       .from("chat_messages")
       .select("session_id, role, content, metadata, sequence_number")
       .in("session_id" as never, ids as never)
@@ -642,10 +640,8 @@ export default function JurisCloudOS() {
     setChatSessions(prev => prev.filter(s => s.id !== sessionId));
     // Apaga as mensagens primeiro (caso não haja ON DELETE CASCADE), depois a sessão.
     await supabase
-      // @ts-expect-error Tabelas chat_messages ainda não estão nos tipos gerados.
       .from("chat_messages").delete().eq("session_id" as never, sessionId);
     const { error } = await supabase
-      // @ts-expect-error Tabelas chat_sessions ainda não estão nos tipos gerados.
       .from("chat_sessions").delete().eq("id" as never, sessionId);
     if (error) {
       console.warn("[deleteSession] falha:", error.message);
@@ -685,7 +681,7 @@ export default function JurisCloudOS() {
         .not("model" as never, "is", null);
       const configuredIds = new Set(((configured as unknown as { id: string }[]) || []).map((r) => r.id));
       // Prioridade: assistant_root → ceo → primeiro configurado
-      const root = dbAgents.find((a) => (a.role === "assistant_root" || a.role === "ceo") && configuredIds.has(a.id));
+      const root = dbAgents.find((a) => ((a.role as string) === "assistant_root" || a.role === "ceo") && configuredIds.has(a.id));
       const pick = root ?? dbAgents.find((a) => configuredIds.has(a.id));
       if (pick) {
         if (!root) console.warn("[JurisCloudOS] Nenhum assistant_root/ceo configurado; usando fallback:", pick.name);

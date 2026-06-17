@@ -68,7 +68,7 @@ export function useAgentDocuments(agentId: string) {
       setLoading(false);
       return;
     }
-    const ids = ((links as { document_id: string }[]) || []).map((l) => l.document_id);
+    const ids = ((links as unknown as { document_id: string }[]) || []).map((l) => l.document_id);
     if (ids.length === 0) {
       setDocuments([]);
       setLoading(false);
@@ -84,7 +84,7 @@ export function useAgentDocuments(agentId: string) {
       console.error("document_library load error", error);
       setDocuments([]);
     } else {
-      setDocuments(((data as Record<string, unknown>[]) || []).map((r) => libToAgentDoc(r, agentId)));
+      setDocuments(((data as unknown as Record<string, unknown>[]) || []).map((r) => libToAgentDoc(r, agentId)));
     }
     setLoading(false);
   }, [agentId]);
@@ -149,10 +149,10 @@ export function useAgentDocuments(agentId: string) {
 
     const { error: linkErr } = await supabase
       .from("agent_document_links" as any)
-      .insert({ agent_id: agentId, document_id: (libRow as { id: string }).id } as any);
+      .insert({ agent_id: agentId, document_id: (libRow as unknown as { id: string }).id } as any);
     if (linkErr) {
       toast.error("Erro ao vincular documento ao agente: " + linkErr.message);
-      await supabase.from("document_library" as any).delete().eq("id", (libRow as { id: string }).id);
+      await supabase.from("document_library" as any).delete().eq("id", (libRow as unknown as { id: string }).id);
       await supabase.storage.from(BUCKET).remove([storagePath]);
       return false;
     }

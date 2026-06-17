@@ -98,7 +98,6 @@ export function useAgentLLMConfig() {
 
   /** Validar via RPC se agente esta apto a chat (helper rapido). */
   const validateForChat = useCallback(async (agentId: string) => {
-    // @ts-expect-error - RPC criada na Onda 2
     const { data, error } = await supabase.rpc("validate_agent_for_chat", {
       p_agent_id: agentId,
     });

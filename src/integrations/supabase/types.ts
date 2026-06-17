@@ -1,1 +1,3905 @@
-{"types":"export type Json =\n  | string\n  | number\n  | boolean\n  | null\n  | { [key: string]: Json | undefined }\n  | Json[]\n\nexport type Database = {\n  // Allows to automatically instantiate createClient with right options\n  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)\n  __InternalSupabase: {\n    PostgrestVersion: \"14.5\"\n  }\n  public: {\n    Tables: {\n      agent_mcp_servers: {\n        Row: {\n          agent_id: string\n          config: Json | null\n          created_at: string | null\n          description: string | null\n          enabled: boolean | null\n          id: string\n          mcp_server_id: string | null\n          name: string\n          updated_at: string | null\n          url: string\n        }\n        Insert: {\n          agent_id: string\n          config?: Json | null\n          created_at?: string | null\n          description?: string | null\n          enabled?: boolean | null\n          id?: string\n          mcp_server_id?: string | null\n          name: string\n          updated_at?: string | null\n          url: string\n        }\n        Update: {\n          agent_id?: string\n          config?: Json | null\n          created_at?: string | null\n          description?: string | null\n          enabled?: boolean | null\n          id?: string\n          mcp_server_id?: string | null\n          name?: string\n          updated_at?: string | null\n          url?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_mcp_servers_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_mcp_servers_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_mcp_servers_mcp_server_id_fkey\"\n            columns: [\"mcp_server_id\"]\n            isOneToOne: false\n            referencedRelation: \"mcp_servers\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agent_messages: {\n        Row: {\n          agent_id: string | null\n          content: string\n          created_at: string\n          department_id: string | null\n          id: string\n          message_type: string\n          metadata: Json | null\n          sender_type: string\n          user_id: string\n        }\n        Insert: {\n          agent_id?: string | null\n          content: string\n          created_at?: string\n          department_id?: string | null\n          id?: string\n          message_type?: string\n          metadata?: Json | null\n          sender_type?: string\n          user_id: string\n        }\n        Update: {\n          agent_id?: string | null\n          content?: string\n          created_at?: string\n          department_id?: string | null\n          id?: string\n          message_type?: string\n          metadata?: Json | null\n          sender_type?: string\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_messages_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_messages_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_messages_department_id_fkey\"\n            columns: [\"department_id\"]\n            isOneToOne: false\n            referencedRelation: \"departments\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agent_orchestration_log: {\n        Row: {\n          action: string\n          created_at: string\n          details: Json | null\n          from_agent_id: string | null\n          id: string\n          task_id: string | null\n          to_agent_id: string | null\n          user_id: string | null\n        }\n        Insert: {\n          action: string\n          created_at?: string\n          details?: Json | null\n          from_agent_id?: string | null\n          id?: string\n          task_id?: string | null\n          to_agent_id?: string | null\n          user_id?: string | null\n        }\n        Update: {\n          action?: string\n          created_at?: string\n          details?: Json | null\n          from_agent_id?: string | null\n          id?: string\n          task_id?: string | null\n          to_agent_id?: string | null\n          user_id?: string | null\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_orchestration_log_from_agent_id_fkey\"\n            columns: [\"from_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_orchestration_log_from_agent_id_fkey\"\n            columns: [\"from_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_orchestration_log_task_id_fkey\"\n            columns: [\"task_id\"]\n            isOneToOne: false\n            referencedRelation: \"agent_tasks\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_orchestration_log_to_agent_id_fkey\"\n            columns: [\"to_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_orchestration_log_to_agent_id_fkey\"\n            columns: [\"to_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agent_permissions: {\n        Row: {\n          agent_id: string\n          created_at: string\n          granted_by: string | null\n          id: string\n          permission: Database[\"public\"][\"Enums\"][\"permission_type\"]\n        }\n        Insert: {\n          agent_id: string\n          created_at?: string\n          granted_by?: string | null\n          id?: string\n          permission: Database[\"public\"][\"Enums\"][\"permission_type\"]\n        }\n        Update: {\n          agent_id?: string\n          created_at?: string\n          granted_by?: string | null\n          id?: string\n          permission?: Database[\"public\"][\"Enums\"][\"permission_type\"]\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_permissions_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_permissions_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agent_tasks: {\n        Row: {\n          agent_id: string\n          agent_name: string | null\n          assigned_by: string | null\n          client_name: string | null\n          completed_at: string | null\n          created_at: string\n          description: string | null\n          due_date: string | null\n          id: string\n          priority: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id: string | null\n          reviewed_by: string | null\n          status: Database[\"public\"][\"Enums\"][\"task_status\"]\n          task_category: string\n          task_type: string\n          title: string\n          updated_at: string\n          user_id: string\n        }\n        Insert: {\n          agent_id: string\n          agent_name?: string | null\n          assigned_by?: string | null\n          client_name?: string | null\n          completed_at?: string | null\n          created_at?: string\n          description?: string | null\n          due_date?: string | null\n          id?: string\n          priority?: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id?: string | null\n          reviewed_by?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"task_status\"]\n          task_category?: string\n          task_type?: string\n          title: string\n          updated_at?: string\n          user_id: string\n        }\n        Update: {\n          agent_id?: string\n          agent_name?: string | null\n          assigned_by?: string | null\n          client_name?: string | null\n          completed_at?: string | null\n          created_at?: string\n          description?: string | null\n          due_date?: string | null\n          id?: string\n          priority?: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id?: string | null\n          reviewed_by?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"task_status\"]\n          task_category?: string\n          task_type?: string\n          title?: string\n          updated_at?: string\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_tasks_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_tasks_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_tasks_process_id_fkey\"\n            columns: [\"process_id\"]\n            isOneToOne: false\n            referencedRelation: \"processes\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agent_templates: {\n        Row: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code: string\n          created_at: string\n          default_color: string\n          default_max_tokens: number\n          default_model: string\n          default_provider: Database[\"public\"][\"Enums\"][\"provider_code\"]\n          default_system_prompt: string | null\n          default_temperature: number\n          description: string | null\n          display_name: string\n          id: string\n          is_active: boolean\n          role: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          sort_order: number\n          stage: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          updated_at: string\n        }\n        Insert: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code: string\n          created_at?: string\n          default_color?: string\n          default_max_tokens?: number\n          default_model?: string\n          default_provider?: Database[\"public\"][\"Enums\"][\"provider_code\"]\n          default_system_prompt?: string | null\n          default_temperature?: number\n          description?: string | null\n          display_name: string\n          id?: string\n          is_active?: boolean\n          role: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          sort_order?: number\n          stage?: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          updated_at?: string\n        }\n        Update: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code?: string\n          created_at?: string\n          default_color?: string\n          default_max_tokens?: number\n          default_model?: string\n          default_provider?: Database[\"public\"][\"Enums\"][\"provider_code\"]\n          default_system_prompt?: string | null\n          default_temperature?: number\n          description?: string | null\n          display_name?: string\n          id?: string\n          is_active?: boolean\n          role?: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          sort_order?: number\n          stage?: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      agent_traces: {\n        Row: {\n          agent_id: string | null\n          cost_usd: number | null\n          created_at: string | null\n          duration_ms: number | null\n          ended_at: string | null\n          error_message: string | null\n          id: string\n          input_summary: string | null\n          input_tokens: number | null\n          metadata: Json | null\n          model: string | null\n          operation_name: string\n          output_summary: string | null\n          output_tokens: number | null\n          parent_span_id: string | null\n          session_id: string | null\n          span_id: string\n          span_kind: string\n          started_at: string\n          status: string\n          trace_id: string\n          user_id: string\n        }\n        Insert: {\n          agent_id?: string | null\n          cost_usd?: number | null\n          created_at?: string | null\n          duration_ms?: number | null\n          ended_at?: string | null\n          error_message?: string | null\n          id?: string\n          input_summary?: string | null\n          input_tokens?: number | null\n          metadata?: Json | null\n          model?: string | null\n          operation_name: string\n          output_summary?: string | null\n          output_tokens?: number | null\n          parent_span_id?: string | null\n          session_id?: string | null\n          span_id: string\n          span_kind: string\n          started_at: string\n          status?: string\n          trace_id: string\n          user_id: string\n        }\n        Update: {\n          agent_id?: string | null\n          cost_usd?: number | null\n          created_at?: string | null\n          duration_ms?: number | null\n          ended_at?: string | null\n          error_message?: string | null\n          id?: string\n          input_summary?: string | null\n          input_tokens?: number | null\n          metadata?: Json | null\n          model?: string | null\n          operation_name?: string\n          output_summary?: string | null\n          output_tokens?: number | null\n          parent_span_id?: string | null\n          session_id?: string | null\n          span_id?: string\n          span_kind?: string\n          started_at?: string\n          status?: string\n          trace_id?: string\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agent_traces_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_traces_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agent_traces_session_id_fkey\"\n            columns: [\"session_id\"]\n            isOneToOne: false\n            referencedRelation: \"chat_sessions\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      agents: {\n        Row: {\n          allow_fallbacks: boolean | null\n          avatar: string\n          can_orchestrate: boolean\n          color: string\n          created_at: string\n          current_tasks: number\n          department_id: string\n          description: string | null\n          external_id: number | null\n          history_limit: number | null\n          id: string\n          is_active: boolean\n          is_overridden: boolean\n          is_personal: boolean\n          level: number\n          max_concurrent_tasks: number\n          max_processes_monitored: number | null\n          max_tokens: number | null\n          memory_enabled: boolean | null\n          model: string | null\n          name: string\n          owner_user_id: string | null\n          provider: string | null\n          reports_to: number | null\n          role: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          source_template_id: string | null\n          status: Database[\"public\"][\"Enums\"][\"agent_status\"]\n          system_prompt: string | null\n          temperature: number | null\n          top_p: number | null\n          updated_at: string\n        }\n        Insert: {\n          allow_fallbacks?: boolean | null\n          avatar?: string\n          can_orchestrate?: boolean\n          color?: string\n          created_at?: string\n          current_tasks?: number\n          department_id: string\n          description?: string | null\n          external_id?: number | null\n          history_limit?: number | null\n          id?: string\n          is_active?: boolean\n          is_overridden?: boolean\n          is_personal?: boolean\n          level: number\n          max_concurrent_tasks?: number\n          max_processes_monitored?: number | null\n          max_tokens?: number | null\n          memory_enabled?: boolean | null\n          model?: string | null\n          name: string\n          owner_user_id?: string | null\n          provider?: string | null\n          reports_to?: number | null\n          role?: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          source_template_id?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"agent_status\"]\n          system_prompt?: string | null\n          temperature?: number | null\n          top_p?: number | null\n          updated_at?: string\n        }\n        Update: {\n          allow_fallbacks?: boolean | null\n          avatar?: string\n          can_orchestrate?: boolean\n          color?: string\n          created_at?: string\n          current_tasks?: number\n          department_id?: string\n          description?: string | null\n          external_id?: number | null\n          history_limit?: number | null\n          id?: string\n          is_active?: boolean\n          is_overridden?: boolean\n          is_personal?: boolean\n          level?: number\n          max_concurrent_tasks?: number\n          max_processes_monitored?: number | null\n          max_tokens?: number | null\n          memory_enabled?: boolean | null\n          model?: string | null\n          name?: string\n          owner_user_id?: string | null\n          provider?: string | null\n          reports_to?: number | null\n          role?: Database[\"public\"][\"Enums\"][\"agent_role\"]\n          source_template_id?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"agent_status\"]\n          system_prompt?: string | null\n          temperature?: number | null\n          top_p?: number | null\n          updated_at?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agents_department_id_fkey\"\n            columns: [\"department_id\"]\n            isOneToOne: false\n            referencedRelation: \"departments\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agents_source_template_fk\"\n            columns: [\"source_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"agent_templates\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      bottleneck_notifications: {\n        Row: {\n          agent_name: string | null\n          alert_type: string\n          created_at: string\n          department: string | null\n          id: string\n          is_read: boolean\n          message: string\n          severity: string\n          user_id: string\n        }\n        Insert: {\n          agent_name?: string | null\n          alert_type: string\n          created_at?: string\n          department?: string | null\n          id?: string\n          is_read?: boolean\n          message: string\n          severity?: string\n          user_id: string\n        }\n        Update: {\n          agent_name?: string | null\n          alert_type?: string\n          created_at?: string\n          department?: string | null\n          id?: string\n          is_read?: boolean\n          message?: string\n          severity?: string\n          user_id?: string\n        }\n        Relationships: []\n      }\n      captacao_canais: {\n        Row: {\n          code: string\n          created_at: string\n          default_assignee_role_code: string | null\n          description: string | null\n          display_name: string\n          id: string\n          is_active: boolean\n          metadata: Json\n          tipo: Database[\"public\"][\"Enums\"][\"captacao_canal_tipo\"]\n          updated_at: string\n        }\n        Insert: {\n          code: string\n          created_at?: string\n          default_assignee_role_code?: string | null\n          description?: string | null\n          display_name: string\n          id?: string\n          is_active?: boolean\n          metadata?: Json\n          tipo: Database[\"public\"][\"Enums\"][\"captacao_canal_tipo\"]\n          updated_at?: string\n        }\n        Update: {\n          code?: string\n          created_at?: string\n          default_assignee_role_code?: string | null\n          description?: string | null\n          display_name?: string\n          id?: string\n          is_active?: boolean\n          metadata?: Json\n          tipo?: Database[\"public\"][\"Enums\"][\"captacao_canal_tipo\"]\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      chat_messages: {\n        Row: {\n          agent_id: string | null\n          content: string | null\n          cost_usd: number | null\n          created_at: string | null\n          duration_ms: number | null\n          id: string\n          input_tokens: number | null\n          metadata: Json | null\n          model_used: string | null\n          output_tokens: number | null\n          role: string\n          sequence_number: number\n          session_id: string\n          tool_call_id: string | null\n          tool_calls: Json | null\n          tool_result: Json | null\n          user_id: string\n        }\n        Insert: {\n          agent_id?: string | null\n          content?: string | null\n          cost_usd?: number | null\n          created_at?: string | null\n          duration_ms?: number | null\n          id?: string\n          input_tokens?: number | null\n          metadata?: Json | null\n          model_used?: string | null\n          output_tokens?: number | null\n          role: string\n          sequence_number: number\n          session_id: string\n          tool_call_id?: string | null\n          tool_calls?: Json | null\n          tool_result?: Json | null\n          user_id: string\n        }\n        Update: {\n          agent_id?: string | null\n          content?: string | null\n          cost_usd?: number | null\n          created_at?: string | null\n          duration_ms?: number | null\n          id?: string\n          input_tokens?: number | null\n          metadata?: Json | null\n          model_used?: string | null\n          output_tokens?: number | null\n          role?: string\n          sequence_number?: number\n          session_id?: string\n          tool_call_id?: string | null\n          tool_calls?: Json | null\n          tool_result?: Json | null\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"chat_messages_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"chat_messages_agent_id_fkey\"\n            columns: [\"agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"chat_messages_session_id_fkey\"\n            columns: [\"session_id\"]\n            isOneToOne: false\n            referencedRelation: \"chat_sessions\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      chat_sessions: {\n        Row: {\n          client_id: string | null\n          closed_at: string | null\n          created_at: string | null\n          entry_agent_id: string | null\n          id: string\n          last_message_at: string | null\n          message_count: number | null\n          metadata: Json | null\n          status: string\n          summary: string | null\n          title: string | null\n          total_cost_usd: number | null\n          total_tokens_input: number | null\n          total_tokens_output: number | null\n          total_tool_calls: number | null\n          user_id: string\n        }\n        Insert: {\n          client_id?: string | null\n          closed_at?: string | null\n          created_at?: string | null\n          entry_agent_id?: string | null\n          id?: string\n          last_message_at?: string | null\n          message_count?: number | null\n          metadata?: Json | null\n          status?: string\n          summary?: string | null\n          title?: string | null\n          total_cost_usd?: number | null\n          total_tokens_input?: number | null\n          total_tokens_output?: number | null\n          total_tool_calls?: number | null\n          user_id: string\n        }\n        Update: {\n          client_id?: string | null\n          closed_at?: string | null\n          created_at?: string | null\n          entry_agent_id?: string | null\n          id?: string\n          last_message_at?: string | null\n          message_count?: number | null\n          metadata?: Json | null\n          status?: string\n          summary?: string | null\n          title?: string | null\n          total_cost_usd?: number | null\n          total_tokens_input?: number | null\n          total_tokens_output?: number | null\n          total_tool_calls?: number | null\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"chat_sessions_client_id_fkey\"\n            columns: [\"client_id\"]\n            isOneToOne: false\n            referencedRelation: \"clients\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"chat_sessions_entry_agent_id_fkey\"\n            columns: [\"entry_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"chat_sessions_entry_agent_id_fkey\"\n            columns: [\"entry_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      client_documents: {\n        Row: {\n          client_id: string\n          client_name: string | null\n          created_at: string\n          document_name: string\n          document_type: string\n          file_path: string\n          file_size: number | null\n          id: string\n          mime_type: string | null\n          notes: string | null\n          uploaded_by: string\n        }\n        Insert: {\n          client_id: string\n          client_name?: string | null\n          created_at?: string\n          document_name: string\n          document_type?: string\n          file_path: string\n          file_size?: number | null\n          id?: string\n          mime_type?: string | null\n          notes?: string | null\n          uploaded_by: string\n        }\n        Update: {\n          client_id?: string\n          client_name?: string | null\n          created_at?: string\n          document_name?: string\n          document_type?: string\n          file_path?: string\n          file_size?: number | null\n          id?: string\n          mime_type?: string | null\n          notes?: string | null\n          uploaded_by?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"client_documents_client_id_fkey\"\n            columns: [\"client_id\"]\n            isOneToOne: false\n            referencedRelation: \"clients\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      clients: {\n        Row: {\n          address: string | null\n          address_complement: string | null\n          address_number: string | null\n          bank_account: string | null\n          bank_account_type: string | null\n          bank_agency: string | null\n          bank_name: string | null\n          birth_date: string | null\n          city: string | null\n          client_origin: string | null\n          cnpj: string | null\n          country: string | null\n          cpf: string | null\n          created_at: string\n          created_by: string\n          email: string | null\n          fantasy_name: string | null\n          father_name: string | null\n          foundation_date: string | null\n          full_name: string\n          gender: string | null\n          gov_br_profile: string | null\n          id: string\n          ie: string | null\n          im: string | null\n          legal_rep_cpf: string | null\n          legal_rep_name: string | null\n          marital_status: string | null\n          mother_name: string | null\n          nationality: string | null\n          natural_city: string | null\n          natural_uf: string | null\n          neighborhood: string | null\n          notes: string | null\n          phone: string | null\n          phone_commercial: string | null\n          phone_home: string | null\n          pis_nit: string | null\n          pix_key: string | null\n          pix_key_type: string | null\n          profession: string | null\n          responsible_lawyer_id: string | null\n          rg: string | null\n          rg_issuer: string | null\n          rg_uf: string | null\n          state: string | null\n          status: string\n          tipo_pessoa: string\n          updated_at: string\n          zip_code: string | null\n        }\n        Insert: {\n          address?: string | null\n          address_complement?: string | null\n          address_number?: string | null\n          bank_account?: string | null\n          bank_account_type?: string | null\n          bank_agency?: string | null\n          bank_name?: string | null\n          birth_date?: string | null\n          city?: string | null\n          client_origin?: string | null\n          cnpj?: string | null\n          country?: string | null\n          cpf?: string | null\n          created_at?: string\n          created_by: string\n          email?: string | null\n          fantasy_name?: string | null\n          father_name?: string | null\n          foundation_date?: string | null\n          full_name: string\n          gender?: string | null\n          gov_br_profile?: string | null\n          id?: string\n          ie?: string | null\n          im?: string | null\n          legal_rep_cpf?: string | null\n          legal_rep_name?: string | null\n          marital_status?: string | null\n          mother_name?: string | null\n          nationality?: string | null\n          natural_city?: string | null\n          natural_uf?: string | null\n          neighborhood?: string | null\n          notes?: string | null\n          phone?: string | null\n          phone_commercial?: string | null\n          phone_home?: string | null\n          pis_nit?: string | null\n          pix_key?: string | null\n          pix_key_type?: string | null\n          profession?: string | null\n          responsible_lawyer_id?: string | null\n          rg?: string | null\n          rg_issuer?: string | null\n          rg_uf?: string | null\n          state?: string | null\n          status?: string\n          tipo_pessoa?: string\n          updated_at?: string\n          zip_code?: string | null\n        }\n        Update: {\n          address?: string | null\n          address_complement?: string | null\n          address_number?: string | null\n          bank_account?: string | null\n          bank_account_type?: string | null\n          bank_agency?: string | null\n          bank_name?: string | null\n          birth_date?: string | null\n          city?: string | null\n          client_origin?: string | null\n          cnpj?: string | null\n          country?: string | null\n          cpf?: string | null\n          created_at?: string\n          created_by?: string\n          email?: string | null\n          fantasy_name?: string | null\n          father_name?: string | null\n          foundation_date?: string | null\n          full_name?: string\n          gender?: string | null\n          gov_br_profile?: string | null\n          id?: string\n          ie?: string | null\n          im?: string | null\n          legal_rep_cpf?: string | null\n          legal_rep_name?: string | null\n          marital_status?: string | null\n          mother_name?: string | null\n          nationality?: string | null\n          natural_city?: string | null\n          natural_uf?: string | null\n          neighborhood?: string | null\n          notes?: string | null\n          phone?: string | null\n          phone_commercial?: string | null\n          phone_home?: string | null\n          pis_nit?: string | null\n          pix_key?: string | null\n          pix_key_type?: string | null\n          profession?: string | null\n          responsible_lawyer_id?: string | null\n          rg?: string | null\n          rg_issuer?: string | null\n          rg_uf?: string | null\n          state?: string | null\n          status?: string\n          tipo_pessoa?: string\n          updated_at?: string\n          zip_code?: string | null\n        }\n        Relationships: []\n      }\n      cron_jobs: {\n        Row: {\n          created_at: string\n          created_by: string | null\n          description: string | null\n          enabled: boolean\n          id: string\n          last_run_at: string | null\n          last_status: string | null\n          name: string\n          params: Json\n          schedule: string\n          target: string\n          updated_at: string\n        }\n        Insert: {\n          created_at?: string\n          created_by?: string | null\n          description?: string | null\n          enabled?: boolean\n          id?: string\n          last_run_at?: string | null\n          last_status?: string | null\n          name: string\n          params?: Json\n          schedule: string\n          target: string\n          updated_at?: string\n        }\n        Update: {\n          created_at?: string\n          created_by?: string | null\n          description?: string | null\n          enabled?: boolean\n          id?: string\n          last_run_at?: string | null\n          last_status?: string | null\n          name?: string\n          params?: Json\n          schedule?: string\n          target?: string\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      departments: {\n        Row: {\n          color: string\n          created_at: string\n          description: string | null\n          icon: string\n          id: string\n          is_active: boolean\n          name: string\n          updated_at: string\n        }\n        Insert: {\n          color?: string\n          created_at?: string\n          description?: string | null\n          icon?: string\n          id?: string\n          is_active?: boolean\n          name: string\n          updated_at?: string\n        }\n        Update: {\n          color?: string\n          created_at?: string\n          description?: string | null\n          icon?: string\n          id?: string\n          is_active?: boolean\n          name?: string\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      edge_runtime_secrets: {\n        Row: {\n          key: string\n          updated_at: string\n          value: string\n        }\n        Insert: {\n          key: string\n          updated_at?: string\n          value: string\n        }\n        Update: {\n          key?: string\n          updated_at?: string\n          value?: string\n        }\n        Relationships: []\n      }\n      email_notifications: {\n        Row: {\n          attempts: number\n          body_html: string\n          body_text: string | null\n          created_at: string\n          id: string\n          last_error: string | null\n          recipient_email: string\n          recipient_user_id: string\n          related_request_id: string | null\n          related_task_id: string | null\n          resend_id: string | null\n          scheduled_at: string\n          sent_at: string | null\n          status: Database[\"public\"][\"Enums\"][\"email_notification_status\"]\n          subject: string\n          type: Database[\"public\"][\"Enums\"][\"email_notification_type\"]\n        }\n        Insert: {\n          attempts?: number\n          body_html: string\n          body_text?: string | null\n          created_at?: string\n          id?: string\n          last_error?: string | null\n          recipient_email: string\n          recipient_user_id: string\n          related_request_id?: string | null\n          related_task_id?: string | null\n          resend_id?: string | null\n          scheduled_at?: string\n          sent_at?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"email_notification_status\"]\n          subject: string\n          type: Database[\"public\"][\"Enums\"][\"email_notification_type\"]\n        }\n        Update: {\n          attempts?: number\n          body_html?: string\n          body_text?: string | null\n          created_at?: string\n          id?: string\n          last_error?: string | null\n          recipient_email?: string\n          recipient_user_id?: string\n          related_request_id?: string | null\n          related_task_id?: string | null\n          resend_id?: string | null\n          scheduled_at?: string\n          sent_at?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"email_notification_status\"]\n          subject?: string\n          type?: Database[\"public\"][\"Enums\"][\"email_notification_type\"]\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"email_notifications_related_request_id_fkey\"\n            columns: [\"related_request_id\"]\n            isOneToOne: false\n            referencedRelation: \"inter_assistant_requests\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"email_notifications_related_task_id_fkey\"\n            columns: [\"related_task_id\"]\n            isOneToOne: false\n            referencedRelation: \"user_tasks\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      external_collaborators: {\n        Row: {\n          created_at: string\n          email: string | null\n          full_name: string\n          id: string\n          is_active: boolean\n          notes: string | null\n          phone_whatsapp: string | null\n          role_template_id: string | null\n          updated_at: string\n        }\n        Insert: {\n          created_at?: string\n          email?: string | null\n          full_name: string\n          id?: string\n          is_active?: boolean\n          notes?: string | null\n          phone_whatsapp?: string | null\n          role_template_id?: string | null\n          updated_at?: string\n        }\n        Update: {\n          created_at?: string\n          email?: string | null\n          full_name?: string\n          id?: string\n          is_active?: boolean\n          notes?: string | null\n          phone_whatsapp?: string | null\n          role_template_id?: string | null\n          updated_at?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"external_collaborators_role_template_id_fkey\"\n            columns: [\"role_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"role_templates\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      integration_api_audit_log: {\n        Row: {\n          action: string\n          client_ip: string | null\n          created_at: string\n          error_code: string | null\n          id: string\n          method: string\n          path: string | null\n          payload_summary: Json\n          status_code: number\n        }\n        Insert: {\n          action: string\n          client_ip?: string | null\n          created_at?: string\n          error_code?: string | null\n          id?: string\n          method: string\n          path?: string | null\n          payload_summary?: Json\n          status_code: number\n        }\n        Update: {\n          action?: string\n          client_ip?: string | null\n          created_at?: string\n          error_code?: string | null\n          id?: string\n          method?: string\n          path?: string | null\n          payload_summary?: Json\n          status_code?: number\n        }\n        Relationships: []\n      }\n      inter_assistant_requests: {\n        Row: {\n          answered_at: string | null\n          created_at: string\n          expires_at: string | null\n          from_agent_id: string | null\n          from_user_id: string\n          id: string\n          payload: Json\n          related_session_id: string | null\n          related_task_id: string | null\n          request_type: string\n          response_payload: Json | null\n          status: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n          to_agent_id: string | null\n          to_user_id: string\n          updated_at: string\n        }\n        Insert: {\n          answered_at?: string | null\n          created_at?: string\n          expires_at?: string | null\n          from_agent_id?: string | null\n          from_user_id: string\n          id?: string\n          payload?: Json\n          related_session_id?: string | null\n          related_task_id?: string | null\n          request_type: string\n          response_payload?: Json | null\n          status?: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n          to_agent_id?: string | null\n          to_user_id: string\n          updated_at?: string\n        }\n        Update: {\n          answered_at?: string | null\n          created_at?: string\n          expires_at?: string | null\n          from_agent_id?: string | null\n          from_user_id?: string\n          id?: string\n          payload?: Json\n          related_session_id?: string | null\n          related_task_id?: string | null\n          request_type?: string\n          response_payload?: Json | null\n          status?: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n          to_agent_id?: string | null\n          to_user_id?: string\n          updated_at?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"inter_assistant_requests_from_agent_id_fkey\"\n            columns: [\"from_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"inter_assistant_requests_from_agent_id_fkey\"\n            columns: [\"from_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"inter_assistant_requests_related_session_id_fkey\"\n            columns: [\"related_session_id\"]\n            isOneToOne: false\n            referencedRelation: \"chat_sessions\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"inter_assistant_requests_related_task_id_fkey\"\n            columns: [\"related_task_id\"]\n            isOneToOne: false\n            referencedRelation: \"user_tasks\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"inter_assistant_requests_to_agent_id_fkey\"\n            columns: [\"to_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"inter_assistant_requests_to_agent_id_fkey\"\n            columns: [\"to_agent_id\"]\n            isOneToOne: false\n            referencedRelation: \"agents_with_owner_v\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      landing_events: {\n        Row: {\n          created_at: string\n          cta_id: string | null\n          cta_label: string | null\n          event_name: string\n          id: string\n          metadata: Json | null\n          page_path: string | null\n          referrer: string | null\n          section: string | null\n          session_id: string | null\n        }\n        Insert: {\n          created_at?: string\n          cta_id?: string | null\n          cta_label?: string | null\n          event_name: string\n          id?: string\n          metadata?: Json | null\n          page_path?: string | null\n          referrer?: string | null\n          section?: string | null\n          session_id?: string | null\n        }\n        Update: {\n          created_at?: string\n          cta_id?: string | null\n          cta_label?: string | null\n          event_name?: string\n          id?: string\n          metadata?: Json | null\n          page_path?: string | null\n          referrer?: string | null\n          section?: string | null\n          session_id?: string | null\n        }\n        Relationships: []\n      }\n      llm_provider_configs: {\n        Row: {\n          api_key_last_4: string | null\n          budget_period_start: string | null\n          created_at: string | null\n          id: string\n          is_active: boolean | null\n          is_default: boolean | null\n          last_used_at: string | null\n          monthly_budget_usd: number | null\n          monthly_spent_usd: number | null\n          notes: string | null\n          provider: string\n          updated_at: string | null\n          user_id: string\n          vault_secret_id: string | null\n        }\n        Insert: {\n          api_key_last_4?: string | null\n          budget_period_start?: string | null\n          created_at?: string | null\n          id?: string\n          is_active?: boolean | null\n          is_default?: boolean | null\n          last_used_at?: string | null\n          monthly_budget_usd?: number | null\n          monthly_spent_usd?: number | null\n          notes?: string | null\n          provider: string\n          updated_at?: string | null\n          user_id: string\n          vault_secret_id?: string | null\n        }\n        Update: {\n          api_key_last_4?: string | null\n          budget_period_start?: string | null\n          created_at?: string | null\n          id?: string\n          is_active?: boolean | null\n          is_default?: boolean | null\n          last_used_at?: string | null\n          monthly_budget_usd?: number | null\n          monthly_spent_usd?: number | null\n          notes?: string | null\n          provider?: string\n          updated_at?: string | null\n          user_id?: string\n          vault_secret_id?: string | null\n        }\n        Relationships: []\n      }\n      mcp_servers: {\n        Row: {\n          config: Json\n          created_at: string\n          created_by: string | null\n          description: string | null\n          enabled: boolean\n          id: string\n          name: string\n          required_credentials: Json\n          slug: string | null\n          transport: string\n          updated_at: string\n          url: string\n        }\n        Insert: {\n          config?: Json\n          created_at?: string\n          created_by?: string | null\n          description?: string | null\n          enabled?: boolean\n          id?: string\n          name: string\n          required_credentials?: Json\n          slug?: string | null\n          transport?: string\n          updated_at?: string\n          url: string\n        }\n        Update: {\n          config?: Json\n          created_at?: string\n          created_by?: string | null\n          description?: string | null\n          enabled?: boolean\n          id?: string\n          name?: string\n          required_credentials?: Json\n          slug?: string | null\n          transport?: string\n          updated_at?: string\n          url?: string\n        }\n        Relationships: []\n      }\n      model_pricing: {\n        Row: {\n          context_window: number\n          created_at: string | null\n          display_name: string\n          id: string\n          input_price_per_mtok: number\n          is_active: boolean | null\n          max_output_tokens: number\n          model_id: string\n          notes: string | null\n          output_price_per_mtok: number\n          provider: string\n          recommended_for: string[] | null\n          supports_streaming: boolean | null\n          supports_tools: boolean | null\n          supports_vision: boolean | null\n          tier: string\n          updated_at: string | null\n        }\n        Insert: {\n          context_window: number\n          created_at?: string | null\n          display_name: string\n          id?: string\n          input_price_per_mtok: number\n          is_active?: boolean | null\n          max_output_tokens: number\n          model_id: string\n          notes?: string | null\n          output_price_per_mtok: number\n          provider: string\n          recommended_for?: string[] | null\n          supports_streaming?: boolean | null\n          supports_tools?: boolean | null\n          supports_vision?: boolean | null\n          tier: string\n          updated_at?: string | null\n        }\n        Update: {\n          context_window?: number\n          created_at?: string | null\n          display_name?: string\n          id?: string\n          input_price_per_mtok?: number\n          is_active?: boolean | null\n          max_output_tokens?: number\n          model_id?: string\n          notes?: string | null\n          output_price_per_mtok?: number\n          provider?: string\n          recommended_for?: string[] | null\n          supports_streaming?: boolean | null\n          supports_tools?: boolean | null\n          supports_vision?: boolean | null\n          tier?: string\n          updated_at?: string | null\n        }\n        Relationships: []\n      }\n      processes: {\n        Row: {\n          client_name: string\n          created_at: string\n          department_id: string | null\n          description: string | null\n          id: string\n          next_hearing_date: string | null\n          process_number: string\n          responsible_lawyer: string | null\n          status: string\n          updated_at: string\n          user_id: string\n        }\n        Insert: {\n          client_name: string\n          created_at?: string\n          department_id?: string | null\n          description?: string | null\n          id?: string\n          next_hearing_date?: string | null\n          process_number: string\n          responsible_lawyer?: string | null\n          status?: string\n          updated_at?: string\n          user_id: string\n        }\n        Update: {\n          client_name?: string\n          created_at?: string\n          department_id?: string | null\n          description?: string | null\n          id?: string\n          next_hearing_date?: string | null\n          process_number?: string\n          responsible_lawyer?: string | null\n          status?: string\n          updated_at?: string\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"processes_department_id_fkey\"\n            columns: [\"department_id\"]\n            isOneToOne: false\n            referencedRelation: \"departments\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      profiles: {\n        Row: {\n          avatar_url: string | null\n          created_at: string\n          department: string | null\n          display_name: string | null\n          full_name: string | null\n          id: string\n          is_estagiario: boolean\n          job_title: string | null\n          organization_id: string | null\n          role_template_id: string | null\n          updated_at: string\n          user_id: string\n        }\n        Insert: {\n          avatar_url?: string | null\n          created_at?: string\n          department?: string | null\n          display_name?: string | null\n          full_name?: string | null\n          id?: string\n          is_estagiario?: boolean\n          job_title?: string | null\n          organization_id?: string | null\n          role_template_id?: string | null\n          updated_at?: string\n          user_id: string\n        }\n        Update: {\n          avatar_url?: string | null\n          created_at?: string\n          department?: string | null\n          display_name?: string | null\n          full_name?: string | null\n          id?: string\n          is_estagiario?: boolean\n          job_title?: string | null\n          organization_id?: string | null\n          role_template_id?: string | null\n          updated_at?: string\n          user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"profiles_role_template_fk\"\n            columns: [\"role_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"role_templates\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      role_agent_matrix: {\n        Row: {\n          agent_template_id: string\n          created_at: string\n          id: string\n          is_default: boolean\n          notes: string | null\n          requires_is_estagiario: boolean | null\n          role_template_id: string\n        }\n        Insert: {\n          agent_template_id: string\n          created_at?: string\n          id?: string\n          is_default?: boolean\n          notes?: string | null\n          requires_is_estagiario?: boolean | null\n          role_template_id: string\n        }\n        Update: {\n          agent_template_id?: string\n          created_at?: string\n          id?: string\n          is_default?: boolean\n          notes?: string | null\n          requires_is_estagiario?: boolean | null\n          role_template_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"role_agent_matrix_agent_template_id_fkey\"\n            columns: [\"agent_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"agent_templates\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"role_agent_matrix_role_template_id_fkey\"\n            columns: [\"role_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"role_templates\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      role_coverage: {\n        Row: {\n          active_from: string\n          active_until: string\n          backup_user_id: string | null\n          created_at: string\n          id: string\n          notes: string | null\n          primary_user_id: string\n          scope_area: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          scope_stage: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          status: Database[\"public\"][\"Enums\"][\"coverage_status\"]\n          updated_at: string\n        }\n        Insert: {\n          active_from: string\n          active_until: string\n          backup_user_id?: string | null\n          created_at?: string\n          id?: string\n          notes?: string | null\n          primary_user_id: string\n          scope_area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          scope_stage?: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          status?: Database[\"public\"][\"Enums\"][\"coverage_status\"]\n          updated_at?: string\n        }\n        Update: {\n          active_from?: string\n          active_until?: string\n          backup_user_id?: string | null\n          created_at?: string\n          id?: string\n          notes?: string | null\n          primary_user_id?: string\n          scope_area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          scope_stage?: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n          status?: Database[\"public\"][\"Enums\"][\"coverage_status\"]\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      role_task_matrix: {\n        Row: {\n          can_assign: boolean\n          can_execute: boolean\n          created_at: string\n          id: string\n          is_default_assignee: boolean\n          notes: string | null\n          role_template_id: string\n          task_type_id: string\n        }\n        Insert: {\n          can_assign?: boolean\n          can_execute?: boolean\n          created_at?: string\n          id?: string\n          is_default_assignee?: boolean\n          notes?: string | null\n          role_template_id: string\n          task_type_id: string\n        }\n        Update: {\n          can_assign?: boolean\n          can_execute?: boolean\n          created_at?: string\n          id?: string\n          is_default_assignee?: boolean\n          notes?: string | null\n          role_template_id?: string\n          task_type_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"role_task_matrix_role_template_id_fkey\"\n            columns: [\"role_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"role_templates\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"role_task_matrix_task_type_id_fkey\"\n            columns: [\"task_type_id\"]\n            isOneToOne: false\n            referencedRelation: \"task_types\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      role_templates: {\n        Row: {\n          areas: Database[\"public\"][\"Enums\"][\"legal_area\"][] | null\n          can_assign_tasks: boolean\n          code: string\n          created_at: string\n          description: string | null\n          display_name: string\n          has_login: boolean\n          id: string\n          is_admin: boolean\n          sort_order: number\n          stages: Database[\"public\"][\"Enums\"][\"org_stage\"][]\n          updated_at: string\n        }\n        Insert: {\n          areas?: Database[\"public\"][\"Enums\"][\"legal_area\"][] | null\n          can_assign_tasks?: boolean\n          code: string\n          created_at?: string\n          description?: string | null\n          display_name: string\n          has_login?: boolean\n          id?: string\n          is_admin?: boolean\n          sort_order?: number\n          stages: Database[\"public\"][\"Enums\"][\"org_stage\"][]\n          updated_at?: string\n        }\n        Update: {\n          areas?: Database[\"public\"][\"Enums\"][\"legal_area\"][] | null\n          can_assign_tasks?: boolean\n          code?: string\n          created_at?: string\n          description?: string | null\n          display_name?: string\n          has_login?: boolean\n          id?: string\n          is_admin?: boolean\n          sort_order?: number\n          stages?: Database[\"public\"][\"Enums\"][\"org_stage\"][]\n          updated_at?: string\n        }\n        Relationships: []\n      }\n      task_attachments: {\n        Row: {\n          created_at: string\n          description: string | null\n          file_name: string\n          file_size_bytes: number\n          id: string\n          mime_type: string | null\n          storage_path: string\n          task_id: string\n          uploader_user_id: string\n        }\n        Insert: {\n          created_at?: string\n          description?: string | null\n          file_name: string\n          file_size_bytes: number\n          id?: string\n          mime_type?: string | null\n          storage_path: string\n          task_id: string\n          uploader_user_id: string\n        }\n        Update: {\n          created_at?: string\n          description?: string | null\n          file_name?: string\n          file_size_bytes?: number\n          id?: string\n          mime_type?: string | null\n          storage_path?: string\n          task_id?: string\n          uploader_user_id?: string\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"task_attachments_task_id_fkey\"\n            columns: [\"task_id\"]\n            isOneToOne: false\n            referencedRelation: \"user_tasks\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      task_types: {\n        Row: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code: string\n          created_at: string\n          default_sla_hours: number | null\n          description: string | null\n          display_name: string\n          id: string\n          is_active: boolean\n          requires_validation: boolean\n          sort_order: number\n          stage: Database[\"public\"][\"Enums\"][\"org_stage\"]\n          updated_at: string\n          validator_role_code: string | null\n        }\n        Insert: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code: string\n          created_at?: string\n          default_sla_hours?: number | null\n          description?: string | null\n          display_name: string\n          id?: string\n          is_active?: boolean\n          requires_validation?: boolean\n          sort_order?: number\n          stage: Database[\"public\"][\"Enums\"][\"org_stage\"]\n          updated_at?: string\n          validator_role_code?: string | null\n        }\n        Update: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          code?: string\n          created_at?: string\n          default_sla_hours?: number | null\n          description?: string | null\n          display_name?: string\n          id?: string\n          is_active?: boolean\n          requires_validation?: boolean\n          sort_order?: number\n          stage?: Database[\"public\"][\"Enums\"][\"org_stage\"]\n          updated_at?: string\n          validator_role_code?: string | null\n        }\n        Relationships: []\n      }\n      token_balances: {\n        Row: {\n          balance: number\n          created_at: string\n          id: string\n          total_consumed: number\n          total_purchased: number\n          updated_at: string\n          user_id: string\n        }\n        Insert: {\n          balance?: number\n          created_at?: string\n          id?: string\n          total_consumed?: number\n          total_purchased?: number\n          updated_at?: string\n          user_id: string\n        }\n        Update: {\n          balance?: number\n          created_at?: string\n          id?: string\n          total_consumed?: number\n          total_purchased?: number\n          updated_at?: string\n          user_id?: string\n        }\n        Relationships: []\n      }\n      token_transactions: {\n        Row: {\n          amount: number\n          created_at: string\n          description: string | null\n          id: string\n          reference_id: string | null\n          transaction_type: Database[\"public\"][\"Enums\"][\"token_transaction_type\"]\n          user_id: string\n        }\n        Insert: {\n          amount: number\n          created_at?: string\n          description?: string | null\n          id?: string\n          reference_id?: string | null\n          transaction_type: Database[\"public\"][\"Enums\"][\"token_transaction_type\"]\n          user_id: string\n        }\n        Update: {\n          amount?: number\n          created_at?: string\n          description?: string | null\n          id?: string\n          reference_id?: string | null\n          transaction_type?: Database[\"public\"][\"Enums\"][\"token_transaction_type\"]\n          user_id?: string\n        }\n        Relationships: []\n      }\n      ui_events: {\n        Row: {\n          created_at: string\n          event_name: string\n          id: string\n          metadata: Json | null\n          session_id: string | null\n          surface: string | null\n          target_id: string | null\n          target_label: string | null\n          user_id: string | null\n        }\n        Insert: {\n          created_at?: string\n          event_name: string\n          id?: string\n          metadata?: Json | null\n          session_id?: string | null\n          surface?: string | null\n          target_id?: string | null\n          target_label?: string | null\n          user_id?: string | null\n        }\n        Update: {\n          created_at?: string\n          event_name?: string\n          id?: string\n          metadata?: Json | null\n          session_id?: string | null\n          surface?: string | null\n          target_id?: string | null\n          target_label?: string | null\n          user_id?: string | null\n        }\n        Relationships: []\n      }\n      user_areas: {\n        Row: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          created_at: string\n          id: string\n          is_primary: boolean\n          user_id: string\n        }\n        Insert: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          created_at?: string\n          id?: string\n          is_primary?: boolean\n          user_id: string\n        }\n        Update: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          created_at?: string\n          id?: string\n          is_primary?: boolean\n          user_id?: string\n        }\n        Relationships: []\n      }\n      user_roles: {\n        Row: {\n          created_at: string\n          id: string\n          role: Database[\"public\"][\"Enums\"][\"app_role\"]\n          user_id: string\n        }\n        Insert: {\n          created_at?: string\n          id?: string\n          role: Database[\"public\"][\"Enums\"][\"app_role\"]\n          user_id: string\n        }\n        Update: {\n          created_at?: string\n          id?: string\n          role?: Database[\"public\"][\"Enums\"][\"app_role\"]\n          user_id?: string\n        }\n        Relationships: []\n      }\n      user_tasks: {\n        Row: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          assignee_external_id: string | null\n          assignee_user_id: string | null\n          assigner_user_id: string\n          cancellation_reason: string | null\n          cancelled_at: string | null\n          client_id: string | null\n          completed_at: string | null\n          created_at: string\n          deadline_at: string | null\n          description: string | null\n          documentation_completed_at: string | null\n          external_kanban_ref: string | null\n          id: string\n          notes: string | null\n          payload: Json\n          priority: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id: string | null\n          status: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          task_type_id: string\n          title: string\n          updated_at: string\n          validated_at: string | null\n          validator_user_id: string | null\n        }\n        Insert: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          assignee_external_id?: string | null\n          assignee_user_id?: string | null\n          assigner_user_id: string\n          cancellation_reason?: string | null\n          cancelled_at?: string | null\n          client_id?: string | null\n          completed_at?: string | null\n          created_at?: string\n          deadline_at?: string | null\n          description?: string | null\n          documentation_completed_at?: string | null\n          external_kanban_ref?: string | null\n          id?: string\n          notes?: string | null\n          payload?: Json\n          priority?: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          task_type_id: string\n          title: string\n          updated_at?: string\n          validated_at?: string | null\n          validator_user_id?: string | null\n        }\n        Update: {\n          area?: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          assignee_external_id?: string | null\n          assignee_user_id?: string | null\n          assigner_user_id?: string\n          cancellation_reason?: string | null\n          cancelled_at?: string | null\n          client_id?: string | null\n          completed_at?: string | null\n          created_at?: string\n          deadline_at?: string | null\n          description?: string | null\n          documentation_completed_at?: string | null\n          external_kanban_ref?: string | null\n          id?: string\n          notes?: string | null\n          payload?: Json\n          priority?: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id?: string | null\n          status?: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          task_type_id?: string\n          title?: string\n          updated_at?: string\n          validated_at?: string | null\n          validator_user_id?: string | null\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"user_tasks_assignee_external_id_fkey\"\n            columns: [\"assignee_external_id\"]\n            isOneToOne: false\n            referencedRelation: \"external_collaborators\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"user_tasks_client_id_fkey\"\n            columns: [\"client_id\"]\n            isOneToOne: false\n            referencedRelation: \"clients\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"user_tasks_process_id_fkey\"\n            columns: [\"process_id\"]\n            isOneToOne: false\n            referencedRelation: \"processes\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"user_tasks_task_type_id_fkey\"\n            columns: [\"task_type_id\"]\n            isOneToOne: false\n            referencedRelation: \"task_types\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n      user_ui_preferences: {\n        Row: {\n          created_at: string\n          id: string\n          right_collapsed: boolean\n          sidebar_collapsed: boolean\n          updated_at: string\n          user_id: string\n        }\n        Insert: {\n          created_at?: string\n          id?: string\n          right_collapsed?: boolean\n          sidebar_collapsed?: boolean\n          updated_at?: string\n          user_id: string\n        }\n        Update: {\n          created_at?: string\n          id?: string\n          right_collapsed?: boolean\n          sidebar_collapsed?: boolean\n          updated_at?: string\n          user_id?: string\n        }\n        Relationships: []\n      }\n    }\n    Views: {\n      agents_with_owner_v: {\n        Row: {\n          can_orchestrate: boolean | null\n          color: string | null\n          current_tasks: number | null\n          department_id: string | null\n          department_name: string | null\n          description: string | null\n          id: string | null\n          is_active: boolean | null\n          is_overridden: boolean | null\n          is_personal: boolean | null\n          level: number | null\n          max_concurrent_tasks: number | null\n          name: string | null\n          owner_display_name: string | null\n          owner_role_code: string | null\n          owner_role_label: string | null\n          owner_user_id: string | null\n          role: Database[\"public\"][\"Enums\"][\"agent_role\"] | null\n          source_template_id: string | null\n          status: Database[\"public\"][\"Enums\"][\"agent_status\"] | null\n          template_area: Database[\"public\"][\"Enums\"][\"legal_area\"] | null\n          template_code: string | null\n          template_stage: Database[\"public\"][\"Enums\"][\"org_stage\"] | null\n        }\n        Relationships: [\n          {\n            foreignKeyName: \"agents_department_id_fkey\"\n            columns: [\"department_id\"]\n            isOneToOne: false\n            referencedRelation: \"departments\"\n            referencedColumns: [\"id\"]\n          },\n          {\n            foreignKeyName: \"agents_source_template_fk\"\n            columns: [\"source_template_id\"]\n            isOneToOne: false\n            referencedRelation: \"agent_templates\"\n            referencedColumns: [\"id\"]\n          },\n        ]\n      }\n    }\n    Functions: {\n      add_tokens: {\n        Args: {\n          p_amount: number\n          p_description?: string\n          p_reference_id?: string\n          p_type?: Database[\"public\"][\"Enums\"][\"token_transaction_type\"]\n          p_user_id: string\n        }\n        Returns: undefined\n      }\n      answer_inter_assistant_request: {\n        Args: {\n          p_request_id: string\n          p_response_payload: Json\n          p_status?: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n        }\n        Returns: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n      }\n      append_chat_message: {\n        Args: {\n          p_agent_id?: string\n          p_content?: string\n          p_cost_usd?: number\n          p_duration_ms?: number\n          p_input_tokens?: number\n          p_metadata?: Json\n          p_model_used?: string\n          p_output_tokens?: number\n          p_role: string\n          p_session_id: string\n          p_tool_call_id?: string\n          p_tool_calls?: Json\n          p_tool_result?: Json\n        }\n        Returns: string\n      }\n      apply_employee_profile: {\n        Args: {\n          p_app_role: Database[\"public\"][\"Enums\"][\"app_role\"]\n          p_full_name: string\n          p_is_estagiario: boolean\n          p_role_template_id: string\n          p_user_id: string\n        }\n        Returns: undefined\n      }\n      calculate_llm_cost: {\n        Args: {\n          p_input_tokens: number\n          p_model_id: string\n          p_output_tokens: number\n          p_provider: string\n        }\n        Returns: number\n      }\n      consume_tokens: {\n        Args: { p_amount: number; p_description?: string; p_user_id: string }\n        Returns: boolean\n      }\n      consume_tokens_with_ref: {\n        Args: {\n          p_amount: number\n          p_description: string\n          p_reference_id: string\n          p_user_id: string\n        }\n        Returns: boolean\n      }\n      create_inter_assistant_request: {\n        Args: {\n          p_expires_in_hours?: number\n          p_payload?: Json\n          p_related_task_id?: string\n          p_request_type: string\n          p_to_user_id: string\n        }\n        Returns: string\n      }\n      create_user_task: {\n        Args: {\n          p_area?: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          p_assignee_user_id: string\n          p_client_id?: string\n          p_deadline_at?: string\n          p_description?: string\n          p_external_kanban_ref?: string\n          p_payload?: Json\n          p_priority?: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          p_process_id?: string\n          p_task_type_id: string\n          p_title: string\n        }\n        Returns: string\n      }\n      delete_task_attachment: {\n        Args: { p_attachment_id: string }\n        Returns: string\n      }\n      enqueue_email_notification: {\n        Args: {\n          p_body_html: string\n          p_body_text?: string\n          p_recipient_user_id: string\n          p_related_request_id?: string\n          p_related_task_id?: string\n          p_subject: string\n          p_type: Database[\"public\"][\"Enums\"][\"email_notification_type\"]\n        }\n        Returns: string\n      }\n      find_users_missing_agents: {\n        Args: never\n        Returns: {\n          agentes_atuais: number\n          cargo: string\n          cargo_label: string\n          email: string\n          faltam: number\n          full_name: string\n          is_estagiario: boolean\n          templates_esperados: number\n          user_id: string\n        }[]\n      }\n      finish_agent_trace: {\n        Args: {\n          p_cost_usd?: number\n          p_error_message?: string\n          p_input_tokens?: number\n          p_output_summary?: string\n          p_output_tokens?: number\n          p_status: string\n          p_trace_pk: string\n        }\n        Returns: undefined\n      }\n      get_active_provider_for_user: {\n        Args: { p_provider: string; p_user_id: string }\n        Returns: {\n          config_id: string\n          is_default: boolean\n          monthly_budget_usd: number\n          monthly_spent_usd: number\n          provider: string\n          vault_secret_id: string\n        }[]\n      }\n      get_edge_runtime_secret: { Args: { p_key: string }; Returns: string }\n      get_eligible_assignees: {\n        Args: { p_task_type_id: string }\n        Returns: {\n          full_name: string\n          is_estagiario: boolean\n          role_code: string\n          role_label: string\n          user_id: string\n        }[]\n      }\n      get_inbox_count: {\n        Args: never\n        Returns: {\n          critical: number\n          overdue: number\n          total: number\n        }[]\n      }\n      get_inter_assistant_inbox_count: { Args: never; Returns: number }\n      get_my_inbox: {\n        Args: { p_include_completed?: boolean }\n        Returns: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          assigner_name: string\n          assigner_user_id: string\n          client_id: string\n          created_at: string\n          deadline_at: string\n          description: string\n          documentation_completed_at: string\n          external_kanban_ref: string\n          id: string\n          is_overdue: boolean\n          notes: string\n          priority: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          process_id: string\n          status: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          task_type_code: string\n          task_type_label: string\n          title: string\n          updated_at: string\n        }[]\n      }\n      get_my_inter_assistant_inbox: {\n        Args: { p_include_finalized?: boolean }\n        Returns: {\n          created_at: string\n          expires_at: string\n          from_user_id: string\n          from_user_name: string\n          from_user_role_label: string\n          id: string\n          is_expired: boolean\n          payload: Json\n          related_task_id: string\n          request_type: string\n          status: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n        }[]\n      }\n      get_my_inter_assistant_outbox: {\n        Args: { p_include_finalized?: boolean }\n        Returns: {\n          answered_at: string\n          created_at: string\n          id: string\n          payload: Json\n          related_task_id: string\n          request_type: string\n          response_payload: Json\n          status: Database[\"public\"][\"Enums\"][\"inter_assistant_status\"]\n          to_user_id: string\n          to_user_name: string\n          to_user_role_label: string\n        }[]\n      }\n      get_my_validation_queue: {\n        Args: never\n        Returns: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          assignee_name: string\n          assignee_user_id: string\n          created_at: string\n          deadline_at: string\n          description: string\n          id: string\n          is_overdue: boolean\n          notes: string\n          priority: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          task_type_code: string\n          task_type_label: string\n          title: string\n          updated_at: string\n        }[]\n      }\n      get_my_workspace: { Args: never; Returns: Json }\n      get_provider_key_decrypted: {\n        Args: { p_provider: string; p_user_id: string }\n        Returns: {\n          config_id: string\n          decrypted_key: string\n          has_remaining_budget: boolean\n          monthly_budget_usd: number\n          monthly_spent_usd: number\n        }[]\n      }\n      get_sector_workload: {\n        Args: { p_target_role_code: string }\n        Returns: {\n          full_name: string\n          is_least_loaded: boolean\n          pending_count: number\n          user_id: string\n        }[]\n      }\n      get_task_attachments: {\n        Args: { p_task_id: string }\n        Returns: {\n          created_at: string\n          description: string\n          file_name: string\n          file_size_bytes: number\n          id: string\n          is_owner: boolean\n          mime_type: string\n          storage_path: string\n          uploader_name: string\n          uploader_user_id: string\n        }[]\n      }\n      get_task_types_by_stage: {\n        Args: never\n        Returns: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          code: string\n          default_sla_hours: number\n          description: string\n          display_name: string\n          eligible_role_codes: string[]\n          id: string\n          stage: Database[\"public\"][\"Enums\"][\"org_stage\"]\n        }[]\n      }\n      get_team_tasks: {\n        Args: {\n          p_assignee_user_id?: string\n          p_include_completed?: boolean\n          p_limit?: number\n          p_status?: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n        }\n        Returns: {\n          area: Database[\"public\"][\"Enums\"][\"legal_area\"]\n          assignee_name: string\n          assignee_role_label: string\n          assignee_user_id: string\n          assigner_name: string\n          assigner_user_id: string\n          created_at: string\n          deadline_at: string\n          id: string\n          is_overdue: boolean\n          priority: Database[\"public\"][\"Enums\"][\"task_priority\"]\n          status: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          task_type_label: string\n          title: string\n        }[]\n      }\n      get_validation_count: { Args: never; Returns: number }\n      has_role: {\n        Args: {\n          _role: Database[\"public\"][\"Enums\"][\"app_role\"]\n          _user_id: string\n        }\n        Returns: boolean\n      }\n      increment_provider_spend: {\n        Args: { p_config_id: string; p_cost: number }\n        Returns: undefined\n      }\n      increment_session_counters: {\n        Args: {\n          p_cost: number\n          p_session_id: string\n          p_tokens_in: number\n          p_tokens_out: number\n        }\n        Returns: undefined\n      }\n      integration_list_rpcs: { Args: never; Returns: string[] }\n      integration_list_tables: { Args: never; Returns: string[] }\n      is_master_admin: { Args: { _user_id: string }; Returns: boolean }\n      is_recepcao_or_socio: { Args: never; Returns: boolean }\n      is_role_eligible_for_task: {\n        Args: { p_role_template_id: string; p_task_type_id: string }\n        Returns: boolean\n      }\n      list_users_for_inter_assistant: {\n        Args: never\n        Returns: {\n          full_name: string\n          has_assistant: boolean\n          role_label: string\n          user_id: string\n        }[]\n      }\n      mcp_delete_server: { Args: { p_id: string }; Returns: undefined }\n      mcp_register_server: {\n        Args: {\n          p_config?: Json\n          p_description?: string\n          p_enabled?: boolean\n          p_name: string\n          p_transport?: string\n          p_url: string\n        }\n        Returns: string\n      }\n      mcp_set_server_enabled: {\n        Args: { p_enabled: boolean; p_id: string }\n        Returns: undefined\n      }\n      mcp_update_server_config: {\n        Args: { p_config: Json; p_id: string }\n        Returns: undefined\n      }\n      provision_user_agents: {\n        Args: { p_user_id: string }\n        Returns: {\n          agent_id: string\n          display_name: string\n          template_code: string\n          was_created: boolean\n        }[]\n      }\n      record_provider_spend: {\n        Args: {\n          p_cost_usd: number\n          p_provider: string\n          p_trace_id: string\n          p_user_id: string\n        }\n        Returns: boolean\n      }\n      refund_own_tokens: {\n        Args: {\n          p_amount: number\n          p_description?: string\n          p_reference_id: string\n        }\n        Returns: boolean\n      }\n      refund_tokens: {\n        Args: {\n          p_amount: number\n          p_description?: string\n          p_reference_id: string\n          p_user_id: string\n        }\n        Returns: boolean\n      }\n      register_provider_key: {\n        Args: {\n          p_api_key: string\n          p_monthly_budget_usd?: number\n          p_notes?: string\n          p_provider: string\n          p_set_default?: boolean\n        }\n        Returns: string\n      }\n      register_task_attachment: {\n        Args: {\n          p_description?: string\n          p_file_name: string\n          p_file_size_bytes: number\n          p_mime_type?: string\n          p_storage_path: string\n          p_task_id: string\n        }\n        Returns: string\n      }\n      reprovision_all_missing: {\n        Args: never\n        Returns: {\n          agentes_provisionados: number\n          email: string\n          full_name: string\n          user_id: string\n        }[]\n      }\n      start_agent_trace: {\n        Args: {\n          p_agent_id: string\n          p_input_summary?: string\n          p_metadata?: Json\n          p_model?: string\n          p_operation_name: string\n          p_parent_span_id: string\n          p_session_id: string\n          p_span_id: string\n          p_span_kind: string\n          p_trace_id: string\n        }\n        Returns: string\n      }\n      start_chat_session: {\n        Args: {\n          p_client_id?: string\n          p_entry_agent_id: string\n          p_title?: string\n        }\n        Returns: string\n      }\n      update_user_task_status: {\n        Args: {\n          p_new_status: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n          p_notes?: string\n          p_task_id: string\n        }\n        Returns: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n      }\n      validate_agent_for_chat: {\n        Args: { p_agent_id: string }\n        Returns: {\n          agent_model: string\n          agent_provider: string\n          is_valid: boolean\n          reason: string\n        }[]\n      }\n      validate_user_task: {\n        Args: { p_approve: boolean; p_notes?: string; p_task_id: string }\n        Returns: Database[\"public\"][\"Enums\"][\"user_task_status\"]\n      }\n    }\n    Enums: {\n      agent_role:\n        | \"ceo\"\n        | \"assistant_root\"\n        | \"director\"\n        | \"orchestrator\"\n        | \"manager\"\n        | \"specialist\"\n        | \"reviewer\"\n        | \"executor\"\n        | \"monitor\"\n      agent_status: \"active\" | \"idle\" | \"alert\" | \"offline\"\n      app_role:\n        | \"admin\"\n        | \"director\"\n        | \"manager\"\n        | \"lawyer\"\n        | \"receptionist\"\n        | \"intern\"\n        | \"financial\"\n        | \"marketing\"\n        | \"protocol\"\n        | \"calculator\"\n        | \"compliance\"\n        | \"tech\"\n      captacao_canal_tipo:\n        | \"cooperativa\"\n        | \"ressaque\"\n        | \"indicacao\"\n        | \"site\"\n        | \"outro\"\n      coverage_status: \"scheduled\" | \"active\" | \"finished\" | \"cancelled\"\n      email_notification_status:\n        | \"pending\"\n        | \"sending\"\n        | \"sent\"\n        | \"failed\"\n        | \"skipped\"\n      email_notification_type:\n        | \"task_assigned\"\n        | \"task_validation_required\"\n        | \"task_validated\"\n        | \"task_rejected\"\n        | \"inter_assistant_received\"\n        | \"inter_assistant_answered\"\n      inter_assistant_status:\n        | \"pending\"\n        | \"in_progress\"\n        | \"answered\"\n        | \"denied\"\n        | \"expired\"\n      legal_area:\n        | \"bancario\"\n        | \"familia\"\n        | \"plano_saude\"\n        | \"consumidor\"\n        | \"civil\"\n        | \"previdenciario\"\n        | \"tributario\"\n      org_stage:\n        | \"atendimento\"\n        | \"confeccao\"\n        | \"revisao\"\n        | \"protocolo\"\n        | \"audiencia\"\n        | \"execucao\"\n        | \"execucao_sindicato\"\n        | \"recursos\"\n        | \"recursos_criticos\"\n        | \"alvara\"\n        | \"diligencia\"\n        | \"acompanhamento\"\n        | \"financeiro\"\n        | \"recepcao\"\n        | \"recepcao_supervisionada\"\n        | \"admin_equipe\"\n        | \"captacao_cooperativa\"\n        | \"kanban_pendencias\"\n        | \"gestao\"\n        | \"todas\"\n      permission_type:\n        | \"read\"\n        | \"write\"\n        | \"approve\"\n        | \"execute\"\n        | \"admin\"\n        | \"monitor\"\n        | \"schedule\"\n        | \"contact_client\"\n        | \"protocol\"\n        | \"calculate\"\n        | \"review_calculation\"\n        | \"petition\"\n        | \"market_study\"\n      provider_code:\n        | \"anthropic\"\n        | \"openai\"\n        | \"google\"\n        | \"openrouter\"\n        | \"deepseek\"\n      task_priority: \"critical\" | \"high\" | \"medium\" | \"low\"\n      task_status:\n        | \"pending\"\n        | \"in_progress\"\n        | \"review\"\n        | \"approved\"\n        | \"rejected\"\n        | \"completed\"\n        | \"cancelled\"\n      token_transaction_type: \"purchase\" | \"consumption\" | \"bonus\" | \"refund\"\n      user_task_status:\n        | \"draft\"\n        | \"assigned\"\n        | \"in_progress\"\n        | \"awaiting_external\"\n        | \"awaiting_validation\"\n        | \"blocked\"\n        | \"completed\"\n        | \"cancelled\"\n    }\n    CompositeTypes: {\n      [_ in never]: never\n    }\n  }\n}\n\ntype DatabaseWithoutInternals = Omit<Database, \"__InternalSupabase\">\n\ntype DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, \"public\">]\n\nexport type Tables<\n  DefaultSchemaTableNameOrOptions extends\n    | keyof (DefaultSchema[\"Tables\"] & DefaultSchema[\"Views\"])\n    | { schema: keyof DatabaseWithoutInternals },\n  TableName extends DefaultSchemaTableNameOrOptions extends {\n    schema: keyof DatabaseWithoutInternals\n  }\n    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"] &\n        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Views\"])\n    : never = never,\n> = DefaultSchemaTableNameOrOptions extends {\n  schema: keyof DatabaseWithoutInternals\n}\n  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"] &\n      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Views\"])[TableName] extends {\n      Row: infer R\n    }\n    ? R\n    : never\n  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema[\"Tables\"] &\n        DefaultSchema[\"Views\"])\n    ? (DefaultSchema[\"Tables\"] &\n        DefaultSchema[\"Views\"])[DefaultSchemaTableNameOrOptions] extends {\n        Row: infer R\n      }\n      ? R\n      : never\n    : never\n\nexport type TablesInsert<\n  DefaultSchemaTableNameOrOptions extends\n    | keyof DefaultSchema[\"Tables\"]\n    | { schema: keyof DatabaseWithoutInternals },\n  TableName extends DefaultSchemaTableNameOrOptions extends {\n    schema: keyof DatabaseWithoutInternals\n  }\n    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"]\n    : never = never,\n> = DefaultSchemaTableNameOrOptions extends {\n  schema: keyof DatabaseWithoutInternals\n}\n  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"][TableName] extends {\n      Insert: infer I\n    }\n    ? I\n    : never\n  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema[\"Tables\"]\n    ? DefaultSchema[\"Tables\"][DefaultSchemaTableNameOrOptions] extends {\n        Insert: infer I\n      }\n      ? I\n      : never\n    : never\n\nexport type TablesUpdate<\n  DefaultSchemaTableNameOrOptions extends\n    | keyof DefaultSchema[\"Tables\"]\n    | { schema: keyof DatabaseWithoutInternals },\n  TableName extends DefaultSchemaTableNameOrOptions extends {\n    schema: keyof DatabaseWithoutInternals\n  }\n    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"]\n    : never = never,\n> = DefaultSchemaTableNameOrOptions extends {\n  schema: keyof DatabaseWithoutInternals\n}\n  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions[\"schema\"]][\"Tables\"][TableName] extends {\n      Update: infer U\n    }\n    ? U\n    : never\n  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema[\"Tables\"]\n    ? DefaultSchema[\"Tables\"][DefaultSchemaTableNameOrOptions] extends {\n        Update: infer U\n      }\n      ? U\n      : never\n    : never\n\nexport type Enums<\n  DefaultSchemaEnumNameOrOptions extends\n    | keyof DefaultSchema[\"Enums\"]\n    | { schema: keyof DatabaseWithoutInternals },\n  EnumName extends DefaultSchemaEnumNameOrOptions extends {\n    schema: keyof DatabaseWithoutInternals\n  }\n    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions[\"schema\"]][\"Enums\"]\n    : never = never,\n> = DefaultSchemaEnumNameOrOptions extends {\n  schema: keyof DatabaseWithoutInternals\n}\n  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions[\"schema\"]][\"Enums\"][EnumName]\n  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema[\"Enums\"]\n    ? DefaultSchema[\"Enums\"][DefaultSchemaEnumNameOrOptions]\n    : never\n\nexport type CompositeTypes<\n  PublicCompositeTypeNameOrOptions extends\n    | keyof DefaultSchema[\"CompositeTypes\"]\n    | { schema: keyof DatabaseWithoutInternals },\n  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {\n    schema: keyof DatabaseWithoutInternals\n  }\n    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions[\"schema\"]][\"CompositeTypes\"]\n    : never = never,\n> = PublicCompositeTypeNameOrOptions extends {\n  schema: keyof DatabaseWithoutInternals\n}\n  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions[\"schema\"]][\"CompositeTypes\"][CompositeTypeName]\n  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema[\"CompositeTypes\"]\n    ? DefaultSchema[\"CompositeTypes\"][PublicCompositeTypeNameOrOptions]\n    : never\n\nexport const Constants = {\n  public: {\n    Enums: {\n      agent_role: [\n        \"ceo\",\n        \"assistant_root\",\n        \"director\",\n        \"orchestrator\",\n        \"manager\",\n        \"specialist\",\n        \"reviewer\",\n        \"executor\",\n        \"monitor\",\n      ],\n      agent_status: [\"active\", \"idle\", \"alert\", \"offline\"],\n      app_role: [\n        \"admin\",\n        \"director\",\n        \"manager\",\n        \"lawyer\",\n        \"receptionist\",\n        \"intern\",\n        \"financial\",\n        \"marketing\",\n        \"protocol\",\n        \"calculator\",\n        \"compliance\",\n        \"tech\",\n      ],\n      captacao_canal_tipo: [\n        \"cooperativa\",\n        \"ressaque\",\n        \"indicacao\",\n        \"site\",\n        \"outro\",\n      ],\n      coverage_status: [\"scheduled\", \"active\", \"finished\", \"cancelled\"],\n      email_notification_status: [\n        \"pending\",\n        \"sending\",\n        \"sent\",\n        \"failed\",\n        \"skipped\",\n      ],\n      email_notification_type: [\n        \"task_assigned\",\n        \"task_validation_required\",\n        \"task_validated\",\n        \"task_rejected\",\n        \"inter_assistant_received\",\n        \"inter_assistant_answered\",\n      ],\n      inter_assistant_status: [\n        \"pending\",\n        \"in_progress\",\n        \"answered\",\n        \"denied\",\n        \"expired\",\n      ],\n      legal_area: [\n        \"bancario\",\n        \"familia\",\n        \"plano_saude\",\n        \"consumidor\",\n        \"civil\",\n        \"previdenciario\",\n        \"tributario\",\n      ],\n      org_stage: [\n        \"atendimento\",\n        \"confeccao\",\n        \"revisao\",\n        \"protocolo\",\n        \"audiencia\",\n        \"execucao\",\n        \"execucao_sindicato\",\n        \"recursos\",\n        \"recursos_criticos\",\n        \"alvara\",\n        \"diligencia\",\n        \"acompanhamento\",\n        \"financeiro\",\n        \"recepcao\",\n        \"recepcao_supervisionada\",\n        \"admin_equipe\",\n        \"captacao_cooperativa\",\n        \"kanban_pendencias\",\n        \"gestao\",\n        \"todas\",\n      ],\n      permission_type: [\n        \"read\",\n        \"write\",\n        \"approve\",\n        \"execute\",\n        \"admin\",\n        \"monitor\",\n        \"schedule\",\n        \"contact_client\",\n        \"protocol\",\n        \"calculate\",\n        \"review_calculation\",\n        \"petition\",\n        \"market_study\",\n      ],\n      provider_code: [\n        \"anthropic\",\n        \"openai\",\n        \"google\",\n        \"openrouter\",\n        \"deepseek\",\n      ],\n      task_priority: [\"critical\", \"high\", \"medium\", \"low\"],\n      task_status: [\n        \"pending\",\n        \"in_progress\",\n        \"review\",\n        \"approved\",\n        \"rejected\",\n        \"completed\",\n        \"cancelled\",\n      ],\n      token_transaction_type: [\"purchase\", \"consumption\", \"bonus\", \"refund\"],\n      user_task_status: [\n        \"draft\",\n        \"assigned\",\n        \"in_progress\",\n        \"awaiting_external\",\n        \"awaiting_validation\",\n        \"blocked\",\n        \"completed\",\n        \"cancelled\",\n      ],\n    },\n  },\n} as const\n"}
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
+  public: {
+    Tables: {
+      agent_document_links: {
+        Row: {
+          agent_id: string
+          document_id: string
+        }
+        Insert: {
+          agent_id: string
+          document_id: string
+        }
+        Update: {
+          agent_id?: string
+          document_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_document_links_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_document_links_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_document_links_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "document_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_documents: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string | null
+          file_name: string
+          file_size: number
+          id: string
+          is_active: boolean
+          mime_type: string | null
+          sort_order: number
+          storage_path: string
+          updated_at: string
+          uploader_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_size?: number
+          id?: string
+          is_active?: boolean
+          mime_type?: string | null
+          sort_order?: number
+          storage_path: string
+          updated_at?: string
+          uploader_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_size?: number
+          id?: string
+          is_active?: boolean
+          mime_type?: string | null
+          sort_order?: number
+          storage_path?: string
+          updated_at?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_documents_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_documents_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_mcp_servers: {
+        Row: {
+          agent_id: string
+          config: Json | null
+          created_at: string | null
+          description: string | null
+          enabled: boolean | null
+          id: string
+          mcp_server_id: string | null
+          name: string
+          updated_at: string | null
+          url: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json | null
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          mcp_server_id?: string | null
+          name: string
+          updated_at?: string | null
+          url: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json | null
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          mcp_server_id?: string | null
+          name?: string
+          updated_at?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_mcp_servers_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_mcp_servers_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_mcp_servers_mcp_server_id_fkey"
+            columns: ["mcp_server_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_messages: {
+        Row: {
+          agent_id: string | null
+          content: string
+          created_at: string
+          department_id: string | null
+          id: string
+          message_type: string
+          metadata: Json | null
+          sender_type: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          content: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message_type?: string
+          metadata?: Json | null
+          sender_type?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message_type?: string
+          metadata?: Json | null
+          sender_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_messages_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_orchestration_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          from_agent_id: string | null
+          id: string
+          task_id: string | null
+          to_agent_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          from_agent_id?: string | null
+          id?: string
+          task_id?: string | null
+          to_agent_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          from_agent_id?: string | null
+          id?: string
+          task_id?: string | null
+          to_agent_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_orchestration_log_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_orchestration_log_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_orchestration_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_orchestration_log_to_agent_id_fkey"
+            columns: ["to_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_orchestration_log_to_agent_id_fkey"
+            columns: ["to_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_permissions: {
+        Row: {
+          agent_id: string
+          created_at: string
+          granted_by: string | null
+          id: string
+          permission: Database["public"]["Enums"]["permission_type"]
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          permission: Database["public"]["Enums"]["permission_type"]
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          permission?: Database["public"]["Enums"]["permission_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_permissions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_permissions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_tasks: {
+        Row: {
+          agent_id: string
+          agent_name: string | null
+          assigned_by: string | null
+          client_name: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          priority: Database["public"]["Enums"]["task_priority"]
+          process_id: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          task_category: string
+          task_type: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          agent_name?: string | null
+          assigned_by?: string | null
+          client_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          process_id?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          task_category?: string
+          task_type?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          agent_name?: string | null
+          assigned_by?: string | null
+          client_name?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          process_id?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          task_category?: string
+          task_type?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_templates: {
+        Row: {
+          area: Database["public"]["Enums"]["legal_area"] | null
+          code: string
+          created_at: string
+          default_color: string
+          default_max_tokens: number
+          default_model: string
+          default_provider: Database["public"]["Enums"]["provider_code"]
+          default_system_prompt: string | null
+          default_temperature: number
+          description: string | null
+          display_name: string
+          id: string
+          is_active: boolean
+          role: Database["public"]["Enums"]["agent_role"]
+          sort_order: number
+          stage: Database["public"]["Enums"]["org_stage"] | null
+          updated_at: string
+        }
+        Insert: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          code: string
+          created_at?: string
+          default_color?: string
+          default_max_tokens?: number
+          default_model?: string
+          default_provider?: Database["public"]["Enums"]["provider_code"]
+          default_system_prompt?: string | null
+          default_temperature?: number
+          description?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean
+          role: Database["public"]["Enums"]["agent_role"]
+          sort_order?: number
+          stage?: Database["public"]["Enums"]["org_stage"] | null
+          updated_at?: string
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          code?: string
+          created_at?: string
+          default_color?: string
+          default_max_tokens?: number
+          default_model?: string
+          default_provider?: Database["public"]["Enums"]["provider_code"]
+          default_system_prompt?: string | null
+          default_temperature?: number
+          description?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          role?: Database["public"]["Enums"]["agent_role"]
+          sort_order?: number
+          stage?: Database["public"]["Enums"]["org_stage"] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_tools: {
+        Row: {
+          agent_id: string
+          config: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          tool_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tool_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tool_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tools_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tools_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tools_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tool_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_traces: {
+        Row: {
+          agent_id: string | null
+          cost_usd: number | null
+          created_at: string | null
+          duration_ms: number | null
+          ended_at: string | null
+          error_message: string | null
+          id: string
+          input_summary: string | null
+          input_tokens: number | null
+          metadata: Json | null
+          model: string | null
+          operation_name: string
+          output_summary: string | null
+          output_tokens: number | null
+          parent_span_id: string | null
+          session_id: string | null
+          span_id: string
+          span_kind: string
+          started_at: string
+          status: string
+          trace_id: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          cost_usd?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          input_summary?: string | null
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string | null
+          operation_name: string
+          output_summary?: string | null
+          output_tokens?: number | null
+          parent_span_id?: string | null
+          session_id?: string | null
+          span_id: string
+          span_kind: string
+          started_at: string
+          status?: string
+          trace_id: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          cost_usd?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          input_summary?: string | null
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string | null
+          operation_name?: string
+          output_summary?: string | null
+          output_tokens?: number | null
+          parent_span_id?: string | null
+          session_id?: string | null
+          span_id?: string
+          span_kind?: string
+          started_at?: string
+          status?: string
+          trace_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_traces_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_traces_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_traces_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          allow_fallbacks: boolean | null
+          avatar: string
+          can_orchestrate: boolean
+          color: string
+          created_at: string
+          current_tasks: number
+          department_id: string
+          description: string | null
+          external_id: number | null
+          history_limit: number | null
+          id: string
+          is_active: boolean
+          is_overridden: boolean
+          is_personal: boolean
+          level: number
+          max_concurrent_tasks: number
+          max_processes_monitored: number | null
+          max_tokens: number | null
+          memory_enabled: boolean | null
+          model: string | null
+          name: string
+          owner_user_id: string | null
+          provider: string | null
+          reports_to: number | null
+          role: Database["public"]["Enums"]["agent_role"]
+          source_template_id: string | null
+          status: Database["public"]["Enums"]["agent_status"]
+          system_prompt: string | null
+          temperature: number | null
+          top_p: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_fallbacks?: boolean | null
+          avatar?: string
+          can_orchestrate?: boolean
+          color?: string
+          created_at?: string
+          current_tasks?: number
+          department_id: string
+          description?: string | null
+          external_id?: number | null
+          history_limit?: number | null
+          id?: string
+          is_active?: boolean
+          is_overridden?: boolean
+          is_personal?: boolean
+          level: number
+          max_concurrent_tasks?: number
+          max_processes_monitored?: number | null
+          max_tokens?: number | null
+          memory_enabled?: boolean | null
+          model?: string | null
+          name: string
+          owner_user_id?: string | null
+          provider?: string | null
+          reports_to?: number | null
+          role?: Database["public"]["Enums"]["agent_role"]
+          source_template_id?: string | null
+          status?: Database["public"]["Enums"]["agent_status"]
+          system_prompt?: string | null
+          temperature?: number | null
+          top_p?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_fallbacks?: boolean | null
+          avatar?: string
+          can_orchestrate?: boolean
+          color?: string
+          created_at?: string
+          current_tasks?: number
+          department_id?: string
+          description?: string | null
+          external_id?: number | null
+          history_limit?: number | null
+          id?: string
+          is_active?: boolean
+          is_overridden?: boolean
+          is_personal?: boolean
+          level?: number
+          max_concurrent_tasks?: number
+          max_processes_monitored?: number | null
+          max_tokens?: number | null
+          memory_enabled?: boolean | null
+          model?: string | null
+          name?: string
+          owner_user_id?: string | null
+          provider?: string | null
+          reports_to?: number | null
+          role?: Database["public"]["Enums"]["agent_role"]
+          source_template_id?: string | null
+          status?: Database["public"]["Enums"]["agent_status"]
+          system_prompt?: string | null
+          temperature?: number | null
+          top_p?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_source_template_fk"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "agent_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bottleneck_notifications: {
+        Row: {
+          agent_name: string | null
+          alert_type: string
+          created_at: string
+          department: string | null
+          id: string
+          is_read: boolean
+          message: string
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          agent_name?: string | null
+          alert_type: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          is_read?: boolean
+          message: string
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          agent_name?: string | null
+          alert_type?: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      captacao_canais: {
+        Row: {
+          code: string
+          created_at: string
+          default_assignee_role_code: string | null
+          description: string | null
+          display_name: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          default_assignee_role_code?: string | null
+          description?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          default_assignee_role_code?: string | null
+          description?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          tipo?: Database["public"]["Enums"]["captacao_canal_tipo"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_attachments: {
+        Row: {
+          created_at: string
+          extracted_text: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          is_active: boolean
+          message_id: string | null
+          mime_type: string | null
+          session_id: string | null
+          storage_path: string
+          summary: string | null
+          summary_generated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          message_id?: string | null
+          mime_type?: string | null
+          session_id?: string | null
+          storage_path: string
+          summary?: string | null
+          summary_generated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          message_id?: string | null
+          mime_type?: string | null
+          session_id?: string | null
+          storage_path?: string
+          summary?: string | null
+          summary_generated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_attachments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          agent_id: string | null
+          content: string | null
+          cost_usd: number | null
+          created_at: string | null
+          duration_ms: number | null
+          id: string
+          input_tokens: number | null
+          metadata: Json | null
+          model_used: string | null
+          output_tokens: number | null
+          role: string
+          sequence_number: number
+          session_id: string
+          tool_call_id: string | null
+          tool_calls: Json | null
+          tool_result: Json | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          content?: string | null
+          cost_usd?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model_used?: string | null
+          output_tokens?: number | null
+          role: string
+          sequence_number: number
+          session_id: string
+          tool_call_id?: string | null
+          tool_calls?: Json | null
+          tool_result?: Json | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string | null
+          cost_usd?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model_used?: string | null
+          output_tokens?: number | null
+          role?: string
+          sequence_number?: number
+          session_id?: string
+          tool_call_id?: string | null
+          tool_calls?: Json | null
+          tool_result?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          client_id: string | null
+          closed_at: string | null
+          created_at: string | null
+          entry_agent_id: string | null
+          id: string
+          last_message_at: string | null
+          message_count: number | null
+          metadata: Json | null
+          status: string
+          summary: string | null
+          title: string | null
+          total_cost_usd: number | null
+          total_tokens_input: number | null
+          total_tokens_output: number | null
+          total_tool_calls: number | null
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          entry_agent_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          message_count?: number | null
+          metadata?: Json | null
+          status?: string
+          summary?: string | null
+          title?: string | null
+          total_cost_usd?: number | null
+          total_tokens_input?: number | null
+          total_tokens_output?: number | null
+          total_tool_calls?: number | null
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          entry_agent_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          message_count?: number | null
+          metadata?: Json | null
+          status?: string
+          summary?: string | null
+          title?: string | null
+          total_cost_usd?: number | null
+          total_tokens_input?: number | null
+          total_tokens_output?: number | null
+          total_tool_calls?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_sessions_entry_agent_id_fkey"
+            columns: ["entry_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_sessions_entry_agent_id_fkey"
+            columns: ["entry_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_documents: {
+        Row: {
+          client_id: string
+          client_name: string | null
+          created_at: string
+          document_name: string
+          document_type: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string | null
+          created_at?: string
+          document_name: string
+          document_type?: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string | null
+          created_at?: string
+          document_name?: string
+          document_type?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          bank_account: string | null
+          bank_account_type: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          birth_date: string | null
+          city: string | null
+          client_origin: string | null
+          cnpj: string | null
+          country: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          fantasy_name: string | null
+          father_name: string | null
+          foundation_date: string | null
+          full_name: string
+          gender: string | null
+          gov_br_profile: string | null
+          id: string
+          ie: string | null
+          im: string | null
+          legal_rep_cpf: string | null
+          legal_rep_name: string | null
+          marital_status: string | null
+          mother_name: string | null
+          nationality: string | null
+          natural_city: string | null
+          natural_uf: string | null
+          neighborhood: string | null
+          notes: string | null
+          phone: string | null
+          phone_commercial: string | null
+          phone_home: string | null
+          pis_nit: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          profession: string | null
+          responsible_lawyer_id: string | null
+          rg: string | null
+          rg_issuer: string | null
+          rg_uf: string | null
+          state: string | null
+          status: string
+          tipo_pessoa: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          bank_account?: string | null
+          bank_account_type?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          birth_date?: string | null
+          city?: string | null
+          client_origin?: string | null
+          cnpj?: string | null
+          country?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          fantasy_name?: string | null
+          father_name?: string | null
+          foundation_date?: string | null
+          full_name: string
+          gender?: string | null
+          gov_br_profile?: string | null
+          id?: string
+          ie?: string | null
+          im?: string | null
+          legal_rep_cpf?: string | null
+          legal_rep_name?: string | null
+          marital_status?: string | null
+          mother_name?: string | null
+          nationality?: string | null
+          natural_city?: string | null
+          natural_uf?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_commercial?: string | null
+          phone_home?: string | null
+          pis_nit?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          profession?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
+          rg_uf?: string | null
+          state?: string | null
+          status?: string
+          tipo_pessoa?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          bank_account?: string | null
+          bank_account_type?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          birth_date?: string | null
+          city?: string | null
+          client_origin?: string | null
+          cnpj?: string | null
+          country?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          fantasy_name?: string | null
+          father_name?: string | null
+          foundation_date?: string | null
+          full_name?: string
+          gender?: string | null
+          gov_br_profile?: string | null
+          id?: string
+          ie?: string | null
+          im?: string | null
+          legal_rep_cpf?: string | null
+          legal_rep_name?: string | null
+          marital_status?: string | null
+          mother_name?: string | null
+          nationality?: string | null
+          natural_city?: string | null
+          natural_uf?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_commercial?: string | null
+          phone_home?: string | null
+          pis_nit?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          profession?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
+          rg_uf?: string | null
+          state?: string | null
+          status?: string
+          tipo_pessoa?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      cron_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          enabled: boolean
+          id: string
+          last_run_at: string | null
+          last_status: string | null
+          name: string
+          params: Json
+          schedule: string
+          target: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_status?: string | null
+          name: string
+          params?: Json
+          schedule: string
+          target: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_status?: string | null
+          name?: string
+          params?: Json
+          schedule?: string
+          target?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      departments: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          icon: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      document_library: {
+        Row: {
+          acao_tipo: string | null
+          categoria: string | null
+          content_cache: string | null
+          created_at: string
+          description: string | null
+          doc_type: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          is_active: boolean
+          match_keywords: string[] | null
+          mime_type: string | null
+          reu_categoria: string | null
+          sort_order: number
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          acao_tipo?: string | null
+          categoria?: string | null
+          content_cache?: string | null
+          created_at?: string
+          description?: string | null
+          doc_type?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          match_keywords?: string[] | null
+          mime_type?: string | null
+          reu_categoria?: string | null
+          sort_order?: number
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acao_tipo?: string | null
+          categoria?: string | null
+          content_cache?: string | null
+          created_at?: string
+          description?: string | null
+          doc_type?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          match_keywords?: string[] | null
+          mime_type?: string | null
+          reu_categoria?: string | null
+          sort_order?: number
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      edge_runtime_secrets: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      email_notifications: {
+        Row: {
+          attempts: number
+          body_html: string
+          body_text: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          recipient_email: string
+          recipient_user_id: string
+          related_request_id: string | null
+          related_task_id: string | null
+          resend_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["email_notification_status"]
+          subject: string
+          type: Database["public"]["Enums"]["email_notification_type"]
+        }
+        Insert: {
+          attempts?: number
+          body_html: string
+          body_text?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          recipient_email: string
+          recipient_user_id: string
+          related_request_id?: string | null
+          related_task_id?: string | null
+          resend_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["email_notification_status"]
+          subject: string
+          type: Database["public"]["Enums"]["email_notification_type"]
+        }
+        Update: {
+          attempts?: number
+          body_html?: string
+          body_text?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          recipient_email?: string
+          recipient_user_id?: string
+          related_request_id?: string | null
+          related_task_id?: string | null
+          resend_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["email_notification_status"]
+          subject?: string
+          type?: Database["public"]["Enums"]["email_notification_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_notifications_related_request_id_fkey"
+            columns: ["related_request_id"]
+            isOneToOne: false
+            referencedRelation: "inter_assistant_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_notifications_related_task_id_fkey"
+            columns: ["related_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_collaborators: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          phone_whatsapp: string | null
+          role_template_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          phone_whatsapp?: string | null
+          role_template_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          phone_whatsapp?: string | null
+          role_template_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_collaborators_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_api_audit_log: {
+        Row: {
+          action: string
+          client_ip: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          method: string
+          path: string | null
+          payload_summary: Json
+          status_code: number
+        }
+        Insert: {
+          action: string
+          client_ip?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          method: string
+          path?: string | null
+          payload_summary?: Json
+          status_code: number
+        }
+        Update: {
+          action?: string
+          client_ip?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          method?: string
+          path?: string | null
+          payload_summary?: Json
+          status_code?: number
+        }
+        Relationships: []
+      }
+      inter_assistant_requests: {
+        Row: {
+          answered_at: string | null
+          created_at: string
+          expires_at: string | null
+          from_agent_id: string | null
+          from_user_id: string
+          id: string
+          payload: Json
+          related_session_id: string | null
+          related_task_id: string | null
+          request_type: string
+          response_payload: Json | null
+          status: Database["public"]["Enums"]["inter_assistant_status"]
+          to_agent_id: string | null
+          to_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          answered_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          from_agent_id?: string | null
+          from_user_id: string
+          id?: string
+          payload?: Json
+          related_session_id?: string | null
+          related_task_id?: string | null
+          request_type: string
+          response_payload?: Json | null
+          status?: Database["public"]["Enums"]["inter_assistant_status"]
+          to_agent_id?: string | null
+          to_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          answered_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          from_agent_id?: string | null
+          from_user_id?: string
+          id?: string
+          payload?: Json
+          related_session_id?: string | null
+          related_task_id?: string | null
+          request_type?: string
+          response_payload?: Json | null
+          status?: Database["public"]["Enums"]["inter_assistant_status"]
+          to_agent_id?: string | null
+          to_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_assistant_requests_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_assistant_requests_from_agent_id_fkey"
+            columns: ["from_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_assistant_requests_related_session_id_fkey"
+            columns: ["related_session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_assistant_requests_related_task_id_fkey"
+            columns: ["related_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_assistant_requests_to_agent_id_fkey"
+            columns: ["to_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_assistant_requests_to_agent_id_fkey"
+            columns: ["to_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_board_favorites: {
+        Row: {
+          board_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_board_favorites_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_board_grants: {
+        Row: {
+          board_id: string
+          created_at: string
+          grantee_role_code: string | null
+          grantee_user_id: string | null
+          id: string
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          grantee_role_code?: string | null
+          grantee_user_id?: string | null
+          id?: string
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          grantee_role_code?: string | null
+          grantee_user_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_board_grants_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_boards: {
+        Row: {
+          created_at: string
+          hide_completed_after_days: number | null
+          id: string
+          is_private: boolean
+          name: string
+          owner_user_id: string
+          simplified_cards: boolean
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hide_completed_after_days?: number | null
+          id?: string
+          is_private?: boolean
+          name: string
+          owner_user_id: string
+          simplified_cards?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hide_completed_after_days?: number | null
+          id?: string
+          is_private?: boolean
+          name?: string
+          owner_user_id?: string
+          simplified_cards?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kanban_card_placements: {
+        Row: {
+          board_id: string
+          column_id: string
+          created_at: string
+          id: string
+          position: number
+          updated_at: string
+          user_task_id: string
+        }
+        Insert: {
+          board_id: string
+          column_id: string
+          created_at?: string
+          id?: string
+          position?: number
+          updated_at?: string
+          user_task_id: string
+        }
+        Update: {
+          board_id?: string
+          column_id?: string
+          created_at?: string
+          id?: string
+          position?: number
+          updated_at?: string
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_card_placements_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_card_placements_column_id_fkey"
+            columns: ["column_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_card_placements_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: true
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_columns: {
+        Row: {
+          board_id: string
+          created_at: string
+          id: string
+          name: string
+          position: number
+          situacao: Database["public"]["Enums"]["task_situacao"]
+          updated_at: string
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          situacao: Database["public"]["Enums"]["task_situacao"]
+          updated_at?: string
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          situacao?: Database["public"]["Enums"]["task_situacao"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_columns_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landing_events: {
+        Row: {
+          created_at: string
+          cta_id: string | null
+          cta_label: string | null
+          event_name: string
+          id: string
+          metadata: Json | null
+          page_path: string | null
+          referrer: string | null
+          section: string | null
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          cta_id?: string | null
+          cta_label?: string | null
+          event_name: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          referrer?: string | null
+          section?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          cta_id?: string | null
+          cta_label?: string | null
+          event_name?: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          referrer?: string | null
+          section?: string | null
+          session_id?: string | null
+        }
+        Relationships: []
+      }
+      llm_provider_configs: {
+        Row: {
+          api_key_last_4: string | null
+          budget_period_start: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          last_used_at: string | null
+          monthly_budget_usd: number | null
+          monthly_spent_usd: number | null
+          notes: string | null
+          provider: string
+          updated_at: string | null
+          user_id: string
+          vault_secret_id: string | null
+        }
+        Insert: {
+          api_key_last_4?: string | null
+          budget_period_start?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          last_used_at?: string | null
+          monthly_budget_usd?: number | null
+          monthly_spent_usd?: number | null
+          notes?: string | null
+          provider: string
+          updated_at?: string | null
+          user_id: string
+          vault_secret_id?: string | null
+        }
+        Update: {
+          api_key_last_4?: string | null
+          budget_period_start?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          last_used_at?: string | null
+          monthly_budget_usd?: number | null
+          monthly_spent_usd?: number | null
+          notes?: string | null
+          provider?: string
+          updated_at?: string | null
+          user_id?: string
+          vault_secret_id?: string | null
+        }
+        Relationships: []
+      }
+      mcp_servers: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          enabled: boolean
+          id: string
+          name: string
+          required_credentials: Json
+          slug: string | null
+          transport: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          name: string
+          required_credentials?: Json
+          slug?: string | null
+          transport?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          name?: string
+          required_credentials?: Json
+          slug?: string | null
+          transport?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      model_pricing: {
+        Row: {
+          context_window: number
+          created_at: string | null
+          display_name: string
+          id: string
+          input_price_per_mtok: number
+          is_active: boolean | null
+          max_output_tokens: number
+          model_id: string
+          notes: string | null
+          output_price_per_mtok: number
+          provider: string
+          recommended_for: string[] | null
+          supports_streaming: boolean | null
+          supports_tools: boolean | null
+          supports_vision: boolean | null
+          tier: string
+          updated_at: string | null
+        }
+        Insert: {
+          context_window: number
+          created_at?: string | null
+          display_name: string
+          id?: string
+          input_price_per_mtok: number
+          is_active?: boolean | null
+          max_output_tokens: number
+          model_id: string
+          notes?: string | null
+          output_price_per_mtok: number
+          provider: string
+          recommended_for?: string[] | null
+          supports_streaming?: boolean | null
+          supports_tools?: boolean | null
+          supports_vision?: boolean | null
+          tier: string
+          updated_at?: string | null
+        }
+        Update: {
+          context_window?: number
+          created_at?: string | null
+          display_name?: string
+          id?: string
+          input_price_per_mtok?: number
+          is_active?: boolean | null
+          max_output_tokens?: number
+          model_id?: string
+          notes?: string | null
+          output_price_per_mtok?: number
+          provider?: string
+          recommended_for?: string[] | null
+          supports_streaming?: boolean | null
+          supports_tools?: boolean | null
+          supports_vision?: boolean | null
+          tier?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      orchestration_runs: {
+        Row: {
+          acao_tipo: string | null
+          block_index: number
+          blocks: Json
+          chain: Json
+          created_at: string
+          draft: string | null
+          entry_agent_id: string | null
+          error: string | null
+          feedback: string | null
+          fixed_facts: string | null
+          id: string
+          iterations: number
+          mech_report: Json | null
+          n3_usage: Json | null
+          original_message: string
+          session_id: string
+          status: string
+          stream_message_id: string | null
+          target_n2_id: string | null
+          target_n3_id: string | null
+          updated_at: string
+          user_id: string
+          user_message_id: string | null
+        }
+        Insert: {
+          acao_tipo?: string | null
+          block_index?: number
+          blocks?: Json
+          chain?: Json
+          created_at?: string
+          draft?: string | null
+          entry_agent_id?: string | null
+          error?: string | null
+          feedback?: string | null
+          fixed_facts?: string | null
+          id?: string
+          iterations?: number
+          mech_report?: Json | null
+          n3_usage?: Json | null
+          original_message: string
+          session_id: string
+          status?: string
+          stream_message_id?: string | null
+          target_n2_id?: string | null
+          target_n3_id?: string | null
+          updated_at?: string
+          user_id: string
+          user_message_id?: string | null
+        }
+        Update: {
+          acao_tipo?: string | null
+          block_index?: number
+          blocks?: Json
+          chain?: Json
+          created_at?: string
+          draft?: string | null
+          entry_agent_id?: string | null
+          error?: string | null
+          feedback?: string | null
+          fixed_facts?: string | null
+          id?: string
+          iterations?: number
+          mech_report?: Json | null
+          n3_usage?: Json | null
+          original_message?: string
+          session_id?: string
+          status?: string
+          stream_message_id?: string | null
+          target_n2_id?: string | null
+          target_n3_id?: string | null
+          updated_at?: string
+          user_id?: string
+          user_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orchestration_runs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orchestration_runs_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes: {
+        Row: {
+          client_name: string
+          created_at: string
+          department_id: string | null
+          description: string | null
+          id: string
+          next_hearing_date: string | null
+          process_number: string
+          responsible_lawyer: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_name: string
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          next_hearing_date?: string | null
+          process_number: string
+          responsible_lawyer?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          next_hearing_date?: string | null
+          process_number?: string
+          responsible_lawyer?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          department: string | null
+          display_name: string | null
+          full_name: string | null
+          id: string
+          is_estagiario: boolean
+          job_title: string | null
+          organization_id: string | null
+          role_template_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          display_name?: string | null
+          full_name?: string | null
+          id?: string
+          is_estagiario?: boolean
+          job_title?: string | null
+          organization_id?: string | null
+          role_template_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          display_name?: string | null
+          full_name?: string | null
+          id?: string
+          is_estagiario?: boolean
+          job_title?: string | null
+          organization_id?: string | null
+          role_template_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_role_template_fk"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_agent_matrix: {
+        Row: {
+          agent_template_id: string
+          created_at: string
+          id: string
+          is_default: boolean
+          notes: string | null
+          requires_is_estagiario: boolean | null
+          role_template_id: string
+        }
+        Insert: {
+          agent_template_id: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          notes?: string | null
+          requires_is_estagiario?: boolean | null
+          role_template_id: string
+        }
+        Update: {
+          agent_template_id?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          notes?: string | null
+          requires_is_estagiario?: boolean | null
+          role_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_agent_matrix_agent_template_id_fkey"
+            columns: ["agent_template_id"]
+            isOneToOne: false
+            referencedRelation: "agent_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_agent_matrix_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_coverage: {
+        Row: {
+          active_from: string
+          active_until: string
+          backup_user_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          primary_user_id: string
+          scope_area: Database["public"]["Enums"]["legal_area"] | null
+          scope_stage: Database["public"]["Enums"]["org_stage"] | null
+          status: Database["public"]["Enums"]["coverage_status"]
+          updated_at: string
+        }
+        Insert: {
+          active_from: string
+          active_until: string
+          backup_user_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          primary_user_id: string
+          scope_area?: Database["public"]["Enums"]["legal_area"] | null
+          scope_stage?: Database["public"]["Enums"]["org_stage"] | null
+          status?: Database["public"]["Enums"]["coverage_status"]
+          updated_at?: string
+        }
+        Update: {
+          active_from?: string
+          active_until?: string
+          backup_user_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          primary_user_id?: string
+          scope_area?: Database["public"]["Enums"]["legal_area"] | null
+          scope_stage?: Database["public"]["Enums"]["org_stage"] | null
+          status?: Database["public"]["Enums"]["coverage_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      role_task_matrix: {
+        Row: {
+          can_assign: boolean
+          can_execute: boolean
+          created_at: string
+          id: string
+          is_default_assignee: boolean
+          notes: string | null
+          role_template_id: string
+          task_type_id: string
+        }
+        Insert: {
+          can_assign?: boolean
+          can_execute?: boolean
+          created_at?: string
+          id?: string
+          is_default_assignee?: boolean
+          notes?: string | null
+          role_template_id: string
+          task_type_id: string
+        }
+        Update: {
+          can_assign?: boolean
+          can_execute?: boolean
+          created_at?: string
+          id?: string
+          is_default_assignee?: boolean
+          notes?: string | null
+          role_template_id?: string
+          task_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_task_matrix_role_template_id_fkey"
+            columns: ["role_template_id"]
+            isOneToOne: false
+            referencedRelation: "role_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_task_matrix_task_type_id_fkey"
+            columns: ["task_type_id"]
+            isOneToOne: false
+            referencedRelation: "task_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_templates: {
+        Row: {
+          areas: Database["public"]["Enums"]["legal_area"][] | null
+          can_assign_tasks: boolean
+          code: string
+          created_at: string
+          description: string | null
+          display_name: string
+          has_login: boolean
+          id: string
+          is_admin: boolean
+          sort_order: number
+          stages: Database["public"]["Enums"]["org_stage"][]
+          updated_at: string
+        }
+        Insert: {
+          areas?: Database["public"]["Enums"]["legal_area"][] | null
+          can_assign_tasks?: boolean
+          code: string
+          created_at?: string
+          description?: string | null
+          display_name: string
+          has_login?: boolean
+          id?: string
+          is_admin?: boolean
+          sort_order?: number
+          stages: Database["public"]["Enums"]["org_stage"][]
+          updated_at?: string
+        }
+        Update: {
+          areas?: Database["public"]["Enums"]["legal_area"][] | null
+          can_assign_tasks?: boolean
+          code?: string
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          has_login?: boolean
+          id?: string
+          is_admin?: boolean
+          sort_order?: number
+          stages?: Database["public"]["Enums"]["org_stage"][]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      routing_exclusivities: {
+        Row: {
+          id: string
+          notes: string | null
+          owner_role: string
+          reu_pattern: string
+        }
+        Insert: {
+          id?: string
+          notes?: string | null
+          owner_role: string
+          reu_pattern: string
+        }
+        Update: {
+          id?: string
+          notes?: string | null
+          owner_role?: string
+          reu_pattern?: string
+        }
+        Relationships: []
+      }
+      task_attachments: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_name: string
+          file_size_bytes: number
+          id: string
+          mime_type: string | null
+          storage_path: string
+          task_id: string
+          uploader_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_size_bytes: number
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          task_id: string
+          uploader_user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_size_bytes?: number
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          task_id?: string
+          uploader_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_types: {
+        Row: {
+          area: Database["public"]["Enums"]["legal_area"] | null
+          code: string
+          created_at: string
+          default_sla_hours: number | null
+          description: string | null
+          display_name: string
+          id: string
+          is_active: boolean
+          requires_validation: boolean
+          sort_order: number
+          stage: Database["public"]["Enums"]["org_stage"]
+          updated_at: string
+          validator_role_code: string | null
+        }
+        Insert: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          code: string
+          created_at?: string
+          default_sla_hours?: number | null
+          description?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean
+          requires_validation?: boolean
+          sort_order?: number
+          stage: Database["public"]["Enums"]["org_stage"]
+          updated_at?: string
+          validator_role_code?: string | null
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          code?: string
+          created_at?: string
+          default_sla_hours?: number | null
+          description?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          requires_validation?: boolean
+          sort_order?: number
+          stage?: Database["public"]["Enums"]["org_stage"]
+          updated_at?: string
+          validator_role_code?: string | null
+        }
+        Relationships: []
+      }
+      token_balances: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          total_consumed: number
+          total_purchased: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_consumed?: number
+          total_purchased?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_consumed?: number
+          total_purchased?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      token_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          reference_id: string | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type?: Database["public"]["Enums"]["token_transaction_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tool_catalog: {
+        Row: {
+          allowed_roles: string[] | null
+          category: string
+          code: string
+          created_at: string
+          description: string
+          display_name: string
+          icon: string | null
+          id: string
+          is_active: boolean
+          sort_order: number
+          tool_schema: Json
+          updated_at: string
+        }
+        Insert: {
+          allowed_roles?: string[] | null
+          category?: string
+          code: string
+          created_at?: string
+          description: string
+          display_name: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          tool_schema?: Json
+          updated_at?: string
+        }
+        Update: {
+          allowed_roles?: string[] | null
+          category?: string
+          code?: string
+          created_at?: string
+          description?: string
+          display_name?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          tool_schema?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ui_events: {
+        Row: {
+          created_at: string
+          event_name: string
+          id: string
+          metadata: Json | null
+          session_id: string | null
+          surface: string | null
+          target_id: string | null
+          target_label: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_name: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          target_id?: string | null
+          target_label?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_name?: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          target_id?: string | null
+          target_label?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_areas: {
+        Row: {
+          area: Database["public"]["Enums"]["legal_area"]
+          created_at: string
+          id: string
+          is_primary: boolean
+          user_id: string
+        }
+        Insert: {
+          area: Database["public"]["Enums"]["legal_area"]
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          user_id: string
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["legal_area"]
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_tasks: {
+        Row: {
+          area: Database["public"]["Enums"]["legal_area"] | null
+          assignee_external_id: string | null
+          assignee_user_id: string | null
+          assigner_user_id: string
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          client_id: string | null
+          completed_at: string | null
+          created_at: string
+          deadline_at: string | null
+          description: string | null
+          documentation_completed_at: string | null
+          external_kanban_ref: string | null
+          id: string
+          notes: string | null
+          payload: Json
+          priority: Database["public"]["Enums"]["task_priority"]
+          process_id: string | null
+          situacao: Database["public"]["Enums"]["task_situacao"]
+          status: Database["public"]["Enums"]["user_task_status"]
+          task_type_id: string
+          title: string
+          updated_at: string
+          validated_at: string | null
+          validator_user_id: string | null
+        }
+        Insert: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          assignee_external_id?: string | null
+          assignee_user_id?: string | null
+          assigner_user_id: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deadline_at?: string | null
+          description?: string | null
+          documentation_completed_at?: string | null
+          external_kanban_ref?: string | null
+          id?: string
+          notes?: string | null
+          payload?: Json
+          priority?: Database["public"]["Enums"]["task_priority"]
+          process_id?: string | null
+          situacao?: Database["public"]["Enums"]["task_situacao"]
+          status?: Database["public"]["Enums"]["user_task_status"]
+          task_type_id: string
+          title: string
+          updated_at?: string
+          validated_at?: string | null
+          validator_user_id?: string | null
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["legal_area"] | null
+          assignee_external_id?: string | null
+          assignee_user_id?: string | null
+          assigner_user_id?: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deadline_at?: string | null
+          description?: string | null
+          documentation_completed_at?: string | null
+          external_kanban_ref?: string | null
+          id?: string
+          notes?: string | null
+          payload?: Json
+          priority?: Database["public"]["Enums"]["task_priority"]
+          process_id?: string | null
+          situacao?: Database["public"]["Enums"]["task_situacao"]
+          status?: Database["public"]["Enums"]["user_task_status"]
+          task_type_id?: string
+          title?: string
+          updated_at?: string
+          validated_at?: string | null
+          validator_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tasks_assignee_external_id_fkey"
+            columns: ["assignee_external_id"]
+            isOneToOne: false
+            referencedRelation: "external_collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_task_type_id_fkey"
+            columns: ["task_type_id"]
+            isOneToOne: false
+            referencedRelation: "task_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_ui_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          right_collapsed: boolean
+          sidebar_collapsed: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          right_collapsed?: boolean
+          sidebar_collapsed?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          right_collapsed?: boolean
+          sidebar_collapsed?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      agents_with_owner_v: {
+        Row: {
+          can_orchestrate: boolean | null
+          color: string | null
+          current_tasks: number | null
+          department_id: string | null
+          department_name: string | null
+          description: string | null
+          id: string | null
+          is_active: boolean | null
+          is_overridden: boolean | null
+          is_personal: boolean | null
+          level: number | null
+          max_concurrent_tasks: number | null
+          name: string | null
+          owner_display_name: string | null
+          owner_role_code: string | null
+          owner_role_label: string | null
+          owner_user_id: string | null
+          role: Database["public"]["Enums"]["agent_role"] | null
+          source_template_id: string | null
+          status: Database["public"]["Enums"]["agent_status"] | null
+          template_area: Database["public"]["Enums"]["legal_area"] | null
+          template_code: string | null
+          template_stage: Database["public"]["Enums"]["org_stage"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_source_template_fk"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "agent_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      add_tokens: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_reference_id?: string
+          p_type?: Database["public"]["Enums"]["token_transaction_type"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      advance_user_task: {
+        Args: { p_next_task_type_id?: string; p_task_id: string }
+        Returns: Json
+      }
+      answer_inter_assistant_request: {
+        Args: {
+          p_request_id: string
+          p_response_payload: Json
+          p_status?: Database["public"]["Enums"]["inter_assistant_status"]
+        }
+        Returns: Database["public"]["Enums"]["inter_assistant_status"]
+      }
+      append_chat_message: {
+        Args: {
+          p_agent_id?: string
+          p_content?: string
+          p_cost_usd?: number
+          p_duration_ms?: number
+          p_input_tokens?: number
+          p_metadata?: Json
+          p_model_used?: string
+          p_output_tokens?: number
+          p_role: string
+          p_session_id: string
+          p_tool_call_id?: string
+          p_tool_calls?: Json
+          p_tool_result?: Json
+        }
+        Returns: string
+      }
+      apply_employee_profile: {
+        Args: {
+          p_app_role: Database["public"]["Enums"]["app_role"]
+          p_full_name: string
+          p_is_estagiario: boolean
+          p_role_template_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      calculate_llm_cost: {
+        Args: {
+          p_input_tokens: number
+          p_model_id: string
+          p_output_tokens: number
+          p_provider: string
+        }
+        Returns: number
+      }
+      consume_tokens: {
+        Args: { p_amount: number; p_description?: string; p_user_id: string }
+        Returns: boolean
+      }
+      consume_tokens_with_ref: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_reference_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      create_inter_assistant_request: {
+        Args: {
+          p_expires_in_hours?: number
+          p_payload?: Json
+          p_related_task_id?: string
+          p_request_type: string
+          p_to_user_id: string
+        }
+        Returns: string
+      }
+      create_user_task: {
+        Args: {
+          p_area?: Database["public"]["Enums"]["legal_area"]
+          p_assignee_user_id: string
+          p_client_id?: string
+          p_deadline_at?: string
+          p_description?: string
+          p_external_kanban_ref?: string
+          p_payload?: Json
+          p_priority?: Database["public"]["Enums"]["task_priority"]
+          p_process_id?: string
+          p_task_type_id: string
+          p_title: string
+        }
+        Returns: string
+      }
+      delete_task_attachment: {
+        Args: { p_attachment_id: string }
+        Returns: string
+      }
+      enqueue_email_notification: {
+        Args: {
+          p_body_html: string
+          p_body_text?: string
+          p_recipient_user_id: string
+          p_related_request_id?: string
+          p_related_task_id?: string
+          p_subject: string
+          p_type: Database["public"]["Enums"]["email_notification_type"]
+        }
+        Returns: string
+      }
+      fail_stale_orchestration_runs: {
+        Args: { p_max_age?: string }
+        Returns: number
+      }
+      find_users_missing_agents: {
+        Args: never
+        Returns: {
+          agentes_atuais: number
+          cargo: string
+          cargo_label: string
+          email: string
+          faltam: number
+          full_name: string
+          is_estagiario: boolean
+          templates_esperados: number
+          user_id: string
+        }[]
+      }
+      finish_agent_trace: {
+        Args: {
+          p_cost_usd?: number
+          p_error_message?: string
+          p_input_tokens?: number
+          p_output_summary?: string
+          p_output_tokens?: number
+          p_status: string
+          p_trace_pk: string
+        }
+        Returns: undefined
+      }
+      get_active_provider_for_user: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: {
+          config_id: string
+          is_default: boolean
+          monthly_budget_usd: number
+          monthly_spent_usd: number
+          provider: string
+          vault_secret_id: string
+        }[]
+      }
+      get_agent_tools: {
+        Args: { p_agent_id: string }
+        Returns: {
+          tool_code: string
+          tool_config: Json
+          tool_name: string
+          tool_schema: Json
+        }[]
+      }
+      get_delegation_targets: {
+        Args: { p_from_agent_id: string }
+        Returns: {
+          agent_id: string
+          agent_name: string
+          agent_role: string
+          description: string
+          template_code: string
+        }[]
+      }
+      get_edge_runtime_secret: { Args: { p_key: string }; Returns: string }
+      get_eligible_assignees: {
+        Args: { p_task_type_id: string }
+        Returns: {
+          full_name: string
+          is_estagiario: boolean
+          role_code: string
+          role_label: string
+          user_id: string
+        }[]
+      }
+      get_inbox_count: {
+        Args: never
+        Returns: {
+          critical: number
+          overdue: number
+          total: number
+        }[]
+      }
+      get_inter_assistant_inbox_count: { Args: never; Returns: number }
+      get_kanban_board:
+        | { Args: { p_board_id: string }; Returns: Json }
+        | {
+            Args: { p_include_completed?: boolean }
+            Returns: {
+              area: Database["public"]["Enums"]["legal_area"]
+              assignee_name: string
+              assignee_role_label: string
+              assignee_user_id: string
+              assigner_name: string
+              assigner_user_id: string
+              awaiting_role_code: string
+              client_id: string
+              created_at: string
+              deadline_at: string
+              id: string
+              is_overdue: boolean
+              owner_role_code: string
+              owner_role_label: string
+              priority: Database["public"]["Enums"]["task_priority"]
+              process_id: string
+              stage: Database["public"]["Enums"]["org_stage"]
+              status: Database["public"]["Enums"]["user_task_status"]
+              task_type_code: string
+              task_type_id: string
+              task_type_label: string
+              title: string
+            }[]
+          }
+      get_kanban_boards: {
+        Args: never
+        Returns: {
+          can_admin: boolean
+          card_count: number
+          created_at: string
+          hide_completed_after_days: number
+          id: string
+          is_favorite: boolean
+          is_owner: boolean
+          is_private: boolean
+          name: string
+          owner_user_id: string
+          simplified_cards: boolean
+          sort_order: number
+          updated_at: string
+        }[]
+      }
+      get_my_inbox: {
+        Args: { p_include_completed?: boolean }
+        Returns: {
+          area: Database["public"]["Enums"]["legal_area"]
+          assigner_name: string
+          assigner_user_id: string
+          client_id: string
+          created_at: string
+          deadline_at: string
+          description: string
+          documentation_completed_at: string
+          external_kanban_ref: string
+          id: string
+          is_overdue: boolean
+          notes: string
+          priority: Database["public"]["Enums"]["task_priority"]
+          process_id: string
+          status: Database["public"]["Enums"]["user_task_status"]
+          task_type_code: string
+          task_type_label: string
+          title: string
+          updated_at: string
+        }[]
+      }
+      get_my_inter_assistant_inbox: {
+        Args: { p_include_finalized?: boolean }
+        Returns: {
+          created_at: string
+          expires_at: string
+          from_user_id: string
+          from_user_name: string
+          from_user_role_label: string
+          id: string
+          is_expired: boolean
+          payload: Json
+          related_task_id: string
+          request_type: string
+          status: Database["public"]["Enums"]["inter_assistant_status"]
+        }[]
+      }
+      get_my_inter_assistant_outbox: {
+        Args: { p_include_finalized?: boolean }
+        Returns: {
+          answered_at: string
+          created_at: string
+          id: string
+          payload: Json
+          related_task_id: string
+          request_type: string
+          response_payload: Json
+          status: Database["public"]["Enums"]["inter_assistant_status"]
+          to_user_id: string
+          to_user_name: string
+          to_user_role_label: string
+        }[]
+      }
+      get_my_validation_queue: {
+        Args: never
+        Returns: {
+          area: Database["public"]["Enums"]["legal_area"]
+          assignee_name: string
+          assignee_user_id: string
+          created_at: string
+          deadline_at: string
+          description: string
+          id: string
+          is_overdue: boolean
+          notes: string
+          priority: Database["public"]["Enums"]["task_priority"]
+          task_type_code: string
+          task_type_label: string
+          title: string
+          updated_at: string
+        }[]
+      }
+      get_my_workspace: { Args: never; Returns: Json }
+      get_provider_key_decrypted: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: {
+          config_id: string
+          decrypted_key: string
+          has_remaining_budget: boolean
+          monthly_budget_usd: number
+          monthly_spent_usd: number
+        }[]
+      }
+      get_sector_workload: {
+        Args: { p_target_role_code: string }
+        Returns: {
+          full_name: string
+          is_least_loaded: boolean
+          pending_count: number
+          user_id: string
+        }[]
+      }
+      get_task_attachments: {
+        Args: { p_task_id: string }
+        Returns: {
+          created_at: string
+          description: string
+          file_name: string
+          file_size_bytes: number
+          id: string
+          is_owner: boolean
+          mime_type: string
+          storage_path: string
+          uploader_name: string
+          uploader_user_id: string
+        }[]
+      }
+      get_task_types_by_stage: {
+        Args: never
+        Returns: {
+          area: Database["public"]["Enums"]["legal_area"]
+          code: string
+          default_sla_hours: number
+          description: string
+          display_name: string
+          eligible_role_codes: string[]
+          id: string
+          stage: Database["public"]["Enums"]["org_stage"]
+        }[]
+      }
+      get_team_tasks: {
+        Args: {
+          p_assignee_user_id?: string
+          p_include_completed?: boolean
+          p_limit?: number
+          p_status?: Database["public"]["Enums"]["user_task_status"]
+        }
+        Returns: {
+          area: Database["public"]["Enums"]["legal_area"]
+          assignee_name: string
+          assignee_role_label: string
+          assignee_user_id: string
+          assigner_name: string
+          assigner_user_id: string
+          created_at: string
+          deadline_at: string
+          id: string
+          is_overdue: boolean
+          priority: Database["public"]["Enums"]["task_priority"]
+          status: Database["public"]["Enums"]["user_task_status"]
+          task_type_label: string
+          title: string
+        }[]
+      }
+      get_validation_count: { Args: never; Returns: number }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      increment_provider_spend: {
+        Args: { p_config_id: string; p_cost: number }
+        Returns: undefined
+      }
+      increment_session_counters: {
+        Args: {
+          p_cost: number
+          p_session_id: string
+          p_tokens_in: number
+          p_tokens_out: number
+        }
+        Returns: undefined
+      }
+      integration_list_rpcs: { Args: never; Returns: string[] }
+      integration_list_tables: { Args: never; Returns: string[] }
+      is_master_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_recepcao_or_socio: { Args: never; Returns: boolean }
+      is_role_eligible_for_task: {
+        Args: { p_role_template_id: string; p_task_type_id: string }
+        Returns: boolean
+      }
+      kanban_add_task_to_board: {
+        Args: { p_column_id: string; p_task_id: string }
+        Returns: undefined
+      }
+      kanban_can_access_board: {
+        Args: { p_board_id: string; p_uid: string }
+        Returns: boolean
+      }
+      kanban_can_admin: { Args: { p_uid: string }; Returns: boolean }
+      kanban_create_board: {
+        Args: {
+          p_hide_completed_after_days?: number
+          p_is_private?: boolean
+          p_name: string
+          p_simplified_cards?: boolean
+        }
+        Returns: string
+      }
+      kanban_delete_board: { Args: { p_board_id: string }; Returns: undefined }
+      kanban_move_card: {
+        Args: { p_column_id: string; p_position?: number; p_task_id: string }
+        Returns: undefined
+      }
+      kanban_next_stage: {
+        Args: { p_stage: Database["public"]["Enums"]["org_stage"] }
+        Returns: Database["public"]["Enums"]["org_stage"]
+      }
+      kanban_remove_task_from_board: {
+        Args: { p_task_id: string }
+        Returns: undefined
+      }
+      kanban_set_board_grants: {
+        Args: {
+          p_board_id: string
+          p_role_codes: string[]
+          p_user_ids: string[]
+        }
+        Returns: undefined
+      }
+      kanban_set_columns: {
+        Args: { p_board_id: string; p_columns: Json }
+        Returns: undefined
+      }
+      kanban_situacao_from_status: {
+        Args: { p_status: Database["public"]["Enums"]["user_task_status"] }
+        Returns: Database["public"]["Enums"]["task_situacao"]
+      }
+      kanban_stage_owner_role: {
+        Args: { p_stage: Database["public"]["Enums"]["org_stage"] }
+        Returns: string
+      }
+      kanban_toggle_favorite: { Args: { p_board_id: string }; Returns: boolean }
+      kanban_update_board: {
+        Args: {
+          p_board_id: string
+          p_hide_completed_after_days: number
+          p_is_private: boolean
+          p_name: string
+          p_simplified_cards: boolean
+        }
+        Returns: undefined
+      }
+      list_users_for_inter_assistant: {
+        Args: never
+        Returns: {
+          full_name: string
+          has_assistant: boolean
+          role_label: string
+          user_id: string
+        }[]
+      }
+      mcp_delete_server: { Args: { p_id: string }; Returns: undefined }
+      mcp_register_server: {
+        Args: {
+          p_config?: Json
+          p_description?: string
+          p_enabled?: boolean
+          p_name: string
+          p_transport?: string
+          p_url: string
+        }
+        Returns: string
+      }
+      mcp_set_server_enabled: {
+        Args: { p_enabled: boolean; p_id: string }
+        Returns: undefined
+      }
+      mcp_update_server_config: {
+        Args: { p_config: Json; p_id: string }
+        Returns: undefined
+      }
+      provision_user_agents: {
+        Args: { p_user_id: string }
+        Returns: {
+          agent_id: string
+          display_name: string
+          template_code: string
+          was_created: boolean
+        }[]
+      }
+      record_provider_spend: {
+        Args: {
+          p_cost_usd: number
+          p_provider: string
+          p_trace_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      refund_own_tokens: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_reference_id: string
+        }
+        Returns: boolean
+      }
+      refund_tokens: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_reference_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      register_provider_key: {
+        Args: {
+          p_api_key: string
+          p_monthly_budget_usd?: number
+          p_notes?: string
+          p_provider: string
+          p_set_default?: boolean
+        }
+        Returns: string
+      }
+      register_task_attachment: {
+        Args: {
+          p_description?: string
+          p_file_name: string
+          p_file_size_bytes: number
+          p_mime_type?: string
+          p_storage_path: string
+          p_task_id: string
+        }
+        Returns: string
+      }
+      reprovision_all_missing: {
+        Args: never
+        Returns: {
+          agentes_provisionados: number
+          email: string
+          full_name: string
+          user_id: string
+        }[]
+      }
+      start_agent_trace: {
+        Args: {
+          p_agent_id: string
+          p_input_summary?: string
+          p_metadata?: Json
+          p_model?: string
+          p_operation_name: string
+          p_parent_span_id: string
+          p_session_id: string
+          p_span_id: string
+          p_span_kind: string
+          p_trace_id: string
+        }
+        Returns: string
+      }
+      start_chat_session: {
+        Args: {
+          p_client_id?: string
+          p_entry_agent_id: string
+          p_title?: string
+        }
+        Returns: string
+      }
+      update_user_task_status: {
+        Args: {
+          p_new_status: Database["public"]["Enums"]["user_task_status"]
+          p_notes?: string
+          p_task_id: string
+        }
+        Returns: Database["public"]["Enums"]["user_task_status"]
+      }
+      validate_agent_for_chat: {
+        Args: { p_agent_id: string }
+        Returns: {
+          agent_model: string
+          agent_provider: string
+          is_valid: boolean
+          reason: string
+        }[]
+      }
+      validate_user_task: {
+        Args: { p_approve: boolean; p_notes?: string; p_task_id: string }
+        Returns: Database["public"]["Enums"]["user_task_status"]
+      }
+    }
+    Enums: {
+      agent_role:
+        | "ceo"
+        | "assistant_root"
+        | "director"
+        | "orchestrator"
+        | "manager"
+        | "specialist"
+        | "reviewer"
+        | "executor"
+        | "monitor"
+      agent_status: "active" | "idle" | "alert" | "offline"
+      app_role:
+        | "admin"
+        | "director"
+        | "manager"
+        | "lawyer"
+        | "receptionist"
+        | "intern"
+        | "financial"
+        | "marketing"
+        | "protocol"
+        | "calculator"
+        | "compliance"
+        | "tech"
+      captacao_canal_tipo:
+        | "cooperativa"
+        | "ressaque"
+        | "indicacao"
+        | "site"
+        | "outro"
+      coverage_status: "scheduled" | "active" | "finished" | "cancelled"
+      email_notification_status:
+        | "pending"
+        | "sending"
+        | "sent"
+        | "failed"
+        | "skipped"
+      email_notification_type:
+        | "task_assigned"
+        | "task_validation_required"
+        | "task_validated"
+        | "task_rejected"
+        | "inter_assistant_received"
+        | "inter_assistant_answered"
+      inter_assistant_status:
+        | "pending"
+        | "in_progress"
+        | "answered"
+        | "denied"
+        | "expired"
+      legal_area:
+        | "bancario"
+        | "familia"
+        | "plano_saude"
+        | "consumidor"
+        | "civil"
+        | "previdenciario"
+        | "tributario"
+      org_stage:
+        | "atendimento"
+        | "confeccao"
+        | "revisao"
+        | "protocolo"
+        | "audiencia"
+        | "execucao"
+        | "execucao_sindicato"
+        | "recursos"
+        | "recursos_criticos"
+        | "alvara"
+        | "diligencia"
+        | "acompanhamento"
+        | "financeiro"
+        | "recepcao"
+        | "recepcao_supervisionada"
+        | "admin_equipe"
+        | "captacao_cooperativa"
+        | "kanban_pendencias"
+        | "gestao"
+        | "todas"
+      permission_type:
+        | "read"
+        | "write"
+        | "approve"
+        | "execute"
+        | "admin"
+        | "monitor"
+        | "schedule"
+        | "contact_client"
+        | "protocol"
+        | "calculate"
+        | "review_calculation"
+        | "petition"
+        | "market_study"
+      provider_code:
+        | "anthropic"
+        | "openai"
+        | "google"
+        | "openrouter"
+        | "deepseek"
+      task_priority: "critical" | "high" | "medium" | "low"
+      task_situacao:
+        | "pendente"
+        | "em_execucao"
+        | "concluida_sucesso"
+        | "concluida_sem_sucesso"
+        | "cancelado"
+      task_status:
+        | "pending"
+        | "in_progress"
+        | "review"
+        | "approved"
+        | "rejected"
+        | "completed"
+        | "cancelled"
+      token_transaction_type: "purchase" | "consumption" | "bonus" | "refund"
+      user_task_status:
+        | "draft"
+        | "assigned"
+        | "in_progress"
+        | "awaiting_external"
+        | "awaiting_validation"
+        | "blocked"
+        | "completed"
+        | "cancelled"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      agent_role: [
+        "ceo",
+        "assistant_root",
+        "director",
+        "orchestrator",
+        "manager",
+        "specialist",
+        "reviewer",
+        "executor",
+        "monitor",
+      ],
+      agent_status: ["active", "idle", "alert", "offline"],
+      app_role: [
+        "admin",
+        "director",
+        "manager",
+        "lawyer",
+        "receptionist",
+        "intern",
+        "financial",
+        "marketing",
+        "protocol",
+        "calculator",
+        "compliance",
+        "tech",
+      ],
+      captacao_canal_tipo: [
+        "cooperativa",
+        "ressaque",
+        "indicacao",
+        "site",
+        "outro",
+      ],
+      coverage_status: ["scheduled", "active", "finished", "cancelled"],
+      email_notification_status: [
+        "pending",
+        "sending",
+        "sent",
+        "failed",
+        "skipped",
+      ],
+      email_notification_type: [
+        "task_assigned",
+        "task_validation_required",
+        "task_validated",
+        "task_rejected",
+        "inter_assistant_received",
+        "inter_assistant_answered",
+      ],
+      inter_assistant_status: [
+        "pending",
+        "in_progress",
+        "answered",
+        "denied",
+        "expired",
+      ],
+      legal_area: [
+        "bancario",
+        "familia",
+        "plano_saude",
+        "consumidor",
+        "civil",
+        "previdenciario",
+        "tributario",
+      ],
+      org_stage: [
+        "atendimento",
+        "confeccao",
+        "revisao",
+        "protocolo",
+        "audiencia",
+        "execucao",
+        "execucao_sindicato",
+        "recursos",
+        "recursos_criticos",
+        "alvara",
+        "diligencia",
+        "acompanhamento",
+        "financeiro",
+        "recepcao",
+        "recepcao_supervisionada",
+        "admin_equipe",
+        "captacao_cooperativa",
+        "kanban_pendencias",
+        "gestao",
+        "todas",
+      ],
+      permission_type: [
+        "read",
+        "write",
+        "approve",
+        "execute",
+        "admin",
+        "monitor",
+        "schedule",
+        "contact_client",
+        "protocol",
+        "calculate",
+        "review_calculation",
+        "petition",
+        "market_study",
+      ],
+      provider_code: [
+        "anthropic",
+        "openai",
+        "google",
+        "openrouter",
+        "deepseek",
+      ],
+      task_priority: ["critical", "high", "medium", "low"],
+      task_situacao: [
+        "pendente",
+        "em_execucao",
+        "concluida_sucesso",
+        "concluida_sem_sucesso",
+        "cancelado",
+      ],
+      task_status: [
+        "pending",
+        "in_progress",
+        "review",
+        "approved",
+        "rejected",
+        "completed",
+        "cancelled",
+      ],
+      token_transaction_type: ["purchase", "consumption", "bonus", "refund"],
+      user_task_status: [
+        "draft",
+        "assigned",
+        "in_progress",
+        "awaiting_external",
+        "awaiting_validation",
+        "blocked",
+        "completed",
+        "cancelled",
+      ],
+    },
+  },
+} as const
