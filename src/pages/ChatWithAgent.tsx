@@ -59,10 +59,9 @@ export default function ChatWithAgent() {
   useEffect(() => {
     if (!user) return;
     supabase
-      // @ts-expect-error Tabelas chat_sessions/chat_messages ainda não estão nos tipos gerados.
       .from("chat_sessions")
       .select("*")
-      .eq("user_id" as never, user.id)
+      .eq("user_id", user.id)
       .order("last_message_at", { ascending: false })
       .limit(20)
       .then(({ data }) => {
@@ -75,10 +74,9 @@ export default function ChatWithAgent() {
     if (!sessionId) { setMessages([]); return; }
     setLoadingMessages(true);
     supabase
-      // @ts-expect-error Tabelas chat_sessions/chat_messages ainda não estão nos tipos gerados.
       .from("chat_messages")
       .select("*")
-      .eq("session_id" as never, sessionId)
+      .eq("session_id", sessionId)
       .order("sequence_number", { ascending: true })
       .then(({ data }) => {
         if (data) setMessages(data as unknown as ChatMessageRow[]);

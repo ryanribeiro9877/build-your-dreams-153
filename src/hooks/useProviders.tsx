@@ -22,7 +22,6 @@ export function useProviders() {
   const loadConfigs = useCallback(async () => {
     setError(null);
     const { data, error } = await supabase
-      // @ts-expect-error - tabela criada na Onda 2, types.ts ainda nao regenerado
       .from("llm_provider_configs")
       .select("*")
       .order("provider", { ascending: true });
@@ -36,10 +35,9 @@ export function useProviders() {
 
   const loadModels = useCallback(async () => {
     const { data, error } = await supabase
-      // @ts-expect-error - tabela criada na Onda 2
       .from("model_pricing")
       .select("*")
-      .eq("is_active" as never, true)
+      .eq("is_active", true)
       .order("provider", { ascending: true });
     if (!error) {
       setModels((data || []) as unknown as ModelPricingRow[]);
@@ -64,7 +62,6 @@ export function useProviders() {
       setError("Chave muito curta (minimo 16 caracteres).");
       return null;
     }
-    // @ts-expect-error - RPC criada na Onda 2
     const { data, error } = await supabase.rpc("register_provider_key", {
       p_provider: provider,
       p_api_key: apiKey,
@@ -83,7 +80,6 @@ export function useProviders() {
   /** Deletar uma config de provider. */
   const deleteConfig = useCallback(async (configId: string): Promise<boolean> => {
     const { error } = await supabase
-      // @ts-expect-error - tabela criada na Onda 2
       .from("llm_provider_configs")
       .delete()
       .eq("id", configId);
@@ -102,20 +98,18 @@ export function useProviders() {
 
     // Batch: reset all other defaults in one query, then set chosen one
     const { error: resetError } = await supabase
-      // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
       .from("llm_provider_configs")
-      .update({ is_default: false } as never)
+      .update({ is_default: false })
       .neq("id", configId)
-      .eq("is_default" as never, true);
+      .eq("is_default", true);
     if (resetError) {
       setError(resetError.message);
       return false;
     }
 
     const { error } = await supabase
-      // @ts-expect-error Tabela llm_provider_configs ainda não está nos tipos gerados do cliente.
       .from("llm_provider_configs")
-      .update({ is_default: true } as never)
+      .update({ is_default: true })
       .eq("id", configId);
     if (error) {
       setError(error.message);

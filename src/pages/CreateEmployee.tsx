@@ -52,7 +52,7 @@ export default function CreateEmployee({ embedded = false, onClose }: CreateEmpl
     async function loadRoles() {
       setLoadingRoles(true);
       const { data, error } = await supabase
-        .from("role_templates" as "agents")
+        .from("role_templates")
         .select("*")
         .eq("has_login", true)
         .neq("code", "estagiaria_recepcao")

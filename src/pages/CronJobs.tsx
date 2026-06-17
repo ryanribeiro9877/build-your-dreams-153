@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import type { Json } from "@/integrations/supabase/types";
 
 interface CronJob {
   id: string;
@@ -51,7 +52,7 @@ export default function CronJobs() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    let params: unknown = {};
+    let params: Json = {};
     try { params = form.params.trim() ? JSON.parse(form.params) : {}; }
     catch { toast.error("Parâmetros: JSON inválido"); return; }
     const { error } = await supabase.from("cron_jobs").insert({

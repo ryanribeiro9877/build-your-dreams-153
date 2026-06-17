@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import type { KanbanBoardDetail, KanbanColumn, TaskSituacao } from "@/types/jurisai";
+import type { KanbanBoardDetailBoard, KanbanColumn, TaskSituacao } from "@/types/jurisai";
 import { SITUACAO_LABELS, SITUACAO_ORDER } from "@/lib/kanbanSituacao";
 import { COLORS, FONT, overlay, modal, input, select, btnGhost, btnPrimary, btnMini, checkLabel } from "./kanbanStyles";
 
@@ -22,7 +22,7 @@ export interface RoleOption {
 }
 
 interface BoardConfigModalProps {
-  board: KanbanBoardDetail;
+  board: KanbanBoardDetailBoard & { columns: KanbanColumn[] };
   // Opções para o multiselect de concessões (aba 2).
   memberOptions: GrantOption[];
   roleOptions: RoleOption[];

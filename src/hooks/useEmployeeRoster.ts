@@ -49,7 +49,7 @@ export function useEmployeeRoster() {
 
     const templateMap = new Map<string, { display_name: string; has_login: boolean }>();
     const { data: templates, error: tplErr } = await supabase
-      .from("role_templates" as "agents")
+      .from("role_templates")
       .select("id, display_name, has_login");
 
     if (!tplErr && templates) {
