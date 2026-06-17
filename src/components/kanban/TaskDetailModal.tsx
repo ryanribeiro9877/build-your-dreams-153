@@ -7,8 +7,12 @@ import type { KanbanBoardDetail, TaskComment, TaskPriority } from "@/types/juris
 import {
   useTaskDetail, useTaskComments, setTaskTags, addComment, updateTaskFields, moveCard,
 } from "@/hooks/useKanban";
+import { useNavigate } from "react-router-dom";
 import { SITUACAO_LABELS } from "@/lib/kanbanSituacao";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import TaskAttachments from "@/components/TaskAttachments";
+import { ChecklistSection } from "./ChecklistSection";
+import { WorkflowSection } from "./WorkflowSection";
 import { COLORS, FONT, overlay, input, select, btnGhost, btnPrimary, btnMini } from "./kanbanStyles";
 
 interface Person { id: string; name: string }
@@ -35,6 +39,7 @@ function fmt(iso: string | null): string {
 }
 
 export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, onOpenClient }: Props) {
+  const navigate = useNavigate();
   const { detail, loading, refresh } = useTaskDetail(taskId);
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
@@ -203,6 +208,28 @@ export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, on
             {/* Marcadores */}
             <Section title="Marcadores">
               <TagEditor taskId={taskId} initial={detail.tags.map((t) => t.name)} onSaved={() => { refresh(); onChanged(); }} />
+            </Section>
+
+            {/* Documentos */}
+            <Section title="Documentos">
+              <TaskAttachments taskId={taskId} canUpload />
+              <button
+                onClick={() => navigate(`/sistema/chat?task=${taskId}${detail.client_id ? `&client=${detail.client_id}` : ""}`)}
+                style={{ ...btnMini, marginTop: 8 }}
+                title="Gerar documento por modelo/IA no módulo de documentos"
+              >
+                Usar modelo / IA
+              </button>
+            </Section>
+
+            {/* Checklist */}
+            <Section title="Checklist">
+              <ChecklistSection taskId={taskId} />
+            </Section>
+
+            {/* Workflow */}
+            <Section title="Workflow">
+              <WorkflowSection taskId={taskId} />
             </Section>
 
             {/* Comentários */}
