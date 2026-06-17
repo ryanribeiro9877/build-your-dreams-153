@@ -11,6 +11,10 @@ import type {
   KanbanBoardDetail,
   SavedFilter,
   KanbanFilterState,
+  KanbanTag,
+  TaskDetail,
+  TaskComment,
+  TaskPriority,
 } from "@/types/jurisai";
 
 /**
@@ -63,9 +67,10 @@ export function useKanbanBoard(boardId: string | null) {
       // get_kanban_board (detalhe) + get_kanban_board_involvement (assigner/validator
       // por card, p/ as abas de envolvimento do SP2) em paralelo, com merge client-side.
       // A RPC de envolvimento ainda não está no types.ts gerado → cast até types:regen.
-      const [boardRes, invRes] = await Promise.all([
+      const [boardRes, invRes, tagRes] = await Promise.all([
         supabase.rpc("get_kanban_board", { p_board_id: boardId }),
         supabase.rpc("get_kanban_board_involvement" as never, { p_board_id: boardId } as never),
+        supabase.rpc("get_kanban_board_tags" as never, { p_board_id: boardId } as never),
       ]);
       if (boardRes.error) throw boardRes.error;
       const detail = boardRes.data as unknown as KanbanBoardDetail;
@@ -76,12 +81,15 @@ export function useKanbanBoard(boardId: string | null) {
           validator_user_id: string | null;
         }>) ?? [];
       const invMap = new Map(invList.map((r) => [r.user_task_id, r]));
+      const tagList = (tagRes.data as unknown as Array<{ user_task_id: string; tags: KanbanTag[] }>) ?? [];
+      const tagMap = new Map(tagList.map((r) => [r.user_task_id, r.tags]));
       return {
         ...detail,
         cards: (detail.cards ?? []).map((c) => ({
           ...c,
           assigner_user_id: invMap.get(c.id)?.assigner_user_id ?? null,
           validator_user_id: invMap.get(c.id)?.validator_user_id ?? null,
+          tags: tagMap.get(c.id) ?? [],
         })),
       };
     },
@@ -89,6 +97,7 @@ export function useKanbanBoard(boardId: string | null) {
       { table: "user_tasks" },
       { table: "kanban_card_placements" },
       { table: "kanban_columns" },
+      { table: "task_tags" },
     ],
   });
 
@@ -247,5 +256,88 @@ export async function deleteSavedFilter(id: string): Promise<void> {
   const { error } = await supabase.rpc("kanban_delete_saved_filter" as never, {
     p_id: id,
   } as never);
+  if (error) throw error;
+}
+
+// ─── Marcadores / detalhe / comentários (SP3) ────────────────────────────────
+// RPCs ainda não presentes no types.ts gerado → cast até types:regen.
+export function useKanbanTags() {
+  const { user } = useAuth();
+  const { data, loading, error, refetch } = useSupabaseQuery<KanbanTag[]>({
+    queryKey: "kanban-tags",
+    enabled: !!user,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_tags" as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as KanbanTag[]) ?? [];
+    },
+    realtime: { table: "kanban_tags" },
+  });
+  return { tags: data ?? [], loading, error, refresh: refetch };
+}
+
+export async function setTaskTags(taskId: string, names: string[]): Promise<void> {
+  const { error } = await supabase.rpc("kanban_set_task_tags" as never, {
+    p_task_id: taskId,
+    p_names: names,
+  } as never);
+  if (error) throw error;
+}
+
+export function useTaskDetail(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<TaskDetail>({
+    queryKey: `task-detail-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_user_task_detail" as never, {
+        p_task_id: taskId,
+      } as never);
+      if (rpcErr) throw rpcErr;
+      return data as unknown as TaskDetail;
+    },
+    realtime: { table: "task_tags" },
+  });
+  return { detail: (data ?? null) as TaskDetail | null, loading, error, refresh: refetch };
+}
+
+export function useTaskComments(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<TaskComment[]>({
+    queryKey: `task-comments-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_comments" as never, {
+        p_task_id: taskId,
+      } as never);
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as TaskComment[]) ?? [];
+    },
+  });
+  return { comments: data ?? [], loading, error, refresh: refetch };
+}
+
+export async function addComment(taskId: string, body: string, mentioned: string[]): Promise<string> {
+  const { data, error } = await supabase.rpc("kanban_add_comment" as never, {
+    p_task_id: taskId,
+    p_body: body,
+    p_mentioned: mentioned,
+  } as never);
+  if (error) throw error;
+  return data as unknown as string;
+}
+
+export interface TaskFieldUpdate {
+  title?: string;
+  description?: string | null;
+  deadline_at?: string | null;
+  assignee_user_id?: string | null;
+  priority?: TaskPriority;
+}
+
+// Edita campos da tarefa direto na tabela (RLS já permite envolvidos/admin).
+export async function updateTaskFields(taskId: string, fields: TaskFieldUpdate): Promise<void> {
+  const { error } = await supabase
+    .from("user_tasks")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", taskId);
   if (error) throw error;
 }

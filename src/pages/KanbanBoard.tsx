@@ -28,6 +28,7 @@ import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { AddTaskModal } from "@/components/kanban/AddTaskModal";
 import { KanbanFilterBar } from "@/components/kanban/KanbanFilterBar";
 import { KanbanFilterModal } from "@/components/kanban/KanbanFilterModal";
+import { TaskDetailModal } from "@/components/kanban/TaskDetailModal";
 import {
   BoardConfigModal,
   type GrantOption,
@@ -70,12 +71,16 @@ export default function KanbanBoard() {
   const [showFilters, setShowFilters] = useState(false);
   const { savedFilters, refresh: refreshSavedFilters } = useSavedFilters();
 
+  // Detalhe-hub (SP3).
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+
   // Opções e concessões para o modal de configuração.
   const [memberOptions, setMemberOptions] = useState<GrantOption[]>([]);
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
 
   useEffect(() => {
-    if (!canAdmin) return;
+    // Carrega pessoas (responsáveis/menção) e cargos. Pessoas servem ao modal de
+    // detalhe (menção/responsável) para todos; cargos só ao modal de config (admin).
     let cancelled = false;
     (async () => {
       const { data: members } = await supabase
@@ -98,7 +103,13 @@ export default function KanbanBoard() {
       );
     })();
     return () => { cancelled = true; };
-  }, [canAdmin]);
+  }, []);
+
+  // Pessoas (id+nome) para menção e seleção de responsável no detalhe-hub.
+  const people = useMemo(
+    () => memberOptions.map((m) => ({ id: m.user_id, name: m.full_name })),
+    [memberOptions],
+  );
 
   // Filtragem client-side (SP2).
   const filteredCards = useMemo(
@@ -111,15 +122,20 @@ export default function KanbanBoard() {
   const filterOptions = useMemo(() => {
     const am = new Map<string, string>();
     const types = new Set<string>();
+    const tagMap = new Map<string, string>();
     for (const c of localCards) {
       if (c.assignee_user_id) am.set(c.assignee_user_id, c.assignee_name);
       if (c.task_type_label) types.add(c.task_type_label);
+      for (const t of c.tags ?? []) tagMap.set(t.id, t.name);
     }
     return {
       assignees: Array.from(am.entries())
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
       taskTypes: Array.from(types).sort((a, b) => a.localeCompare(b, "pt-BR")),
+      tags: Array.from(tagMap.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     };
   }, [localCards]);
 
@@ -348,7 +364,8 @@ export default function KanbanBoard() {
                 cards={cardsByColumn[col.id] ?? []}
                 canEdit={true}
                 simplified={!!board?.simplified_cards}
-                onEditCard={handleEditCard}
+                onOpenCard={(c) => setDetailTaskId(c.id)}
+                onEditCard={(c) => setDetailTaskId(c.id)}
                 onDeleteCard={handleDeleteCard}
                 onOpenClient={handleOpenClient}
               />
@@ -417,6 +434,18 @@ export default function KanbanBoard() {
           options={filterOptions}
           onApply={setFilters}
           onClose={() => setShowFilters(false)}
+        />
+      )}
+
+      {/* Modal-hub de detalhe da tarefa (SP3) */}
+      {detailTaskId && (
+        <TaskDetailModal
+          taskId={detailTaskId}
+          boards={boards.map((b) => ({ id: b.id, name: b.name }))}
+          people={people}
+          onClose={() => setDetailTaskId(null)}
+          onChanged={refreshBoard}
+          onOpenClient={(id) => { setDetailTaskId(null); handleOpenClient(id); }}
         />
       )}
     </div>

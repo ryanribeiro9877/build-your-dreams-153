@@ -34,6 +34,7 @@ function mk(o: Partial<KanbanCardV2> = {}): KanbanCardV2 {
     column_id: "c1",
     position: 0,
     created_at: "2026-06-01T00:00:00Z",
+    tags: [],
     ...o,
   };
 }
@@ -98,6 +99,15 @@ describe("applyFilters — filtros avançados", () => {
   it("processNumber (substring)", () => {
     const cards = [mk({ id: "a", process_number: "0001234-55.2026" }), mk({ id: "b", process_number: "9999" })];
     expect(ids(applyFilters(cards, f({ processNumber: "1234" }), ME))).toEqual(["a"]);
+  });
+  it("marcadores (card com >=1 tag selecionada)", () => {
+    const cards = [
+      mk({ id: "a", tags: [{ id: "t1", name: "Urgente", color: "#f00" }] }),
+      mk({ id: "b", tags: [{ id: "t2", name: "Bradesco", color: "#0f0" }] }),
+      mk({ id: "c", tags: [] }),
+    ];
+    expect(ids(applyFilters(cards, f({ marcadores: ["t1"] }), ME))).toEqual(["a"]);
+    expect(ids(applyFilters(cards, f({ marcadores: ["t1", "t2"] }), ME)).sort()).toEqual(["a", "b"]);
   });
 });
 
@@ -175,11 +185,11 @@ describe("countActiveAdvanced", () => {
   it("não conta abas, busca nem ordenação", () => {
     expect(countActiveAdvanced(f({ involvement: "responsavel", search: "x", sort: "prazo" }))).toBe(0);
   });
-  it("conta cada campo avançado e período", () => {
+  it("conta cada campo avançado, marcadores e período", () => {
     expect(countActiveAdvanced(f({
       assignees: ["u"], taskTypes: ["t"], areas: ["civil"], situacoes: ["pendente"],
-      clientName: "a", processNumber: "1", periodStart: "2026-06-01",
-    }))).toBe(7);
+      marcadores: ["t1"], clientName: "a", processNumber: "1", periodStart: "2026-06-01",
+    }))).toBe(8);
   });
 });
 
