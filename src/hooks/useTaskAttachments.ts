@@ -54,8 +54,8 @@ export function useTaskAttachments(taskId: string | null) {
     }
     setLoading(true);
     const { data, error: rpcErr } = await supabase.rpc(
-      "get_task_attachments" as never,
-      { p_task_id: taskId } as never,
+      "get_task_attachments",
+      { p_task_id: taskId },
     );
     if (rpcErr) {
       setError(rpcErr.message);
@@ -124,7 +124,7 @@ export function useTaskAttachments(taskId: string | null) {
 
       // 2. Registra metadata via RPC
       const { data: attachmentId, error: rpcErr } = await supabase.rpc(
-        "register_task_attachment" as never,
+        "register_task_attachment",
         {
           p_task_id: taskId,
           p_storage_path: storagePath,
@@ -132,7 +132,7 @@ export function useTaskAttachments(taskId: string | null) {
           p_file_size_bytes: file.size,
           p_mime_type: file.type || null,
           p_description: description || null,
-        } as never,
+        },
       );
 
       if (rpcErr) {
@@ -173,8 +173,8 @@ export function useTaskAttachments(taskId: string | null) {
     try {
       // RPC retorna o storage_path pra eu deletar
       const { data: storagePath, error: rpcErr } = await supabase.rpc(
-        "delete_task_attachment" as never,
-        { p_attachment_id: attachmentId } as never,
+        "delete_task_attachment",
+        { p_attachment_id: attachmentId },
       );
       if (rpcErr) throw rpcErr;
 

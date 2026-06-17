@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type { InterAssistantStatus } from "@/types/jurisai";
@@ -60,8 +61,8 @@ export function useInterAssistantInbox(includeFinalized = false) {
     enabled: !!user,
     fetcher: async () => {
       const { data, error: rpcErr } = await supabase.rpc(
-        "get_my_inter_assistant_inbox" as never,
-        { p_include_finalized: includeFinalized } as never,
+        "get_my_inter_assistant_inbox",
+        { p_include_finalized: includeFinalized },
       );
       if (rpcErr) throw rpcErr;
       return (data as unknown as InterAssistantInboxItem[]) || [];
@@ -83,8 +84,8 @@ export function useInterAssistantOutbox(includeFinalized = true) {
     enabled: !!user,
     fetcher: async () => {
       const { data } = await supabase.rpc(
-        "get_my_inter_assistant_outbox" as never,
-        { p_include_finalized: includeFinalized } as never,
+        "get_my_inter_assistant_outbox",
+        { p_include_finalized: includeFinalized },
       );
       return (data as unknown as InterAssistantOutboxItem[]) || [];
     },
@@ -104,7 +105,7 @@ export function useInterAssistantCount() {
     queryKey: `iar-count-${user?.id ?? "anon"}`,
     enabled: !!user,
     fetcher: async () => {
-      const { data } = await supabase.rpc("get_inter_assistant_inbox_count" as never);
+      const { data } = await supabase.rpc("get_inter_assistant_inbox_count");
       return typeof data === "number" ? data : 0;
     },
     realtime: user
@@ -120,7 +121,7 @@ export function useUsersForInterAssistant() {
   const { data, loading } = useSupabaseQuery<UserForInterAssistant[]>({
     queryKey: "iar-users",
     fetcher: async () => {
-      const { data } = await supabase.rpc("list_users_for_inter_assistant" as never);
+      const { data } = await supabase.rpc("list_users_for_inter_assistant");
       return (data as unknown as UserForInterAssistant[]) || [];
     },
   });
@@ -136,13 +137,13 @@ export async function createInterAssistantRequest(input: {
   related_task_id?: string;
   expires_in_hours?: number;
 }): Promise<string> {
-  const { data, error } = await supabase.rpc("create_inter_assistant_request" as never, {
+  const { data, error } = await supabase.rpc("create_inter_assistant_request", {
     p_to_user_id: input.to_user_id,
     p_request_type: input.request_type,
-    p_payload: input.payload ?? {},
+    p_payload: (input.payload ?? {}) as unknown as Json,
     p_related_task_id: input.related_task_id ?? null,
     p_expires_in_hours: input.expires_in_hours ?? 72,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as string;
 }
@@ -152,10 +153,10 @@ export async function answerInterAssistantRequest(
   responsePayload: Record<string, unknown>,
   status: "answered" | "denied" = "answered",
 ): Promise<void> {
-  const { error } = await supabase.rpc("answer_inter_assistant_request" as never, {
+  const { error } = await supabase.rpc("answer_inter_assistant_request", {
     p_request_id: requestId,
-    p_response_payload: responsePayload,
+    p_response_payload: responsePayload as unknown as Json,
     p_status: status,
-  } as never);
+  });
   if (error) throw error;
 }

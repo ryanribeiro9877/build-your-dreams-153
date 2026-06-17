@@ -69,7 +69,7 @@ export function useMyWorkspace() {
   const { data, loading, error, refetch } = useSupabaseQuery<MyWorkspace>({
     queryKey: user ? `workspace-${user.id}` : "workspace-anonymous",
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_my_workspace" as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_my_workspace");
       if (rpcErr) throw new Error(rpcErr.message);
       return data as unknown as MyWorkspace;
     },
