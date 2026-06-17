@@ -8,13 +8,14 @@ interface KanbanColumnProps {
   cards: KanbanCardV2[];
   canEdit: boolean;
   simplified: boolean;
+  onOpenCard?: (card: KanbanCardV2) => void;
   onEditCard: (card: KanbanCardV2) => void;
   onDeleteCard: (card: KanbanCardV2) => void;
   onOpenClient?: (clientId: string) => void;
 }
 
 export function KanbanColumn({
-  column, cards, canEdit, simplified, onEditCard, onDeleteCard, onOpenClient,
+  column, cards, canEdit, simplified, onOpenCard, onEditCard, onDeleteCard, onOpenClient,
 }: KanbanColumnProps) {
   return (
     <div style={columnStyle}>
@@ -72,6 +73,7 @@ export function KanbanColumn({
                       card={c}
                       simplified={simplified}
                       canEdit={canEdit}
+                      onOpen={onOpenCard}
                       onEdit={onEditCard}
                       onDelete={onDeleteCard}
                       onOpenClient={onOpenClient}

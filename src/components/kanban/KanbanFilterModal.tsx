@@ -13,7 +13,11 @@ const AREA_LABELS: Record<LegalArea, string> = {
 
 interface Props {
   filters: KanbanFilterState;
-  options: { assignees: { id: string; name: string }[]; taskTypes: string[] };
+  options: {
+    assignees: { id: string; name: string }[];
+    taskTypes: string[];
+    tags: { id: string; name: string }[];
+  };
   onApply: (f: KanbanFilterState) => void;
   onClose: () => void;
 }
@@ -54,6 +58,13 @@ export function KanbanFilterModal({ filters, options, onApply, onClose }: Props)
           ))}
         </Field>
 
+        <Field label="Marcadores">
+          {options.tags.length === 0 && <span style={muted}>Nenhum marcador nos cards.</span>}
+          {options.tags.map((t) => (
+            <Toggle key={t.id} on={draft.marcadores.includes(t.id)} onClick={() => set({ marcadores: toggle(draft.marcadores, t.id) })}>{t.name}</Toggle>
+          ))}
+        </Field>
+
         <div style={{ display: "flex", gap: 8, margin: "12px 0 10px", flexWrap: "wrap" }}>
           <input placeholder="Nome do cliente" value={draft.clientName} onChange={(e) => set({ clientName: e.target.value })} style={{ ...input, flex: 1, minWidth: 160 }} />
           <input placeholder="Número do processo" value={draft.processNumber} onChange={(e) => set({ processNumber: e.target.value })} style={{ ...input, flex: 1, minWidth: 160 }} />
@@ -66,7 +77,7 @@ export function KanbanFilterModal({ filters, options, onApply, onClose }: Props)
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
           <button
-            onClick={() => set({ assignees: [], taskTypes: [], areas: [], situacoes: [], clientName: "", processNumber: "", periodStart: null, periodEnd: null })}
+            onClick={() => set({ assignees: [], taskTypes: [], areas: [], situacoes: [], marcadores: [], clientName: "", processNumber: "", periodStart: null, periodEnd: null })}
             style={btnGhost}
           >
             Limpar

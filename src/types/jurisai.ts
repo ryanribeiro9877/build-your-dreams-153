@@ -478,6 +478,7 @@ export interface KanbanCardV2 {
   column_id: string;
   position: number;
   created_at: string;
+  tags: KanbanTag[];
 }
 
 /** Board no detalhe (get_kanban_board): metadados do summary + concessões de acesso. */
@@ -511,6 +512,7 @@ export interface KanbanFilterState {
   taskTypes: string[];       // task_type_label (origem da etiqueta de tipo)
   areas: LegalArea[];
   situacoes: TaskSituacao[];
+  marcadores: string[];      // ids de kanban_tags
   clientName: string;
   processNumber: string;
 }
@@ -519,5 +521,52 @@ export interface SavedFilter {
   id: string;
   name: string;
   filter: KanbanFilterState;
+  created_at: string;
+}
+
+// ============================================================================
+// SP3 — Detalhe-hub: marcadores (tags), detalhe da tarefa, comentários
+// ============================================================================
+
+export interface KanbanTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/** Retorno de get_user_task_detail (modal-hub). */
+export interface TaskDetail {
+  id: string;
+  title: string;
+  description: string | null;
+  situacao: TaskSituacao;
+  status: UserTaskStatus;
+  priority: TaskPriority;
+  area: LegalArea | null;
+  deadline_at: string | null;
+  created_at: string;
+  completed_at: string | null;
+  task_type_label: string;
+  assignee_user_id: string | null;
+  assignee_name: string;
+  assigner_user_id: string | null;
+  assigner_name: string;
+  validator_user_id: string | null;
+  validator_name: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  process_id: string | null;
+  process_number: string | null;
+  board_id: string | null;
+  column_id: string | null;
+  tags: KanbanTag[];
+}
+
+export interface TaskComment {
+  id: string;
+  author_user_id: string;
+  author_name: string;
+  body: string;
+  mentioned_user_ids: string[];
   created_at: string;
 }

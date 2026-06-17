@@ -6,9 +6,29 @@ interface KanbanCardProps {
   card: KanbanCardV2;
   simplified: boolean;
   canEdit: boolean;
+  onOpen?: (card: KanbanCardV2) => void;
   onEdit: (card: KanbanCardV2) => void;
   onDelete: (card: KanbanCardV2) => void;
   onOpenClient?: (clientId: string) => void;
+}
+
+function TagChips({ tags }: { tags: KanbanCardV2["tags"] }) {
+  if (!tags || tags.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+      {tags.map((t) => (
+        <span
+          key={t.id}
+          style={{
+            fontSize: 9, padding: "1px 7px", borderRadius: 10, fontWeight: 600,
+            background: `${t.color}22`, color: t.color, border: `1px solid ${t.color}55`,
+          }}
+        >
+          {t.name}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function formatDate(iso: string | null): string {
@@ -24,8 +44,9 @@ function initials(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpenClient }: KanbanCardProps) {
+export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete, onOpenClient }: KanbanCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const open = () => onOpen?.(card);
 
   const borderLeft = `3px solid ${PRIORITY_COLORS[card.priority]}`;
   const overdueBorder = card.is_overdue ? "rgba(239,68,68,0.4)" : COLORS.border;
@@ -50,7 +71,7 @@ export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpen
   // ── Modo simplificado: só título + responsável + prazo ──────────────────
   if (simplified) {
     return (
-      <div style={{ ...cardStyle, borderLeft, border: `1px solid ${overdueBorder}`, position: "relative" }}>
+      <div onClick={open} style={{ ...cardStyle, borderLeft, border: `1px solid ${overdueBorder}`, position: "relative", cursor: "pointer" }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text1, lineHeight: 1.3, marginBottom: 6, paddingRight: canEdit ? 18 : 0 }}>
           {card.title}
         </div>
@@ -63,6 +84,7 @@ export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpen
             📅 {formatDate(card.deadline_at)}
           </span>
         </div>
+        <TagChips tags={card.tags} />
         {canEdit && <CardMenu open={menuOpen} setOpen={setMenuOpen} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />}
       </div>
     );
@@ -70,7 +92,7 @@ export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpen
 
   // ── Modo completo ────────────────────────────────────────────────────────
   return (
-    <div style={{ ...cardStyle, borderLeft, border: `1px solid ${overdueBorder}`, position: "relative" }}>
+    <div onClick={open} style={{ ...cardStyle, borderLeft, border: `1px solid ${overdueBorder}`, position: "relative", cursor: "pointer" }}>
       {/* Etiqueta de origem + badge "em validação" */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, paddingRight: canEdit ? 18 : 0, flexWrap: "wrap" }}>
         <span style={{ ...chip, background: `${originColor}22`, color: originColor, border: `1px solid ${originColor}55` }}>
@@ -80,7 +102,7 @@ export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpen
           originClickable ? (
             <button
               type="button"
-              onClick={() => onOpenClient?.(card.client_id as string)}
+              onClick={(e) => { e.stopPropagation(); onOpenClient?.(card.client_id as string); }}
               title="Abrir cliente"
               style={{
                 background: "transparent", border: "none", padding: 0, cursor: "pointer",
@@ -124,6 +146,8 @@ export function KanbanCard({ card, simplified, canEdit, onEdit, onDelete, onOpen
           <span style={{ color: COLORS.danger, fontWeight: 600 }}>❗ Data fatal: {formatDate(card.deadline_at)}</span>
         )}
       </div>
+
+      <TagChips tags={card.tags} />
 
       {canEdit && <CardMenu open={menuOpen} setOpen={setMenuOpen} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />}
     </div>

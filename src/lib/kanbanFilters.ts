@@ -19,6 +19,7 @@ export const EMPTY_FILTERS: KanbanFilterState = {
   taskTypes: [],
   areas: [],
   situacoes: [],
+  marcadores: [],
   clientName: "",
   processNumber: "",
 };
@@ -39,6 +40,7 @@ export function countActiveAdvanced(f: KanbanFilterState): number {
   if (f.taskTypes.length > 0) n++;
   if (f.areas.length > 0) n++;
   if (f.situacoes.length > 0) n++;
+  if (f.marcadores.length > 0) n++;
   if (f.clientName.trim() !== "") n++;
   if (f.processNumber.trim() !== "") n++;
   if (f.periodStart || f.periodEnd) n++;
@@ -70,6 +72,7 @@ function matchesAdvanced(c: KanbanCardV2, f: KanbanFilterState): boolean {
   if (f.taskTypes.length > 0 && !f.taskTypes.includes(c.task_type_label)) return false;
   if (f.areas.length > 0 && !(c.area && f.areas.includes(c.area as LegalArea))) return false;
   if (f.situacoes.length > 0 && !f.situacoes.includes(c.situacao as TaskSituacao)) return false;
+  if (f.marcadores.length > 0 && !(c.tags ?? []).some((t) => f.marcadores.includes(t.id))) return false;
 
   const cli = f.clientName.trim().toLowerCase();
   if (cli && !(c.client_name ?? "").toLowerCase().includes(cli)) return false;
