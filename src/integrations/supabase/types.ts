@@ -1836,6 +1836,54 @@ export type Database = {
           },
         ]
       }
+      kanban_saved_filters: {
+        Row: {
+          created_at: string
+          filter: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filter?: Json
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filter?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      kanban_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       landing_events: {
         Row: {
           created_at: string
@@ -2472,6 +2520,147 @@ export type Database = {
           },
         ]
       }
+      task_audit_log: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          field: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          user_task_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          field: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          user_task_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          field?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_audit_log_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_checklist_items: {
+        Row: {
+          body: string
+          created_at: string
+          done: boolean
+          id: string
+          position: number
+          user_task_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          done?: boolean
+          id?: string
+          position?: number
+          user_task_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          done?: boolean
+          id?: string
+          position?: number
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_checklist_items_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_tags: {
+        Row: {
+          created_at: string
+          tag_id: string
+          user_task_id: string
+        }
+        Insert: {
+          created_at?: string
+          tag_id: string
+          user_task_id: string
+        }
+        Update: {
+          created_at?: string
+          tag_id?: string
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_tags_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_time_entries: {
+        Row: {
+          created_at: string
+          id: string
+          minutes: number
+          note: string | null
+          user_id: string
+          user_task_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          minutes: number
+          note?: string | null
+          user_id: string
+          user_task_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          minutes?: number
+          note?: string | null
+          user_id?: string
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_time_entries_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_types: {
         Row: {
           area: Database["public"]["Enums"]["legal_area"] | null
@@ -2519,6 +2708,86 @@ export type Database = {
           validator_role_code?: string | null
         }
         Relationships: []
+      }
+      task_workflow_instances: {
+        Row: {
+          id: string
+          started_at: string
+          started_by: string | null
+          template_id: string | null
+          template_name: string
+          user_task_id: string
+        }
+        Insert: {
+          id?: string
+          started_at?: string
+          started_by?: string | null
+          template_id?: string | null
+          template_name: string
+          user_task_id: string
+        }
+        Update: {
+          id?: string
+          started_at?: string
+          started_by?: string | null
+          template_id?: string | null
+          template_name?: string
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_workflow_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_workflow_instances_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_workflow_step_states: {
+        Row: {
+          done: boolean
+          done_at: string | null
+          done_by: string | null
+          id: string
+          instance_id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          done?: boolean
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          instance_id: string
+          name: string
+          position?: number
+        }
+        Update: {
+          done?: boolean
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          instance_id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_workflow_step_states_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "task_workflow_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       token_balances: {
         Row: {
@@ -2706,6 +2975,41 @@ export type Database = {
         }
         Relationships: []
       }
+      user_task_comments: {
+        Row: {
+          author_user_id: string
+          body: string
+          created_at: string
+          id: string
+          mentioned_user_ids: string[]
+          user_task_id: string
+        }
+        Insert: {
+          author_user_id: string
+          body: string
+          created_at?: string
+          id?: string
+          mentioned_user_ids?: string[]
+          user_task_id: string
+        }
+        Update: {
+          author_user_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          mentioned_user_ids?: string[]
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_task_comments_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_tasks: {
         Row: {
           area: Database["public"]["Enums"]["legal_area"] | null
@@ -2843,6 +3147,53 @@ export type Database = {
           sidebar_collapsed?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      workflow_template_steps: {
+        Row: {
+          id: string
+          name: string
+          position: number
+          template_id: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          position?: number
+          template_id: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          position?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_template_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_templates: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
         }
         Relationships: []
       }
@@ -3116,6 +3467,21 @@ export type Database = {
               title: string
             }[]
           }
+      get_kanban_board_involvement: {
+        Args: { p_board_id: string }
+        Returns: {
+          assigner_user_id: string
+          user_task_id: string
+          validator_user_id: string
+        }[]
+      }
+      get_kanban_board_tags: {
+        Args: { p_board_id: string }
+        Returns: {
+          tags: Json
+          user_task_id: string
+        }[]
+      }
       get_kanban_boards: {
         Args: never
         Returns: {
@@ -3132,6 +3498,14 @@ export type Database = {
           simplified_cards: boolean
           sort_order: number
           updated_at: string
+        }[]
+      }
+      get_kanban_tags: {
+        Args: never
+        Returns: {
+          color: string
+          id: string
+          name: string
         }[]
       }
       get_my_inbox: {
@@ -3190,6 +3564,15 @@ export type Database = {
           to_user_role_label: string
         }[]
       }
+      get_my_saved_filters: {
+        Args: never
+        Returns: {
+          created_at: string
+          filter: Json
+          id: string
+          name: string
+        }[]
+      }
       get_my_validation_queue: {
         Args: never
         Returns: {
@@ -3244,6 +3627,50 @@ export type Database = {
           uploader_user_id: string
         }[]
       }
+      get_task_audit: {
+        Args: { p_task_id: string }
+        Returns: {
+          actor_name: string
+          actor_user_id: string
+          created_at: string
+          field: string
+          id: string
+          new_value: string
+          old_value: string
+        }[]
+      }
+      get_task_checklist: {
+        Args: { p_task_id: string }
+        Returns: {
+          body: string
+          done: boolean
+          id: string
+          position: number
+        }[]
+      }
+      get_task_comments: {
+        Args: { p_task_id: string }
+        Returns: {
+          author_name: string
+          author_user_id: string
+          body: string
+          created_at: string
+          id: string
+          mentioned_user_ids: string[]
+        }[]
+      }
+      get_task_time_entries: {
+        Args: { p_task_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          minutes: number
+          note: string
+          total_minutes: number
+          user_id: string
+          user_name: string
+        }[]
+      }
       get_task_types_by_stage: {
         Args: never
         Returns: {
@@ -3257,6 +3684,7 @@ export type Database = {
           stage: Database["public"]["Enums"]["org_stage"]
         }[]
       }
+      get_task_workflow: { Args: { p_task_id: string }; Returns: Json }
       get_team_tasks: {
         Args: {
           p_assignee_user_id?: string
@@ -3281,7 +3709,16 @@ export type Database = {
           title: string
         }[]
       }
+      get_user_task_detail: { Args: { p_task_id: string }; Returns: Json }
       get_validation_count: { Args: never; Returns: number }
+      get_workflow_templates: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          step_count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3310,15 +3747,31 @@ export type Database = {
         Args: { p_role_template_id: string; p_task_type_id: string }
         Returns: boolean
       }
+      kanban_add_checklist_item: {
+        Args: { p_body: string; p_task_id: string }
+        Returns: string
+      }
+      kanban_add_comment: {
+        Args: { p_body: string; p_mentioned: string[]; p_task_id: string }
+        Returns: string
+      }
       kanban_add_task_to_board: {
         Args: { p_column_id: string; p_task_id: string }
         Returns: undefined
+      }
+      kanban_add_time_entry: {
+        Args: { p_minutes: number; p_note: string; p_task_id: string }
+        Returns: string
       }
       kanban_can_access_board: {
         Args: { p_board_id: string; p_uid: string }
         Returns: boolean
       }
       kanban_can_admin: { Args: { p_uid: string }; Returns: boolean }
+      kanban_can_edit_task: {
+        Args: { p_task_id: string; p_uid: string }
+        Returns: boolean
+      }
       kanban_create_board: {
         Args: {
           p_hide_completed_after_days?: number
@@ -3328,7 +3781,21 @@ export type Database = {
         }
         Returns: string
       }
+      kanban_create_workflow_template: {
+        Args: { p_name: string; p_steps: string[] }
+        Returns: string
+      }
       kanban_delete_board: { Args: { p_board_id: string }; Returns: undefined }
+      kanban_delete_checklist_item: {
+        Args: { p_item_id: string }
+        Returns: undefined
+      }
+      kanban_delete_saved_filter: { Args: { p_id: string }; Returns: undefined }
+      kanban_delete_time_entry: { Args: { p_id: string }; Returns: undefined }
+      kanban_delete_workflow_template: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       kanban_move_card: {
         Args: { p_column_id: string; p_position?: number; p_task_id: string }
         Returns: undefined
@@ -3340,6 +3807,10 @@ export type Database = {
       kanban_remove_task_from_board: {
         Args: { p_task_id: string }
         Returns: undefined
+      }
+      kanban_save_filter: {
+        Args: { p_filter: Json; p_name: string }
+        Returns: string
       }
       kanban_set_board_grants: {
         Args: {
@@ -3353,6 +3824,14 @@ export type Database = {
         Args: { p_board_id: string; p_columns: Json }
         Returns: undefined
       }
+      kanban_set_task_tags: {
+        Args: { p_names: string[]; p_task_id: string }
+        Returns: undefined
+      }
+      kanban_set_workflow_step: {
+        Args: { p_done: boolean; p_step_state_id: string }
+        Returns: undefined
+      }
       kanban_situacao_from_status: {
         Args: { p_status: Database["public"]["Enums"]["user_task_status"] }
         Returns: Database["public"]["Enums"]["task_situacao"]
@@ -3360,6 +3839,14 @@ export type Database = {
       kanban_stage_owner_role: {
         Args: { p_stage: Database["public"]["Enums"]["org_stage"] }
         Returns: string
+      }
+      kanban_start_workflow: {
+        Args: { p_task_id: string; p_template_id: string }
+        Returns: string
+      }
+      kanban_toggle_checklist_item: {
+        Args: { p_done: boolean; p_item_id: string }
+        Returns: undefined
       }
       kanban_toggle_favorite: { Args: { p_board_id: string }; Returns: boolean }
       kanban_update_board: {

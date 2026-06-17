@@ -18,6 +18,8 @@ import type {
   ChecklistItem,
   WorkflowTemplateSummary,
   TaskWorkflow,
+  TimeEntry,
+  AuditLogEntry,
 } from "@/types/jurisai";
 
 /**
@@ -69,11 +71,11 @@ export function useKanbanBoard(boardId: string | null) {
     fetcher: async () => {
       // get_kanban_board (detalhe) + get_kanban_board_involvement (assigner/validator
       // por card, p/ as abas de envolvimento do SP2) em paralelo, com merge client-side.
-      // A RPC de envolvimento ainda não está no types.ts gerado → cast até types:regen.
+      // Envolvimento e tags vêm por RPCs auxiliares e são mesclados nos cards.
       const [boardRes, invRes, tagRes] = await Promise.all([
         supabase.rpc("get_kanban_board", { p_board_id: boardId }),
-        supabase.rpc("get_kanban_board_involvement" as never, { p_board_id: boardId } as never),
-        supabase.rpc("get_kanban_board_tags" as never, { p_board_id: boardId } as never),
+        supabase.rpc("get_kanban_board_involvement", { p_board_id: boardId }),
+        supabase.rpc("get_kanban_board_tags", { p_board_id: boardId }),
       ]);
       if (boardRes.error) throw boardRes.error;
       const detail = boardRes.data as unknown as KanbanBoardDetail;
@@ -228,14 +230,13 @@ export async function toggleFavorite(boardId: string): Promise<void> {
 }
 
 // ─── Filtros salvos (SP2) ────────────────────────────────────────────────────
-// RPCs ainda não presentes no types.ts gerado → cast até types:regen.
 export function useSavedFilters() {
   const { user } = useAuth();
   const { data, loading, error, refetch } = useSupabaseQuery<SavedFilter[]>({
     queryKey: `kanban-saved-filters-${user?.id ?? "anon"}`,
     enabled: !!user,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_my_saved_filters" as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_my_saved_filters");
       if (rpcErr) throw rpcErr;
       return (data as unknown as SavedFilter[]) ?? [];
     },
@@ -247,30 +248,29 @@ export function useSavedFilters() {
 }
 
 export async function saveFilter(name: string, filter: KanbanFilterState): Promise<string> {
-  const { data, error } = await supabase.rpc("kanban_save_filter" as never, {
+  const { data, error } = await supabase.rpc("kanban_save_filter", {
     p_name: name,
     p_filter: filter as unknown as Json,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as string;
 }
 
 export async function deleteSavedFilter(id: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_delete_saved_filter" as never, {
+  const { error } = await supabase.rpc("kanban_delete_saved_filter", {
     p_id: id,
-  } as never);
+  });
   if (error) throw error;
 }
 
 // ─── Marcadores / detalhe / comentários (SP3) ────────────────────────────────
-// RPCs ainda não presentes no types.ts gerado → cast até types:regen.
 export function useKanbanTags() {
   const { user } = useAuth();
   const { data, loading, error, refetch } = useSupabaseQuery<KanbanTag[]>({
     queryKey: "kanban-tags",
     enabled: !!user,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_kanban_tags" as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_kanban_tags");
       if (rpcErr) throw rpcErr;
       return (data as unknown as KanbanTag[]) ?? [];
     },
@@ -280,10 +280,10 @@ export function useKanbanTags() {
 }
 
 export async function setTaskTags(taskId: string, names: string[]): Promise<void> {
-  const { error } = await supabase.rpc("kanban_set_task_tags" as never, {
+  const { error } = await supabase.rpc("kanban_set_task_tags", {
     p_task_id: taskId,
     p_names: names,
-  } as never);
+  });
   if (error) throw error;
 }
 
@@ -292,9 +292,9 @@ export function useTaskDetail(taskId: string | null) {
     queryKey: `task-detail-${taskId ?? "none"}`,
     enabled: !!taskId,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_user_task_detail" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_user_task_detail", {
         p_task_id: taskId,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return data as unknown as TaskDetail;
     },
@@ -308,9 +308,9 @@ export function useTaskComments(taskId: string | null) {
     queryKey: `task-comments-${taskId ?? "none"}`,
     enabled: !!taskId,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_task_comments" as never, {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_comments", {
         p_task_id: taskId,
-      } as never);
+      });
       if (rpcErr) throw rpcErr;
       return (data as unknown as TaskComment[]) ?? [];
     },
@@ -319,11 +319,11 @@ export function useTaskComments(taskId: string | null) {
 }
 
 export async function addComment(taskId: string, body: string, mentioned: string[]): Promise<string> {
-  const { data, error } = await supabase.rpc("kanban_add_comment" as never, {
+  const { data, error } = await supabase.rpc("kanban_add_comment", {
     p_task_id: taskId,
     p_body: body,
     p_mentioned: mentioned,
-  } as never);
+  });
   if (error) throw error;
   return data as unknown as string;
 }
@@ -346,13 +346,12 @@ export async function updateTaskFields(taskId: string, fields: TaskFieldUpdate):
 }
 
 // ─── Checklist (SP4) ─────────────────────────────────────────────────────────
-// RPCs ainda não presentes no types.ts gerado → cast até types:regen.
 export function useChecklist(taskId: string | null) {
   const { data, loading, error, refetch } = useSupabaseQuery<ChecklistItem[]>({
     queryKey: `task-checklist-${taskId ?? "none"}`,
     enabled: !!taskId,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_task_checklist" as never, { p_task_id: taskId } as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_task_checklist", { p_task_id: taskId });
       if (rpcErr) throw rpcErr;
       return (data as unknown as ChecklistItem[]) ?? [];
     },
@@ -361,15 +360,15 @@ export function useChecklist(taskId: string | null) {
 }
 
 export async function addChecklistItem(taskId: string, body: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_add_checklist_item" as never, { p_task_id: taskId, p_body: body } as never);
+  const { error } = await supabase.rpc("kanban_add_checklist_item", { p_task_id: taskId, p_body: body });
   if (error) throw error;
 }
 export async function toggleChecklistItem(itemId: string, done: boolean): Promise<void> {
-  const { error } = await supabase.rpc("kanban_toggle_checklist_item" as never, { p_item_id: itemId, p_done: done } as never);
+  const { error } = await supabase.rpc("kanban_toggle_checklist_item", { p_item_id: itemId, p_done: done });
   if (error) throw error;
 }
 export async function deleteChecklistItem(itemId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_delete_checklist_item" as never, { p_item_id: itemId } as never);
+  const { error } = await supabase.rpc("kanban_delete_checklist_item", { p_item_id: itemId });
   if (error) throw error;
 }
 
@@ -380,7 +379,7 @@ export function useWorkflowTemplates() {
     queryKey: "workflow-templates",
     enabled: !!user,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_workflow_templates" as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_workflow_templates");
       if (rpcErr) throw rpcErr;
       return (data as unknown as WorkflowTemplateSummary[]) ?? [];
     },
@@ -390,12 +389,12 @@ export function useWorkflowTemplates() {
 }
 
 export async function createWorkflowTemplate(name: string, steps: string[]): Promise<string> {
-  const { data, error } = await supabase.rpc("kanban_create_workflow_template" as never, { p_name: name, p_steps: steps } as never);
+  const { data, error } = await supabase.rpc("kanban_create_workflow_template", { p_name: name, p_steps: steps });
   if (error) throw error;
   return data as unknown as string;
 }
 export async function deleteWorkflowTemplate(id: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_delete_workflow_template" as never, { p_id: id } as never);
+  const { error } = await supabase.rpc("kanban_delete_workflow_template", { p_id: id });
   if (error) throw error;
 }
 
@@ -404,7 +403,7 @@ export function useTaskWorkflow(taskId: string | null) {
     queryKey: `task-workflow-${taskId ?? "none"}`,
     enabled: !!taskId,
     fetcher: async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_task_workflow" as never, { p_task_id: taskId } as never);
+      const { data, error: rpcErr } = await supabase.rpc("get_task_workflow", { p_task_id: taskId });
       if (rpcErr) throw rpcErr;
       return (data as unknown as TaskWorkflow) ?? null;
     },
@@ -413,10 +412,49 @@ export function useTaskWorkflow(taskId: string | null) {
 }
 
 export async function startWorkflow(taskId: string, templateId: string): Promise<void> {
-  const { error } = await supabase.rpc("kanban_start_workflow" as never, { p_task_id: taskId, p_template_id: templateId } as never);
+  const { error } = await supabase.rpc("kanban_start_workflow", { p_task_id: taskId, p_template_id: templateId });
   if (error) throw error;
 }
 export async function setWorkflowStep(stepStateId: string, done: boolean): Promise<void> {
-  const { error } = await supabase.rpc("kanban_set_workflow_step" as never, { p_step_state_id: stepStateId, p_done: done } as never);
+  const { error } = await supabase.rpc("kanban_set_workflow_step", { p_step_state_id: stepStateId, p_done: done });
   if (error) throw error;
+}
+
+// ─── Timesheet (SP5) ─────────────────────────────────────────────────────────
+export function useTimeEntries(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<TimeEntry[]>({
+    queryKey: `task-time-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_time_entries", { p_task_id: taskId });
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as TimeEntry[]) ?? [];
+    },
+  });
+  const entries = data ?? [];
+  const totalMinutes = entries.reduce((acc, e) => acc + (e.minutes ?? 0), 0);
+  return { entries, totalMinutes, loading, error, refresh: refetch };
+}
+
+export async function addTimeEntry(taskId: string, minutes: number, note: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_add_time_entry", { p_task_id: taskId, p_minutes: minutes, p_note: note });
+  if (error) throw error;
+}
+export async function deleteTimeEntry(id: string): Promise<void> {
+  const { error } = await supabase.rpc("kanban_delete_time_entry", { p_id: id });
+  if (error) throw error;
+}
+
+// ─── Auditoria por tarefa (SP5) ──────────────────────────────────────────────
+export function useTaskAudit(taskId: string | null) {
+  const { data, loading, error, refetch } = useSupabaseQuery<AuditLogEntry[]>({
+    queryKey: `task-audit-${taskId ?? "none"}`,
+    enabled: !!taskId,
+    fetcher: async () => {
+      const { data, error: rpcErr } = await supabase.rpc("get_task_audit", { p_task_id: taskId });
+      if (rpcErr) throw rpcErr;
+      return (data as unknown as AuditLogEntry[]) ?? [];
+    },
+  });
+  return { entries: data ?? [], loading, error, refresh: refetch };
 }

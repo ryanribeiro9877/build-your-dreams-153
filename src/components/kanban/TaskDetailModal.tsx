@@ -13,6 +13,8 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import TaskAttachments from "@/components/TaskAttachments";
 import { ChecklistSection } from "./ChecklistSection";
 import { WorkflowSection } from "./WorkflowSection";
+import { TimesheetSection } from "./TimesheetSection";
+import { AuditSection } from "./AuditSection";
 import { COLORS, FONT, overlay, input, select, btnGhost, btnPrimary, btnMini } from "./kanbanStyles";
 
 interface Person { id: string; name: string }
@@ -232,9 +234,19 @@ export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, on
               <WorkflowSection taskId={taskId} />
             </Section>
 
+            {/* Timesheet */}
+            <Section title="Timesheet">
+              <TimesheetSection taskId={taskId} />
+            </Section>
+
             {/* Comentários */}
             <Section title="Comentários">
               <CommentsSection taskId={taskId} people={people} />
+            </Section>
+
+            {/* Auditoria */}
+            <Section title="Auditoria">
+              <AuditSection taskId={taskId} people={people} />
             </Section>
           </>
         )}
