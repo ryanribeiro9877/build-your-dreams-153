@@ -12,7 +12,7 @@ import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
  * em outras tarefas).
  */
 
-export type AgentRole = "ceo" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
+export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 export type AgentStatus = "active" | "idle" | "alert" | "offline";
 
 export interface AgentRecord {

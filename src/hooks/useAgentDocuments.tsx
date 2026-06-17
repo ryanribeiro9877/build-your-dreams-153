@@ -59,7 +59,7 @@ export function useAgentDocuments(agentId: string) {
   const load = useCallback(async () => {
     // Lê os modelos vinculados ao agente via document_library + agent_document_links.
     const { data: links, error: linkErr } = await supabase
-      .from("agent_document_links" as any)
+      .from("agent_document_links")
       .select("document_id")
       .eq("agent_id", agentId);
     if (linkErr) {
@@ -68,14 +68,14 @@ export function useAgentDocuments(agentId: string) {
       setLoading(false);
       return;
     }
-    const ids = ((links as unknown as { document_id: string }[]) || []).map((l) => l.document_id);
+    const ids = (links || []).map((l) => l.document_id);
     if (ids.length === 0) {
       setDocuments([]);
       setLoading(false);
       return;
     }
     const { data, error } = await supabase
-      .from("document_library" as any)
+      .from("document_library")
       .select("*")
       .in("id", ids)
       .order("sort_order")
@@ -127,7 +127,7 @@ export function useAgentDocuments(agentId: string) {
     try { contentCache = await extractFileText(file); } catch { /* extração best-effort */ }
 
     const { data: libRow, error: libErr } = await supabase
-      .from("document_library" as any)
+      .from("document_library")
       .insert({
         storage_path: storagePath,
         file_name: file.name,
@@ -137,7 +137,7 @@ export function useAgentDocuments(agentId: string) {
         content_cache: contentCache,
         is_active: true,
         sort_order: 0,
-      } as any)
+      })
       .select("id")
       .single();
 
@@ -148,11 +148,11 @@ export function useAgentDocuments(agentId: string) {
     }
 
     const { error: linkErr } = await supabase
-      .from("agent_document_links" as any)
-      .insert({ agent_id: agentId, document_id: (libRow as unknown as { id: string }).id } as any);
+      .from("agent_document_links")
+      .insert({ agent_id: agentId, document_id: libRow.id });
     if (linkErr) {
       toast.error("Erro ao vincular documento ao agente: " + linkErr.message);
-      await supabase.from("document_library" as any).delete().eq("id", (libRow as unknown as { id: string }).id);
+      await supabase.from("document_library").delete().eq("id", libRow.id);
       await supabase.storage.from(BUCKET).remove([storagePath]);
       return false;
     }
@@ -169,7 +169,7 @@ export function useAgentDocuments(agentId: string) {
     // Remove o vínculo deste agente; se nenhum outro agente usar o documento,
     // apaga a linha de document_library e o objeto no storage.
     const { error: linkErr } = await supabase
-      .from("agent_document_links" as any)
+      .from("agent_document_links")
       .delete()
       .eq("agent_id", agentId)
       .eq("document_id", doc.id);
@@ -179,13 +179,13 @@ export function useAgentDocuments(agentId: string) {
     }
 
     const { data: remaining } = await supabase
-      .from("agent_document_links" as any)
+      .from("agent_document_links")
       .select("agent_id")
       .eq("document_id", doc.id);
     const stillLinked = ((remaining as unknown[]) || []).length > 0;
 
     if (!stillLinked) {
-      await supabase.from("document_library" as any).delete().eq("id", doc.id);
+      await supabase.from("document_library").delete().eq("id", doc.id);
       if (doc.storage_path) {
         const { error: storageError } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
         if (storageError) console.warn("Storage delete failed (may already be gone):", storageError.message);
@@ -198,8 +198,8 @@ export function useAgentDocuments(agentId: string) {
 
   const toggleActive = async (doc: AgentDocument): Promise<boolean> => {
     const { error } = await supabase
-      .from("document_library" as any)
-      .update({ is_active: !doc.is_active } as any)
+      .from("document_library")
+      .update({ is_active: !doc.is_active })
       .eq("id", doc.id);
     if (error) {
       toast.error(error.message);
@@ -213,8 +213,8 @@ export function useAgentDocuments(agentId: string) {
 
   const updateDescription = async (docId: string, description: string): Promise<boolean> => {
     const { error } = await supabase
-      .from("document_library" as any)
-      .update({ description: description || null } as any)
+      .from("document_library")
+      .update({ description: description || null })
       .eq("id", docId);
     if (error) {
       toast.error(error.message);

@@ -37,7 +37,7 @@ export function useProviders() {
     const { data, error } = await supabase
       .from("model_pricing")
       .select("*")
-      .eq("is_active" as never, true)
+      .eq("is_active", true)
       .order("provider", { ascending: true });
     if (!error) {
       setModels((data || []) as unknown as ModelPricingRow[]);
@@ -99,9 +99,9 @@ export function useProviders() {
     // Batch: reset all other defaults in one query, then set chosen one
     const { error: resetError } = await supabase
       .from("llm_provider_configs")
-      .update({ is_default: false } as never)
+      .update({ is_default: false })
       .neq("id", configId)
-      .eq("is_default" as never, true);
+      .eq("is_default", true);
     if (resetError) {
       setError(resetError.message);
       return false;
@@ -109,7 +109,7 @@ export function useProviders() {
 
     const { error } = await supabase
       .from("llm_provider_configs")
-      .update({ is_default: true } as never)
+      .update({ is_default: true })
       .eq("id", configId);
     if (error) {
       setError(error.message);

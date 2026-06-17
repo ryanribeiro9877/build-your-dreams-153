@@ -61,7 +61,7 @@ export default function ChatWithAgent() {
     supabase
       .from("chat_sessions")
       .select("*")
-      .eq("user_id" as never, user.id)
+      .eq("user_id", user.id)
       .order("last_message_at", { ascending: false })
       .limit(20)
       .then(({ data }) => {
@@ -76,7 +76,7 @@ export default function ChatWithAgent() {
     supabase
       .from("chat_messages")
       .select("*")
-      .eq("session_id" as never, sessionId)
+      .eq("session_id", sessionId)
       .order("sequence_number", { ascending: true })
       .then(({ data }) => {
         if (data) setMessages(data as unknown as ChatMessageRow[]);
