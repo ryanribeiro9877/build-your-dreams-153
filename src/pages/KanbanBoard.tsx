@@ -17,11 +17,17 @@ import {
   setColumns as rpcSetColumns,
   setBoardGrants,
   toggleFavorite,
+  useSavedFilters,
+  saveFilter,
+  deleteSavedFilter,
 } from "@/hooks/useKanban";
-import type { KanbanCardV2, TaskSituacao } from "@/types/jurisai";
+import type { KanbanCardV2, TaskSituacao, KanbanFilterState } from "@/types/jurisai";
+import { applyFilters, countActiveAdvanced, EMPTY_FILTERS } from "@/lib/kanbanFilters";
 import { BoardSelector } from "@/components/kanban/BoardSelector";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { AddTaskModal } from "@/components/kanban/AddTaskModal";
+import { KanbanFilterBar } from "@/components/kanban/KanbanFilterBar";
+import { KanbanFilterModal } from "@/components/kanban/KanbanFilterModal";
 import {
   BoardConfigModal,
   type GrantOption,
@@ -31,7 +37,7 @@ import { COLORS, FONT, page, btnGhost, btnPrimary } from "@/components/kanban/ka
 
 export default function KanbanBoard() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
   const { isMaster } = useMasterAdmin();
 
   const canAdmin = isMaster || hasRole("admin");
@@ -58,6 +64,11 @@ export default function KanbanBoard() {
   const [showConfig, setShowConfig] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // Filtros (SP2) — client-side.
+  const [filters, setFilters] = useState<KanbanFilterState>(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  const { savedFilters, refresh: refreshSavedFilters } = useSavedFilters();
 
   // Opções e concessões para o modal de configuração.
   const [memberOptions, setMemberOptions] = useState<GrantOption[]>([]);
@@ -89,15 +100,38 @@ export default function KanbanBoard() {
     return () => { cancelled = true; };
   }, [canAdmin]);
 
-  // Cards agrupados por coluna.
+  // Filtragem client-side (SP2).
+  const filteredCards = useMemo(
+    () => applyFilters(localCards, filters, user?.id ?? ""),
+    [localCards, filters, user?.id],
+  );
+  const advancedCount = useMemo(() => countActiveAdvanced(filters), [filters]);
+
+  // Opções do modal de filtros, derivadas dos cards carregados.
+  const filterOptions = useMemo(() => {
+    const am = new Map<string, string>();
+    const types = new Set<string>();
+    for (const c of localCards) {
+      if (c.assignee_user_id) am.set(c.assignee_user_id, c.assignee_name);
+      if (c.task_type_label) types.add(c.task_type_label);
+    }
+    return {
+      assignees: Array.from(am.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+      taskTypes: Array.from(types).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    };
+  }, [localCards]);
+
+  // Cards agrupados por coluna (sobre os JÁ filtrados).
   const cardsByColumn = useMemo(() => {
     const m: Record<string, KanbanCardV2[]> = {};
     for (const col of columns) m[col.id] = [];
-    for (const c of localCards) (m[c.column_id] ??= []).push(c);
+    for (const c of filteredCards) (m[c.column_id] ??= []).push(c);
     // Mantém a ordem por position dentro de cada coluna.
     for (const k of Object.keys(m)) m[k].sort((a, b) => a.position - b.position);
     return m;
-  }, [columns, localCards]);
+  }, [columns, filteredCards]);
 
   const orderedColumns = useMemo(
     () => [...columns].sort((a, b) => a.position - b.position),
@@ -204,6 +238,28 @@ export default function KanbanBoard() {
     }
   }
 
+  // ── Filtros salvos ───────────────────────────────────────────────────────────
+  async function handleSaveCurrentFilter() {
+    const name = window.prompt("Nome para o filtro salvo:");
+    if (!name || !name.trim()) return;
+    try {
+      await saveFilter(name.trim(), filters);
+      toast.success("Filtro salvo.");
+      refreshSavedFilters();
+    } catch (e) {
+      toast.error((e as Error)?.message ?? "Falha ao salvar o filtro.");
+    }
+  }
+
+  async function handleDeleteSavedFilter(id: string) {
+    try {
+      await deleteSavedFilter(id);
+      refreshSavedFilters();
+    } catch (e) {
+      toast.error((e as Error)?.message ?? "Falha ao excluir o filtro.");
+    }
+  }
+
   // ── Loading / erro ───────────────────────────────────────────────────────────
   if (boardsLoading) return <HexagonLoader variant="fullscreen" label="Carregando quadros" />;
 
@@ -255,6 +311,21 @@ export default function KanbanBoard() {
           )}
         </div>
       </div>
+
+      {/* Barra de filtros (SP2) */}
+      {activeBoardId && board && (
+        <KanbanFilterBar
+          filters={filters}
+          onChange={setFilters}
+          total={filteredCards.length}
+          advancedCount={advancedCount}
+          onOpenAdvanced={() => setShowFilters(true)}
+          savedFilters={savedFilters}
+          onApplySaved={setFilters}
+          onSaveCurrent={handleSaveCurrentFilter}
+          onDeleteSaved={handleDeleteSavedFilter}
+        />
+      )}
 
       {/* Conteúdo do quadro */}
       {!activeBoardId ? (
@@ -336,6 +407,16 @@ export default function KanbanBoard() {
           excludeTaskIds={localCards.map((c) => c.id)}
           onClose={() => setShowAddTask(false)}
           onAdded={refreshBoard}
+        />
+      )}
+
+      {/* Modal de filtros avançados (SP2) */}
+      {showFilters && (
+        <KanbanFilterModal
+          filters={filters}
+          options={filterOptions}
+          onApply={setFilters}
+          onClose={() => setShowFilters(false)}
         />
       )}
     </div>
