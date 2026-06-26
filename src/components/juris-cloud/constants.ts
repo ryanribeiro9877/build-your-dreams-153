@@ -105,7 +105,9 @@ export const AGENTS_FALLBACK: Agent[] = [
 ];
 
 // ── Static data ──
-export const PROCESSES: { id: string; client: string; area: string; status: string; prazo: string; tribunal: string; value: string }[] = [];
+// PROCESSES removido: o painel lateral "Processos" agora lê a tabela `processes`
+// (ver useMyProcesses). ALERTS permanece pois ainda alimenta os chips do topo
+// (JurisTopBar) e o indicador systemOnline (JurisCloudOS).
 export const ALERTS: { type: string; text: string; time: string }[] = [];
 export const INITIAL_MESSAGES: JcChatMessage[] = [];
 

@@ -4,6 +4,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import TaskAttachments from "@/components/TaskAttachments";
 import { useMyInbox, updateUserTaskStatus } from "@/hooks/useUserTasks";
 import { toast } from "sonner";
+import { USER_TASK_STATUS_LABELS as STATUS_LABELS } from "@/lib/userTaskLabels";
 import type { UserTaskStatus, TaskPriority } from "@/types/jurisai";
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -18,17 +19,6 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "Alta",
   medium: "Média",
   low: "Baixa",
-};
-
-const STATUS_LABELS: Record<UserTaskStatus, string> = {
-  draft: "Rascunho",
-  assigned: "Atribuída",
-  in_progress: "Em andamento",
-  awaiting_external: "Aguardando externo",
-  awaiting_validation: "Aguardando validação",
-  blocked: "Bloqueada",
-  completed: "Concluída",
-  cancelled: "Cancelada",
 };
 
 const NEXT_STATUS: Record<UserTaskStatus, UserTaskStatus | null> = {
