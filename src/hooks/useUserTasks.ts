@@ -85,7 +85,7 @@ export function useMyInbox(includeCompleted = false) {
   const { user } = useAuth();
 
   const { data, loading, error, refetch } = useSupabaseQuery<InboxTask[]>({
-    queryKey: `my-inbox-${user?.id ?? "anon"}`,
+    queryKey: `my-inbox-${user?.id ?? "anon"}-${includeCompleted ? "all" : "open"}`,
     enabled: !!user,
     fetcher: async () => {
       const { data, error: rpcErr } = await supabase.rpc("get_my_inbox", {

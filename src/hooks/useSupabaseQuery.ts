@@ -76,7 +76,9 @@ export function useSupabaseQuery<T>(
     }
   }, []);
 
-  // Fetch inicial (e re-fetch quando enabled muda)
+  // Fetch inicial (e re-fetch quando `enabled` ou `queryKey` mudam).
+  // Incluir queryKey garante que mudanças de parâmetro embutidas na chave
+  // (ex.: includeFinalized/includeCompleted) disparem novo fetch.
   useEffect(() => {
     if (!enabled) {
       setData(null);
@@ -84,7 +86,8 @@ export function useSupabaseQuery<T>(
       return;
     }
     void doFetch();
-  }, [enabled, doFetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, doFetch, queryKey]);
 
   // Realtime subscription
   useEffect(() => {

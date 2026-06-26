@@ -57,7 +57,7 @@ export function useInterAssistantInbox(includeFinalized = false) {
   const { user } = useAuth();
 
   const { data, loading, error, refetch } = useSupabaseQuery<InterAssistantInboxItem[]>({
-    queryKey: `iar-inbox-${user?.id ?? "anon"}`,
+    queryKey: `iar-inbox-${user?.id ?? "anon"}-${includeFinalized ? "all" : "open"}`,
     enabled: !!user,
     fetcher: async () => {
       const { data, error: rpcErr } = await supabase.rpc(
