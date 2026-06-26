@@ -141,7 +141,7 @@ export default function AssignTaskPage() {
         area: selectedType?.area ?? undefined,
       });
       toast.success(`Tarefa criada! ID: ${taskId.slice(0, 8)}…`);
-      navigate("/sistema/equipe");
+      navigate("/sistema/kanban");
     } catch (e) {
       toast.error(`Erro: ${(e as Error).message}`);
     } finally {
@@ -161,7 +161,7 @@ export default function AssignTaskPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <button
             className="btn-voltar"
-            onClick={() => navigate("/sistema/equipe")}
+            onClick={() => navigate("/sistema/kanban")}
             style={{
               padding: "8px 16px", borderRadius: 8,
               border: "1px solid #25253a", background: "#11111a",

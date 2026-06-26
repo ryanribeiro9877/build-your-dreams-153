@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   Menu, AlertTriangle, AlertCircle, CheckCircle, Info,
-  Coins, UserPlus, Users, Network, ClipboardList,
+  Coins, UserPlus, Users, ClipboardList,
   MessageSquare, ShieldCheck, Lock, KanbanSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -154,15 +154,6 @@ export default function JurisTopBar({
 
           {isMaster && (
             <>
-              <button
-                type="button"
-                className="jc-btn-team-list"
-                onClick={() => navigate("/sistema/equipe")}
-                title="Painel de equipe e tarefas (apenas master)"
-              >
-                <Network size={15} strokeWidth={2.5} />
-                Equipe
-              </button>
               <button
                 type="button"
                 className="jc-btn-create-user"

@@ -316,6 +316,11 @@ export default function KanbanBoard() {
         />
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+          {isMaster && (
+            <button onClick={() => navigate("/sistema/equipe/atribuir")} style={btnPrimary} title="Atribuir uma tarefa a um membro da equipe">
+              + Atribuir tarefa
+            </button>
+          )}
           {canAdmin && board && (
             <button onClick={() => setShowAddTask(true)} style={btnGhost} title="Adicionar tarefa ao quadro">
               + Adicionar tarefa
