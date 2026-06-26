@@ -10,8 +10,25 @@ import {
 } from "@/hooks/useInterAssistant";
 import { toast } from "sonner";
 import type { InterAssistantStatus } from "@/types/jurisai";
+import {
+  uploadInterAssistantFile, getAttachmentUrl,
+  searchClients, listClientDocuments, clientDocToAttachment,
+  type IAAttachment, type ClientLite, type ClientDocLite,
+} from "@/hooks/useInterAssistantFiles";
 
 type TabKey = "inbox" | "outbox" | "new";
+
+function fmtSize(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function readAttachments(payload: Record<string, unknown> | null): IAAttachment[] {
+  const arr = (payload as { attachments?: unknown })?.attachments;
+  return Array.isArray(arr) ? (arr as IAAttachment[]) : [];
+}
 
 const STATUS_LABELS: Record<InterAssistantStatus, string> = {
   pending: "Pendente",
@@ -111,26 +128,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 // ─── INBOX (Recebidos) ────────────────────────────────────────────────────────
 function InboxTab() {
   const [includeFinalized, setIncludeFinalized] = useState(false);
-  const { items, loading } = useInterAssistantInbox(includeFinalized);
+  const { items, loading, refresh } = useInterAssistantInbox(includeFinalized);
   const [responding, setResponding] = useState<string | null>(null);
-  const [responseText, setResponseText] = useState("");
 
   if (loading) return <HexagonLoader variant="inline" label="Carregando" />;
-
-  const handleAnswer = async (id: string, status: "answered" | "denied") => {
-    try {
-      await answerInterAssistantRequest(
-        id,
-        { message: responseText.trim() || (status === "denied" ? "Pedido negado." : "Respondido.") },
-        status,
-      );
-      toast.success(status === "answered" ? "Pedido respondido!" : "Pedido negado.");
-      setResponding(null);
-      setResponseText("");
-    } catch (e) {
-      toast.error(`Erro: ${(e as Error).message}`);
-    }
-  };
 
   return (
     <>
@@ -167,29 +168,11 @@ function InboxTab() {
 
                 {canAnswer && (
                   isResponding ? (
-                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                      <textarea
-                        placeholder="Sua resposta..."
-                        value={responseText}
-                        onChange={(e) => setResponseText(e.target.value)}
-                        rows={3}
-                        style={textareaStyle}
-                      />
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => handleAnswer(item.id, "answered")} style={btnSuccess}>
-                          ✓ Enviar resposta
-                        </button>
-                        <button onClick={() => handleAnswer(item.id, "denied")} style={btnDanger}>
-                          ✗ Negar pedido
-                        </button>
-                        <button
-                          onClick={() => { setResponding(null); setResponseText(""); }}
-                          style={btnSecondary}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
+                    <ResponderForm
+                      requestId={item.id}
+                      onDone={() => { setResponding(null); void refresh(); }}
+                      onCancel={() => setResponding(null)}
+                    />
                   ) : (
                     <div style={{ marginTop: 8 }}>
                       <button onClick={() => setResponding(item.id)} style={btnPrimary}>
@@ -221,6 +204,7 @@ function OutboxTab() {
       {items.map(item => {
         const msg = (item.payload as { message?: string })?.message || "(sem mensagem)";
         const response = (item.response_payload as { message?: string })?.message;
+        const respAttachments = readAttachments(item.response_payload);
         return (
           <div key={item.id} style={cardStyle(item.status)}>
             <Header
@@ -233,12 +217,13 @@ function OutboxTab() {
               <span style={{ color: "#7a7a92", fontWeight: 400 }}> ({item.to_user_role_label})</span>
             </div>
             <Quote text={msg} />
-            {response && (
+            {(response || respAttachments.length > 0) && (
               <>
                 <div style={{ fontSize: 11, color: "#7a7a92", marginTop: 12, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   Resposta:
                 </div>
-                <Quote text={response} accent="#22c55e" />
+                {response && <Quote text={response} accent="#22c55e" />}
+                {respAttachments.length > 0 && <AttachmentList attachments={respAttachments} />}
               </>
             )}
             <Meta items={[
@@ -433,6 +418,177 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// ─── Formulário de resposta (com anexos) ──────────────────────────────────────
+function ResponderForm({ requestId, onDone, onCancel }: {
+  requestId: string; onDone: () => void; onCancel: () => void;
+}) {
+  const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<IAAttachment[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Seletor de documentos do cliente
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [clientTerm, setClientTerm] = useState("");
+  const [clients, setClients] = useState<ClientLite[]>([]);
+  const [selectedClient, setSelectedClient] = useState<ClientLite | null>(null);
+  const [clientDocs, setClientDocs] = useState<ClientDocLite[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const addAttachment = (a: IAAttachment) =>
+    setAttachments(prev => prev.some(x => x.bucket === a.bucket && x.path === a.path) ? prev : [...prev, a]);
+  const removeAttachment = (i: number) => setAttachments(prev => prev.filter((_, idx) => idx !== i));
+
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files)) addAttachment(await uploadInterAssistantFile(requestId, f));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const doSearchClients = async () => {
+    setSearching(true);
+    try { setClients(await searchClients(clientTerm)); }
+    finally { setSearching(false); }
+  };
+
+  const pickClient = async (c: ClientLite) => {
+    setSelectedClient(c);
+    setClientDocs(await listClientDocuments(c.id));
+  };
+
+  const send = async (status: "answered" | "denied") => {
+    setBusy(true);
+    try {
+      await answerInterAssistantRequest(
+        requestId,
+        { message: message.trim() || (status === "denied" ? "Pedido negado." : "Respondido."), attachments },
+        status,
+      );
+      toast.success(status === "answered" ? "Resposta enviada!" : "Pedido negado.");
+      onDone();
+    } catch (e) {
+      toast.error(`Erro: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+      <textarea
+        placeholder="Sua resposta..."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        rows={3}
+        style={textareaStyle}
+      />
+
+      {attachments.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {attachments.map((a, i) => (
+            <div key={`${a.bucket}-${a.path}`} style={attachRowStyle}>
+              <span style={{ fontSize: 12 }}>{a.source === "client_doc" ? "🗂" : "📎"}</span>
+              <span style={{ flex: 1, fontSize: 12, color: "#c4c4d4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+              <span style={{ fontSize: 10, color: "#7a7a92" }}>{fmtSize(a.size)}</span>
+              <button onClick={() => removeAttachment(i)} style={removeBtnStyle} title="Remover">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <label style={{ ...btnSecondary, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {uploading ? "Enviando..." : "📎 Anexar arquivo"}
+          <input type="file" multiple style={{ display: "none" }} onChange={(e) => onFiles(e.target.files)} disabled={uploading} />
+        </label>
+        <button type="button" onClick={() => setPickerOpen(o => !o)} style={btnSecondary}>
+          🗂 Documento de cliente
+        </button>
+      </div>
+
+      {pickerOpen && (
+        <div style={pickerBoxStyle}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              placeholder="Buscar cliente por nome..."
+              value={clientTerm}
+              onChange={(e) => setClientTerm(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void doSearchClients(); } }}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <button type="button" onClick={() => void doSearchClients()} style={btnSecondary}>Buscar</button>
+          </div>
+          {searching && <div style={{ fontSize: 12, color: "#7a7a92", marginTop: 6 }}>Buscando…</div>}
+          {!selectedClient && clients.length > 0 && (
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+              {clients.map(c => (
+                <button key={c.id} type="button" onClick={() => void pickClient(c)} style={listItemStyle}>{c.full_name}</button>
+              ))}
+            </div>
+          )}
+          {selectedClient && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: "#facc15", marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>📁 {selectedClient.full_name}</span>
+                <button type="button" onClick={() => { setSelectedClient(null); setClientDocs([]); }} style={{ ...removeBtnStyle, fontSize: 11 }}>trocar</button>
+              </div>
+              {clientDocs.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#7a7a92" }}>Nenhum documento cadastrado para este cliente.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {clientDocs.map(d => (
+                    <div key={d.id} style={attachRowStyle}>
+                      <span style={{ flex: 1, fontSize: 12, color: "#c4c4d4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {d.document_name}{d.document_type ? ` · ${d.document_type}` : ""}
+                      </span>
+                      <button type="button" onClick={() => addAttachment(clientDocToAttachment(d))} style={btnPrimary}>+ Anexar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => void send("answered")} disabled={busy || uploading} style={btnSuccess}>
+          {busy ? "Enviando..." : "✓ Enviar resposta"}
+        </button>
+        <button onClick={() => void send("denied")} disabled={busy} style={btnDanger}>✗ Negar pedido</button>
+        <button onClick={onCancel} style={btnSecondary}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Lista de anexos com download ─────────────────────────────────────────────
+function AttachmentList({ attachments }: { attachments: IAAttachment[] }) {
+  const open = async (a: IAAttachment) => {
+    const url = await getAttachmentUrl(a);
+    if (url) window.open(url, "_blank", "noopener");
+    else toast.error("Não foi possível gerar o link de download.");
+  };
+  return (
+    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      {attachments.map((a, i) => (
+        <button key={`${a.bucket}-${a.path}-${i}`} type="button" onClick={() => void open(a)} style={downloadRowStyle}>
+          <span>{a.source === "client_doc" ? "🗂" : "📎"}</span>
+          <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+          <span style={{ fontSize: 10, color: "#7a7a92" }}>{fmtSize(a.size)}</span>
+          <span style={{ fontSize: 11, color: "#60a5fa" }}>⬇ baixar</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const labelStyle: React.CSSProperties = {
   display: "block", fontSize: 11, color: "#9898b0",
   textTransform: "uppercase", letterSpacing: "0.06em",
@@ -464,4 +620,27 @@ const btnDanger: React.CSSProperties = {
 };
 const btnSecondary: React.CSSProperties = {
   ...btnBase, border: "1px solid #25253a", background: "#16161f", color: "#c4c4d4",
+};
+const attachRowStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8,
+  padding: "6px 10px", borderRadius: 6,
+  background: "#16161f", border: "1px solid #25253a",
+};
+const removeBtnStyle: React.CSSProperties = {
+  border: "none", background: "transparent", color: "#fca5a5",
+  cursor: "pointer", fontSize: 12, padding: "2px 4px",
+};
+const pickerBoxStyle: React.CSSProperties = {
+  padding: 12, borderRadius: 8, background: "#0f0f17", border: "1px solid #25253a",
+};
+const listItemStyle: React.CSSProperties = {
+  textAlign: "left", padding: "6px 10px", borderRadius: 6,
+  background: "#16161f", border: "1px solid #25253a", color: "#c4c4d4",
+  cursor: "pointer", fontSize: 13,
+};
+const downloadRowStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8,
+  padding: "8px 10px", borderRadius: 6,
+  background: "#16161f", border: "1px solid #25253a", color: "#c4c4d4",
+  cursor: "pointer", fontSize: 12, width: "100%",
 };
