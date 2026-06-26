@@ -62,25 +62,6 @@ export default function AdminEmployees() {
           ← Voltar
         </button>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: gold, margin: 0 }}>Funcionários</h1>
-        {isMaster && (
-          <button
-            type="button"
-            onClick={() => navigate("/sistema?criar=funcionario")}
-            style={{
-              marginLeft: "auto",
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: `1px solid ${gold}`,
-              background: "linear-gradient(145deg, rgba(234,179,8,0.2), rgba(250,204,21,0.1))",
-              color: "#facc15",
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 700,
-            }}
-          >
-            Criar Funcionário
-          </button>
-        )}
       </div>
 
       <p style={{ fontSize: 12, color: text3, marginBottom: 16, marginTop: 0 }}>
