@@ -1,13 +1,18 @@
 import React from "react";
-import TaskQueuesPanel from "@/components/TaskQueuesPanel";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle, AlertCircle, CheckCircle, Info,
   Zap, BarChart3, Circle, ListTodo, FileText,
 } from "lucide-react";
+import { HexagonLoader } from "@/components/HexagonLoader";
+import { useMyInbox, type InboxTask } from "@/hooks/useUserTasks";
+import { useMyProcesses } from "@/hooks/useMyProcesses";
+import { USER_TASK_STATUS_LABELS, OPEN_QUEUE_STATUSES } from "@/lib/userTaskLabels";
+import type { TaskPriority } from "@/types/jurisai";
 import type { Agent } from "./types";
 import {
-  PROCESSES, ALERTS, ROLE_ICONS,
-  getCaseAreaChip, getAgentLoad, getTotalCapacity, getInitials, roleLabelsMap,
+  ROLE_ICONS,
+  getAgentLoad, getTotalCapacity, getInitials, roleLabelsMap,
 } from "./constants";
 
 /* ── Alert Icon helper ── */
@@ -17,6 +22,52 @@ function AlertIcon({ type }: { type: string }) {
   if (type === "warning") return <AlertCircle size={size} style={{ color: "#EAB308" }} />;
   if (type === "success") return <CheckCircle size={size} style={{ color: "#FEF9C3" }} />;
   return <Info size={size} style={{ color: "#FDE047" }} />;
+}
+
+/* ── Cores/labels de prioridade ── */
+const PRIO_COLORS: Record<TaskPriority, string> = {
+  critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280",
+};
+const PRIO_LABELS: Record<TaskPriority, string> = {
+  critical: "CRÍTICO", high: "ALTA", medium: "MÉDIA", low: "BAIXA",
+};
+
+function formatDeadline(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+/* ── Card de tarefa (usado em Filas e Alertas) ── */
+function TaskCard({ task, onOpen }: { task: InboxTask; onOpen: () => void }) {
+  return (
+    <div
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+      style={{
+        background: "var(--bg3)",
+        border: "1px solid var(--border)",
+        borderLeft: `3px solid ${PRIO_COLORS[task.priority]}`,
+        borderRadius: "0 8px 8px 0", padding: "10px 12px", marginBottom: 6,
+        cursor: "pointer", transition: "background-color 0.2s",
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text1)", marginBottom: 4, lineHeight: 1.3 }}>
+        {task.title}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 9, color: "var(--text3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+          {task.task_type_label}
+        </span>
+        <span style={{
+          fontSize: 7, padding: "1px 5px", borderRadius: 3,
+          background: `${PRIO_COLORS[task.priority]}18`, color: PRIO_COLORS[task.priority],
+          fontWeight: 600, textTransform: "uppercase", fontFamily: "var(--font-mono)", flexShrink: 0,
+        }}>{PRIO_LABELS[task.priority]}</span>
+      </div>
+    </div>
+  );
 }
 
 export interface JurisRightPanelProps {
@@ -44,6 +95,17 @@ export default function JurisRightPanel({
   visibility,
   hasRole,
 }: JurisRightPanelProps) {
+  const navigate = useNavigate();
+  const { tasks, loading: tasksLoading } = useMyInbox(false);
+  const { processes, loading: procLoading } = useMyProcesses();
+
+  const openKanban = () => navigate("/sistema/kanban");
+
+  // Alertas: tarefas vencidas ou de prioridade crítica (vencidas primeiro).
+  const alertTasks = tasks
+    .filter(t => t.is_overdue || t.priority === "critical")
+    .sort((a, b) => Number(b.is_overdue) - Number(a.is_overdue));
+
   return (
     <>
       <aside
@@ -67,49 +129,119 @@ export default function JurisRightPanel({
           ))}
         </div>
         <div className="jc-right-body">
-          {rightTab === "filas" && <TaskQueuesPanel />}
-
-          {rightTab === "processos" && (
-            <>
-              <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                {PROCESSES.length} processos ativos
-              </div>
-              {PROCESSES.map(p => (
-                <div className="jc-case-card" key={p.id}>
-                  <div className="jc-case-num">Proc. #{p.id} · {p.tribunal}</div>
-                  <div className="jc-case-name">{p.client}</div>
-                  <div className="jc-case-row">
-                    <span style={{
-                      fontSize: 10, padding: "2px 7px", borderRadius: 4,
-                      ...getCaseAreaChip(p.area),
-                    }}>{p.area}</span>
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#FACC15", fontWeight: 600 }}>{p.value}</span>
-                  </div>
-                  <div className="jc-case-prazo-row">
-                    <span style={{ color: p.prazo === "HOJE" ? "#FACC15" : "var(--text3)", display: "flex", alignItems: "center", gap: 3 }}>
-                      {p.prazo === "HOJE" ? <><AlertTriangle size={10} /> Prazo HOJE</> : <>Prazo em {p.prazo}</>}
-                    </span>
-                    <div style={{ flex: 1 }} />
-                    <span className={`jc-process-badge ${p.status}`}>{p.status}</span>
-                  </div>
+          {/* ── FILAS: minhas tarefas abertas, agrupadas por status ── */}
+          {rightTab === "filas" && (
+            tasksLoading ? <HexagonLoader variant="compact" label="Carregando tarefas..." /> : (
+              <>
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                  {tasks.length} {tasks.length === 1 ? "tarefa atribuída" : "tarefas atribuídas"}
                 </div>
-              ))}
-            </>
+                {OPEN_QUEUE_STATUSES.map(status => {
+                  const items = tasks.filter(t => t.status === status);
+                  if (!items.length) return null;
+                  return (
+                    <div key={status} style={{ marginBottom: 14 }}>
+                      <div style={{
+                        fontSize: 11, fontWeight: 600, color: "var(--text1)", marginBottom: 6,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                      }}>
+                        <span>{USER_TASK_STATUS_LABELS[status]}</span>
+                        <span style={{
+                          fontSize: 9, padding: "2px 8px", borderRadius: 10,
+                          background: "rgba(234,179,8,0.10)", color: "var(--gold)",
+                          border: "1px solid rgba(234,179,8,0.28)", fontFamily: "var(--font-mono)",
+                        }}>{items.length}</span>
+                      </div>
+                      {items.map(task => (
+                        <TaskCard key={task.id} task={task} onOpen={openKanban} />
+                      ))}
+                    </div>
+                  );
+                })}
+                {tasks.length === 0 && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", textAlign: "center", padding: "16px 0", fontStyle: "italic" }}>
+                    Nenhuma tarefa atribuída
+                  </div>
+                )}
+              </>
+            )
           )}
 
-          {rightTab === "alertas" && (
-            <>
-              <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                {ALERTS.length} alertas
-              </div>
-              {ALERTS.map((a, i) => (
-                <div key={i} className={`jc-alert-item ${a.type}`}>
-                  <AlertIcon type={a.type} />
-                  <div className="jc-alert-text">{a.text}</div>
-                  <div className="jc-alert-time">{a.time}</div>
+          {/* ── PROCESSOS: casos do usuário (tabela processes) ── */}
+          {rightTab === "processos" && (
+            procLoading ? <HexagonLoader variant="compact" label="Carregando processos..." /> : (
+              <>
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                  {processes.length} {processes.length === 1 ? "processo" : "processos"}
                 </div>
-              ))}
-            </>
+                {processes.map(p => {
+                  const hearingPast = p.next_hearing_date ? new Date(p.next_hearing_date) < new Date() : false;
+                  return (
+                    <div className="jc-case-card" key={p.id}>
+                      <div className="jc-case-num">Proc. {p.process_number}</div>
+                      <div className="jc-case-name">{p.client_name}</div>
+                      <div className="jc-case-row">
+                        <span className="jc-process-badge">{p.status}</span>
+                        {p.responsible_lawyer && (
+                          <span style={{ fontSize: 10, color: "var(--text3)" }}>{p.responsible_lawyer}</span>
+                        )}
+                      </div>
+                      {p.next_hearing_date && (
+                        <div className="jc-case-prazo-row">
+                          <span style={{ color: hearingPast ? "#FACC15" : "var(--text3)", display: "flex", alignItems: "center", gap: 3 }}>
+                            <AlertTriangle size={10} /> Audiência: {new Date(p.next_hearing_date).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {processes.length === 0 && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", textAlign: "center", padding: "16px 0", fontStyle: "italic" }}>
+                    Nenhum processo cadastrado
+                  </div>
+                )}
+              </>
+            )
+          )}
+
+          {/* ── ALERTAS: tarefas vencidas ou críticas ── */}
+          {rightTab === "alertas" && (
+            tasksLoading ? <HexagonLoader variant="compact" label="Carregando alertas..." /> : (
+              <>
+                <div style={{ fontSize: 10, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                  {alertTasks.length} {alertTasks.length === 1 ? "alerta" : "alertas"}
+                </div>
+                {alertTasks.map(t => {
+                  const type = t.is_overdue ? "fatal" : "warning";
+                  return (
+                    <div
+                      key={t.id}
+                      className={`jc-alert-item ${type}`}
+                      onClick={openKanban}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === "Enter") openKanban(); }}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <AlertIcon type={type} />
+                      <div className="jc-alert-text">
+                        {t.title}
+                        <span style={{ display: "block", fontSize: 9, color: "var(--text3)", marginTop: 2 }}>
+                          {t.is_overdue ? "Prazo vencido" : "Prioridade crítica"} · {USER_TASK_STATUS_LABELS[t.status]}
+                        </span>
+                      </div>
+                      <div className="jc-alert-time">{formatDeadline(t.deadline_at)}</div>
+                    </div>
+                  );
+                })}
+                {alertTasks.length === 0 && (
+                  <div style={{ fontSize: 10, color: "var(--text3)", textAlign: "center", padding: "16px 0", fontStyle: "italic" }}>
+                    Nenhum alerta
+                  </div>
+                )}
+              </>
+            )
           )}
 
           {rightTab === "agentes" && (() => {
