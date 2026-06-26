@@ -572,8 +572,18 @@ function ResponderForm({ requestId, onDone, onCancel }: {
 function AttachmentList({ attachments }: { attachments: IAAttachment[] }) {
   const open = async (a: IAAttachment) => {
     const url = await getAttachmentUrl(a);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.error("Não foi possível gerar o link de download.");
+    if (!url) {
+      toast.error("Não foi possível gerar o link de download.");
+      return;
+    }
+    // Dispara download automático (o signed URL já vem com Content-Disposition: attachment).
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = a.name;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
   return (
     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>

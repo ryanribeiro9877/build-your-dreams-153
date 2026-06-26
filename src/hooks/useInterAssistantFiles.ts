@@ -50,9 +50,19 @@ export async function uploadInterAssistantFile(requestId: string, file: File): P
   return { bucket: UPLOAD_BUCKET, path, name: file.name, size: file.size, mime: file.type || null, source: "upload" };
 }
 
-/** Gera URL assinada (1h) para baixar um anexo (de qualquer um dos buckets). */
-export async function getAttachmentUrl(att: { bucket: string; path: string }): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(att.bucket).createSignedUrl(att.path, 3600);
+/**
+ * Gera URL assinada (1h) para um anexo. Por padrão força o download
+ * (Content-Disposition: attachment) usando o nome do arquivo, em vez de
+ * abrir o arquivo no navegador.
+ */
+export async function getAttachmentUrl(
+  att: { bucket: string; path: string; name?: string },
+  forceDownload = true,
+): Promise<string | null> {
+  const options = forceDownload ? { download: att.name || true } : undefined;
+  const { data, error } = await supabase.storage
+    .from(att.bucket)
+    .createSignedUrl(att.path, 3600, options);
   if (error) return null;
   return data?.signedUrl ?? null;
 }
