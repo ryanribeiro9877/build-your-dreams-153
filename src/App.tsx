@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
@@ -10,36 +10,61 @@ import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
 
-const Index = lazy(() => import("./pages/Index.tsx"));
-const Auth = lazy(() => import("./pages/Auth.tsx"));
-const Clients = lazy(() => import("./pages/Clients.tsx"));
-const ClientDetails = lazy(() => import("./pages/ClientDetails.tsx"));
-const Admin = lazy(() => import("./pages/Admin.tsx"));
-const Profile = lazy(() => import("./pages/Profile.tsx"));
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword.tsx"));
-const DefinePassword = lazy(() => import("./pages/DefinePassword.tsx"));
-const AdminEmployees = lazy(() => import("./pages/AdminEmployees.tsx"));
-const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
-const OrgChart = lazy(() => import("./pages/OrgChart.tsx"));
-const EfficiencyKPIs = lazy(() => import("./pages/EfficiencyKPIs.tsx"));
-const Tokens = lazy(() => import("./pages/Tokens.tsx"));
-const AdminTokens = lazy(() => import("./pages/AdminTokens.tsx"));
-const AdminUiEvents = lazy(() => import("./pages/AdminUiEvents.tsx"));
-const AdminMaster = lazy(() => import("./pages/AdminMaster.tsx"));
-const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
-const ProvidersConfig = lazy(() => import("./pages/ProvidersConfig.tsx"));
-const AgentsAdmin = lazy(() => import("./pages/AgentsAdmin.tsx"));
-const AgentDetail = lazy(() => import("./pages/AgentDetail.tsx"));
-const ChatWithAgent = lazy(() => import("./pages/ChatWithAgent.tsx"));
-const MyInbox = lazy(() => import("./pages/MyInbox.tsx"));
-const TeamDashboard = lazy(() => import("./pages/TeamDashboard.tsx"));
-const KanbanBoard = lazy(() => import("./pages/KanbanBoard.tsx"));
-const AssignTask = lazy(() => import("./pages/AssignTask.tsx"));
-const ValidationQueue = lazy(() => import("./pages/ValidationQueue.tsx"));
-const InterAssistantInbox = lazy(() => import("./pages/InterAssistantInbox.tsx"));
-const CronJobs = lazy(() => import("./pages/CronJobs.tsx"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+// E5: chunk lazy obsoleto após um redeploy (hash mudou na Vercel) faz o import()
+// rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
+// Aqui tentamos UM reload completo (busca o manifest novo) antes de desistir;
+// na 2ª falha, deixa o Sentry.ErrorBoundary tratar. Recupera TODAS as rotas lazy.
+function lazyWithRetry<T extends ComponentType<unknown>>(factory: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    const KEY = "jurisai:chunk-reload";
+    try {
+      const mod = await factory();
+      try { sessionStorage.removeItem(KEY); } catch { /* noop */ }
+      return mod;
+    } catch (err) {
+      let alreadyReloaded = false;
+      try { alreadyReloaded = sessionStorage.getItem(KEY) === "1"; } catch { /* noop */ }
+      if (!alreadyReloaded) {
+        try { sessionStorage.setItem(KEY, "1"); } catch { /* noop */ }
+        window.location.reload();
+        // Promise que nunca resolve: a página vai recarregar antes de renderizar.
+        return new Promise<{ default: T }>(() => { /* noop */ });
+      }
+      throw err;
+    }
+  });
+}
+
+const Index = lazyWithRetry(() => import("./pages/Index.tsx"));
+const Auth = lazyWithRetry(() => import("./pages/Auth.tsx"));
+const Clients = lazyWithRetry(() => import("./pages/Clients.tsx"));
+const ClientDetails = lazyWithRetry(() => import("./pages/ClientDetails.tsx"));
+const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
+const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
+const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword.tsx"));
+const DefinePassword = lazyWithRetry(() => import("./pages/DefinePassword.tsx"));
+const AdminEmployees = lazyWithRetry(() => import("./pages/AdminEmployees.tsx"));
+const LandingPage = lazyWithRetry(() => import("./pages/LandingPage.tsx"));
+const OrgChart = lazyWithRetry(() => import("./pages/OrgChart.tsx"));
+const EfficiencyKPIs = lazyWithRetry(() => import("./pages/EfficiencyKPIs.tsx"));
+const Tokens = lazyWithRetry(() => import("./pages/Tokens.tsx"));
+const AdminTokens = lazyWithRetry(() => import("./pages/AdminTokens.tsx"));
+const AdminUiEvents = lazyWithRetry(() => import("./pages/AdminUiEvents.tsx"));
+const AdminMaster = lazyWithRetry(() => import("./pages/AdminMaster.tsx"));
+const AdminNotifications = lazyWithRetry(() => import("./pages/AdminNotifications.tsx"));
+const ProvidersConfig = lazyWithRetry(() => import("./pages/ProvidersConfig.tsx"));
+const AgentsAdmin = lazyWithRetry(() => import("./pages/AgentsAdmin.tsx"));
+const AgentDetail = lazyWithRetry(() => import("./pages/AgentDetail.tsx"));
+const ChatWithAgent = lazyWithRetry(() => import("./pages/ChatWithAgent.tsx"));
+const MyInbox = lazyWithRetry(() => import("./pages/MyInbox.tsx"));
+const TeamDashboard = lazyWithRetry(() => import("./pages/TeamDashboard.tsx"));
+const KanbanBoard = lazyWithRetry(() => import("./pages/KanbanBoard.tsx"));
+const AssignTask = lazyWithRetry(() => import("./pages/AssignTask.tsx"));
+const ValidationQueue = lazyWithRetry(() => import("./pages/ValidationQueue.tsx"));
+const InterAssistantInbox = lazyWithRetry(() => import("./pages/InterAssistantInbox.tsx"));
+const CronJobs = lazyWithRetry(() => import("./pages/CronJobs.tsx"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();
 

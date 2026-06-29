@@ -333,6 +333,15 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   const typedGreeting = useTypewriter(greetingFull, !loading);
   const greetingDone = typedGreeting.length >= greetingFull.length;
 
+  // E7: assim que o composer é revelado (saudação digitada, fora do modo gravação),
+  // foca o textarea. Sem isto, o wrapper fica com `pointer-events: none`/opacity 0
+  // enquanto o título anima (~1,2s) e as primeiras teclas/Enter se perdiam.
+  useEffect(() => {
+    if (!loading && greetingDone && !isRecording) {
+      textareaRef.current?.focus();
+    }
+  }, [loading, greetingDone, isRecording]);
+
   if (loading) {
     return (
       <div className="ws-root">

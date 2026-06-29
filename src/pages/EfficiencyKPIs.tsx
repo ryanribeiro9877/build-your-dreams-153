@@ -61,11 +61,22 @@ interface OrchLogRow {
   details?: unknown;
 }
 
+/** E8: evento REAL de orquestração — vem de `orchestration_runs` (não do morto `agent_orchestration_log`). */
+interface OrchRunRow {
+  id: string;
+  status?: string;
+  original_message?: string | null;
+  chain?: unknown;
+  error?: string | null;
+  created_at: string;
+}
+
 export default function EfficiencyKPIs() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<EfficiencyTaskRow[]>([]);
   const [orchLogs, setOrchLogs] = useState<OrchLogRow[]>([]);
+  const [orchRuns, setOrchRuns] = useState<OrchRunRow[]>([]); // E8: eventos reais de orquestração
   const [loading, setLoading] = useState(true);
 
   const [filterDept, setFilterDept] = useState("all");
@@ -74,12 +85,15 @@ export default function EfficiencyKPIs() {
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const [tasksRes, logsRes] = await Promise.all([
+    const [tasksRes, logsRes, runsRes] = await Promise.all([
       supabase.from("agent_tasks").select("*").eq("user_id", user.id),
       supabase.from("agent_orchestration_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50),
+      // E8: eventos reais de orquestração (a tabela agent_orchestration_log nunca recebe dados).
+      supabase.from("orchestration_runs").select("id,status,original_message,chain,error,created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
     ]);
     setTasks((tasksRes.data as EfficiencyTaskRow[]) || []);
     setOrchLogs((logsRes.data as OrchLogRow[]) || []);
+    setOrchRuns((runsRes.data as OrchRunRow[]) || []);
     setLoading(false);
   }, [user]);
 
@@ -88,6 +102,7 @@ export default function EfficiencyKPIs() {
     const channel = supabase.channel("efficiency_kpis")
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_tasks" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "agent_orchestration_log" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orchestration_runs" }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
@@ -346,32 +361,40 @@ export default function EfficiencyKPIs() {
           <div style={{ fontSize: 13, fontWeight: 600, color: "#e8e8ed", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
             <ClipboardList size={16} /> Últimos Eventos de Orquestração
           </div>
-          {orchLogs.length === 0 && (
+          {orchRuns.length === 0 && (
             <div style={{ fontSize: 12, color: "#888", textAlign: "center", padding: 20 }}>
               Nenhum evento de orquestração registrado ainda
             </div>
           )}
-          {orchLogs.slice(0, 10).map((log, i) => (
-            <div key={log.id || i} style={{
-              display: "flex", gap: 10, padding: "8px 0", alignItems: "center",
-              borderBottom: i < 9 ? "1px solid rgba(255,255,255,0.04)" : "none",
-            }}>
-              <span style={{
-                fontSize: 9, padding: "2px 6px", borderRadius: 4,
-                background: log.action?.includes("critical") ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
-                color: log.action?.includes("critical") ? "#ff8080" : "#60a5fa",
-                fontFamily: "monospace", whiteSpace: "nowrap",
-              }}>{log.action}</span>
-              <span style={{ fontSize: 11, color: "#aaa", flex: 1 }}>
-                {typeof log.details === "object" && log.details !== null && "message" in log.details
-                  ? String((log.details as { message?: unknown }).message)
-                  : JSON.stringify(log.details ?? null).slice(0, 80)}
-              </span>
-              <span style={{ fontSize: 9, color: "#666", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                {new Date(log.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-          ))}
+          {orchRuns.slice(0, 10).map((run, i) => {
+            const isFailed = run.status === "failed";
+            const isDone = run.status === "done";
+            const finalAgent = Array.isArray(run.chain)
+              ? (run.chain as { agent?: string }[]).filter((c) => c && c.agent).slice(-1)[0]?.agent
+              : undefined;
+            return (
+              <div key={run.id || i} style={{
+                display: "flex", gap: 10, padding: "8px 0", alignItems: "center",
+                borderBottom: i < 9 ? "1px solid rgba(255,255,255,0.04)" : "none",
+              }}>
+                <span style={{
+                  fontSize: 9, padding: "2px 6px", borderRadius: 4,
+                  background: isFailed ? "rgba(239,68,68,0.15)" : isDone ? "rgba(45,212,160,0.15)" : "rgba(59,130,246,0.15)",
+                  color: isFailed ? "#ff8080" : isDone ? "#2dd4a0" : "#60a5fa",
+                  fontFamily: "monospace", whiteSpace: "nowrap",
+                }}>{run.status || "—"}</span>
+                <span style={{ fontSize: 11, color: "#aaa", flex: 1 }}>
+                  {finalAgent ? `${finalAgent} · ` : ""}
+                  {isFailed && run.error
+                    ? String(run.error).slice(0, 80)
+                    : String(run.original_message ?? "").slice(0, 90)}
+                </span>
+                <span style={{ fontSize: 9, color: "#666", fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                  {new Date(run.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

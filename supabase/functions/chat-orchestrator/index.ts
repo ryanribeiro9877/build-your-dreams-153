@@ -91,6 +91,15 @@ function errResp(status: number, code: string, message: string) {
 }
 
 const MAX_ITERATIONS = 2;
+// E1: orçamento de rodadas do loop CONSULTIVO (validador LLM N2/N1). Separado do
+// loop mecânico (MAX_ITERATIONS). Quando o consultivo reprova com feedback, a peça
+// volta ao N3 para regenerar até este teto; esgotado, anexa [REVISAR] (rede final).
+const MAX_CONSULTIVE_ITERATIONS = Number(Deno.env.get("MAX_CONSULTIVE_ITERATIONS")) || 1;
+// E2/E12: roteamento cross-área. Quando o pool de especialistas do PRÓPRIO usuário não
+// cobre a matéria classificada (ou está vazio, ex.: Tecnologia), amplia os candidatos
+// com especialistas da mesma matéria de outros donos (firm-wide). Só ADICIONA candidatos
+// (o Diretor continua escolhendo). Reversível por env (default ligado).
+const CROSS_AREA_ROUTING = (Deno.env.get("CROSS_AREA_ROUTING") ?? "true").toLowerCase() !== "false";
 
 // Timeout das chamadas de LLM. NÃO impomos limite artificial baixo: deixamos cada
 // passo levar o tempo que precisar, até o teto da plataforma (wall-clock do Edge
@@ -329,6 +338,21 @@ async function loadSubAgents(admin: SupabaseClient, ownerUserId: string, roles: 
   const { data } = await admin.from("agents")
     .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit")
     .eq("owner_user_id", ownerUserId).eq("is_active", true).in("role", roles);
+  return ((data as unknown as AgentRow[]) || []);
+}
+
+// E2/E12: especialistas firm-wide (de QUALQUER dono), opcionalmente filtrados pela
+// matéria (ilike no nome, ex.: "%Consumidor%") e excluindo o dono do próprio usuário.
+// Usa o client `admin` (service-role) — leitura cross-owner é intencional aqui.
+async function loadFirmSpecialists(
+  admin: SupabaseClient, opts: { materia?: string | null; excludeOwner?: string | null },
+): Promise<AgentRow[]> {
+  let q = admin.from("agents")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit")
+    .eq("is_active", true).eq("role", "specialist");
+  if (opts.materia) q = q.ilike("name", `%${opts.materia}%`);
+  if (opts.excludeOwner) q = q.neq("owner_user_id", opts.excludeOwner);
+  const { data } = await q;
   return ((data as unknown as AgentRow[]) || []);
 }
 
@@ -1131,6 +1155,29 @@ function buildDraftingRules(): string {
     "═══ FIM DAS REGRAS DE REDAÇÃO ═══\n";
 }
 
+// E9/E13: diretrizes INVIOLÁVEIS aplicadas a TODA saída do N3 (peça OU consulta,
+// COM ou SEM documentos). Diferente de buildDraftingRules (que só entra quando há
+// documentos do caso), este bloco é sempre anexado ao system do especialista.
+function buildUniversalGuardrails(): string {
+  return "\n\n═══ DIRETRIZES INVIOLÁVEIS (toda peça e toda resposta) ═══\n" +
+    "A. FERRAMENTA INTERNA — VOCÊ É O ESPECIALISTA: o destinatário é um advogado/operador do " +
+    "próprio escritório. NUNCA recomende 'procure um advogado', 'consulte um advogado especializado', " +
+    "'busque orientação jurídica' ou equivalente. Entregue diretamente a análise/peça com a fundamentação.\n" +
+    "B. NÃO INVENTAR PARTES/EMPRESAS: use APENAS nomes de partes, réus, empresas, valores e números de " +
+    "contrato/processo que constem na solicitação ou nos documentos do caso. É PROIBIDO introduzir nomes de " +
+    "empresas/réus (bancos, seguradoras, etc.) que não foram fornecidos. Dado ausente → escreva [A PREENCHER: ...]. " +
+    "Nunca use o nome do advogado/dono do agente como se fosse a parte.\n" +
+    "C. PRECISÃO STJ × STF (recursos excepcionais) — não confunda os institutos:\n" +
+    "   • Recurso ESPECIAL (STJ, art. 105, III, CF): cabe por violação de LEI FEDERAL ou divergência " +
+    "jurisprudencial; exige PREQUESTIONAMENTO. NÃO mencione 'repercussão geral' nem 'violação direta à " +
+    "Constituição' no recurso especial — isso é do extraordinário.\n" +
+    "   • Recurso EXTRAORDINÁRIO (STF, art. 102, III, CF): cabe por ofensa DIRETA à Constituição e exige " +
+    "REPERCUSSÃO GERAL.\n" +
+    "   • 'Recurso repetitivo' (art. 1.036 do CPC) é técnica de julgamento por amostragem no STJ — NÃO é " +
+    "requisito de admissibilidade do recurso individual. Aplique cada instituto no tribunal correto.\n" +
+    "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
+}
+
 // ─── Caminho B: geração da peça em BLOCOS (uma chamada por seção) ─────────────
 // Cada bloco redige SOMENTE a sua seção; ao final são concatenados num único
 // documento. Só agentes redatores (max_tokens alto) entram no modo segmentado.
@@ -1299,6 +1346,27 @@ REGRAS DE ROTEAMENTO POR INTENCAO (obedeça rigorosamente):
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
 `;
 
+// E2: classificação DETERMINÍSTICA da matéria (espelha a Regra 5 do ROUTING_INTENT_RULES).
+// Retorna o rótulo canônico que casa com o nome dos especialistas ("Especialista
+// Confecção <Matéria>"), ou null se não der para classificar com segurança.
+function classifyMateria(msg: string): string | null {
+  const m = (msg || "").toLowerCase();
+  // Ordem importa: sinais mais específicos primeiro.
+  if (/negativ|protesto|serasa|\bspc\b|c[oó]digo de defesa|\bcdc\b|rela[çc][ãa]o de consumo|produto|servi[çc]o|v[ií]cio do produto|cobran[çc]a indevida/.test(m)) return "Consumidor";
+  if (/plano de sa[uú]de|conv[êe]nio m[ée]dico|cobertura|car[êe]ncia|rol da ans|seguro sa[uú]de/.test(m)) return "Plano de Saúde";
+  if (/banc[áa]rio|\bbanco\b|cart[ãa]o|empr[ée]stimo|consignado|cr[ée]dito|capitaliza|revisional|juros abusiv|\brmc\b|\brcc\b|c[ée]dula de cr[ée]dito/.test(m)) return "Bancário";
+  if (/previdenci|\binss\b|aposentadoria|benef[íi]cio|aux[íi]lio|\bloas\b|\bbpc\b|sal[áa]rio-maternidade/.test(m)) return "Previdenciário";
+  if (/tribut|imposto|\bicms\b|\biss\b|\bipva\b|\biptu\b|fiscal|execu[çc][ãa]o fiscal/.test(m)) return "Tributário";
+  if (/contrato|responsabilidade civil|dano moral|dano material|indeniza/.test(m)) return "Civil";
+  return null;
+}
+
+// True se algum especialista do pool cobre a matéria (pelo nome).
+function poolCoversMateria(pool: AgentRow[], materia: string): boolean {
+  const k = materia.toLowerCase();
+  return pool.some((a) => (a.name || "").toLowerCase().includes(k));
+}
+
 // Aplica routing_exclusivities: réus exclusivos do sócio.
 async function applyExclusivities(admin: SupabaseClient, userMsg: string, candidates: AgentRow[]): Promise<AgentRow[]> {
   const { data: excl } = await admin.from("routing_exclusivities").select("reu_pattern, owner_role");
@@ -1339,8 +1407,11 @@ async function chooseAgent(admin: SupabaseClient, router: AgentRow, userMsg: str
     });
     const parsed = JSON.parse(r.content) as { agent_id?: string };
     const found = candidates.find((c) => c.id === parsed.agent_id);
+    // E10: fallback não pode ser silencioso — registra quando o id não bateu.
+    if (!found) console.warn(`[routing] chooseAgent: id "${parsed.agent_id}" não bateu com nenhum candidato — fallback para "${candidates[0].name}" (${candidates.length} candidatos)`);
     return found || candidates[0];
-  } catch {
+  } catch (e) {
+    console.warn(`[routing] chooseAgent: falha/JSON inválido (${(e as Error)?.message}) — fallback para "${candidates[0].name}"`);
     return candidates[0];
   }
 }
@@ -1378,8 +1449,11 @@ async function chooseSpecialistAndAcaoTipo(
     const parsed = JSON.parse(r.content) as { agent_id?: string; acao_tipo?: string };
     const found = candidates.find((c) => c.id === parsed.agent_id);
     const acaoTipo = ACAO_TIPOS.includes(parsed.acao_tipo || "") ? (parsed.acao_tipo as string) : null;
+    // E10: fallback não pode ser silencioso — registra quando o id não bateu.
+    if (!found) console.warn(`[routing] chooseSpecialist: id "${parsed.agent_id}" não bateu com nenhum candidato — fallback para "${candidates[0].name}" (${candidates.length} candidatos)`);
     return { agent: found || candidates[0], acaoTipo };
-  } catch {
+  } catch (e) {
+    console.warn(`[routing] chooseSpecialist: falha/JSON inválido (${(e as Error)?.message}) — fallback para "${candidates[0].name}"`);
     return { agent: candidates[0], acaoTipo: null };
   }
 }
@@ -1498,11 +1572,19 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     // "tente novamente" não resolve — o usuário precisa saber o que fazer.
     const isCredit = /\b402\b|more credits|can only afford|requires more credits|insufficient_quota|insufficient credits/i.test(msg);
     const isAuthKey = /\b401\b|invalid api key|incorrect api key|unauthorized|no auth credentials/i.test(msg);
-    const errContent = isCredit
-      ? "Nao foi possivel gerar a peca: os creditos do provedor de IA (OpenRouter) se esgotaram. Recarregue o saldo em openrouter.ai/settings/credits e gere a peca novamente."
-      : isAuthKey
-      ? "Nao foi possivel gerar a peca: a chave de API do provedor de IA foi recusada. Verifique a chave do escritorio nas configuracoes e tente novamente."
+    // E3: provedor REAL que falhou — detectado da mensagem interna, NUNCA hardcoded.
+    // Só vai para log/Sentry (admin/tech); jamais para o texto exibido ao usuário.
+    const failedProvider = /openrouter/i.test(msg) ? "OpenRouter"
+      : /openai/i.test(msg) ? "OpenAI"
+      : "provedor de IA";
+    // Mensagem ao USUÁRIO: genérica, sem vazar provedor, URL de billing ou ação de billing.
+    const errContent = (isCredit || isAuthKey)
+      ? "O serviço de IA está temporariamente indisponível. O administrador do escritório já foi avisado — tente novamente em alguns minutos."
       : "Nao consegui concluir a orquestracao agora. Tente novamente.";
+    // Alerta INTERNO (logs/Sentry): causa real + provedor, para o admin/tech agir.
+    if (isCredit || isAuthKey) {
+      console.error(`[fail][provider-alert] run=${runId} provider=${failedProvider} tipo=${isCredit ? "sem_credito(402)" : "chave_recusada(401)"} msg=${msg}`);
+    }
     // Se havia uma linha de streaming, converte-a em erro (evita bolha órfã); senão insere.
     if (run.stream_message_id) {
       await admin.from("chat_messages")
@@ -1549,6 +1631,24 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     } else if (run.status === "routing_n2") {
       const router = run.target_n2_id ? (await loadAgent(admin, run.target_n2_id)) || n1 : n1;
       let specialists = await loadSubAgents(admin, n1.owner_user_id, ["specialist", "monitor", "executor"]);
+      // E2/E12: roteamento cross-área. Só AMPLIA os candidatos (o Diretor segue escolhendo).
+      if (CROSS_AREA_ROUTING) {
+        const materia = classifyMateria(run.original_message);
+        if (specialists.length === 0) {
+          // E12: usuário sem especialistas próprios (ex.: Tecnologia) → pool firm-wide
+          // (filtrado pela matéria quando classificável; senão, todos os especialistas).
+          specialists = await loadFirmSpecialists(admin, { materia });
+          if (specialists.length) console.log(`[routing][cross-area] pool próprio vazio — ${specialists.length} especialista(s) firm-wide${materia ? ` (matéria "${materia}")` : ""}`);
+        } else if (materia && !poolCoversMateria(specialists, materia)) {
+          // E2: o pool próprio não cobre a matéria → acrescenta os especialistas
+          // firm-wide dessa matéria (ex.: laura previdenciária pedindo Consumidor).
+          const extra = await loadFirmSpecialists(admin, { materia, excludeOwner: n1.owner_user_id });
+          if (extra.length) {
+            console.log(`[routing][cross-area] pool de "${(router?.name) || "?"}" não cobre "${materia}" — +${extra.length} especialista(s) firm-wide`);
+            specialists = [...specialists, ...extra];
+          }
+        }
+      }
       if (specialists.length === 0) return await fail("Nenhum especialista disponivel");
       // Aplica exclusividades de réu (Agiproteg/Agibank/Facta → sócio)
       specialists = await applyExclusivities(admin, run.original_message, specialists);
@@ -1596,6 +1696,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       if (canonFacts && blockIdx === 0) await enrichCepInfo(canonFacts);
       const canonicalBlock = canonFacts ? buildCanonicalFactsBlock(canonFacts) : "";
       const stableSystem = (n3.system_prompt || "") +
+        buildUniversalGuardrails() + // E9/E13: sempre-ativo (com ou sem documentos)
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
         canonicalBlock +
@@ -1608,6 +1709,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // números). Era a reinjeção desse bloco gigante em cada chamada de correção
       // que inflava o input (~174k tokens) e travava a chamada (stall de TTFT).
       const correctionSystem = (n3.system_prompt || "") +
+        buildUniversalGuardrails() + // E9/E13: sempre-ativo (com ou sem documentos)
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         canonicalBlock;
 
@@ -1872,6 +1974,34 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS)
         : buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
       const verdict = await validateDraft(admin, n2 || n1, run.original_message, run.draft || "", caseCtx);
+
+      // ── E1: FECHAR O LOOP CONSULTIVO ──────────────────────────────────────
+      // Quando o validador consultivo (LLM) REPROVA com feedback acionável,
+      // devolvemos a peça ao N3 para regenerar — em vez de só anexar [REVISAR] e
+      // finalizar com o rascunho ruim. Orçamento próprio (MAX_CONSULTIVE_ITERATIONS),
+      // separado do loop mecânico, persistido em mech_report.consultive_rounds (sem
+      // migração de schema). Esgotado o orçamento, cai no comportamento antigo
+      // (anexa [REVISAR]) como rede de segurança — nunca entra em loop infinito.
+      // NOTA: a regeneração reaproveita a maquinaria de correção do N3 (bloco a bloco
+      // p/ peças longas; chamada única p/ respostas curtas). Vícios de QUALIDADE são
+      // corrigidos aqui; vício de ÁREA (re-roteamento) depende do E2 — até lá, o
+      // feedback de área esgota o orçamento e cai no [REVISAR].
+      const consultiveRounds = ((run.mech_report as { consultive_rounds?: number } | null)?.consultive_rounds) ?? 0;
+      if (!verdict.approved && verdict.feedback && consultiveRounds < MAX_CONSULTIVE_ITERATIONS) {
+        await insertStage(admin, run.session_id, run.user_id,
+          `Validador consultivo reprovou a peça. Devolvendo ao especialista para correção (rodada consultiva ${consultiveRounds + 1}/${MAX_CONSULTIVE_ITERATIONS})...`,
+          "executing_n3", n2 || n1);
+        const baseReport = (mechReportPatch.mech_report as Record<string, unknown> | undefined)
+          ?? (run.mech_report as Record<string, unknown> | null) ?? {};
+        await upd({
+          status: "executing_n3",
+          feedback: verdict.feedback,
+          block_index: 0, // reinicia o ponteiro p/ a correção segmentada (bloco 0..N)
+          mech_report: { ...baseReport, consultive_rounds: consultiveRounds + 1 },
+        });
+        return fireNextStep(runId, supabaseUrl, serviceKey);
+      }
+
       let draft = run.draft || "";
       if (!verdict.approved && verdict.feedback) {
         draft += `\n\n---\n_[REVISAR — observações do validador: ${verdict.feedback}]_`;
