@@ -1254,6 +1254,12 @@ function buildUniversalGuardrails(): string {
     "REPERCUSSÃO GERAL.\n" +
     "   • 'Recurso repetitivo' (art. 1.036 do CPC) é técnica de julgamento por amostragem no STJ — NÃO é " +
     "requisito de admissibilidade do recurso individual. Aplique cada instituto no tribunal correto.\n" +
+    "F. EXECUÇÃO REAL (FERRAMENTAS): quando o pedido corresponder a uma ação para a qual você " +
+    "tem FERRAMENTA disponível (cadastrar cliente, criar/transferir/resolver pendência, agendar reunião, " +
+    "solicitar documentos, criar card), VOCÊ DEVE CHAMAR a ferramenta — NUNCA descreva a ação como feita " +
+    "sem o resultado dela. É PROIBIDO dizer 'pendência gerada/aberta', 'cadastro realizado', 'agendado' se " +
+    "a ferramenta não foi chamada e não retornou sucesso. Se o pedido tiver MAIS DE UMA ação (ex.: 'cadastrar " +
+    "E agendar'), chame TODAS as ferramentas correspondentes na mesma resposta.\n" +
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
 }
 
@@ -1444,30 +1450,34 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
   }
 }
 
-// Propõe uma AÇÃO de escrita: grava a auditoria (agent_actions), publica a bolha
-// de confirmação no chat e PAUSA o run em awaiting_confirmation (NÃO dispara o
-// próximo passo — o run só prossegue quando o usuário confirma/cancela via modo
-// confirm). A execução de fato acontece em handleConfirm.
-async function proposeAction(admin: SupabaseClient, run: any, n3: any, call: LlmToolCall, supabaseUrl: string, serviceKey: string) {
-  const tool = call.function.name;
-  const args = safeJson(call.function.arguments);
+// Propõe AÇÕES de escrita: grava a auditoria (agent_actions), publica UMA bolha
+// de confirmação no chat POR AÇÃO e PAUSA o run em awaiting_confirmation (NÃO
+// dispara o próximo passo — o run só prossegue quando o usuário confirma/cancela
+// TODAS as ações via modo confirm). A execução de fato acontece em handleConfirm.
+async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string) {
   const perms = await loadActionPerms(admin, run.user_id);
-  const route = decideActionRoute(perms, tool);
-  const { data: actionRow } = await admin.from("agent_actions").insert({
-    run_id: run.id, session_id: run.session_id, user_id: run.user_id, agent_id: n3.id,
-    tool, args, status: route === "pendencia" ? "routed_pendencia" : "proposed",
-  }).select("id").single();
-  const proposal = { action_id: actionRow?.id, run_id: run.id, tool, args, resumo: humanSummary(tool, args), route };
-  const seq = await nextSeq(admin, run.session_id);
-  await admin.from("chat_messages").insert({
-    session_id: run.session_id, user_id: run.user_id, role: "assistant", sequence_number: seq, agent_id: n3.id,
-    content: route === "pendencia"
-      ? `Você não tem permissão para essa ação. Posso encaminhar ao Admin para aprovação. ${proposal.resumo}`
-      : `Confirme a ação: ${proposal.resumo}`,
-    metadata: { kind: "action_proposal", proposal },
-  });
-  await admin.from("orchestration_runs").update({ status: "awaiting_confirmation", pending_actions: [proposal], updated_at: new Date().toISOString() }).eq("id", run.id);
-  // NÃO chama fireNextStep — pausa até a confirmação do usuário.
+  const proposals: Record<string, unknown>[] = [];
+  for (const call of calls) {
+    const tool = call.function.name;
+    const args = safeJson(call.function.arguments);
+    const route = decideActionRoute(perms, tool);
+    const { data: actionRow } = await admin.from("agent_actions").insert({
+      run_id: run.id, session_id: run.session_id, user_id: run.user_id, agent_id: n3.id,
+      tool, args, status: route === "pendencia" ? "routed_pendencia" : "proposed",
+    }).select("id").single();
+    const proposal = { action_id: actionRow?.id, run_id: run.id, tool, args, resumo: humanSummary(tool, args), route };
+    const seq = await nextSeq(admin, run.session_id);
+    await admin.from("chat_messages").insert({
+      session_id: run.session_id, user_id: run.user_id, role: "assistant", sequence_number: seq, agent_id: n3.id,
+      content: route === "pendencia"
+        ? `Você não tem permissão para essa ação. Posso encaminhar ao Admin para aprovação. ${proposal.resumo}`
+        : `Confirme a ação: ${proposal.resumo}`,
+      metadata: { kind: "action_proposal", proposal },
+    });
+    proposals.push(proposal);
+  }
+  await admin.from("orchestration_runs").update({ status: "awaiting_confirmation", pending_actions: proposals, updated_at: new Date().toISOString() }).eq("id", run.id);
+  // NÃO chama fireNextStep — pausa até a confirmação de TODAS as ações.
 }
 
 // ─── regras de roteamento de intenção (N2→N3) ──────────────────────────────
@@ -1966,10 +1976,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               });
               return fireNextStep(runId, supabaseUrl, serviceKey);
             }
-            // Ação de ESCRITA: propõe e PAUSA aguardando confirmação do usuário.
-            const writeCall = r.toolCalls.find((c) => isWriteTool(c.function.name));
-            if (writeCall) {
-              return await proposeAction(admin, run, n3, writeCall, supabaseUrl, serviceKey);
+            // Ação(ões) de ESCRITA: propõe TODAS e PAUSA aguardando confirmação do usuário.
+            const writeCalls = r.toolCalls.filter((c) => isWriteTool(c.function.name));
+            if (writeCalls.length > 0) {
+              return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey);
             }
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
@@ -2258,7 +2268,11 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
   if (action.status === "executed") return jsonResp({ ok: true, alreadyDone: true });
   if (body.decision === "cancel") {
     await admin.from("agent_actions").update({ status: "cancelled" }).eq("id", action.id);
-    await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+    const { data: remaining } = await admin.from("agent_actions")
+      .select("id").eq("run_id", body.runId).eq("status", "proposed");
+    if (!remaining || remaining.length === 0) {
+      await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+    }
     return jsonResp({ ok: true, cancelled: true });
   }
   const perms = await loadActionPerms(admin, user.id);
@@ -2280,7 +2294,11 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
     content: exec.ok ? (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso.") : `Não consegui executar: ${exec.error}`,
     metadata: { kind: "action_done", action_id: action.id, ok: exec.ok },
   });
-  await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+  const { data: remaining } = await admin.from("agent_actions")
+    .select("id").eq("run_id", body.runId).eq("status", "proposed");
+  if (!remaining || remaining.length === 0) {
+    await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+  }
   return jsonResp({ ok: exec.ok, result: exec.result, error: exec.error });
 }
 
