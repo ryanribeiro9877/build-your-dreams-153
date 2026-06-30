@@ -9,6 +9,7 @@ import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "
 import { getInitials, getCaseAreaChip, getTokenCost } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
+import { ActionCard } from "@/components/chat/ActionCard";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -103,6 +104,12 @@ function StageLine({ msg }: { msg: JcChatMessage }) {
 
 function MessageBubble({ msg }: { msg: JcChatMessage }) {
   const { user } = useAuth();
+  // Proposta de acao agentica: renderiza o ActionCard (Confirmar/Cancelar) no
+  // lugar do balao normal. A confirmacao chama o chat-orchestrator em mode=confirm;
+  // a atualizacao da timeline volta via realtime/refetch.
+  if (msg.kind === "action_proposal" && msg.proposal) {
+    return <ActionCard key={msg.id} proposal={msg.proposal} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
+  }
   // Etapa intermediaria da orquestracao: renderiza como status, nao balao.
   if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {
     return <StageLine msg={msg} />;

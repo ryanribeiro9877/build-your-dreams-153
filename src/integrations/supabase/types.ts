@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_actions: {
+        Row: {
+          agent_id: string | null
+          args: Json
+          created_at: string
+          executed_at: string | null
+          id: string
+          result: Json | null
+          run_id: string | null
+          session_id: string | null
+          status: string
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          args?: Json
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+          run_id?: string | null
+          session_id?: string | null
+          status?: string
+          tool: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          args?: Json
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+          run_id?: string | null
+          session_id?: string | null
+          status?: string
+          tool?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_actions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_actions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_actions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "orchestration_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_actions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_document_links: {
         Row: {
           agent_id: string
@@ -635,6 +706,7 @@ export type Database = {
       agents: {
         Row: {
           allow_fallbacks: boolean | null
+          allowed_tools: string[]
           avatar: string
           can_orchestrate: boolean
           color: string
@@ -668,6 +740,7 @@ export type Database = {
         }
         Insert: {
           allow_fallbacks?: boolean | null
+          allowed_tools?: string[]
           avatar?: string
           can_orchestrate?: boolean
           color?: string
@@ -701,6 +774,7 @@ export type Database = {
         }
         Update: {
           allow_fallbacks?: boolean | null
+          allowed_tools?: string[]
           avatar?: string
           can_orchestrate?: boolean
           color?: string
@@ -2096,6 +2170,7 @@ export type Database = {
           mech_report: Json | null
           n3_usage: Json | null
           original_message: string
+          pending_actions: Json | null
           session_id: string
           status: string
           stream_message_id: string | null
@@ -2121,6 +2196,7 @@ export type Database = {
           mech_report?: Json | null
           n3_usage?: Json | null
           original_message: string
+          pending_actions?: Json | null
           session_id: string
           status?: string
           stream_message_id?: string | null
@@ -2146,6 +2222,7 @@ export type Database = {
           mech_report?: Json | null
           n3_usage?: Json | null
           original_message?: string
+          pending_actions?: Json | null
           session_id?: string
           status?: string
           stream_message_id?: string | null

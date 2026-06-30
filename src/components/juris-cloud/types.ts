@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ActionProposal } from "@/components/chat/ActionCard";
 
 export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 export type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
@@ -63,8 +64,12 @@ export interface JcChatMessage {
   card?: AssistantChatCard;
   // V23 orquestracao: 'stage' = etapa intermediaria (linha de status);
   // 'final' = resposta do agente; 'error' = falha.
-  kind?: "stage" | "final" | "error";
+  // 'action_proposal' = proposta de acao agentica (renderiza ActionCard).
+  kind?: "stage" | "final" | "error" | "action_proposal";
   stage?: string;
+  // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
+  // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.
+  proposal?: ActionProposal;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
   // Ações inline (ex.: botão "gerar mesmo assim" no gate de anexos). Só para
   // mensagens locais do sistema — não vem do banco.

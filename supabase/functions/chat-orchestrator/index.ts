@@ -28,6 +28,9 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
+import { toolsFor, isWriteTool } from "./tools/registry.ts";
+import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
+import { decideActionRoute } from "./tools/rbac.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
 // Init UMA vez, no escopo de módulo. defaultIntegrations:false é OBRIGATÓRIO: o
@@ -89,6 +92,14 @@ function json(status: number, body: unknown): Response {
 function errResp(status: number, code: string, message: string) {
   return json(status, { error: code, message });
 }
+// Resposta JSON 200 (sucesso) — mesmos headers CORS do errResp/json.
+function jsonResp(obj: unknown) {
+  return json(200, obj);
+}
+// Parse defensivo dos arguments de uma tool call (string JSON do LLM).
+function safeJson(s: string): Record<string, unknown> {
+  try { return JSON.parse(s || "{}"); } catch { return {}; }
+}
 
 const MAX_ITERATIONS = 2;
 // E1: orçamento de rodadas do loop CONSULTIVO (validador LLM N2/N1). Separado do
@@ -103,6 +114,11 @@ const MAX_CONSULTIVE_ITERATIONS = Number(Deno.env.get("MAX_CONSULTIVE_ITERATIONS
 // com especialistas da mesma matéria de outros donos (firm-wide). Só ADICIONA candidatos
 // (o Diretor continua escolhendo). Reversível por env (default ligado).
 const CROSS_AREA_ROUTING = (Deno.env.get("CROSS_AREA_ROUTING") ?? "true").toLowerCase() !== "false";
+// Chat agêntico (loop de ferramentas + ações com confirmação). Default DESLIGADO:
+// deployar este código não muda NADA até a flag ser ligada via env. Quando false,
+// OU o agente não tem allowed_tools, OU é redator segmentado, o executing_n3 se
+// comporta EXATAMENTE como hoje (sem ferramentas).
+const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "true";
 
 // Timeout das chamadas de LLM. NÃO impomos limite artificial baixo: deixamos cada
 // passo levar o tempo que precisar, até o teto da plataforma (wall-clock do Edge
@@ -160,9 +176,16 @@ interface AgentRow {
   system_prompt: string | null; description: string | null;
   is_active: boolean; owner_user_id: string | null;
   history_limit: number | null;
+  allowed_tools: string[] | null;
 }
 
-interface LlmResult { content: string; inputTokens: number; outputTokens: number; rawModel: string; }
+interface LlmToolCall { id: string; type?: string; function: { name: string; arguments: string }; }
+// Mensagem do histórico para o LLM. Além de user/assistant com texto, suporta
+// (para o loop de ferramentas) a mensagem `assistant` com `tool_calls` e a
+// mensagem `tool` (resultado de uma ferramenta) com `tool_call_id`/`name`.
+type LlmMessage = { role: string; content?: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string };
+type LlmToolDef = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
+interface LlmResult { content: string; inputTokens: number; outputTokens: number; rawModel: string; toolCalls: LlmToolCall[]; }
 
 // ─── Roteamento por PROVEDOR ─────────────────────────────────────────────────
 // Fonte de verdade: o FORMATO de agents.model.
@@ -185,9 +208,10 @@ const LLM_ENDPOINT: Record<ProviderCode, string> = {
 // systemPrompt aqui vira o sufixo VOLÁTIL (ex.: resumo rolante da conversa).
 async function callOpenAICompatible(opts: {
   apiKey: string; baseUrl: string; provider: ProviderCode; model: string; systemPrompt: string | null;
-  history: { role: string; content: string }[]; userMessage: string;
+  history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
   jsonMode?: boolean; cacheableSystem?: string | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
   onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const messages: Record<string, unknown>[] = [];
@@ -204,8 +228,19 @@ async function callOpenAICompatible(opts: {
     const sys = [opts.cacheableSystem, opts.systemPrompt].filter(Boolean).join("");
     if (sys) messages.push({ role: "system", content: sys });
   }
-  for (const h of opts.history) { if (h.content) messages.push({ role: h.role, content: h.content }); }
-  messages.push({ role: "user", content: opts.userMessage });
+  for (const h of opts.history) {
+    // Passa adiante mensagens normais (com content) E as do loop de ferramentas:
+    // assistant com tool_calls (content pode ser vazio) e tool (resultado).
+    if (!h.content && !h.tool_calls && h.role !== "tool") continue;
+    const m: Record<string, unknown> = { role: h.role, content: h.content ?? "" };
+    if (h.tool_calls) m.tool_calls = h.tool_calls;
+    if (h.tool_call_id) m.tool_call_id = h.tool_call_id;
+    if (h.name) m.name = h.name;
+    messages.push(m);
+  }
+  // userMessage vazio (loop de ferramentas em iterações ≥2, onde a sequência
+  // user→assistant(tool_calls)→tool já vem no history) não vira mensagem solta.
+  if (opts.userMessage) messages.push({ role: "user", content: opts.userMessage });
   // Limite de saída: OpenAI usa max_completion_tokens (modelos novos rejeitam
   // max_tokens); OpenRouter/Anthropic usa max_tokens. Mandar o nome errado faz o
   // provedor ignorar e aplicar um default baixo (~4096) → peça truncada no meio.
@@ -218,6 +253,10 @@ async function callOpenAICompatible(opts: {
     if (opts.top_p !== null) body.top_p = opts.top_p;
   }
   if (opts.jsonMode) body.response_format = { type: "json_object" };
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools;
+    body.tool_choice = opts.toolChoice ?? "auto";
+  }
   const streaming = !!opts.onDelta;
   if (streaming) {
     body.stream = true;
@@ -300,17 +339,21 @@ async function callOpenAICompatible(opts: {
           }
         }
         if (!full) throw new Error(`${opts.provider}: resposta vazia (stream)`);
-        return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel };
+        // Streaming nunca é usado junto com tools (o loop chama sem onDelta).
+        return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel, toolCalls: [] };
       }
 
       // ── Modo normal (resposta única) ──
       const data = (await resp.json()) as {
-        choices?: { message?: { content?: string } }[];
+        choices?: { message?: { content?: string; tool_calls?: LlmToolCall[] } }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string;
       };
-      const content = data.choices?.[0]?.message?.content ?? "";
-      if (!content) throw new Error(`${opts.provider}: resposta vazia`);
-      return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model };
+      const msg = data.choices?.[0]?.message ?? {};
+      const content = msg.content ?? "";
+      const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+      // Com tools, uma resposta SÓ com tool_calls (content vazio) é válida.
+      if (!content && toolCalls.length === 0) throw new Error(`${opts.provider}: resposta vazia`);
+      return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model, toolCalls };
     } finally { clearTimeout(t); }
   }
 }
@@ -319,9 +362,11 @@ async function callOpenAICompatible(opts: {
 // Erro legível se faltar chave para o provedor resolvido.
 async function callLLM(admin: SupabaseClient, opts: {
   model: string; systemPrompt: string | null;
-  history: { role: string; content: string }[]; userMessage: string;
+  history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
-  jsonMode?: boolean; cacheableSystem?: string | null; onDelta?: (fullText: string) => void;
+  jsonMode?: boolean; cacheableSystem?: string | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
+  onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const provider = providerFromModel(opts.model);
   const apiKey = await resolveKey(admin, provider);
@@ -332,14 +377,14 @@ async function callLLM(admin: SupabaseClient, opts: {
 // ─── data helpers ────────────────────────────────────────────────────────────
 async function loadAgent(admin: SupabaseClient, agentId: string): Promise<AgentRow | null> {
   const { data } = await admin.from("agents")
-    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
     .eq("id", agentId).maybeSingle();
   return (data as unknown as AgentRow | null) ?? null;
 }
 
 async function loadSubAgents(admin: SupabaseClient, ownerUserId: string, roles: string[]): Promise<AgentRow[]> {
   const { data } = await admin.from("agents")
-    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
     .eq("owner_user_id", ownerUserId).eq("is_active", true).in("role", roles);
   return ((data as unknown as AgentRow[]) || []);
 }
@@ -351,7 +396,7 @@ async function loadFirmSpecialists(
   admin: SupabaseClient, opts: { materia?: string | null; excludeOwner?: string | null },
 ): Promise<AgentRow[]> {
   let q = admin.from("agents")
-    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
     .eq("is_active", true).eq("role", "specialist");
   if (opts.materia) q = q.ilike("name", `%${opts.materia}%`);
   if (opts.excludeOwner) q = q.neq("owner_user_id", opts.excludeOwner);
@@ -1369,6 +1414,58 @@ async function insertStage(admin: SupabaseClient, sessionId: string, userId: str
   });
 }
 
+// ─── chat agêntico: permissões, proposta e resumo de ação ───────────────────
+// Permissões de AÇÃO do usuário: master (RPC) e poder de atribuir tarefa (matriz
+// de cargo). Lidas com o client `admin` (service-role) — leitura de metadados.
+async function loadActionPerms(admin: SupabaseClient, userId: string): Promise<{ isMaster: boolean; canAssignTask: boolean }> {
+  const { data: m } = await admin.rpc("is_master_admin", { _user_id: userId });
+  const { data: prof } = await admin.from("profiles").select("role_template_id").eq("user_id", userId).maybeSingle();
+  let canAssign = false;
+  if (prof?.role_template_id) {
+    const { data: rows } = await admin.from("role_task_matrix")
+      .select("can_assign").eq("role_template_id", prof.role_template_id).eq("can_assign", true).limit(1);
+    canAssign = !!(rows && rows.length);
+  }
+  return { isMaster: !!m, canAssignTask: canAssign };
+}
+
+// Resumo legível (PT-BR) de uma ação proposta, para exibir ao usuário na bolha.
+function humanSummary(tool: string, args: Record<string, unknown>): string {
+  switch (tool) {
+    case "cadastrar_cliente": return `Cadastrar cliente "${args.full_name ?? "[A PREENCHER]"}"${args.cpf ? `, CPF ${args.cpf}` : ""}.`;
+    case "criar_card_tarefa": return `Criar card "${args.title}" para o responsável indicado${args.deadline_at ? `, prazo ${args.deadline_at}` : ""}.`;
+    case "solicitar_documentos": return `Solicitar documentos (${(args.documentos as string[] ?? []).join(", ")}).`;
+    case "pedir_acesso_arquivos": return `Pedir acesso a arquivos: ${args.descricao ?? ""}.`;
+    default: return `Executar ${tool}.`;
+  }
+}
+
+// Propõe uma AÇÃO de escrita: grava a auditoria (agent_actions), publica a bolha
+// de confirmação no chat e PAUSA o run em awaiting_confirmation (NÃO dispara o
+// próximo passo — o run só prossegue quando o usuário confirma/cancela via modo
+// confirm). A execução de fato acontece em handleConfirm.
+async function proposeAction(admin: SupabaseClient, run: any, n3: any, call: LlmToolCall, supabaseUrl: string, serviceKey: string) {
+  const tool = call.function.name;
+  const args = safeJson(call.function.arguments);
+  const perms = await loadActionPerms(admin, run.user_id);
+  const route = decideActionRoute(perms, tool);
+  const { data: actionRow } = await admin.from("agent_actions").insert({
+    run_id: run.id, session_id: run.session_id, user_id: run.user_id, agent_id: n3.id,
+    tool, args, status: route === "pendencia" ? "routed_pendencia" : "proposed",
+  }).select("id").single();
+  const proposal = { action_id: actionRow?.id, run_id: run.id, tool, args, resumo: humanSummary(tool, args), route };
+  const seq = await nextSeq(admin, run.session_id);
+  await admin.from("chat_messages").insert({
+    session_id: run.session_id, user_id: run.user_id, role: "assistant", sequence_number: seq, agent_id: n3.id,
+    content: route === "pendencia"
+      ? `Você não tem permissão para essa ação. Posso encaminhar ao Admin para aprovação. ${proposal.resumo}`
+      : `Confirme a ação: ${proposal.resumo}`,
+    metadata: { kind: "action_proposal", proposal },
+  });
+  await admin.from("orchestration_runs").update({ status: "awaiting_confirmation", pending_actions: [proposal], updated_at: new Date().toISOString() }).eq("id", run.id);
+  // NÃO chama fireNextStep — pausa até a confirmação do usuário.
+}
+
 // ─── regras de roteamento de intenção (N2→N3) ──────────────────────────────
 const ROUTING_INTENT_RULES = `
 REGRAS DE ROTEAMENTO POR INTENCAO (obedeça rigorosamente):
@@ -1835,6 +1932,51 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       }
 
       if (!segment) {
+        // ── CHAT AGÊNTICO: loop de ferramentas (somente chamada única) ──
+        // Gating triplo: flag ligada AND não-segmentado AND o agente declara tools.
+        // Quando QUALQUER condição falha, toolDefs fica vazio e o fluxo abaixo roda
+        // EXATAMENTE como antes (nenhuma mudança de comportamento). Só não roda em
+        // passo de CORREÇÃO (run.feedback): aí a peça já existe e segue a regeneração.
+        const toolDefs = (CHAT_TOOLS_ENABLED && !run.feedback) ? toolsFor(n3.allowed_tools) : [];
+        if (toolDefs.length > 0) {
+          const toolMsgs: LlmMessage[] = [];
+          const MAX_READ_ITERS = 4;
+          for (let i = 0; i < MAX_READ_ITERS; i++) {
+            const userMsg = i === 0 ? run.original_message : "";
+            const histForCall: LlmMessage[] = i === 0
+              ? history
+              : [...history, { role: "user", content: run.original_message }, ...toolMsgs];
+            const r = await callLLM(admin, {
+              model: n3.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: summaryBlock || null,
+              history: histForCall, userMessage: userMsg,
+              temperature: n3.temperature, top_p: n3.top_p, maxTokens: n3.max_tokens ?? 2000,
+              timeoutMs: N3_BLOCK_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto",
+            });
+            if (!r.toolCalls || r.toolCalls.length === 0) {
+              // Resposta textual normal → finaliza para validação (como hoje).
+              await insertStage(admin, run.session_id, run.user_id, `${n3.name} respondeu.`, "validating_n2", n3);
+              await upd({
+                status: "validating_n2", draft: r.content, feedback: null,
+                n3_usage: { model: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens, duration_ms: 0 },
+                chain: [...(run.chain || []), { level: 3, agent: n3.name }],
+              });
+              return fireNextStep(runId, supabaseUrl, serviceKey);
+            }
+            // Ação de ESCRITA: propõe e PAUSA aguardando confirmação do usuário.
+            const writeCall = r.toolCalls.find((c) => isWriteTool(c.function.name));
+            if (writeCall) {
+              return await proposeAction(admin, run, n3, writeCall, supabaseUrl, serviceKey);
+            }
+            // Só LEITURA: executa cada uma e realimenta o histórico do loop.
+            for (const c of r.toolCalls) {
+              const data = await runReadTool(admin, run.user_id, c.function.name, safeJson(c.function.arguments));
+              toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
+              toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: JSON.stringify(data).slice(0, 8000) });
+            }
+          }
+          // Estourou o teto de leituras: cai no fluxo normal (sem ferramentas) abaixo.
+        }
+
         // ── Modo CHAMADA ÚNICA (agentes de resposta curta) ──
         const corr = run.feedback ? `\n\nINSTRUCOES DE CORRECAO:\n${run.feedback}\n\nReescreva atendendo a essas correcoes.` : "";
         let streamMsgId: string | null = run.stream_message_id ?? null;
@@ -2089,6 +2231,55 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
   }
 }
 
+// ─── chat agêntico: confirmação de ação (modo confirm) ──────────────────────
+// Resolve o user_id do "Admin" do escritório para encaminhar pendências:
+// 1º admin/diretor (user_roles); senão, 1º sócio (profiles + role_templates.code).
+async function firstAdminUserId(admin: SupabaseClient): Promise<string | null> {
+  const { data: r } = await admin.from("user_roles").select("user_id").in("role", ["admin", "director"]).limit(1);
+  if (r && r.length) return (r[0] as { user_id: string }).user_id;
+  const { data: p } = await admin.from("profiles").select("user_id, role_templates!inner(code)").eq("role_templates.code", "socio").limit(1);
+  return p && p.length ? (p[0] as any).user_id : null;
+}
+
+// Executa (ou encaminha como pendência) uma ação previamente PROPOSTA, mediante
+// confirmação do usuário dono da ação. Idempotente (ação já executada → no-op).
+async function handleConfirm(req: Request, body: { runId: string; actionId: string; decision: "confirm" | "cancel" }, supabaseUrl: string, serviceKey: string, anonKey: string) {
+  const token = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
+  const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data: { user } } = await userClient.auth.getUser(token);
+  if (!user) return errResp(401, "unauthorized", "Sessão inválida");
+  const admin = createClient(supabaseUrl, serviceKey);
+  const { data: action } = await admin.from("agent_actions").select("*").eq("id", body.actionId).maybeSingle();
+  if (!action || action.user_id !== user.id) return errResp(403, "forbidden", "Ação não encontrada");
+  if (action.status === "executed") return jsonResp({ ok: true, alreadyDone: true });
+  if (body.decision === "cancel") {
+    await admin.from("agent_actions").update({ status: "cancelled" }).eq("id", action.id);
+    await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+    return jsonResp({ ok: true, cancelled: true });
+  }
+  const perms = await loadActionPerms(admin, user.id);
+  const route = decideActionRoute(perms, action.tool);
+  let exec;
+  if (route === "pendencia") {
+    const adminUserId = await firstAdminUserId(admin);
+    exec = adminUserId ? await routeAsPendencia(userClient, adminUserId, action.tool, action.args) : { ok: false, error: "nenhum admin encontrado" };
+  } else {
+    exec = await runWriteTool(userClient, user.id, action.tool, action.args);
+  }
+  await admin.from("agent_actions").update({
+    status: exec.ok ? (route === "pendencia" ? "routed_pendencia" : "executed") : "failed",
+    result: exec.ok ? exec.result : { error: exec.error }, executed_at: new Date().toISOString(),
+  }).eq("id", action.id);
+  const seq = await nextSeq(admin, action.session_id);
+  await admin.from("chat_messages").insert({
+    session_id: action.session_id, user_id: user.id, role: "assistant", sequence_number: seq,
+    content: exec.ok ? (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso.") : `Não consegui executar: ${exec.error}`,
+    metadata: { kind: "action_done", action_id: action.id, ok: exec.ok },
+  });
+  await admin.from("orchestration_runs").update({ status: "done", pending_actions: null }).eq("id", body.runId);
+  return jsonResp({ ok: exec.ok, result: exec.result, error: exec.error });
+}
+
 // ─── handler ─────────────────────────────────────────────────────────────────
 serve(async (req) => {
   _cors = getCorsHeaders(req);
@@ -2117,8 +2308,17 @@ serve(async (req) => {
     return json(202, { ok: true, background: true });
   }
 
-  // ── Modo START (frontend) ──
+  // ── Modo START (frontend) e CONFIRM (confirmação de ação) ──
   try {
+    let body: { sessionId?: string; message?: string; mode?: string; runId?: string; actionId?: string; decision?: "confirm" | "cancel" };
+    try { body = await req.json(); } catch { return errResp(400, "invalid_request", "JSON invalido"); }
+
+    // Modo CONFIRM: o usuário confirma/cancela uma ação proposta (faz a própria
+    // autenticação via header). Roteado ANTES da criação de run.
+    if (body?.mode === "confirm") {
+      return await handleConfirm(req, body as { runId: string; actionId: string; decision: "confirm" | "cancel" }, supabaseUrl, serviceKey, anonKey);
+    }
+
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const userClient = createClient(supabaseUrl, anonKey);
@@ -2126,8 +2326,6 @@ serve(async (req) => {
     if (!userData?.user) return errResp(401, "invalid_jwt", "Sessao invalida ou expirada");
     const userId = userData.user.id;
 
-    let body: { sessionId?: string; message?: string };
-    try { body = await req.json(); } catch { return errResp(400, "invalid_request", "JSON invalido"); }
     if (!body.sessionId || !body.message?.trim()) return errResp(400, "invalid_request", "sessionId e message obrigatorios");
     if (body.message.length > 8000) return errResp(400, "invalid_request", "Mensagem excede 8000 caracteres");
 
