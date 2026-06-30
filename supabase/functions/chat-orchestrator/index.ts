@@ -162,7 +162,13 @@ interface AgentRow {
   history_limit: number | null;
 }
 
-interface LlmResult { content: string; inputTokens: number; outputTokens: number; rawModel: string; }
+interface LlmToolCall { id: string; type?: string; function: { name: string; arguments: string }; }
+// Mensagem do histórico para o LLM. Além de user/assistant com texto, suporta
+// (para o loop de ferramentas) a mensagem `assistant` com `tool_calls` e a
+// mensagem `tool` (resultado de uma ferramenta) com `tool_call_id`/`name`.
+type LlmMessage = { role: string; content?: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string };
+type LlmToolDef = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
+interface LlmResult { content: string; inputTokens: number; outputTokens: number; rawModel: string; toolCalls: LlmToolCall[]; }
 
 // ─── Roteamento por PROVEDOR ─────────────────────────────────────────────────
 // Fonte de verdade: o FORMATO de agents.model.
@@ -185,9 +191,10 @@ const LLM_ENDPOINT: Record<ProviderCode, string> = {
 // systemPrompt aqui vira o sufixo VOLÁTIL (ex.: resumo rolante da conversa).
 async function callOpenAICompatible(opts: {
   apiKey: string; baseUrl: string; provider: ProviderCode; model: string; systemPrompt: string | null;
-  history: { role: string; content: string }[]; userMessage: string;
+  history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
   jsonMode?: boolean; cacheableSystem?: string | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
   onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const messages: Record<string, unknown>[] = [];
@@ -204,8 +211,19 @@ async function callOpenAICompatible(opts: {
     const sys = [opts.cacheableSystem, opts.systemPrompt].filter(Boolean).join("");
     if (sys) messages.push({ role: "system", content: sys });
   }
-  for (const h of opts.history) { if (h.content) messages.push({ role: h.role, content: h.content }); }
-  messages.push({ role: "user", content: opts.userMessage });
+  for (const h of opts.history) {
+    // Passa adiante mensagens normais (com content) E as do loop de ferramentas:
+    // assistant com tool_calls (content pode ser vazio) e tool (resultado).
+    if (!h.content && !h.tool_calls && h.role !== "tool") continue;
+    const m: Record<string, unknown> = { role: h.role, content: h.content ?? "" };
+    if (h.tool_calls) m.tool_calls = h.tool_calls;
+    if (h.tool_call_id) m.tool_call_id = h.tool_call_id;
+    if (h.name) m.name = h.name;
+    messages.push(m);
+  }
+  // userMessage vazio (loop de ferramentas em iterações ≥2, onde a sequência
+  // user→assistant(tool_calls)→tool já vem no history) não vira mensagem solta.
+  if (opts.userMessage) messages.push({ role: "user", content: opts.userMessage });
   // Limite de saída: OpenAI usa max_completion_tokens (modelos novos rejeitam
   // max_tokens); OpenRouter/Anthropic usa max_tokens. Mandar o nome errado faz o
   // provedor ignorar e aplicar um default baixo (~4096) → peça truncada no meio.
@@ -218,6 +236,10 @@ async function callOpenAICompatible(opts: {
     if (opts.top_p !== null) body.top_p = opts.top_p;
   }
   if (opts.jsonMode) body.response_format = { type: "json_object" };
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools;
+    body.tool_choice = opts.toolChoice ?? "auto";
+  }
   const streaming = !!opts.onDelta;
   if (streaming) {
     body.stream = true;
@@ -300,17 +322,21 @@ async function callOpenAICompatible(opts: {
           }
         }
         if (!full) throw new Error(`${opts.provider}: resposta vazia (stream)`);
-        return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel };
+        // Streaming nunca é usado junto com tools (o loop chama sem onDelta).
+        return { content: full, inputTokens: inTok, outputTokens: outTok, rawModel, toolCalls: [] };
       }
 
       // ── Modo normal (resposta única) ──
       const data = (await resp.json()) as {
-        choices?: { message?: { content?: string } }[];
+        choices?: { message?: { content?: string; tool_calls?: LlmToolCall[] } }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string;
       };
-      const content = data.choices?.[0]?.message?.content ?? "";
-      if (!content) throw new Error(`${opts.provider}: resposta vazia`);
-      return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model };
+      const msg = data.choices?.[0]?.message ?? {};
+      const content = msg.content ?? "";
+      const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+      // Com tools, uma resposta SÓ com tool_calls (content vazio) é válida.
+      if (!content && toolCalls.length === 0) throw new Error(`${opts.provider}: resposta vazia`);
+      return { content, inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, rawModel: data.model ?? opts.model, toolCalls };
     } finally { clearTimeout(t); }
   }
 }
@@ -319,9 +345,11 @@ async function callOpenAICompatible(opts: {
 // Erro legível se faltar chave para o provedor resolvido.
 async function callLLM(admin: SupabaseClient, opts: {
   model: string; systemPrompt: string | null;
-  history: { role: string; content: string }[]; userMessage: string;
+  history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
-  jsonMode?: boolean; cacheableSystem?: string | null; onDelta?: (fullText: string) => void;
+  jsonMode?: boolean; cacheableSystem?: string | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
+  onDelta?: (fullText: string) => void;
 }): Promise<LlmResult> {
   const provider = providerFromModel(opts.model);
   const apiKey = await resolveKey(admin, provider);
