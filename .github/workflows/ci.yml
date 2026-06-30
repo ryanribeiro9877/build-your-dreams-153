@@ -38,3 +38,21 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  edge:
+    # Type-check e testes das Edge Functions (Deno) — não cobertas pelo tsc do front.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Type-check chat-orchestrator
+        run: deno check supabase/functions/chat-orchestrator/index.ts
+
+      - name: Test tools module
+        run: deno test supabase/functions/chat-orchestrator/tools/

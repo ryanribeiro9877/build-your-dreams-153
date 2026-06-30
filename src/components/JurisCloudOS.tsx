@@ -764,7 +764,9 @@ export default function JurisCloudOS() {
         if (m.role === "user" && prev.some(x => String(x.id).startsWith("local_user_"))) return prev;
         return [...prev, m];
       });
-      if (k === "final" || k === "error") { setThinking(false); loadSessions(); }
+      // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
+      // ação: ambos devem parar o indicador "pensando", igual a final/error.
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { setThinking(false); loadSessions(); }
     };
 
     (async () => {
@@ -775,7 +777,7 @@ export default function JurisCloudOS() {
       if (cancelled || !data) return;
       // Não exibe linhas 'streaming' (rascunho em geração) no catch-up inicial.
       upsert((data as Record<string, any>[]).filter(r => r.metadata?.kind !== "streaming").map(mapRow));
-      if ((data as Record<string, any>[]).some(r => r.metadata?.kind === "final" || r.metadata?.kind === "error")) setThinking(false);
+      if ((data as Record<string, any>[]).some(r => ["final","error","action_proposal","action_done"].includes(r.metadata?.kind))) setThinking(false);
     })();
 
     const channel = supabase.channel(`chat:${assistantSessionId}`)
