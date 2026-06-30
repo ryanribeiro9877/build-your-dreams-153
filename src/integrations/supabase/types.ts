@@ -3098,13 +3098,20 @@ export type Database = {
           client_id: string | null
           completed_at: string | null
           created_at: string
+          data_fatal: string | null
           deadline_at: string | null
+          departamento_atual: Database["public"]["Enums"]["org_stage"] | null
           description: string | null
           documentation_completed_at: string | null
           external_kanban_ref: string | null
           id: string
+          is_pendencia: boolean
           notes: string | null
+          origem_departamento: Database["public"]["Enums"]["org_stage"] | null
+          origem_user_id: string | null
           payload: Json
+          pendencia_estado: string | null
+          pendencia_tipo: string | null
           priority: Database["public"]["Enums"]["task_priority"]
           process_id: string | null
           situacao: Database["public"]["Enums"]["task_situacao"]
@@ -3125,13 +3132,20 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           created_at?: string
+          data_fatal?: string | null
           deadline_at?: string | null
+          departamento_atual?: Database["public"]["Enums"]["org_stage"] | null
           description?: string | null
           documentation_completed_at?: string | null
           external_kanban_ref?: string | null
           id?: string
+          is_pendencia?: boolean
           notes?: string | null
+          origem_departamento?: Database["public"]["Enums"]["org_stage"] | null
+          origem_user_id?: string | null
           payload?: Json
+          pendencia_estado?: string | null
+          pendencia_tipo?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           process_id?: string | null
           situacao?: Database["public"]["Enums"]["task_situacao"]
@@ -3152,13 +3166,20 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           created_at?: string
+          data_fatal?: string | null
           deadline_at?: string | null
+          departamento_atual?: Database["public"]["Enums"]["org_stage"] | null
           description?: string | null
           documentation_completed_at?: string | null
           external_kanban_ref?: string | null
           id?: string
+          is_pendencia?: boolean
           notes?: string | null
+          origem_departamento?: Database["public"]["Enums"]["org_stage"] | null
+          origem_user_id?: string | null
           payload?: Json
+          pendencia_estado?: string | null
+          pendencia_tipo?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           process_id?: string | null
           situacao?: Database["public"]["Enums"]["task_situacao"]
@@ -3416,6 +3437,19 @@ export type Database = {
           p_process_id?: string
           p_task_type_id: string
           p_title: string
+        }
+        Returns: string
+      }
+      criar_pendencia: {
+        Args: {
+          p_cliente_id?: string
+          p_data_fatal?: string
+          p_departamento?: Database["public"]["Enums"]["org_stage"]
+          p_descricao?: string
+          p_prazo?: string
+          p_responsavel_user_id?: string
+          p_tipo: string
+          p_titulo: string
         }
         Returns: string
       }
@@ -3965,6 +3999,13 @@ export type Database = {
         Args: { p_config: Json; p_id: string }
         Returns: undefined
       }
+      pode_operar_pendencia: {
+        Args: {
+          _task: Database["public"]["Tables"]["user_tasks"]["Row"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       provision_user_agents: {
         Args: { p_user_id: string }
         Returns: {
@@ -4030,6 +4071,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      resolver_pendencia: {
+        Args: { p_id: string; p_resolucao?: string }
+        Returns: string
+      }
       start_agent_trace: {
         Args: {
           p_agent_id: string
@@ -4050,6 +4095,14 @@ export type Database = {
           p_client_id?: string
           p_entry_agent_id: string
           p_title?: string
+        }
+        Returns: string
+      }
+      transferir_pendencia: {
+        Args: {
+          p_departamento_destino?: Database["public"]["Enums"]["org_stage"]
+          p_id: string
+          p_responsavel_destino?: string
         }
         Returns: string
       }
