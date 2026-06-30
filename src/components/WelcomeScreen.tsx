@@ -107,15 +107,22 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           "Usuário";
         setDisplayName(firstName);
 
+        // Tarefas vivas ficam em `user_tasks` (humano→humano). A antiga
+        // `agent_tasks` é um subsistema morto que nunca recebeu dados, então as
+        // KPIs aqui exibiam sempre zero. Filtramos pelas tarefas atribuídas ao
+        // usuário logado (`assignee_user_id`) e descartamos as encerradas, em
+        // linha com a semântica do inbox (`get_my_inbox` exclui concluídas).
         const { data: tasks } = await supabase
-          .from("agent_tasks")
+          .from("user_tasks")
           .select("priority, status")
-          .eq("user_id", user.id);
+          .eq("assignee_user_id", user.id)
+          .not("status", "in", "(completed,cancelled,draft)");
         if (tasks) {
           setSummary({
             total: tasks.length,
             critical: tasks.filter((t) => t.priority === "critical").length,
-            pending: tasks.filter((t) => t.status === "pending").length,
+            // "Pendentes" = atribuída mas ainda não iniciada.
+            pending: tasks.filter((t) => t.status === "assigned").length,
             inProgress: tasks.filter((t) => t.status === "in_progress").length,
           });
         }
@@ -333,14 +340,16 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
   const typedGreeting = useTypewriter(greetingFull, !loading);
   const greetingDone = typedGreeting.length >= greetingFull.length;
 
-  // E7: assim que o composer é revelado (saudação digitada, fora do modo gravação),
-  // foca o textarea. Sem isto, o wrapper fica com `pointer-events: none`/opacity 0
-  // enquanto o título anima (~1,2s) e as primeiras teclas/Enter se perdiam.
+  // E7 / UX-01: focar o textarea ASSIM QUE a tela sai do loading — sem esperar o
+  // fim da animação do título (~1,2s). Antes o foco dependia de `greetingDone`, e o
+  // composer ficava com `pointer-events: none`/opacity 0 durante a digitação do
+  // título, engolindo a 1ª tecla/Enter. Agora o composer é revelado de imediato (ver
+  // className abaixo) e o foco acontece no mount, então a 1ª mensagem nunca se perde.
   useEffect(() => {
-    if (!loading && greetingDone && !isRecording) {
+    if (!loading && !isRecording) {
       textareaRef.current?.focus();
     }
-  }, [loading, greetingDone, isRecording]);
+  }, [loading, isRecording]);
 
   if (loading) {
     return (
@@ -365,9 +374,12 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
           {!greetingDone && <span className="ws-greeting-cursor" aria-hidden="true">|</span>}
         </h1>
 
-        {/* Composer — dois modos: idle e recording */}
+        {/* Composer — dois modos: idle e recording.
+            UX-01: o wrapper idle é revelado de imediato (animação de entrada no mount),
+            nunca gated em `greetingDone` — evita a janela morta (pointer-events:none)
+            durante a animação do título em que a 1ª tecla/Enter se perdia. */}
         {!isRecording ? (
-          <div className={`ws-composer-wrapper ${greetingDone ? "ws-composer--enter" : "ws-composer--hidden"}`}>
+          <div className="ws-composer-wrapper ws-composer--enter">
             {attachedFiles.length > 0 && (
               <div style={{
                 display: "flex",
@@ -449,6 +461,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
 
               <textarea
                 ref={textareaRef}
+                autoFocus
                 className="ws-textarea"
                 placeholder="Pergunte alguma coisa"
                 value={value}

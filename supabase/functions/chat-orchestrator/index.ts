@@ -94,7 +94,10 @@ const MAX_ITERATIONS = 2;
 // E1: orçamento de rodadas do loop CONSULTIVO (validador LLM N2/N1). Separado do
 // loop mecânico (MAX_ITERATIONS). Quando o consultivo reprova com feedback, a peça
 // volta ao N3 para regenerar até este teto; esgotado, anexa [REVISAR] (rede final).
-const MAX_CONSULTIVE_ITERATIONS = Number(Deno.env.get("MAX_CONSULTIVE_ITERATIONS")) || 1;
+// ORQ-03: default 2 (era 1) — uma única rodada não bastava para vícios objetivos
+// (ex.: ano de data errado persistia após 1 devolução). 2 rodadas cabem no orçamento
+// de latência e corrigem vícios simples antes de degradar para o aviso [REVISAR].
+const MAX_CONSULTIVE_ITERATIONS = Number(Deno.env.get("MAX_CONSULTIVE_ITERATIONS")) || 2;
 // E2/E12: roteamento cross-área. Quando o pool de especialistas do PRÓPRIO usuário não
 // cobre a matéria classificada (ou está vazio, ex.: Tecnologia), amplia os candidatos
 // com especialistas da mesma matéria de outros donos (firm-wide). Só ADICIONA candidatos
@@ -1158,16 +1161,47 @@ function buildDraftingRules(): string {
 // E9/E13: diretrizes INVIOLÁVEIS aplicadas a TODA saída do N3 (peça OU consulta,
 // COM ou SEM documentos). Diferente de buildDraftingRules (que só entra quando há
 // documentos do caso), este bloco é sempre anexado ao system do especialista.
+// Data atual formatada no fuso de Brasília (pt-BR). Granularidade de DIA — estável
+// dentro de um mesmo run (todos os blocos rodam em minutos no mesmo dia), portanto
+// não quebra o cache do prefixo estável (stableSystem). BUG-01: o N3 presumia 2024.
+function currentDateContext(): { full: string; year: number; iso: string } {
+  const now = new Date();
+  const tz = "America/Sao_Paulo";
+  const full = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: tz, weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  }).format(now);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const iso = `${get("year")}-${get("month")}-${get("day")}`;
+  return { full, year: Number(get("year")), iso };
+}
+
 function buildUniversalGuardrails(): string {
+  const today = currentDateContext();
   return "\n\n═══ DIRETRIZES INVIOLÁVEIS (toda peça e toda resposta) ═══\n" +
     "A. FERRAMENTA INTERNA — VOCÊ É O ESPECIALISTA: o destinatário é um advogado/operador do " +
     "próprio escritório. NUNCA recomende 'procure um advogado', 'consulte um advogado especializado', " +
     "'busque orientação jurídica' ou equivalente. Entregue diretamente a análise/peça com a fundamentação.\n" +
     "B. NÃO INVENTAR PARTES/EMPRESAS: use APENAS nomes de partes, réus, empresas, valores e números de " +
     "contrato/processo que constem na solicitação ou nos documentos do caso. É PROIBIDO introduzir nomes de " +
-    "empresas/réus (bancos, seguradoras, etc.) que não foram fornecidos. Dado ausente → escreva [A PREENCHER: ...]. " +
-    "Nunca use o nome do advogado/dono do agente como se fosse a parte.\n" +
-    "C. PRECISÃO STJ × STF (recursos excepcionais) — não confunda os institutos:\n" +
+    "empresas/réus (bancos, seguradoras, financeiras — p.ex. Agibank, Agiproteg, Facta, BMG, etc.) que não " +
+    "foram fornecidos, NEM MESMO a título de exemplo, hipótese ou ilustração. Em pergunta genérica (sem parte " +
+    "no contexto), responda de forma abstrata, sem citar nenhum nome de banco/empresa. Dado ausente → escreva " +
+    "[A PREENCHER: ...]. Nunca use o nome do advogado/dono do agente como se fosse a parte.\n" +
+    `C. DATA ATUAL = ${today.full} (fuso de Brasília; hoje em ISO: ${today.iso}). O ano corrente é ` +
+    `${today.year}. NUNCA presuma ${today.year - 2} nem qualquer ano passado para datas de agendamento, prazo, ` +
+    "audiência, reunião ou protocolo. Se uma data vier SEM ano (ex.: '20/07'), use o ano corrente; se essa data " +
+    `já passou neste ano, use o próximo ano (${today.year + 1}). SEMPRE explicite a suposição feita (ex.: ` +
+    `\"entendi como 20/07/${today.year}\") ou peça confirmação. Datas futuras (agenda/prazo) jamais no passado.\n` +
+    "D. NÃO AFIRMAR AÇÃO NÃO EXECUTADA: você NÃO executa cadastros, agendamentos, protocolos ou integrações — " +
+    "apenas redige/orienta/encaminha. É PROIBIDO declarar que uma ação foi concluída ('cadastro confirmado', " +
+    "'reunião agendada', 'protocolo realizado') quando o sistema não a executou. Use linguagem impessoal e " +
+    "honesta sobre o estado real: 'encaminhei ao especialista responsável' / 'gerei a pendência' / 'segue a " +
+    "minuta para registro'. NÃO infira nome de cliente/parte sem lastro no contexto; na ausência, trate como " +
+    "[A PREENCHER] e peça o dado.\n" +
+    "E. PRECISÃO STJ × STF (recursos excepcionais) — não confunda os institutos:\n" +
     "   • Recurso ESPECIAL (STJ, art. 105, III, CF): cabe por violação de LEI FEDERAL ou divergência " +
     "jurisprudencial; exige PREQUESTIONAMENTO. NÃO mencione 'repercussão geral' nem 'violação direta à " +
     "Constituição' no recurso especial — isso é do extraordinário.\n" +

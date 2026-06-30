@@ -1,7 +1,7 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -14,18 +14,27 @@ import { MasterRoute } from "@/components/MasterRoute";
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
 // Aqui tentamos UM reload completo (busca o manifest novo) antes de desistir;
 // na 2ª falha, deixa o Sentry.ErrorBoundary tratar. Recupera TODAS as rotas lazy.
+const CHUNK_RELOAD_KEY = "jurisai:chunk-reload";
+// BUG-02: rota-alvo que estava sendo aberta quando o chunk falhou. Persistimos antes
+// do reload e re-navegamos depois do boot (ChunkReloadRestore) — assim o clique em
+// "Crons" (ou qualquer rota lazy) chega ao destino mesmo se o reload cair na raiz.
+const CHUNK_RELOAD_TO_KEY = "jurisai:chunk-reload-to";
+
 function lazyWithRetry<T extends ComponentType<unknown>>(factory: () => Promise<{ default: T }>) {
   return lazy(async () => {
-    const KEY = "jurisai:chunk-reload";
     try {
       const mod = await factory();
-      try { sessionStorage.removeItem(KEY); } catch { /* noop */ }
+      try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* noop */ }
       return mod;
     } catch (err) {
       let alreadyReloaded = false;
-      try { alreadyReloaded = sessionStorage.getItem(KEY) === "1"; } catch { /* noop */ }
+      try { alreadyReloaded = sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1"; } catch { /* noop */ }
       if (!alreadyReloaded) {
-        try { sessionStorage.setItem(KEY, "1"); } catch { /* noop */ }
+        try {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+          // Guarda a rota de destino para restaurar após o reload buscar o manifest novo.
+          sessionStorage.setItem(CHUNK_RELOAD_TO_KEY, window.location.pathname + window.location.search);
+        } catch { /* noop */ }
         window.location.reload();
         // Promise que nunca resolve: a página vai recarregar antes de renderizar.
         return new Promise<{ default: T }>(() => { /* noop */ });
@@ -33,6 +42,21 @@ function lazyWithRetry<T extends ComponentType<unknown>>(factory: () => Promise<
       throw err;
     }
   });
+}
+
+// BUG-02: após um reload disparado pelo lazyWithRetry, garante que voltamos para a
+// rota que o usuário estava abrindo. Roda uma vez no mount (dentro do Router).
+function ChunkReloadRestore() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    let target: string | null = null;
+    try { target = sessionStorage.getItem(CHUNK_RELOAD_TO_KEY); } catch { /* noop */ }
+    if (!target) return;
+    try { sessionStorage.removeItem(CHUNK_RELOAD_TO_KEY); } catch { /* noop */ }
+    const current = window.location.pathname + window.location.search;
+    if (target !== current) navigate(target, { replace: true });
+  }, [navigate]);
+  return null;
 }
 
 const Index = lazyWithRetry(() => import("./pages/Index.tsx"));
@@ -132,6 +156,7 @@ const App = () => (
       <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
       <BrowserRouter>
         <AuthProvider>
+          <ChunkReloadRestore />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
