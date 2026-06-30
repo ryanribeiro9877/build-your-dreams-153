@@ -1436,6 +1436,10 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "criar_card_tarefa": return `Criar card "${args.title}" para o responsável indicado${args.deadline_at ? `, prazo ${args.deadline_at}` : ""}.`;
     case "solicitar_documentos": return `Solicitar documentos (${(args.documentos as string[] ?? []).join(", ")}).`;
     case "pedir_acesso_arquivos": return `Pedir acesso a arquivos: ${args.descricao ?? ""}.`;
+    case "criar_pendencia": return `Criar pendência "${args.titulo}" (${args.tipo}).`;
+    case "transferir_pendencia": return `Transferir pendência ${args.pendencia_id}.`;
+    case "resolver_pendencia": return `Resolver pendência ${args.pendencia_id}.`;
+    case "agendar_reuniao": return `Agendar reunião "${args.titulo}" em ${args.data_hora_iso} (${args.modalidade ?? ""}).`;
     default: return `Executar ${tool}.`;
   }
 }
