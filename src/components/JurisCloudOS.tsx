@@ -730,6 +730,7 @@ export default function JurisCloudOS() {
       content: r.content,
       kind: r.metadata?.kind,
       stage: r.metadata?.stage,
+      proposal: r.metadata?.proposal,
       timestamp: r.created_at
         ? new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
         : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -899,6 +900,7 @@ export default function JurisCloudOS() {
             id: r.id, role: r.role,
             agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
             content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
+            proposal: r.metadata?.proposal,
             timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
           } as JcChatMessage));
         return add.length ? [...prev, ...add] : prev;
