@@ -78,6 +78,39 @@ export async function runWriteTool(userClient: SupabaseClient, userId: string, n
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { request_id: data } };
       }
+      case "criar_pendencia": {
+        const { data, error } = await userClient.rpc("criar_pendencia", {
+          p_tipo: args.tipo, p_titulo: args.titulo, p_cliente_id: args.cliente_id ?? null,
+          p_descricao: args.descricao ?? null, p_responsavel_user_id: args.responsavel_user_id ?? null,
+          p_prazo: args.prazo ?? null, p_data_fatal: args.data_fatal ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { task_id: data } };
+      }
+      case "transferir_pendencia": {
+        const { data, error } = await userClient.rpc("transferir_pendencia", {
+          p_id: args.pendencia_id, p_departamento_destino: args.departamento_destino ?? null,
+          p_responsavel_destino: args.responsavel_destino ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { task_id: data } };
+      }
+      case "resolver_pendencia": {
+        const { data, error } = await userClient.rpc("resolver_pendencia", {
+          p_id: args.pendencia_id, p_resolucao: args.resolucao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { task_id: data } };
+      }
+      case "agendar_reuniao": {
+        const { data, error } = await userClient.rpc("criar_pendencia", {
+          p_tipo: "reuniao", p_titulo: args.titulo, p_cliente_id: args.cliente_id ?? null,
+          p_descricao: `Reunião ${args.modalidade ?? ""} em ${args.data_hora_iso}`,
+          p_responsavel_user_id: null, p_prazo: args.data_hora_iso ?? null, p_data_fatal: null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { task_id: data } };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }

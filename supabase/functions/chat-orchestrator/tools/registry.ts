@@ -87,6 +87,46 @@ export const TOOLS: Record<string, ToolDef> = {
       motivo: str("por que precisa"),
     }, required: ["to_user_id", "descricao"] },
   }},
+  criar_pendencia: { type: "function", function: {
+    name: "criar_pendencia",
+    description: "Cria uma pendência interna (documentação, senha INSS, comprovante, etc.). Atribuída ao responsável indicado ou a quem cria.",
+    parameters: { type: "object", properties: {
+      tipo: { type: "string", enum: ["documentacao","comprovante_endereco","senha_inss","reset_inss","extratos","falta_documentacao","audiencia","reuniao","andamento","whatsapp","outro"], description: "tipo da pendência" },
+      titulo: str("título / o que está pendente"),
+      cliente_id: str("id do cliente (opcional)"),
+      descricao: str("detalhes (opcional)"),
+      responsavel_user_id: str("id do responsável (opcional; default = quem cria)"),
+      prazo: str("prazo em ISO 8601 (opcional)"),
+      data_fatal: str("data fatal AAAA-MM-DD (opcional)"),
+    }, required: ["tipo", "titulo"] },
+  }},
+  transferir_pendencia: { type: "function", function: {
+    name: "transferir_pendencia",
+    description: "Transfere uma pendência para outro departamento e/ou responsável.",
+    parameters: { type: "object", properties: {
+      pendencia_id: str("id da pendência"),
+      departamento_destino: str("departamento destino (org_stage, opcional)"),
+      responsavel_destino: str("id do novo responsável (opcional)"),
+    }, required: ["pendencia_id"] },
+  }},
+  resolver_pendencia: { type: "function", function: {
+    name: "resolver_pendencia",
+    description: "Marca uma pendência como resolvida; devolve ao gerador automaticamente quando aplicável.",
+    parameters: { type: "object", properties: {
+      pendencia_id: str("id da pendência"),
+      resolucao: str("descrição da resolução (opcional)"),
+    }, required: ["pendencia_id"] },
+  }},
+  agendar_reuniao: { type: "function", function: {
+    name: "agendar_reuniao",
+    description: "Agenda uma reunião com o cliente (presencial ou no Meet). Registrada como pendência do tipo reunião.",
+    parameters: { type: "object", properties: {
+      cliente_id: str("id do cliente (opcional)"),
+      titulo: str("título da reunião"),
+      data_hora_iso: str("data/hora em ISO 8601 (ex.: 2026-07-03T14:00:00-03:00)"),
+      modalidade: { type: "string", enum: ["presencial","meet"], description: "modalidade" },
+    }, required: ["titulo", "data_hora_iso"] },
+  }},
 };
 
 export function toolsFor(allowed: string[] | null | undefined): ToolDef[] {

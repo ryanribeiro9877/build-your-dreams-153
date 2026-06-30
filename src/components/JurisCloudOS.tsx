@@ -19,7 +19,7 @@ import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings,
+  Bot, Clock, Settings, ClipboardList, Upload,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -1184,9 +1184,11 @@ export default function JurisCloudOS() {
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
+    { id: "pendencias", label: "Pendências", icon: ClipboardList, color: ACCENT, action: () => navigate("/pendencias"), show: true },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/admin/agentes"), show: hasRole("tech") },
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/admin/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/configuracoes/providers"), show: hasRole("tech") },
+    { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/admin/importar"), show: hasRole("tech") },
     { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];

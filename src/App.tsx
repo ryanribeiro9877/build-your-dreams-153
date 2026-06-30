@@ -88,6 +88,8 @@ const AssignTask = lazyWithRetry(() => import("./pages/AssignTask.tsx"));
 const ValidationQueue = lazyWithRetry(() => import("./pages/ValidationQueue.tsx"));
 const InterAssistantInbox = lazyWithRetry(() => import("./pages/InterAssistantInbox.tsx"));
 const CronJobs = lazyWithRetry(() => import("./pages/CronJobs.tsx"));
+const Pendencias = lazyWithRetry(() => import("./pages/Pendencias.tsx"));
+const ImportarDados = lazyWithRetry(() => import("./pages/ImportarDados.tsx"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();
@@ -187,6 +189,8 @@ const App = () => (
               <Route path="/admin/agentes/:id" element={<TechRoute><AgentDetail /></TechRoute>} />
               <Route path="/configuracoes/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
               <Route path="/admin/crons" element={<TechRoute><CronJobs /></TechRoute>} />
+              <Route path="/pendencias" element={<ProtectedRoute><Pendencias /></ProtectedRoute>} />
+              <Route path="/admin/importar" element={<TechRoute><ImportarDados /></TechRoute>} />
               <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
               <Route path="/sistema/tarefas" element={<ProtectedRoute><MyInbox /></ProtectedRoute>} />
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />
