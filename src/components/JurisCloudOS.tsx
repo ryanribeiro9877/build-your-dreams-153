@@ -14,11 +14,10 @@ import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUiPreferences } from "@/hooks/useUiPreferences";
-import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings, Upload,
+  Bot, Clock, Settings, Upload, UserPlus, Coins,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -526,7 +525,6 @@ export default function JurisCloudOS() {
   const openCreateEmployee = () => setSearchParams({ criar: "funcionario" });
   const closeCreateEmployee = () => setSearchParams({});
   const { user, signOut, hasRole } = useAuth();
-  const { isMaster } = useMasterAdmin();
   const { canAccessDepartment, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection(navigate);
@@ -1146,6 +1144,8 @@ export default function JurisCloudOS() {
   const MENU_ITEMS: MenuItem[] = [
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
+    { id: "usuarios-listar", label: "Listar Usuários", icon: Users, color: ACCENT_SOFT, action: () => navigate("/admin/funcionarios"), show: canAccessAdmin },
+    { id: "usuarios-criar", label: "Criar Usuário", icon: UserPlus, color: ACCENT, action: () => openCreateEmployee(), show: canAccessAdmin },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
@@ -1153,6 +1153,7 @@ export default function JurisCloudOS() {
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/admin/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/configuracoes/providers"), show: hasRole("tech") },
     { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/admin/importar"), show: hasRole("tech") },
+    { id: "tokens", label: "Meus Tokens", icon: Coins, color: ACCENT, action: () => navigate("/tokens"), show: true },
     { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
@@ -1235,9 +1236,6 @@ export default function JurisCloudOS() {
           <JurisTopBar
             activeDeptData={activeDeptData}
             setSidebarOpen={setSidebarOpen}
-            isMaster={isMaster}
-            openCreateEmployee={openCreateEmployee}
-            tokenBalance={tokenBalance}
             user={user}
             inboxCount={inboxCount}
             validationCount={validationCount}

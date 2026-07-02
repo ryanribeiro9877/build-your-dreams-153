@@ -3,13 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   Menu, AlertTriangle, AlertCircle, CheckCircle, Info,
-  Coins, UserPlus, Users, ClipboardList,
-  ShieldCheck, Lock, KanbanSquare,
+  ClipboardList, ShieldCheck, KanbanSquare,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { Agent, SidebarItem } from "./types";
-import { DEPT_ICONS, ALERTS, ACCENT, ACCENT_SOFT } from "./constants";
-import { BILLING_ENABLED, UNLIMITED_LABEL } from "@/config/billing";
+import { DEPT_ICONS, ALERTS } from "./constants";
 
 /* ── Alert Icon helper ── */
 function AlertIcon({ type }: { type: string }) {
@@ -23,9 +19,6 @@ function AlertIcon({ type }: { type: string }) {
 export interface JurisTopBarProps {
   activeDeptData: { id: string; label: string; color: string; badge: number } | undefined;
   setSidebarOpen: (open: boolean) => void;
-  isMaster: boolean;
-  openCreateEmployee: () => void;
-  tokenBalance: { balance: number };
   user: { email?: string | null; user_metadata?: { display_name?: string } } | null;
   inboxCount: { total: number; overdue: number };
   validationCount: number;
@@ -40,9 +33,6 @@ export interface JurisTopBarProps {
 export default function JurisTopBar({
   activeDeptData,
   setSidebarOpen,
-  isMaster,
-  openCreateEmployee,
-  tokenBalance,
   user,
   inboxCount,
   validationCount,
@@ -128,29 +118,6 @@ export default function JurisTopBar({
             Kanban
           </button>
 
-          {isMaster && (
-            <>
-              <button
-                type="button"
-                className="jc-btn-create-user"
-                onClick={openCreateEmployee}
-                title="Convidar novo funcionário (apenas master)"
-              >
-                <UserPlus size={15} strokeWidth={2.5} />
-                Criar Funcionário
-              </button>
-              <button
-                type="button"
-                className="jc-btn-team-list"
-                onClick={() => navigate("/admin/funcionarios")}
-                title="Lista de funcionários e status online (apenas master)"
-              >
-                <Users size={15} strokeWidth={2.5} />
-                Ver Lista
-              </button>
-            </>
-          )}
-
           {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
             <div key={i} className={`jc-alert-chip ${a.type}`}>
               <AlertIcon type={a.type} />
@@ -159,13 +126,6 @@ export default function JurisTopBar({
           ))}
 
           <NotificationCenter />
-
-          <button type="button" onClick={() => navigate("/tokens")} title="Meus Tokens"
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
-              background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.28)", cursor: "pointer", color: "#FACC15", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", flexShrink: 0 }}>
-            <Coins size={14} />
-            {BILLING_ENABLED ? tokenBalance.balance.toLocaleString() : UNLIMITED_LABEL}
-          </button>
 
           <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/perfil"); } }}>
             <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>
