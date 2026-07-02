@@ -1799,7 +1799,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       specialists = await applyExclusivities(admin, run.original_message, specialists);
       // V25: o Diretor escolhe o N3 E classifica o acao_tipo (persistido no run).
       const { agent: n3, acaoTipo } = await chooseSpecialistAndAcaoTipo(admin, router, run.original_message, specialists, ROUTING_INTENT_RULES);
-      ctxModel = n3?.model;
+      ctxModel = n3?.model ?? undefined;
       await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, "executing_n3", n3);
       await upd({
         status: "executing_n3", target_n3_id: n3.id, acao_tipo: acaoTipo,
@@ -1810,7 +1810,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     } else if (run.status === "executing_n3") {
       const n3 = await loadAgent(admin, run.target_n3_id);
       if (!n3) return await fail("Especialista invalido");
-      ctxModel = n3?.model;
+      ctxModel = n3?.model ?? undefined;
       // Redatores de peça longa (max_tokens alto) entram no modo SEGMENTADO (Caminho B:
       // um bloco/seção por chamada). Os demais (respostas curtas) seguem em chamada única.
       const segment = (n3.max_tokens ?? 0) >= SEGMENT_MIN_MAX_TOKENS;
