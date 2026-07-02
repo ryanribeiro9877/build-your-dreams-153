@@ -555,6 +555,13 @@ O Ryan tem padrão de qualidade alto e detesta retrabalho:
 9. **Anti-padrões dele**: subjetivismos sem comparação concreta; refatorações invasivas sem motivo; uso de tooling não-padrão (yarn, webpack).
 10. **Se criar arquivo novo, ATUALIZE este `AGENTS.md`** com a referência.
 11. **NÃO crie usuários reais via SQL.** Todos os usuários (exceto admin@juridico.com legado e o bootstrap do sócio) vêm do botão "Criar Funcionário" do sócio.
+12. **Fluxo de entrega PADRÃO para TODA alteração** (definido pelo Ryan em 02/jul/2026): toda mudança deve ir para produção via este pipeline, sem exceção salvo pedido explícito em contrário:
+    1. Desenvolver na branch designada (ex.: `claude/<feature>`), nunca commitar direto na `main`.
+    2. Rodar `vite build` (e lint) antes de entregar.
+    3. **Criar o PR** contra `main`.
+    4. **Fazer o merge** do PR na `main` (squash).
+    5. O merge na `main` **dispara automaticamente o deploy de produção no Vercel** (`build-your-dreams-153.vercel.app`) — é assim que o Ryan visualiza as mudanças no sistema. Sempre confirme que o deploy foi disparado e informe a URL.
+    - Não pare no "PR criado": o padrão inclui merge + deploy para que a mudança fique visível em produção.
 
 ---
 
@@ -652,5 +659,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 02/junho/2026 (após V21 — aposentar CEO → Meu Assistente por Usuário)
+**Última atualização**: 02/julho/2026 (consolidação do menu Configurações + fluxo de entrega padrão PR→merge→deploy Vercel)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.
