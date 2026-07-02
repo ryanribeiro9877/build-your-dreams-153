@@ -10,7 +10,7 @@ import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldChec
 import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/jurisaiShellTheme";
 
 /**
- * /configuracoes/providers
+ * /tech/providers
  *
  * Onde o usuario cadastra suas chaves Anthropic/OpenAI/Google (BYOK).
  * Chaves vao para Supabase Vault, criptografadas. So mostramos last 4 chars.

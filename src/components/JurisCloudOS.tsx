@@ -967,7 +967,7 @@ export default function JurisCloudOS() {
     try {
       if (!entryAgentId) {
         await refundAndNotify(
-          "nenhum agente com IA configurada — vá em /admin/agentes, escolha o agente, na aba Modelo configure provedor + modelo, e salve",
+          "nenhum agente com IA configurada — vá em /tech/agentes, escolha o agente, na aba Modelo configure provedor + modelo, e salve",
         );
         return;
       }
@@ -1149,10 +1149,10 @@ export default function JurisCloudOS() {
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
-    { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/admin/agentes"), show: hasRole("tech") },
-    { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/admin/crons"), show: hasRole("tech") },
-    { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/configuracoes/providers"), show: hasRole("tech") },
-    { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/admin/importar"), show: hasRole("tech") },
+    { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/tech/agentes"), show: hasRole("tech") },
+    { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/tech/crons"), show: hasRole("tech") },
+    { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/tech/providers"), show: hasRole("tech") },
+    { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: hasRole("tech") },
     { id: "tokens", label: "Meus Tokens", icon: Coins, color: ACCENT, action: () => navigate("/tokens"), show: true },
     { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },

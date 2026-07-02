@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
 /**
- * /admin/agentes/:id
+ * /tech/agentes/:id
  *
  * Página completa de configuração do agente, estilo "Meus Agentes" do bot.zanetti.
  * Abas: Identidade · Modelo · Prompt · Memória · Provedor.
@@ -187,7 +187,7 @@ export default function AgentDetail() {
             <p className="lf-panel__hint">O agente solicitado não existe ou foi removido.</p>
             <button
               type="button"
-              onClick={() => navigate("/admin/agentes")}
+              onClick={() => navigate("/tech/agentes")}
               className="lf-btn lf-btn--ghost"
             >
               Voltar para a lista
@@ -219,7 +219,7 @@ export default function AgentDetail() {
       <header className="lf-header">
         <button
           type="button"
-          onClick={() => navigate("/admin/agentes")}
+          onClick={() => navigate("/tech/agentes")}
           className="lf-btn lf-btn--ghost btn-voltar"
           aria-label="Voltar para a lista de agentes"
         >
@@ -357,7 +357,7 @@ export default function AgentDetail() {
                 if (error) { toast.error(error.message); return; }
                 toast.success("Agente desativado");
                 reloadAgents();
-                navigate("/admin/agentes");
+                navigate("/tech/agentes");
               }}
             >
               ⏸ Desativar agente
@@ -374,7 +374,7 @@ export default function AgentDetail() {
                 setSaving(false);
                 if (error) { toast.error(error.message); return; }
                 toast.success("Agente excluído");
-                navigate("/admin/agentes");
+                navigate("/tech/agentes");
               }}
             >
               🗑 Excluir agente
