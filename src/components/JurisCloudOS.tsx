@@ -96,7 +96,7 @@ const GlobalStyles = () => (
       position: relative; z-index: 6;
     }
     .jc-sidebar-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-    .jc-sidebar.collapsed { width: 52px; min-width: 52px; }
+    .jc-sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; border-right-color: transparent; }
     .jc-sidebar.collapsed .jc-logo-info, .jc-sidebar.collapsed .jc-search,
     .jc-sidebar.collapsed .jc-section-label, .jc-sidebar.collapsed .jc-nav-label,
     .jc-sidebar.collapsed .jc-nav-badge, .jc-sidebar.collapsed .jc-agent-name { display: none; }
@@ -118,7 +118,7 @@ const GlobalStyles = () => (
       overflow: hidden; line-height: 0; flex-shrink: 0;
       backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     }
-    .jc-sidebar-toggle.is-collapsed { left: 56px; }
+    .jc-sidebar-toggle.is-collapsed { left: 12px; }
     .jc-sidebar-toggle::before {
       content: ""; position: absolute; inset: 0; border-radius: inherit;
       background: radial-gradient(ellipse at center, rgba(234,179,8,0.18) 0%, rgba(234,179,8,0) 70%);
