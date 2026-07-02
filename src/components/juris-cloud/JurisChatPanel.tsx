@@ -3,10 +3,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import {
-  AlertTriangle, ChevronRight, Lock,
+  AlertTriangle, Lock,
 } from "lucide-react";
 import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "./types";
-import { getInitials, getCaseAreaChip, getTokenCost } from "./constants";
+import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
@@ -74,34 +74,6 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-// Linha de status das etapas da orquestracao (N1->N2->N3). Cor por tipo de etapa
-// para facilitar a leitura: roteamento (dourado), execucao (azul), revisao (verde).
-const STAGE_STYLE: Record<string, { icon: string; color: string }> = {
-  routing_n1:    { icon: "🧭", color: "#EAB308" },
-  routing_n2:    { icon: "⛓", color: "#EAB308" },
-  executing_n3:  { icon: "✍️", color: "#5CC2FF" },
-  validating_n2: { icon: "🔍", color: "#2DD4A0" },
-  validating_n1: { icon: "🔍", color: "#2DD4A0" },
-};
-
-function StageLine({ msg }: { msg: JcChatMessage }) {
-  const s = STAGE_STYLE[msg.stage || ""] || { icon: "•", color: "#9A9AB0" };
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "9px 14px", margin: "5px 0",
-      fontSize: 13.5, lineHeight: 1.45, fontWeight: 500,
-      color: "#E4E4EE",
-      background: "rgba(255,255,255,0.05)",
-      borderLeft: `3px solid ${s.color}`,
-      borderRadius: "0 8px 8px 0",
-    }}>
-      <span aria-hidden style={{ fontSize: 16, flexShrink: 0, lineHeight: 1 }}>{s.icon}</span>
-      <span>{msg.content}</span>
-    </div>
-  );
-}
-
 function MessageBubble({ msg }: { msg: JcChatMessage }) {
   const { user } = useAuth();
   // Proposta de acao agentica: renderiza o ActionCard (Confirmar/Cancelar) no
@@ -110,9 +82,9 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   if (msg.kind === "action_proposal" && msg.proposal) {
     return <ActionCard key={msg.id} proposal={msg.proposal} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
   }
-  // Etapa intermediaria da orquestracao: renderiza como status, nao balao.
+  // Etapas intermediarias da orquestracao nao sao exibidas.
   if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {
-    return <StageLine msg={msg} />;
+    return null;
   }
   const agentColors: Record<string, string> = {
     "Meu Assistente": "#EAB308",
@@ -272,7 +244,6 @@ export interface JurisChatPanelProps {
   inputVal: string;
   setInputVal: (v: string) => void;
   handleSend: (text?: string, files?: File[]) => void;
-  visibleCommands: string[];
   isRecording: boolean;
   toggleRecording: () => void;
   isReadOnly: boolean;
@@ -289,7 +260,6 @@ export default function JurisChatPanel({
   inputVal,
   setInputVal,
   handleSend,
-  visibleCommands,
   isRecording,
   toggleRecording,
   isReadOnly,
@@ -369,16 +339,6 @@ export default function JurisChatPanel({
       {/* INPUT */}
       {!showWelcome && (
         <div className="jc-input-area">
-          <div className="jc-commands">
-            {visibleCommands.map((cmd, i) => {
-              const { cost } = getTokenCost(cmd);
-              return (
-                <button key={i} className="jc-cmd" onClick={() => handleSend(cmd)} title={`Custo: ${cost} token(s)`}>
-                  <ChevronRight size={10} /> {cmd} <span style={{ opacity: 0.5, fontSize: 9, marginLeft: 4 }}>({cost}t)</span>
-                </button>
-              );
-            })}
-          </div>
           {attachedFiles.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 0 8px" }}>
               {attachedFiles.map((f, i) => (
