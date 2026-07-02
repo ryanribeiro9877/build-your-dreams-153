@@ -152,13 +152,6 @@ export type UserTaskStatus =
 
 export type CoverageStatus = "scheduled" | "active" | "finished" | "cancelled";
 
-export type InterAssistantStatus =
-  | "pending"
-  | "in_progress"
-  | "answered"
-  | "denied"
-  | "expired";
-
 export type CaptacaoCanalTipo =
   | "cooperativa"
   | "ressaque"
@@ -307,24 +300,6 @@ export interface UserTaskRow {
   completed_at: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface InterAssistantRequestRow {
-  id: string;
-  from_user_id: string;
-  to_user_id: string;
-  from_agent_id: string | null;
-  to_agent_id: string | null;
-  request_type: string;
-  payload: Record<string, unknown>;
-  status: InterAssistantStatus;
-  response_payload: Record<string, unknown> | null;
-  related_task_id: string | null;
-  related_session_id: string | null;
-  expires_at: string | null;
-  answered_at: string | null;
   created_at: string;
   updated_at: string;
 }
