@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -122,6 +122,13 @@ function AppErrorFallback() {
   );
 }
 
+// Compat: redireciona um caminho antigo para o novo preservando o parâmetro de rota.
+// Usado para /admin/agentes/:id → /tech/agentes/:id (o <Navigate> puro não interpola params).
+function RedirectWithParams({ to }: { to: (params: Record<string, string | undefined>) => string }) {
+  const params = useParams();
+  return <Navigate to={to(params)} replace />;
+}
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -183,11 +190,21 @@ const App = () => (
               <Route path="/admin/ui" element={<AdminRoute><AdminUiEvents /></AdminRoute>} />
               <Route path="/admin/master" element={<MasterRoute><AdminMaster /></MasterRoute>} />
               <Route path="/admin/notificacoes" element={<AdminRoute><AdminNotifications /></AdminRoute>} />
-              <Route path="/admin/agentes" element={<TechRoute><AgentsAdmin /></TechRoute>} />
-              <Route path="/admin/agentes/:id" element={<TechRoute><AgentDetail /></TechRoute>} />
-              <Route path="/configuracoes/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
-              <Route path="/admin/crons" element={<TechRoute><CronJobs /></TechRoute>} />
-              <Route path="/admin/importar" element={<TechRoute><ImportarDados /></TechRoute>} />
+              {/* Rotas tech-only — o prefixo /tech/* reflete a privacidade real (gated por TechRoute).
+                  Antes viviam sob /admin/* (agentes/crons/importar) e /configuracoes/* (providers),
+                  o que confundia com as rotas de fato administrativas (AdminRoute). */}
+              <Route path="/tech/agentes" element={<TechRoute><AgentsAdmin /></TechRoute>} />
+              <Route path="/tech/agentes/:id" element={<TechRoute><AgentDetail /></TechRoute>} />
+              <Route path="/tech/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
+              <Route path="/tech/crons" element={<TechRoute><CronJobs /></TechRoute>} />
+              <Route path="/tech/importar" element={<TechRoute><ImportarDados /></TechRoute>} />
+
+              {/* Compat: caminhos antigos redirecionam para o novo prefixo /tech/* (bookmarks/links legados). */}
+              <Route path="/admin/agentes" element={<Navigate to="/tech/agentes" replace />} />
+              <Route path="/admin/agentes/:id" element={<RedirectWithParams to={(p) => `/tech/agentes/${p.id}`} />} />
+              <Route path="/configuracoes/providers" element={<Navigate to="/tech/providers" replace />} />
+              <Route path="/admin/crons" element={<Navigate to="/tech/crons" replace />} />
+              <Route path="/admin/importar" element={<Navigate to="/tech/importar" replace />} />
               <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
               <Route path="/sistema/tarefas" element={<ProtectedRoute><MyInbox /></ProtectedRoute>} />
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />

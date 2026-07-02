@@ -185,7 +185,7 @@ export default function AgentsAdmin() {
         <div className="lf-row" style={{ marginLeft: "auto" }}>
           <button
             type="button"
-            onClick={() => navigate("/configuracoes/providers")}
+            onClick={() => navigate("/tech/providers")}
             className="lf-btn lf-btn--ghost"
           >
             Provedores
@@ -284,7 +284,7 @@ export default function AgentsAdmin() {
                     entry={entry}
                     hasInstance={hasInstance}
                     status={status}
-                    onClick={hasInstance ? () => navigate(`/admin/agentes/${matchedAgent.id}`) : undefined}
+                    onClick={hasInstance ? () => navigate(`/tech/agentes/${matchedAgent.id}`) : undefined}
                   />
                 );
               })}

@@ -391,7 +391,7 @@ export default function JurisSidebar({
                         toast.error("Aguarde a sincronização dos agentes com o servidor.");
                         return;
                       }
-                      navigate(`/admin/agentes/${agent.uuid}`);
+                      navigate(`/tech/agentes/${agent.uuid}`);
                     }}
                   >
                     <Settings size={14} className="opacity-80 shrink-0" />

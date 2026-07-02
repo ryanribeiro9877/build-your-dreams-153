@@ -84,7 +84,7 @@ export default function Admin() {
             <button type="button" onClick={() => navigate("/admin/ui")} style={btnBase}>
               Eventos de UI
             </button>
-            <button type="button" onClick={() => navigate("/admin/agentes")} style={btnBase}>
+            <button type="button" onClick={() => navigate("/tech/agentes")} style={btnBase}>
               Agentes IA
             </button>
           </>

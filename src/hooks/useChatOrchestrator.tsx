@@ -201,13 +201,13 @@ function detectProviderIssue(msg: string): string | null {
     return "Cota da chave OpenAI esgotada. Adicione saldo em platform.openai.com/account/billing e tente novamente.";
   }
   if (m.includes("invalid_api_key") || m.includes("invalid api key") || m.includes("incorrect api key")) {
-    return "Chave de API rejeitada pelo provedor. Cadastre uma chave válida em /admin/agentes → aba Provedor.";
+    return "Chave de API rejeitada pelo provedor. Cadastre uma chave válida em /tech/agentes → aba Provedor.";
   }
   if (m.includes("rate_limit") || m.includes("rate limit") || m.includes("429")) {
     return "Limite de requisições atingido no provedor. Aguarde alguns segundos e tente de novo.";
   }
   if (m.includes("model_not_found") || m.includes("does not exist") || m.includes("the model")) {
-    return "O modelo configurado não existe ou foi desativado pelo provedor. Escolha outro em /admin/agentes → aba Modelo.";
+    return "O modelo configurado não existe ou foi desativado pelo provedor. Escolha outro em /tech/agentes → aba Modelo.";
   }
   if (m.includes("context_length_exceeded") || m.includes("maximum context")) {
     return "A conversa ficou muito longa para o modelo. Limpe o histórico ou troque por um modelo de contexto maior.";

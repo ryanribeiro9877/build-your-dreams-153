@@ -158,7 +158,7 @@ export default function ChatWithAgent() {
             <div style={{ fontSize: 11, color: "#ffb8b8", padding: 10, background: "rgba(255,107,107,0.08)", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)" }}>
               <AlertTriangle size={11} style={{ display: "inline", marginRight: 4 }} />
               Nenhum agente configurado.{" "}
-              <button onClick={() => navigate("/admin/agentes")} style={{ background: "transparent", border: "none", color: "#c9a84c", padding: 0, textDecoration: "underline", cursor: "pointer", fontSize: 11 }}>
+              <button onClick={() => navigate("/tech/agentes")} style={{ background: "transparent", border: "none", color: "#c9a84c", padding: 0, textDecoration: "underline", cursor: "pointer", fontSize: 11 }}>
                 Configurar
               </button>
             </div>

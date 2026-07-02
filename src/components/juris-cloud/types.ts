@@ -16,7 +16,7 @@ export function parseAgentPermissions(raw: string[]): AgentPermission[] {
 
 export interface Agent {
   id: number;
-  /** UUID em `public.agents` — necessário para abrir `/admin/agentes/:id`. */
+  /** UUID em `public.agents` — necessário para abrir `/tech/agentes/:id`. */
   uuid?: string;
   name: string; status: "active" | "idle" | "alert";
   color: string; role: AgentRole; permissions: AgentPermission[];

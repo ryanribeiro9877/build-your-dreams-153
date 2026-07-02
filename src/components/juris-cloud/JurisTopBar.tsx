@@ -145,7 +145,7 @@ export default function JurisTopBar({
           </div>
           <button
             type="button"
-            onClick={() => navigate("/configuracoes/providers")}
+            onClick={() => navigate("/tech/providers")}
             className="jc-onboarding-cta"
           >
             Configurar agora
