@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProviders, PROVIDER_LABELS, PROVIDER_HINTS } from "@/hooks/useProviders";
 import type { ProviderCode } from "@/types/jurisai";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
-import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Key, Plus, Trash2, Star, AlertCircle, DollarSign, ShieldCheck, RefreshCw } from "lucide-react";
 import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBackBtn } from "@/lib/jurisaiShellTheme";
 
 /**
@@ -16,8 +17,10 @@ import { LfPage, LfInput, LfLabel, LfGhostBtn, LfPrimaryBtn, LfCard, LfHeaderBac
  */
 export default function ProvidersConfig() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { configs, models, loading, error, registerKey, deleteConfig, setDefaultConfig } = useProviders();
+  const { user, hasRole } = useAuth();
+  const { configs, models, loading, error, registerKey, deleteConfig, setDefaultConfig, reloadModels } = useProviders();
+  const isAdmin = hasRole("admin");
+  const [syncing, setSyncing] = useState(false);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -67,6 +70,34 @@ export default function ProvidersConfig() {
   const handleSetDefault = async (configId: string) => {
     const ok = await setDefaultConfig(configId);
     if (ok) toast.success("Definido como padrao.");
+  };
+
+  const handleSyncOpenRouter = async () => {
+    setSyncing(true);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke("sync-openrouter-models");
+      if (fnErr) {
+        toast.error("Falha ao sincronizar modelos da OpenRouter.", { description: fnErr.message });
+        return;
+      }
+      if (data?.ok) {
+        toast.success("Catalogo OpenRouter atualizado.", {
+          description: `${data.upserted} modelos ativos${data.deactivated ? `, ${data.deactivated} desativados` : ""}. (${data.with_tools} com suporte a tools de ${data.fetched} retornados.)`,
+          duration: 8000,
+        });
+        await reloadModels();
+      } else {
+        toast.error("A sincronizacao nao retornou sucesso.", {
+          description: data?.message || "Resposta inesperada da funcao.",
+        });
+      }
+    } catch (e) {
+      toast.error("Erro ao chamar a sincronizacao.", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const modelCount = (p: ProviderCode) => models.filter(m => m.provider === p).length;
@@ -328,9 +359,27 @@ export default function ProvidersConfig() {
         {/* Modelos disponiveis (info) */}
         {models.length > 0 && (
           <section style={cardStyle}>
-            <h3 style={{ fontSize: 14, margin: "0 0 12px", color: "#c0c0d0" }}>
-              Modelos disponiveis no catalogo ({models.length})
-            </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+              <h3 style={{ fontSize: 14, margin: 0, color: "#c0c0d0" }}>
+                Modelos disponiveis no catalogo ({models.length})
+              </h3>
+              {isAdmin && (
+                <button
+                  onClick={handleSyncOpenRouter}
+                  disabled={syncing}
+                  style={{ ...buttonGhost, padding: "6px 12px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, opacity: syncing ? 0.6 : 1 }}
+                  title="Busca o catalogo completo (400+) da OpenRouter e atualiza os modelos disponiveis"
+                >
+                  <RefreshCw size={14} style={syncing ? { animation: "spin 1s linear infinite" } : undefined} />
+                  {syncing ? "Sincronizando..." : "Sincronizar modelos OpenRouter"}
+                </button>
+              )}
+            </div>
+            {isAdmin && (
+              <p style={{ fontSize: 11, color: "#6b6b80", margin: "0 0 12px" }}>
+                A OpenRouter oferece 400+ modelos. Clique para importar todos que suportam ferramentas (tools) — necessario para os agentes.
+              </p>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
               {models.map(m => (
                 <div key={m.id} style={{

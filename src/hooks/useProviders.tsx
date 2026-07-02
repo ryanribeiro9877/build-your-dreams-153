@@ -131,6 +131,7 @@ export function useProviders() {
     loading,
     error,
     reload: loadConfigs,
+    reloadModels: loadModels,
     registerKey,
     deleteConfig,
     setDefaultConfig,
