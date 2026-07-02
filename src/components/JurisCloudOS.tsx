@@ -33,7 +33,7 @@ import { parseAgentPermissions } from "./juris-cloud/types";
 import {
   ACCENT, ACCENT_SOFT,
   DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
-  ALL_COMMANDS, INITIAL_MESSAGES,
+  INITIAL_MESSAGES,
   getTokenCost, formatTokenRefundMessage, formatInsufficientBalanceMessage,
   getAgentsForDepartment, toLegacyAgent,
 } from "./juris-cloud/constants";
@@ -527,7 +527,7 @@ export default function JurisCloudOS() {
   const closeCreateEmployee = () => setSearchParams({});
   const { user, signOut, hasRole } = useAuth();
   const { isMaster } = useMasterAdmin();
-  const { canAccessDepartment, canSeeCommand, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
+  const { canAccessDepartment, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
   useRealtimeNotifications();
   useBottleneckDetection(navigate);
   const { tokenBalance, consumeTokensWithRef, refundTokens } = useTokenBalance(navigate);
@@ -1121,7 +1121,6 @@ export default function JurisCloudOS() {
     DEPARTMENTS.find((d) => d.id === activeDept) ??
     (activeSidebarItem ? { id: activeSidebarItem.id, label: activeSidebarItem.label, color: activeSidebarItem.color, badge: activeSidebarItem.badge } : undefined);
 
-  const visibleCommands = ALL_COMMANDS.filter(c => canSeeCommand(c));
 
   const visibleAgents = (() => {
     let result: ReturnType<typeof toLegacyAgent>[];
@@ -1259,7 +1258,6 @@ export default function JurisCloudOS() {
             inputVal={inputVal}
             setInputVal={setInputVal}
             handleSend={handleSend}
-            visibleCommands={visibleCommands}
             isRecording={isRecording}
             toggleRecording={toggleRecording}
             isReadOnly={isReadOnly}
