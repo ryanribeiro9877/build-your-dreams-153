@@ -193,6 +193,17 @@ const GlobalStyles = () => (
     }
     .jc-nav-item:hover { background: var(--bg4); }
     .jc-nav-item.active { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.15); }
+    .jc-nav-group-header.expanded { background: var(--bg3); }
+    .jc-nav-chevron { margin-left: auto; flex-shrink: 0; }
+    .jc-nav-subitems {
+      display: flex; flex-direction: column;
+      margin: 1px 0 3px 8px; padding-left: 8px;
+      border-left: 1px solid var(--border);
+    }
+    .jc-nav-subitem { padding-left: 10px; }
+    .jc-sidebar.collapsed .jc-nav-chevron { display: none; }
+    .jc-sidebar.collapsed .jc-nav-subitems { margin-left: 0; padding-left: 0; border-left: none; }
+    .jc-sidebar.collapsed .jc-nav-subitem { padding-left: 8px; }
     .jc-session-del { opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; }
     .jc-session-item:hover .jc-session-del, .jc-session-item:focus-within .jc-session-del { opacity: 0.7; }
     .jc-session-del:hover { opacity: 1 !important; color: #ef4444 !important; background: rgba(239,68,68,0.12) !important; }
@@ -1140,12 +1151,20 @@ export default function JurisCloudOS() {
     return result.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   })();
 
+  // Itens do menu "Configurações" (grupo expansível na barra lateral).
+  // Listar/Criar Funcionário são exclusivos do admin; Meus Tokens e Meu Perfil
+  // ficam disponíveis a todos os usuários autenticados.
+  const CONFIG_MENU_CHILDREN: MenuItem[] = [
+    { id: "tokens", label: "Meus Tokens", icon: Coins, color: ACCENT, action: () => navigate("/tokens"), show: true },
+    { id: "usuarios-criar", label: "Criar Funcionário", icon: UserPlus, color: ACCENT, action: () => openCreateEmployee(), show: canAccessAdmin },
+    { id: "usuarios-listar", label: "Listar Funcionário", icon: Users, color: ACCENT_SOFT, action: () => navigate("/admin/funcionarios"), show: canAccessAdmin },
+    { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
+  ];
+
   // Menu items
   const MENU_ITEMS: MenuItem[] = [
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
-    { id: "usuarios-listar", label: "Listar Usuários", icon: Users, color: ACCENT_SOFT, action: () => navigate("/admin/funcionarios"), show: canAccessAdmin },
-    { id: "usuarios-criar", label: "Criar Usuário", icon: UserPlus, color: ACCENT, action: () => openCreateEmployee(), show: canAccessAdmin },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
@@ -1153,8 +1172,7 @@ export default function JurisCloudOS() {
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/tech/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/tech/providers"), show: hasRole("tech") },
     { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: hasRole("tech") },
-    { id: "tokens", label: "Meus Tokens", icon: Coins, color: ACCENT, action: () => navigate("/tokens"), show: true },
-    { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
+    { id: "configuracoes", label: "Configurações", icon: Settings, color: ACCENT, action: () => {}, show: CONFIG_MENU_CHILDREN.some(c => c.show), children: CONFIG_MENU_CHILDREN },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
 

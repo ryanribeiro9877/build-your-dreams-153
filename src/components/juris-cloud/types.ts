@@ -85,4 +85,6 @@ export interface MenuItem {
   color: string;
   action: () => void;
   show: boolean;
+  /** Quando presente, o item vira um grupo expansível (ex.: "Configurações"). */
+  children?: MenuItem[];
 }
