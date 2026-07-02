@@ -4,7 +4,7 @@ import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   Menu, AlertTriangle, AlertCircle, CheckCircle, Info,
   Coins, UserPlus, Users, ClipboardList,
-  MessageSquare, ShieldCheck, Lock, KanbanSquare,
+  ShieldCheck, Lock, KanbanSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Agent, SidebarItem } from "./types";
@@ -28,7 +28,6 @@ export interface JurisTopBarProps {
   tokenBalance: { balance: number };
   user: { email?: string | null; user_metadata?: { display_name?: string } } | null;
   inboxCount: { total: number; overdue: number };
-  interAssistantCount: number;
   validationCount: number;
   visibility: { showAlertChips: boolean };
   isReadOnly: boolean;
@@ -46,7 +45,6 @@ export default function JurisTopBar({
   tokenBalance,
   user,
   inboxCount,
-  interAssistantCount,
   validationCount,
   visibility,
   isReadOnly,
@@ -71,28 +69,6 @@ export default function JurisTopBar({
           </div>
         </div>
         <div className="jc-topbar-trailing">
-          <button
-            type="button"
-            className="jc-btn-team-list"
-            onClick={() => navigate("/sistema/inter-assistente")}
-            title="Pedidos entre Meus Assistentes"
-            style={{ position: "relative" }}
-          >
-            <MessageSquare size={15} strokeWidth={2.5} />
-            Inter-Assistente
-            {interAssistantCount > 0 && (
-              <span style={{
-                position: "absolute", top: -4, right: -4,
-                minWidth: 18, height: 18, padding: "0 5px",
-                borderRadius: 9, background: "#a855f7", color: "#ffffff",
-                fontSize: 10, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {interAssistantCount}
-              </span>
-            )}
-          </button>
-
           {validationCount > 0 && (
             <button
               type="button"

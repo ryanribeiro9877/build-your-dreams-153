@@ -1,9 +1,8 @@
 import type { UserTaskStatus } from "@/types/jurisai";
 
 /**
- * Rótulos e ordenação dos status de `user_tasks` — compartilhados entre o
- * MyInbox (página "Minhas Tarefas") e o painel lateral (Central de Operações),
- * para evitar duplicação de mapas.
+ * Rótulos e ordenação dos status de `user_tasks` — usados pelo MyInbox
+ * (página "Minhas Tarefas"), para evitar duplicação de mapas.
  */
 export const USER_TASK_STATUS_LABELS: Record<UserTaskStatus, string> = {
   draft: "Rascunho",

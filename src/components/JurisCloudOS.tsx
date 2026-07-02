@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount } from "@/hooks/useUserTasks";
-import { useInterAssistantCount } from "@/hooks/useInterAssistant";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
@@ -19,7 +18,7 @@ import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings, ClipboardList, Upload,
+  Bot, Clock, Settings, Upload,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -27,7 +26,6 @@ import type { LucideIcon } from "lucide-react";
 import JurisSidebar from "./juris-cloud/JurisSidebar";
 import JurisTopBar from "./juris-cloud/JurisTopBar";
 import JurisChatPanel from "./juris-cloud/JurisChatPanel";
-import JurisRightPanel from "./juris-cloud/JurisRightPanel";
 
 // Shared constants & types
 import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/types";
@@ -536,7 +534,6 @@ export default function JurisCloudOS() {
 
   const { agents: dbAgents, loading: agentsLoading } = useAgents();
   const inboxCount = useInboxCount();
-  const interAssistantCount = useInterAssistantCount();
   const [validationCount, setValidationCount] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -697,13 +694,11 @@ export default function JurisCloudOS() {
   const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
   const [thinking, setThinking]           = useState(false);
-  const [rightTab, setRightTab]           = useState("processos");
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const {
-    sidebarCollapsed, rightCollapsed,
-    setSidebarCollapsed, setRightCollapsed,
+    sidebarCollapsed,
+    setSidebarCollapsed,
   } = useUiPreferences();
   const [isRecording, setIsRecording]     = useState(false);
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
@@ -808,31 +803,6 @@ export default function JurisCloudOS() {
     });
   };
 
-  const handleRightToggle = (source: "click" | "keyboard" = "click") => {
-    const narrow = typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches;
-    if (narrow) {
-      if (!rightPanelOpen) {
-        setRightPanelOpen(true);
-        setRightCollapsed(false);
-        trackUiEvent("right_panel_toggle", { surface: "right_panel", collapsed: false, source });
-        announce("Painel de operações expandido");
-        return;
-      }
-      const nextCollapsed = !rightCollapsed;
-      setRightCollapsed(nextCollapsed);
-      if (nextCollapsed) setRightPanelOpen(false);
-      trackUiEvent("right_panel_toggle", { surface: "right_panel", collapsed: nextCollapsed, source });
-      announce(nextCollapsed ? "Painel de operações recolhido" : "Painel de operações expandido");
-      return;
-    }
-    setRightCollapsed(prev => {
-      const next = !prev;
-      trackUiEvent("right_panel_toggle", { surface: "right_panel", collapsed: next, source });
-      announce(next ? "Painel de operações recolhido" : "Painel de operações expandido");
-      return next;
-    });
-  };
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -845,10 +815,6 @@ export default function JurisCloudOS() {
         e.preventDefault();
         trackUiEvent("shortcut_used", { target_id: "ctrl+b", surface: "left_sidebar" });
         handleSidebarToggle("keyboard");
-      } else if (key === "o") {
-        e.preventDefault();
-        trackUiEvent("shortcut_used", { target_id: "ctrl+o", surface: "right_panel" });
-        handleRightToggle("keyboard");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1184,7 +1150,6 @@ export default function JurisCloudOS() {
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
-    { id: "pendencias", label: "Pendências", icon: ClipboardList, color: ACCENT, action: () => navigate("/pendencias"), show: true },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/admin/agentes"), show: hasRole("tech") },
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/admin/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/configuracoes/providers"), show: hasRole("tech") },
@@ -1276,7 +1241,6 @@ export default function JurisCloudOS() {
             tokenBalance={tokenBalance}
             user={user}
             inboxCount={inboxCount}
-            interAssistantCount={interAssistantCount}
             validationCount={validationCount}
             visibility={visibility}
             isReadOnly={isReadOnly}
@@ -1304,20 +1268,6 @@ export default function JurisCloudOS() {
           />
         </main>
 
-        {/* RIGHT PANEL */}
-        <JurisRightPanel
-          rightPanelOpen={rightPanelOpen}
-          setRightPanelOpen={setRightPanelOpen}
-          rightCollapsed={rightCollapsed}
-          setRightCollapsed={setRightCollapsed}
-          rightTab={rightTab}
-          setRightTab={setRightTab}
-          allAgents={AGENTS}
-          visibleAgents={visibleAgents}
-          visibility={visibility}
-          hasRole={hasRole}
-        />
-
         {/* TOGGLES — outside panels to escape overflow:hidden */}
         {withTooltip("Ctrl+B",
           <button
@@ -1336,26 +1286,6 @@ export default function JurisCloudOS() {
             </span>
           </button>
         , "sidebar_toggle_btn")}
-
-        {withTooltip("Ctrl+O",
-          <button
-            className={`jc-right-toggle-desk ${rightCollapsed ? "is-collapsed" : ""} ${rightPanelOpen ? "is-panel-open" : ""}`}
-            onClick={() => handleRightToggle("click")}
-            aria-label={rightCollapsed ? "Expandir painel" : "Recolher painel"}
-            aria-expanded={!rightCollapsed}
-            aria-controls="jc-right-panel"
-            aria-keyshortcuts="Control+O Meta+O"
-            type="button"
-          >
-            <span className="jc-toggle-arrow" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </span>
-          </button>,
-          "right_panel_toggle_btn",
-          { side: "left", surface: "right_panel", alwaysOn: true }
-        )}
 
         {/* Live region for keyboard shortcut announcements */}
         <div className="jc-sr-only" role="status" aria-live="polite" aria-atomic="true">

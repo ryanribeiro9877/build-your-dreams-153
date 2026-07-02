@@ -120,55 +120,6 @@ describe("Sidebar responsive behavior", () => {
     // The mobile overlay element exists for closing
     expect(container.querySelector(".jc-sidebar-overlay")).toBeTruthy();
   });
-
-
-  it("Escape on right-panel toggle keeps focus on the trigger button (desktop)", async () => {
-    setViewport(1280);
-    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
-    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
-
-    const rightToggle = container.querySelector(
-      ".jc-right-toggle-desk"
-    ) as HTMLButtonElement | null;
-    expect(rightToggle).toBeTruthy();
-    rightToggle!.focus();
-    expect(document.activeElement).toBe(rightToggle);
-    // Scroll position should not change to top after Escape.
-    const beforeY = window.scrollY;
-    fireEvent.keyDown(rightToggle!, { key: "Escape" });
-    expect(document.activeElement).toBe(rightToggle);
-    expect(window.scrollY).toBe(beforeY);
-  });
-
-  it("Escape on right-panel toggle keeps focus also on mobile viewport", async () => {
-    setViewport(375, 812);
-    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
-    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
-
-    const rightToggle = container.querySelector(
-      ".jc-right-toggle-desk"
-    ) as HTMLButtonElement | null;
-    if (rightToggle) {
-      rightToggle.focus();
-      const beforeY = window.scrollY;
-      fireEvent.keyDown(rightToggle, { key: "Escape" });
-      expect(document.activeElement).toBe(rightToggle);
-      expect(window.scrollY).toBe(beforeY);
-    }
-  });
-
-  it("Ctrl+O toggles the right panel collapsed state", async () => {
-    setViewport(1280);
-    const { default: JurisCloudOS } = await import("@/components/JurisCloudOS");
-    const { container } = render(<Wrap><JurisCloudOS /></Wrap>);
-
-    const right = container.querySelector("#jc-right-panel");
-    expect(right).toBeTruthy();
-    const initial = right!.classList.contains("collapsed");
-    fireEvent.keyDown(window, { key: "o", ctrlKey: true });
-    const after = container.querySelector("#jc-right-panel");
-    expect(after!.classList.contains("collapsed")).toBe(!initial);
-  });
 });
 
 describe("UI tracking", () => {
