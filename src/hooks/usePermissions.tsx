@@ -25,13 +25,17 @@ export function usePermissions() {
     return (visibility.agentRolesVisible as string[]).includes(role);
   };
 
-  const isAdmin = primaryRole === "admin";
+  // "É admin" = POSSUI o papel admin — não depende da ordem em que os papéis
+  // são retornados. Um usuário admin+director (ex.: o sócio) tem primaryRole
+  // potencialmente "director" (userRoles[0]), então checar posse do papel é o
+  // correto para liberar as ações exclusivas do admin.
+  const isAdmin = userRoles.includes("admin");
   const isTech = userRoles.includes("tech");
   const isDirector = primaryRole === "director";
   const isManager = primaryRole === "manager";
   const canEdit = ["admin", "director", "manager", "lawyer", "receptionist", "financial", "marketing", "protocol", "calculator", "compliance"].includes(primaryRole);
   const canDelete = ["admin", "director"].includes(primaryRole);
-  const canAccessAdmin = primaryRole === "admin";
+  const canAccessAdmin = userRoles.includes("admin");
   const canAccessFinancial = ["admin", "director", "manager", "financial"].includes(primaryRole);
   const canAccessClients = ["admin", "receptionist"].includes(primaryRole);
   const canEditAgents = isTech;
