@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare, Trash2,
+  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare, Trash2, ChevronDown,
 } from "lucide-react";
 import type { Agent, SidebarItem, MenuItem } from "./types";
 import { DEPT_ICONS, getHierarchyColor, getInitials } from "./constants";
@@ -63,6 +63,7 @@ export default function JurisSidebar({
   onDeleteSession,
 }: JurisSidebarProps) {
   const navigate = useNavigate();
+  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
 
   const withTooltip = (
     label: string,
@@ -277,51 +278,107 @@ export default function JurisSidebar({
 
           <div className="jc-section-label" style={{ marginTop: 8 }}>Sistema</div>
           {menuItems.filter(m => m.show).map(item => {
-            const activate = (source: "click" | "keyboard") => {
-              trackUiEvent("nav_click", {
-                surface: "left_sidebar",
-                target_id: item.id,
-                target_label: item.label,
-                source,
-                collapsed: sidebarCollapsed,
-              });
-              item.action();
+            // Renderiza um item folha (navegável). Reutilizado para itens de
+            // topo e para os filhos de um grupo (ex.: "Configurações").
+            const renderLeaf = (leaf: MenuItem, isChild: boolean) => {
+              const activate = (source: "click" | "keyboard") => {
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: leaf.id,
+                  target_label: leaf.label,
+                  source,
+                  collapsed: sidebarCollapsed,
+                });
+                leaf.action();
+              };
+              return withTooltip(leaf.label,
+                <div
+                  key={leaf.id}
+                  className={cn("jc-nav-item", isChild && "jc-nav-subitem")}
+                  onClick={() => activate("click")}
+                  role="button"
+                  tabIndex={0}
+                  onFocus={(e) => {
+                    if (e.target.matches(":focus-visible")) {
+                      trackUiEvent("tab_navigate", {
+                        surface: "left_sidebar",
+                        target_id: leaf.id,
+                        target_label: leaf.label,
+                        collapsed: sidebarCollapsed,
+                      });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      trackUiEvent("key_activate", {
+                        surface: "left_sidebar",
+                        target_id: leaf.id,
+                        target_label: leaf.label,
+                        source: "keyboard",
+                      });
+                      activate("keyboard");
+                    }
+                  }}
+                >
+                  <leaf.icon size={16} style={{ color: leaf.color, flexShrink: 0 }} />
+                  <span className="jc-nav-label">{leaf.label}</span>
+                </div>,
+                leaf.id
+              );
             };
-            return withTooltip(item.label,
-              <div
-                key={item.id}
-                className="jc-nav-item"
-                onClick={() => activate("click")}
-                role="button"
-                tabIndex={0}
-                onFocus={(e) => {
-                  if (e.target.matches(":focus-visible")) {
-                    trackUiEvent("tab_navigate", {
-                      surface: "left_sidebar",
-                      target_id: item.id,
-                      target_label: item.label,
-                      collapsed: sidebarCollapsed,
-                    });
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    trackUiEvent("key_activate", {
-                      surface: "left_sidebar",
-                      target_id: item.id,
-                      target_label: item.label,
-                      source: "keyboard",
-                    });
-                    activate("keyboard");
-                  }
-                }}
-              >
-                <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
-                <span className="jc-nav-label">{item.label}</span>
-              </div>,
-              item.id
-            );
+
+            // Grupo expansível (item com filhos), ex.: "Configurações".
+            if (item.children && item.children.length > 0) {
+              const visibleChildren = item.children.filter(c => c.show);
+              if (visibleChildren.length === 0) return null;
+              const expanded = !!expandedGroups[item.id];
+              const toggle = () => {
+                trackUiEvent("nav_click", {
+                  surface: "left_sidebar",
+                  target_id: item.id,
+                  target_label: item.label,
+                  source: "click",
+                  collapsed: sidebarCollapsed,
+                });
+                setExpandedGroups(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+              };
+              return (
+                <div key={item.id} className="jc-nav-group">
+                  {withTooltip(item.label,
+                    <div
+                      className={cn("jc-nav-item", "jc-nav-group-header", expanded && "expanded")}
+                      onClick={toggle}
+                      role="button"
+                      aria-expanded={expanded}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggle();
+                        }
+                      }}
+                    >
+                      <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
+                      <span className="jc-nav-label">{item.label}</span>
+                      <ChevronDown
+                        size={14}
+                        className="jc-nav-chevron"
+                        style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+                      />
+                    </div>,
+                    item.id
+                  )}
+                  {expanded && (
+                    <div className="jc-nav-subitems">
+                      {visibleChildren.map(child => renderLeaf(child, true))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return renderLeaf(item, false);
           })}
         </nav>
 
