@@ -73,34 +73,6 @@ export default function Admin() {
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        {isMaster && (
-          <>
-            <button
-              type="button"
-              onClick={() => navigate("/sistema?criar=funcionario")}
-              style={{
-                ...btnBase,
-                borderColor: "#eab308",
-                color: "#facc15",
-                fontWeight: 700,
-              }}
-            >
-              Criar Funcionário
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/admin/funcionarios")}
-              style={{
-                ...btnBase,
-                borderColor: "#eab308",
-                color: "#facc15",
-                fontWeight: 600,
-              }}
-            >
-              Ver Lista
-            </button>
-          </>
-        )}
         {canAccessAdmin && (
           <>
             <button type="button" onClick={() => navigate("/admin/tokens")} style={{ ...btnBase, borderColor: gold, color: gold }}>
