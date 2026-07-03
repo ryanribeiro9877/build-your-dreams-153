@@ -29,6 +29,7 @@ import JurisChatPanel from "./juris-cloud/JurisChatPanel";
 // Shared constants & types
 import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/types";
 import { parseAgentPermissions } from "./juris-cloud/types";
+import { deriveLiveStage, type LiveStage } from "./juris-cloud/liveStatus";
 import {
   ACCENT, ACCENT_SOFT,
   DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
@@ -723,6 +724,11 @@ export default function JurisCloudOS() {
   const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
   const [thinking, setThinking]           = useState(false);
+  // Live status da orquestração (Caminho B): fase amigável + "bloco X de N".
+  const [liveStage, setLiveStage]         = useState<LiveStage | null>(null);
+  // Momento em que o "processando" começou — alimenta o cronômetro e o aviso de
+  // peça longa. Fica null quando não há processamento em andamento.
+  const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const {
@@ -739,6 +745,18 @@ export default function JurisCloudOS() {
       document.documentElement.classList.add("dark");
     }
   }, []);
+
+  // Cronômetro do "processando": marca o início quando o thinking liga e limpa
+  // (junto do liveStage) quando desliga. Centraliza aqui para não depender dos
+  // vários pontos de setThinking(true) espalhados nos fluxos de envio.
+  useEffect(() => {
+    if (thinking) {
+      setThinkingStartedAt((prev) => prev ?? Date.now());
+    } else {
+      setThinkingStartedAt(null);
+      setLiveStage(null);
+    }
+  }, [thinking]);
 
   // V23: acompanha a orquestracao via Realtime. Etapas (role=system) e a resposta
   // final (role=assistant) chegam como linhas em chat_messages. Fetch inicial
@@ -788,9 +806,12 @@ export default function JurisCloudOS() {
         if (m.role === "user" && prev.some(x => String(x.id).startsWith("local_user_"))) return prev;
         return [...prev, m];
       });
+      // Etapa intermediária: alimenta o indicador de progresso (fase amigável +
+      // "bloco X de N"). Não é renderizada como balão (2.1 preserva o log oculto).
+      if (k === "stage") setLiveStage(deriveLiveStage(row));
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { setThinking(false); loadSessions(); }
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { setThinking(false); setLiveStage(null); loadSessions(); }
     };
 
     (async () => {
@@ -1289,6 +1310,8 @@ export default function JurisCloudOS() {
             messages={messages}
             thinking={thinking}
             thinkingAgentName="Meu Assistente"
+            liveStage={liveStage}
+            thinkingStartedAt={thinkingStartedAt}
             showWelcome={showWelcome}
             setShowWelcome={setShowWelcome}
             inputVal={inputVal}
