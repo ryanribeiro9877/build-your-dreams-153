@@ -8,6 +8,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
+import { cancelRun } from "@/hooks/useActionConfirm";
 import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
@@ -552,9 +553,10 @@ const GlobalStyles = () => (
 
 // Status da run que devem ENCERRAR o "pensando" no front. Espelham os kinds de
 // mensagem que já param o indicador (final/error/action_proposal/action_done):
-//   done → final · failed → error · awaiting_confirmation → action_proposal.
+//   done → final · failed → error · awaiting_confirmation → action_proposal ·
+//   cancelled → STOP instantâneo (geração interrompida pelo usuário).
 // No escopo de módulo (constante estável) para não virar dependência de hook.
-const TERMINAL_RUN_STATUSES = ["done", "failed", "awaiting_confirmation"];
+const TERMINAL_RUN_STATUSES = ["done", "failed", "awaiting_confirmation", "cancelled"];
 
 // ── MAIN COMPONENT ───────────────────────────────────────────
 export default function JurisCloudOS() {
@@ -918,7 +920,7 @@ export default function JurisCloudOS() {
       }
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status
@@ -1164,6 +1166,30 @@ export default function JurisCloudOS() {
       }]);
     }
   };
+
+  // STOP instantâneo: cancela a run DAQUELA conversa (a aberta). Usa o runId do
+  // mapa por session_id (2.3) — cancelar A NÃO afeta B. Otimista: mostra "Geração
+  // interrompida" na hora; o backend encerra a run como 'cancelled' e a
+  // reconciliação (assinatura de orchestration_runs) confirma e para o "pensando".
+  const [stopping, setStopping] = useState(false);
+  const handleStop = useCallback(async () => {
+    const sid = assistantSessionId;
+    if (!sid) return;
+    const st = runStatesRef.current[sid];
+    if (!st?.thinking) return;
+    setStopping(true);
+    // Feedback imediato na fase do indicador (não espera o round-trip).
+    patchRunState(sid, { liveStage: { label: "Interrompendo…" } });
+    try {
+      await cancelRun({ runId: st.runId, sessionId: sid });
+    } catch (e) {
+      console.warn("[handleStop] cancelamento falhou:", e);
+      // Falha ao pedir o cancelamento: restaura o indicador (segue processando).
+      patchRunState(sid, { liveStage: null });
+    } finally {
+      setStopping(false);
+    }
+  }, [assistantSessionId, patchRunState]);
 
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
@@ -1514,6 +1540,8 @@ export default function JurisCloudOS() {
             inputVal={inputVal}
             setInputVal={setInputVal}
             handleSend={handleSend}
+            onStop={handleStop}
+            stopping={stopping}
             isRecording={isRecording}
             toggleRecording={toggleRecording}
             isReadOnly={isReadOnly}

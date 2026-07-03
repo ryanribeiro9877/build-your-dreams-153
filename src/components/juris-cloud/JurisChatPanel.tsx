@@ -309,6 +309,10 @@ export interface JurisChatPanelProps {
   inputVal: string;
   setInputVal: (v: string) => void;
   handleSend: (text?: string, files?: File[]) => void;
+  /** STOP instantâneo: cancela a run desta conversa (botão vira quadrado enquanto processa). */
+  onStop?: () => void;
+  /** Cancelamento em andamento (clique feito, aguardando o backend reagir). */
+  stopping?: boolean;
   isRecording: boolean;
   toggleRecording: () => void;
   isReadOnly: boolean;
@@ -327,6 +331,8 @@ export default function JurisChatPanel({
   inputVal,
   setInputVal,
   handleSend,
+  onStop,
+  stopping,
   isRecording,
   toggleRecording,
   isReadOnly,
@@ -474,23 +480,43 @@ export default function JurisChatPanel({
               )}
               <span className="jc-sr-only">{isRecording ? "Parar gravação" : "Gravar áudio"}</span>
             </button>
-            <button
-              className="jc-send-btn"
-              onClick={() => doSend()}
-              disabled={thinking || (!inputVal.trim() && attachedFiles.length === 0)}
-              aria-label="Enviar"
-              type="button"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.6"
-                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="5 6 11 12 5 18" />
-                <polyline points="12 6 18 12 12 18" />
-                <path d="M20 4l0.6 1.4L22 6l-1.4 0.6L20 8l-0.6-1.4L18 6l1.4-0.6z"
-                      fill="currentColor" stroke="none" />
-              </svg>
-              <span className="jc-sr-only">Enviar mensagem</span>
-            </button>
+            {thinking && onStop ? (
+              // STOP instantâneo: enquanto processa, a seta vira um QUADRADO de stop.
+              // Clicar cancela a run DESTA conversa (o botão volta a ser seta ao
+              // encerrar). Fica desabilitado no intervalo entre o clique e a reação.
+              <button
+                className="jc-send-btn is-stop"
+                onClick={() => onStop()}
+                disabled={stopping}
+                aria-label="Parar geração"
+                title="Parar geração"
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
+                     stroke="none" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                <span className="jc-sr-only">Parar geração</span>
+              </button>
+            ) : (
+              <button
+                className="jc-send-btn"
+                onClick={() => doSend()}
+                disabled={thinking || (!inputVal.trim() && attachedFiles.length === 0)}
+                aria-label="Enviar"
+                type="button"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" strokeWidth="2.6"
+                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="5 6 11 12 5 18" />
+                  <polyline points="12 6 18 12 12 18" />
+                  <path d="M20 4l0.6 1.4L22 6l-1.4 0.6L20 8l-0.6-1.4L18 6l1.4-0.6z"
+                        fill="currentColor" stroke="none" />
+                </svg>
+                <span className="jc-sr-only">Enviar mensagem</span>
+              </button>
+            )}
           </div>
           <div className="jc-input-hint">
             {isReadOnly && <span style={{ color: "#EAB308", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
