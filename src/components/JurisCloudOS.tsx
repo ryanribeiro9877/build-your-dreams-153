@@ -31,6 +31,7 @@ import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/
 import { parseAgentPermissions } from "./juris-cloud/types";
 import { deriveLiveStage } from "./juris-cloud/liveStatus";
 import { applyRunPatch, type RunState } from "./juris-cloud/runStates";
+import { deriveConversationStatus } from "./juris-cloud/sessionStatus";
 import {
   ACCENT, ACCENT_SOFT,
   DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
@@ -589,7 +590,13 @@ export default function JurisCloudOS() {
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
 
   // ── Histórico de conversas ──
-  type SessionSummary = { id: string; title: string; preview: string; lastMessageAt: string; messageCount: number };
+  // clientName/runStatus (2.4): cliente vinculado (só exibição) + status da
+  // última run, para derivar o status da conversa combinado com o sinal ao vivo.
+  type SessionSummary = {
+    id: string; title: string; preview: string;
+    lastMessageAt: string; messageCount: number;
+    clientName: string | null; runStatus: string | null;
+  };
   const [chatSessions, setChatSessions] = useState<SessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
@@ -609,12 +616,12 @@ export default function JurisCloudOS() {
     setSessionsLoading(true);
     const { data } = await supabase
       .from("chat_sessions")
-      .select("id, title, summary, last_message_at, message_count")
+      .select("id, title, summary, last_message_at, message_count, client_id")
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("last_message_at", { ascending: false })
       .limit(30);
-    const rows = (data as unknown as { id: string; title: string | null; summary: string | null; last_message_at: string; message_count: number }[]) || [];
+    const rows = (data as unknown as { id: string; title: string | null; summary: string | null; last_message_at: string; message_count: number; client_id: string | null }[]) || [];
     if (rows.length === 0) { setChatSessions([]); setSessionsLoading(false); return; }
 
     // Busca as mensagens (user + assistant final) dessas sessões para montar proposta + contexto.
@@ -632,6 +639,36 @@ export default function JurisCloudOS() {
       if (m.role === "assistant" && (m.metadata?.kind === "final" || m.metadata?.kind == null)) lastAssistant[m.session_id] = m.content;
     }
 
+    // Status por conversa (2.4): status da ÚLTIMA run de cada sessão. Ordenado
+    // por created_at asc ⇒ a última escrita (run mais recente) vence no mapa.
+    // RLS de orchestration_runs limita a runs do próprio usuário (owner).
+    const lastRunStatus: Record<string, string> = {};
+    const { data: runRows } = await supabase
+      .from("orchestration_runs")
+      .select("session_id, status, created_at")
+      .in("session_id", ids)
+      .order("created_at", { ascending: true });
+    for (const r of (runRows as unknown as { session_id: string; status: string }[]) || []) {
+      lastRunStatus[r.session_id] = r.status;
+    }
+
+    // Cliente vinculado (2.4 — SOMENTE exibição). A coluna client_id JÁ existe
+    // em chat_sessions; o vínculo em si é preenchido por OUTRO card (Resolvedor
+    // de cliente). Aqui só resolvemos o nome quando o vínculo existe. Se o
+    // usuário não tiver acesso à tabela clients (RLS: recepção/sócio), o select
+    // volta vazio e o nome fica null — sem quebrar.
+    const clientName: Record<string, string> = {};
+    const clientIds = Array.from(new Set(rows.map(r => r.client_id).filter((v): v is string => !!v)));
+    if (clientIds.length > 0) {
+      const { data: clientRows } = await supabase
+        .from("clients")
+        .select("id, full_name")
+        .in("id", clientIds);
+      for (const c of (clientRows as unknown as { id: string; full_name: string | null }[]) || []) {
+        if (c.full_name) clientName[c.id] = c.full_name;
+      }
+    }
+
     const placeholders = ["", "nova conversa", "meu assistente"];
     setChatSessions(rows.map(r => {
       const stored = (r.title || "").trim();
@@ -645,7 +682,12 @@ export default function JurisCloudOS() {
         : (lastAssistant[r.id] || firstUser[r.id] || "");
       let preview = ctxSource.replace(/\n?\[Arquivos:.*?\]/gi, " ").replace(/\s+/g, " ").trim();
       if (preview.length > 90) preview = preview.slice(0, 87) + "…";
-      return { id: r.id, title, preview, lastMessageAt: r.last_message_at, messageCount: r.message_count };
+      return {
+        id: r.id, title, preview,
+        lastMessageAt: r.last_message_at, messageCount: r.message_count,
+        clientName: r.client_id ? (clientName[r.client_id] ?? null) : null,
+        runStatus: lastRunStatus[r.id] ?? null,
+      };
     }));
     setSessionsLoading(false);
   };
@@ -762,6 +804,15 @@ export default function JurisCloudOS() {
   const thinking = openRun?.thinking ?? false;
   const liveStage = openRun?.liveStage ?? null;
   const thinkingStartedAt = openRun?.thinkingStartedAt ?? null;
+
+  // Status por conversa (2.4): combina o status da última run (banco) com o
+  // sinal AO VIVO do mapa runStates (thinking) — assim uma conversa gerando
+  // mostra "em andamento" mesmo antes de o banco registrar o 1o UPDATE da run.
+  // Recomputa a cada render (≤30 itens): barato e sempre reflete o estado atual.
+  const sessionsWithStatus = chatSessions.map(s => ({
+    ...s,
+    status: deriveConversationStatus(s.runStatus, !!runStates[s.id]?.thinking),
+  }));
 
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
@@ -1480,7 +1531,7 @@ export default function JurisCloudOS() {
           openTooltipCount={openTooltipCount}
           setOpenTooltipCount={setOpenTooltipCount}
           hasRole={hasRole}
-          chatSessions={chatSessions}
+          chatSessions={sessionsWithStatus}
           activeSessionId={assistantSessionId}
           onSwitchSession={switchSession}
           onNewChat={startNewChat}
