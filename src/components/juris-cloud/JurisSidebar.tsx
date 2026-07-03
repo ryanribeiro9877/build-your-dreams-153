@@ -12,12 +12,44 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare, Trash2, ChevronDown,
+  Search, Sparkles, Settings, Network, Circle, Plus, MessageSquare, Trash2, ChevronDown, UserRound,
 } from "lucide-react";
 import type { Agent, SidebarItem, MenuItem } from "./types";
 import { DEPT_ICONS, getHierarchyColor, getInitials } from "./constants";
+import { STATUS_META, type ConversationStatus } from "./sessionStatus";
 
-type SessionSummary = { id: string; title: string; preview?: string; lastMessageAt: string; messageCount: number };
+// Selo de status da conversa (2.4). Um ponto colorido + rótulo curto. Só é
+// renderizado quando há um status derivável (o componente pai passa null quando
+// o estado não é confiável — nunca inventamos um status).
+function StatusBadge({ status }: { status: ConversationStatus }) {
+  const meta = STATUS_META[status];
+  return (
+    <span
+      title={meta.label}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "1px 7px", borderRadius: 10, fontSize: 9.5, fontWeight: 600,
+        lineHeight: 1.5, whiteSpace: "nowrap",
+        color: meta.fg, background: meta.bg, border: `1px solid ${meta.border}`,
+      }}
+    >
+      <span
+        style={{
+          width: 5, height: 5, borderRadius: "50%", background: meta.dot, flexShrink: 0,
+          animation: status === "em_andamento" ? "pulse 1.4s infinite" : undefined,
+        }}
+      />
+      {meta.label}
+    </span>
+  );
+}
+
+type SessionSummary = {
+  id: string; title: string; preview?: string;
+  lastMessageAt: string; messageCount: number;
+  clientName?: string | null;
+  status?: ConversationStatus | null;
+};
 
 export interface JurisSidebarProps {
   sidebarOpen: boolean;
@@ -215,9 +247,11 @@ export default function JurisSidebar({
                 </div>
               ) : chatSessions.map(s => {
                 const isActive = s.id === activeSessionId;
-                const dateStr = s.lastMessageAt
-                  ? new Date(s.lastMessageAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
-                  : "";
+                // Data + HORÁRIO (2.4): antes só a data; agora dd/mm HH:MM.
+                const when = s.lastMessageAt ? new Date(s.lastMessageAt) : null;
+                const dateStr = when ? when.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+                const timeStr = when ? when.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+                const dateTimeStr = when ? `${dateStr} ${timeStr}` : "";
                 const handleDelete = (e: React.MouseEvent | React.KeyboardEvent) => {
                   e.stopPropagation();
                   if (!onDeleteSession) return;
@@ -225,7 +259,10 @@ export default function JurisSidebar({
                     onDeleteSession(s.id);
                   }
                 };
-                const tooltipText = s.preview ? `${s.title}\n\n${s.preview}` : s.title;
+                const tooltipParts = [s.title];
+                if (s.clientName) tooltipParts.push(`Cliente: ${s.clientName}`);
+                if (s.preview) tooltipParts.push(`\n${s.preview}`);
+                const tooltipText = tooltipParts.join("\n");
                 return (
                   <div
                     key={s.id}
@@ -245,7 +282,6 @@ export default function JurisSidebar({
                           fontSize: 12, fontWeight: 500, flex: 1, minWidth: 0,
                           color: isActive ? "#EAB308" : "var(--text1)",
                         }}>{s.title}</span>
-                        <span style={{ fontSize: 9.5, color: "var(--text2)", flexShrink: 0 }}>{dateStr}</span>
                         <button
                           type="button"
                           className="jc-session-del"
@@ -262,6 +298,27 @@ export default function JurisSidebar({
                           <Trash2 size={12} />
                         </button>
                       </div>
+                      {/* Meta: status (2.4) + data/HORÁRIO. Status só aparece
+                          quando derivável; senão fica só data + horário. */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {s.status && <StatusBadge status={s.status} />}
+                        {dateTimeStr && (
+                          <span style={{ fontSize: 9.5, color: "var(--text3)", flexShrink: 0 }}>{dateTimeStr}</span>
+                        )}
+                      </div>
+                      {/* Cliente vinculado (2.4 — só exibição). Vazio quando não
+                          há vínculo; não quebra o layout nesse caso. */}
+                      {s.clientName && (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                          fontSize: 10, color: "var(--text2)", minWidth: 0,
+                        }}>
+                          <UserRound size={10} style={{ flexShrink: 0, color: "var(--text3)" }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.clientName}
+                          </span>
+                        </span>
+                      )}
                       {s.preview && (
                         <span style={{
                           fontSize: 11, color: "var(--text2)", lineHeight: 1.4,
