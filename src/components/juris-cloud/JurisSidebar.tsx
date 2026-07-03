@@ -333,6 +333,7 @@ export default function JurisSidebar({
               const visibleChildren = item.children.filter(c => c.show);
               if (visibleChildren.length === 0) return null;
               const expanded = !!expandedGroups[item.id];
+              const submenuId = `jc-submenu-${item.id}`;
               const toggle = () => {
                 trackUiEvent("nav_click", {
                   surface: "left_sidebar",
@@ -346,34 +347,24 @@ export default function JurisSidebar({
               return (
                 <div key={item.id} className="jc-nav-group">
                   {withTooltip(item.label,
-                    <div
+                    <button
+                      type="button"
                       className={cn("jc-nav-item", "jc-nav-group-header", expanded && "expanded")}
                       onClick={toggle}
-                      role="button"
                       aria-expanded={expanded}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          toggle();
-                        }
-                      }}
+                      aria-controls={submenuId}
                     >
                       <item.icon size={16} style={{ color: item.color, flexShrink: 0 }} />
                       <span className="jc-nav-label">{item.label}</span>
-                      <ChevronDown
-                        size={14}
-                        className="jc-nav-chevron"
-                        style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-                      />
-                    </div>,
+                      <ChevronDown size={14} className="jc-nav-chevron" aria-hidden />
+                    </button>,
                     item.id
                   )}
-                  {expanded && (
+                  <div id={submenuId} className={cn("jc-nav-subwrap", expanded && "open")}>
                     <div className="jc-nav-subitems">
                       {visibleChildren.map(child => renderLeaf(child, true))}
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             }

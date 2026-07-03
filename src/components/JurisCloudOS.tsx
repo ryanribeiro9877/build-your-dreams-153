@@ -193,14 +193,34 @@ const GlobalStyles = () => (
     }
     .jc-nav-item:hover { background: var(--bg4); }
     .jc-nav-item.active { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.15); }
-    .jc-nav-group-header.expanded { background: var(--bg3); }
-    .jc-nav-chevron { margin-left: auto; flex-shrink: 0; }
-    .jc-nav-subitems {
-      display: flex; flex-direction: column;
-      margin: 1px 0 3px 8px; padding-left: 8px;
-      border-left: 1px solid var(--border);
+    /* Cabeçalho do grupo é um <button>: zera o estilo nativo do botão */
+    .jc-nav-group-header {
+      width: 100%; background: transparent; border: none;
+      font-family: inherit; color: var(--text1); text-align: left;
     }
+    .jc-nav-group-header.expanded { background: var(--bg3); }
+    .jc-nav-chevron { margin-left: auto; flex-shrink: 0; transition: transform 0.3s ease; }
+    .jc-nav-group-header.expanded .jc-nav-chevron { transform: rotate(180deg); }
+    /* Slide suave via CSS grid (0fr -> 1fr). O filho direto PRECISA de
+       overflow:hidden + min-height:0 para colapsar de fato. Espaçamento
+       vertical fica em padding (dentro do overflow) para não "pular". */
+    .jc-nav-subwrap {
+      display: grid; grid-template-rows: 0fr;
+      transition: grid-template-rows 0.3s ease;
+    }
+    .jc-nav-subwrap.open { grid-template-rows: 1fr; }
+    .jc-nav-subitems {
+      overflow: hidden; min-height: 0;
+      display: flex; flex-direction: column;
+      margin-left: 8px; padding: 2px 0 4px 8px;
+      border-left: 1px solid var(--border);
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    .jc-nav-subwrap.open .jc-nav-subitems { opacity: 1; }
     .jc-nav-subitem { padding-left: 10px; }
+    @media (prefers-reduced-motion: reduce) {
+      .jc-nav-subwrap, .jc-nav-subitems, .jc-nav-chevron { transition: none; }
+    }
     .jc-sidebar.collapsed .jc-nav-chevron { display: none; }
     .jc-sidebar.collapsed .jc-nav-subitems { margin-left: 0; padding-left: 0; border-left: none; }
     .jc-sidebar.collapsed .jc-nav-subitem { padding-left: 8px; }
