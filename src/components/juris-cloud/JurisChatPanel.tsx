@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "./types";
 import { getInitials, getCaseAreaChip } from "./constants";
+import { stageStatusLabel } from "./stageStatus";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
@@ -217,7 +218,31 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   );
 }
 
-function ThinkingBubble({ agent }: { agent: string }) {
+// Card 2.2 — indicador de status + tempo de atividade.
+//
+// UMA linha que ATUALIZA (não empilha): mostra o rótulo humano da etapa mais
+// recente da orquestração (traduzido de metadata.stage — o log técnico segue
+// oculto) somado a um cronômetro "há Xs". O cronômetro é 100% frontend: conta do
+// envio da mensagem (montagem deste componente, quando `thinking` liga) até a
+// resposta final chegar (desmontagem, quando `thinking` desliga). Sem depender do
+// backend. O progresso de bloco ("Gerando bloco X de N") só aparece quando o texto
+// da etapa carrega o número real — nunca um contador decorativo.
+function StatusIndicator({ agent, statusLabel }: { agent: string; statusLabel: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    setElapsed(0);
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // "Pensando" (rótulo padrão) usa a forma natural "Pensando há Xs"; um rótulo de
+  // etapa concreto usa "Rótulo · Xs" (ex.: "Gerando o documento · 14s").
+  const isDefault = statusLabel === "Pensando";
+  const text = isDefault ? `${statusLabel} há ${elapsed}s` : `${statusLabel} · ${elapsed}s`;
+
   return (
     <div className="jc-msg-wrap">
       <div className="jc-msg-avatar" style={{ background: "rgba(234,179,8,0.12)", color: "#EAB308", border: "1px solid rgba(234,179,8,0.28)", fontSize: 11 }}>
@@ -225,8 +250,14 @@ function ThinkingBubble({ agent }: { agent: string }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="jc-msg-meta"><span className="agent-tag">{agent}</span><span>agora</span></div>
-        <div className="jc-msg-bubble" style={{ padding: "14px 18px" }}>
+        <div className="jc-msg-bubble" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
           <div className="jc-thinking"><span /><span /><span /></div>
+          <span
+            aria-live="polite"
+            style={{ fontSize: 12.5, color: "var(--text2)", fontFamily: "var(--font-body)" }}
+          >
+            {text}
+          </span>
         </div>
       </div>
     </div>
@@ -274,6 +305,21 @@ export default function JurisChatPanel({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
+
+  // Rótulo de status derivado da etapa (stage) mais recente da orquestração.
+  // As etapas chegam como mensagens role='system' com metadata.kind='stage' e
+  // seguem OCULTAS como balões (MessageBubble retorna null) — aqui só as usamos
+  // como fonte para o indicador humano de status. Enquanto nenhuma etapa chegou,
+  // cai no rótulo padrão ("Pensando").
+  const statusLabel = React.useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.kind === "stage" || (m.role === "system" && m.stage)) {
+        return stageStatusLabel(m.stage, m.content);
+      }
+    }
+    return stageStatusLabel(undefined, undefined);
+  }, [messages]);
 
   // Envia anexando os nomes a mensagem (chips na UI) E passando os arquivos reais
   // para o backend (Canal A — sobe, extrai texto e grava em chat_attachments).
@@ -331,7 +377,7 @@ export default function JurisChatPanel({
       ) : (
         <div className="jc-messages">
           {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-          {thinking && <ThinkingBubble agent={thinkingAgentName} />}
+          {thinking && <StatusIndicator agent={thinkingAgentName} statusLabel={statusLabel} />}
           <div ref={messagesEndRef} />
         </div>
       )}
