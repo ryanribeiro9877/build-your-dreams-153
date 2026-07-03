@@ -29,7 +29,8 @@ import JurisChatPanel from "./juris-cloud/JurisChatPanel";
 // Shared constants & types
 import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/types";
 import { parseAgentPermissions } from "./juris-cloud/types";
-import { deriveLiveStage, type LiveStage } from "./juris-cloud/liveStatus";
+import { deriveLiveStage } from "./juris-cloud/liveStatus";
+import { applyRunPatch, type RunState } from "./juris-cloud/runStates";
 import {
   ACCENT, ACCENT_SOFT,
   DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
@@ -650,27 +651,36 @@ export default function JurisCloudOS() {
   };
 
   useEffect(() => { loadSessions(); }, [user, assistantSessionId]);
+  // Ref estável para chamar loadSessions de dentro de efeitos/handlers sem
+  // recriá-los a cada render (evita reassinar canais) nem dependências obsoletas.
+  const loadSessionsRef = useRef(loadSessions);
+  useEffect(() => { loadSessionsRef.current = loadSessions; });
 
-  // Trocar para uma sessão existente
+  // Trocar para uma sessão existente. NÃO mexe no "processando" das outras runs:
+  // apenas troca qual entrada do mapa é exibida. Se a sessão aberta tiver uma run
+  // ativa, o indicador reaparece a partir do mapa (+ reconciliação no efeito de
+  // Realtime), SEMPRE ademais das mensagens já persistidas — nunca no lugar delas.
   const switchSession = async (sessionId: string) => {
     setShowWelcome(false);
-    setThinking(false);
     setMessages([]);
     setAssistantSessionId(sessionId);
   };
 
-  // Iniciar nova conversa
+  // Iniciar nova conversa. Runs de outras conversas continuam no mapa (rodando e
+  // sendo rastreadas); como assistantSessionId fica null, a tela nova não mostra
+  // "processando" de ninguém.
   const startNewChat = () => {
     setAssistantSessionId(null);
     setMessages(INITIAL_MESSAGES);
     setShowWelcome(true);
-    setThinking(false);
   };
 
   // Excluir uma conversa (mensagens + sessão). RLS garante que só o dono apaga.
   const deleteSession = async (sessionId: string) => {
     // Remove otimisticamente da lista
     setChatSessions(prev => prev.filter(s => s.id !== sessionId));
+    // Descarta também qualquer estado de run rastreado para a conversa apagada.
+    patchRunState(sessionId, null);
     // Apaga as mensagens primeiro (caso não haja ON DELETE CASCADE), depois a sessão.
     await supabase
       .from("chat_messages").delete().eq("session_id", sessionId);
@@ -729,21 +739,30 @@ export default function JurisCloudOS() {
   const [activeDept, setActiveDept]       = useState("assistente");
   const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
-  const [thinking, setThinking]           = useState(false);
-  // Live status da orquestração (Caminho B): fase amigável + "bloco X de N".
-  const [liveStage, setLiveStage]         = useState<LiveStage | null>(null);
-  // Momento em que o "processando" começou — alimenta o cronômetro e o aviso de
-  // peça longa. Fica null quando não há processamento em andamento.
-  const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
-  // Id da run corrente (retornado por startOrchestration). Fonte de verdade para
-  // reconciliar a UI com o backend quando o Realtime perde eventos: assinamos os
-  // updates de orchestration_runs e, no status terminal (done/failed), encerramos
-  // o "pensando" MESMO que a mensagem 'final' não tenha chegado pelo canal. O ref
-  // acompanha o valor para os handlers do Realtime (evita closure obsoleta) sem
-  // reassinar o canal a cada nova run.
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
-  const currentRunIdRef = useRef<string | null>(null);
-  useEffect(() => { currentRunIdRef.current = currentRunId; }, [currentRunId]);
+  // ── Estado de "processando" POR conversa (session_id) ─────────────────────
+  // MAPA session_id → RunState. Substitui o slot ÚNICO (currentRunId do #18) que
+  // misturava o estado de duas runs simultâneas (bug 2.3). Cada conversa mantém
+  // seu próprio runId/thinking/liveStage/cronômetro; abrir a conversa B NÃO limpa
+  // nem sobrescreve a run ativa em A — as duas continuam sendo rastreadas.
+  const [runStates, setRunStates] = useState<Record<string, RunState>>({});
+  // Espelho em ref para os handlers de Realtime/polling lerem o estado atual sem
+  // recriar as assinaturas a cada mudança (evita closures obsoletas).
+  const runStatesRef = useRef<Record<string, RunState>>({});
+  useEffect(() => { runStatesRef.current = runStates; }, [runStates]);
+
+  // Única via de escrita no mapa: atualiza/limpa a entrada de UMA conversa sem
+  // tocar nas demais. patch=null remove a entrada (encerra o "processando").
+  const patchRunState = useCallback((sid: string, patch: Partial<RunState> | null) => {
+    setRunStates(prev => applyRunPatch(prev, sid, patch));
+  }, []);
+
+  // A UI da conversa ABERTA lê SEMPRE o estado da SUA sessão — nunca o de outra.
+  // Trocar de conversa apenas troca qual entrada do mapa é exibida.
+  const openRun = assistantSessionId ? runStates[assistantSessionId] : undefined;
+  const thinking = openRun?.thinking ?? false;
+  const liveStage = openRun?.liveStage ?? null;
+  const thinkingStartedAt = openRun?.thinkingStartedAt ?? null;
+
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [sidebarOpen, setSidebarOpen]     = useState(false);
   const {
@@ -761,17 +780,15 @@ export default function JurisCloudOS() {
     }
   }, []);
 
-  // Cronômetro do "processando": marca o início quando o thinking liga e limpa
-  // (junto do liveStage) quando desliga. Centraliza aqui para não depender dos
-  // vários pontos de setThinking(true) espalhados nos fluxos de envio.
-  useEffect(() => {
-    if (thinking) {
-      setThinkingStartedAt((prev) => prev ?? Date.now());
-    } else {
-      setThinkingStartedAt(null);
-      setLiveStage(null);
-    }
-  }, [thinking]);
+  // O cronômetro/início do "processando" agora vive no mapa por conversa
+  // (thinkingStartedAt de cada RunState), marcado ao disparar a run e limpo no
+  // status terminal — não há mais um efeito global espelhando um "thinking" único.
+
+  // Ref da conversa aberta, para os fetches assíncronos saberem se a conversa
+  // ainda é a mesma quando resolvem (evita mesclar mensagens de A na tela de B —
+  // a "sobreposição momentânea" do bug 2.3).
+  const assistantSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { assistantSessionIdRef.current = assistantSessionId; }, [assistantSessionId]);
 
   // Reconciliação: re-busca as mensagens da sessão e mescla (dedup por id), sem
   // reexibir 'streaming' nem duplicar a mensagem otimista do usuário. Recupera um
@@ -782,6 +799,9 @@ export default function JurisCloudOS() {
       .select("id, role, content, metadata, created_at, sequence_number")
       .eq("session_id", sid).order("sequence_number", { ascending: true });
     if (!data) return;
+    // A conversa pode ter mudado enquanto o fetch estava no ar: só mescla se esta
+    // ainda for a conversa aberta — nunca joga mensagens de uma conversa na outra.
+    if (assistantSessionIdRef.current !== sid) return;
     setMessages(prev => {
       const seen = new Set(prev.map(m => String(m.id)));
       const hasOptimistic = prev.some(m => String(m.id).startsWith("local_user_"));
@@ -798,10 +818,13 @@ export default function JurisCloudOS() {
     });
   }, []);
 
-  // Aplica um status TERMINAL da run: reconcilia as mensagens (recupera o que o
-  // Realtime perdeu), encerra o "pensando" e limpa a run corrente. Em 'failed'
-  // sem resposta do assistente após a última mensagem do usuário, injeta um aviso
-  // de erro claro para o card não ficar preso em "pensando".
+  // Aplica um status TERMINAL da run da conversa ABERTA: reconcilia as mensagens
+  // (recupera o que o Realtime perdeu) e encerra o "pensando" DAQUELA conversa
+  // (remove só a entrada dela no mapa — as outras runs seguem intactas). Em
+  // 'failed' sem resposta do assistente após a última mensagem do usuário, injeta
+  // um aviso de erro claro para o card não ficar preso em "pensando".
+  // Usada apenas para a conversa aberta (mexe em `messages`); runs de fundo são
+  // encerradas por finishBackgroundRun, que não toca nas mensagens à vista.
   const applyTerminalRun = useCallback(async (sid: string, status: string) => {
     await fetchAndMergeMessages(sid);
     if (status === "failed") {
@@ -820,9 +843,17 @@ export default function JurisCloudOS() {
         } as JcChatMessage];
       });
     }
-    setThinking(false);
-    setCurrentRunId(null);
-  }, [fetchAndMergeMessages]);
+    patchRunState(sid, null);
+  }, [fetchAndMergeMessages, patchRunState]);
+
+  // Encerra uma run de FUNDO (conversa que não está aberta): limpa só a entrada
+  // dela no mapa e atualiza a lista lateral. Não mexe em `messages` (não estão à
+  // vista); quando o usuário abrir a conversa, o histórico já persistido carrega
+  // normalmente pelo efeito de Realtime.
+  const finishBackgroundRun = useCallback((sid: string) => {
+    patchRunState(sid, null);
+    loadSessionsRef.current?.();
+  }, [patchRunState]);
 
   // V23: acompanha a orquestracao via Realtime. Etapas (role=system) e a resposta
   // final (role=assistant) chegam como linhas em chat_messages. Fetch inicial
@@ -834,6 +865,7 @@ export default function JurisCloudOS() {
   // catch-up para recuperar eventos perdidos durante uma queda de conexão.
   useEffect(() => {
     if (!assistantSessionId) return;
+    const sid = assistantSessionId; // conversa ABERTA; canais e mapa escopam por ela
     let cancelled = false;
 
     const mapRow = (r: Record<string, any>): JcChatMessage => ({
@@ -878,101 +910,137 @@ export default function JurisCloudOS() {
         return [...prev, m];
       });
       // Etapa intermediária: alimenta o indicador de progresso (fase amigável +
-      // "bloco X de N"). Não é renderizada como balão (2.1 preserva o log oculto).
-      if (k === "stage") setLiveStage(deriveLiveStage(row));
+      // "bloco X de N") DESTA conversa. Não é renderizada como balão (2.1 preserva
+      // o log oculto). Só atualiza se a conversa ainda estiver processando — não
+      // revive um indicador já encerrado com uma etapa fora de ordem.
+      if (k === "stage" && runStatesRef.current[sid]?.thinking) {
+        patchRunState(sid, { liveStage: deriveLiveStage(row) });
+      }
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { setThinking(false); setLiveStage(null); setCurrentRunId(null); loadSessions(); }
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status
     // terminal, mesmo que o 'final' de chat_messages tenha se perdido no Realtime.
-    // Só reage à run corrente (evita runs antigas concluídas da mesma sessão).
+    // Só reage à run corrente DESTA conversa (evita runs antigas da mesma sessão).
     const applyRunRow = (row: Record<string, unknown>) => {
       const status = row?.status as string | undefined;
       const id = row?.id as string | undefined;
       if (!status || !TERMINAL_RUN_STATUSES.includes(status)) return;
-      if (currentRunIdRef.current && id && id !== currentRunIdRef.current) return;
-      applyTerminalRun(assistantSessionId, status);
+      const runId = runStatesRef.current[sid]?.runId;
+      if (runId && id && id !== runId) return;
+      applyTerminalRun(sid, status);
+    };
+
+    // Reconcilia o ESTADO DE RUN desta conversa a partir do backend: aplica o
+    // indicador de "processando" SÓ quando há run ativa, SEMPRE ademais das
+    // mensagens já carregadas (nunca as esconde). No status terminal, encerra o
+    // "pensando". lastStageRow reidrata "bloco X de N" ao abrir a conversa.
+    const reconcileRun = async (lastStageRow?: Record<string, unknown> | null) => {
+      const { data: runRow } = await supabase.from("orchestration_runs")
+        .select("id, status")
+        .eq("session_id", sid)
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle();
+      if (cancelled) return;
+      const status = (runRow as { status?: string } | null)?.status;
+      const rid = (runRow as { id?: string } | null)?.id ?? null;
+      if (!status) return; // sem run conhecida: nada a reconciliar
+      if (TERMINAL_RUN_STATUSES.includes(status)) {
+        // Só encerra se ainda houvermos marcado esta conversa como processando.
+        if (runStatesRef.current[sid]) await applyTerminalRun(sid, status);
+        return;
+      }
+      // Run ATIVA nesta conversa → mostra/mantém o indicador por-sessão. Preserva
+      // o cronômetro se já existir; senão marca o início agora.
+      const cur = runStatesRef.current[sid];
+      patchRunState(sid, {
+        runId: rid,
+        thinking: true,
+        thinkingStartedAt: cur?.thinkingStartedAt ?? Date.now(),
+        liveStage: lastStageRow
+          ? deriveLiveStage(lastStageRow as { content?: string | null; metadata?: { stage?: string } | null })
+          : (cur?.liveStage ?? null),
+      });
     };
 
     (async () => {
       const { data } = await supabase.from("chat_messages")
         .select("id, role, content, metadata, created_at, sequence_number")
-        .eq("session_id", assistantSessionId)
+        .eq("session_id", sid)
         .order("sequence_number", { ascending: true });
       if (cancelled || !data) return;
+      const rows = data as Record<string, unknown>[];
+      const kindOf = (r: Record<string, unknown>): string | undefined =>
+        (r.metadata as { kind?: string } | null | undefined)?.kind;
       // Não exibe linhas 'streaming' (rascunho em geração) no catch-up inicial.
-      upsert((data as Record<string, any>[]).filter(r => r.metadata?.kind !== "streaming").map(mapRow));
-      if ((data as Record<string, any>[]).some(r => ["final","error","action_proposal","action_done"].includes(r.metadata?.kind))) setThinking(false);
+      upsert(rows.filter(r => kindOf(r) !== "streaming").map(mapRow));
+      // Última etapa persistida → reidrata o "bloco X de N" ao abrir a conversa.
+      const lastStage = [...rows].reverse().find(r => kindOf(r) === "stage") ?? null;
+      await reconcileRun(lastStage);
     })();
 
-    const channel = supabase.channel(`chat:${assistantSessionId}`)
+    const channel = supabase.channel(`chat:${sid}`)
       .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${assistantSessionId}` },
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `session_id=eq.${sid}` },
         (payload) => applyRow(payload.new as Record<string, any>))
       .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `session_id=eq.${assistantSessionId}` },
+        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `session_id=eq.${sid}` },
         (payload) => applyRow(payload.new as Record<string, any>))
       .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "orchestration_runs", filter: `session_id=eq.${assistantSessionId}` },
+        { event: "UPDATE", schema: "public", table: "orchestration_runs", filter: `session_id=eq.${sid}` },
         (payload) => applyRunRow(payload.new as Record<string, unknown>))
       .subscribe((status) => {
-        // Reconexão após queda: refaz o catch-up e checa o término da run, para
-        // recuperar stages/final e o status terminal que passaram durante a queda.
+        // Reconexão após queda: refaz o catch-up e reconcilia o estado da run,
+        // recuperando stages/final e o status terminal que passaram na queda.
         if (status !== "SUBSCRIBED") return;
-        fetchAndMergeMessages(assistantSessionId);
-        const runId = currentRunIdRef.current;
-        if (!runId) return;
-        (async () => {
-          const { data } = await supabase.from("orchestration_runs")
-            .select("id, status").eq("id", runId).maybeSingle();
-          if (cancelled) return;
-          const st = (data as { status?: string } | null)?.status;
-          if (st && TERMINAL_RUN_STATUSES.includes(st)) applyTerminalRun(assistantSessionId, st);
-        })();
+        fetchAndMergeMessages(sid);
+        reconcileRun();
       });
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
-  }, [assistantSessionId, applyTerminalRun, fetchAndMergeMessages]);
+  }, [assistantSessionId, applyTerminalRun, fetchAndMergeMessages, patchRunState]);
 
-  // Frente 4 (rede de segurança): enquanto o card estiver "pensando", faz polling
-  // conservador (12s) reconciliando mensagens + status da run. Cobre o buraco em
-  // que o próprio UPDATE de orchestration_runs também se perde no Realtime. A
-  // decisão de encerrar o "pensando" vem SEMPRE do status da run corrente (por id),
-  // nunca da mera presença de um 'final' (que poderia ser de um turno anterior).
-  // Timeout defensivo (~25 min, bem acima do caso legítimo ~18 min): força uma
-  // reconciliação final para não girar o cronômetro indefinidamente.
+  // Frente 4 (rede de segurança), agora para N runs: enquanto QUALQUER conversa
+  // estiver processando, faz polling conservador (12s) do status de cada run
+  // ativa (por id, ou pela última run da sessão), cobrindo o buraco em que o
+  // UPDATE de orchestration_runs também se perde no Realtime. A decisão de
+  // encerrar o "pensando" vem SEMPRE do status terminal da run — nunca da mera
+  // presença de um 'final'. Reconcilia mensagens só da conversa ABERTA (as outras
+  // não estão à vista); runs de fundo apenas têm a entrada limpa ao terminarem.
+  const activeRunSids = Object.keys(runStates).filter(s => runStates[s]?.thinking).sort();
+  const activeRunKey = activeRunSids.join(",");
   useEffect(() => {
-    if (!thinking || !assistantSessionId) return;
+    if (activeRunSids.length === 0) return;
     let cancelled = false;
     const POLL_MS = 12_000;
-    const DEFENSIVE_TIMEOUT_MS = 25 * 60_000;
-    const startedAt = Date.now();
     const id = window.setInterval(async () => {
       if (cancelled) return;
-      await fetchAndMergeMessages(assistantSessionId);
-      if (cancelled) return;
-      const runId = currentRunIdRef.current;
-      if (runId) {
-        const { data } = await supabase.from("orchestration_runs")
-          .select("id, status").eq("id", runId).maybeSingle();
+      const states = runStatesRef.current;
+      for (const sid of Object.keys(states)) {
         if (cancelled) return;
-        const st = (data as { status?: string } | null)?.status;
-        if (st && TERMINAL_RUN_STATUSES.includes(st)) { applyTerminalRun(assistantSessionId, st); return; }
-      }
-      // Timeout defensivo: só encerra se o status confirmar término; caso contrário
-      // apenas reconcilia (não mata um run legítimo que ainda está rodando).
-      if (Date.now() - startedAt >= DEFENSIVE_TIMEOUT_MS && runId) {
-        const { data } = await supabase.from("orchestration_runs")
-          .select("id, status").eq("id", runId).maybeSingle();
+        const st = states[sid];
+        if (!st?.thinking) continue;
+        const isOpen = sid === assistantSessionId;
+        // Só a conversa aberta reconcilia mensagens (as outras não estão à vista).
+        if (isOpen) { await fetchAndMergeMessages(sid); if (cancelled) return; }
+        // Confere o status: pela run corrente (por id) ou pela última run da sessão.
+        const query = st.runId
+          ? supabase.from("orchestration_runs").select("id, status").eq("id", st.runId).maybeSingle()
+          : supabase.from("orchestration_runs").select("id, status").eq("session_id", sid).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const { data } = await query;
         if (cancelled) return;
-        const st = (data as { status?: string } | null)?.status;
-        if (st && TERMINAL_RUN_STATUSES.includes(st)) applyTerminalRun(assistantSessionId, st);
+        const status = (data as { status?: string } | null)?.status;
+        if (status && TERMINAL_RUN_STATUSES.includes(status)) {
+          if (isOpen) await applyTerminalRun(sid, status);
+          else finishBackgroundRun(sid);
+        }
       }
     }, POLL_MS);
     return () => { cancelled = true; window.clearInterval(id); };
-  }, [thinking, assistantSessionId, currentRunId, applyTerminalRun, fetchAndMergeMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRunKey, assistantSessionId, applyTerminalRun, finishBackgroundRun, fetchAndMergeMessages]);
 
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
 
@@ -1061,8 +1129,8 @@ export default function JurisCloudOS() {
       }]);
       return;
     }
-    setThinking(true);
-    setCurrentRunId(null); // limpa a run anterior até a nova ser conhecida
+    // Liga o "processando" DESTA conversa (entra no mapa por session_id).
+    patchRunState(sid, { thinking: true, thinkingStartedAt: Date.now(), liveStage: null, runId: null });
     const reason = (msg: string) => `Estorno automatico: ${msg}`;
     const message = missingDocs.length
       ? `[AVISO DO SISTEMA — DOCUMENTOS AUSENTES]\n` +
@@ -1075,7 +1143,7 @@ export default function JurisCloudOS() {
       if (!ok) {
         const msg = friendlyError(sendErr ?? { error: "request_failed", message: "agente nao respondeu" });
         await refundTokens(cost, requestId, reason(msg));
-        setThinking(false);
+        patchRunState(sid, null);
         setMessages(prev => [...prev, {
           id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
           content: formatTokenRefundMessage(cost, msg),
@@ -1083,12 +1151,12 @@ export default function JurisCloudOS() {
         }]);
         return;
       }
-      if (runId) setCurrentRunId(runId);
+      if (runId) patchRunState(sid, { runId });
       scheduleCatchUp(sid);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "erro de rede";
       await refundTokens(cost, requestId, reason(msg));
-      setThinking(false);
+      patchRunState(sid, null);
       setMessages(prev => [...prev, {
         id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
         content: formatTokenRefundMessage(cost, msg),
@@ -1124,12 +1192,15 @@ export default function JurisCloudOS() {
       timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     }]);
     setInputVal("");
-    setThinking(true);
-    setCurrentRunId(null); // limpa a run anterior até a nova ser conhecida
+
+    // sid da conversa alvo — pode ser criado abaixo para uma conversa nova. O
+    // "processando" desta conversa só é ligado (no mapa por session_id) DEPOIS de
+    // conhecermos o sid, para nunca misturar o estado com o de outra conversa.
+    let sid = assistantSessionId;
 
     const refundAndNotify = async (reason: string) => {
       await refundTokens(cost, requestId, `Estorno automatico: ${reason}`);
-      setThinking(false);
+      if (sid) patchRunState(sid, null); // desliga o "processando" só DESTA conversa
       setMessages(prev => [...prev, {
         id: `local_${Date.now()}`, role: "assistant", agent: "Sistema",
         content: formatTokenRefundMessage(cost, reason),
@@ -1144,13 +1215,14 @@ export default function JurisCloudOS() {
         );
         return;
       }
-      let sid = assistantSessionId;
       if (!sid) {
         const { sessionId, error: startErr } = await startSession(entryAgentId, { title: "Meu Assistente" });
         if (!sessionId) { await refundAndNotify(friendlyError(startErr)); return; }
         setAssistantSessionId(sessionId); // dispara a assinatura Realtime
         sid = sessionId;
       }
+      // Conversa conhecida: liga o "processando" DELA no mapa (entrada por sid).
+      patchRunState(sid, { thinking: true, thinkingStartedAt: Date.now(), liveStage: null, runId: null });
       // Canal A: sobe e extrai os DOCUMENTOS DO CASO ANTES de orquestrar, para que
       // o especialista (N3) leia o conteudo real (nao apenas os nomes dos arquivos).
       //
@@ -1172,7 +1244,7 @@ export default function JurisCloudOS() {
         const failedAll = [...ing.failedUpload, ...ing.failedExtraction];
         if (failedAll.length > 0) {
           await refundTokens(cost, requestId, "Estorno automatico: anexos falharam — geração bloqueada");
-          setThinking(false);
+          patchRunState(sid, null);
           const lines: string[] = [];
           if (ing.failedUpload.length) {
             lines.push(`**Não foram enviados** (falha de upload ou acima de 15 MB):\n${ing.failedUpload.map(n => `• ${n}`).join("\n")}`);
@@ -1212,7 +1284,7 @@ export default function JurisCloudOS() {
           const estTokens = Math.round(totalChars / 4);
           if (estTokens > CLIENT_MAX_CASE_TOKENS) {
             await refundTokens(cost, requestId, "Estorno automatico: confirmacao de orcamento de tokens");
-            setThinking(false);
+            patchRunState(sid, null);
             const largest = [...rows]
               .sort((a, b) => (b.extracted_text?.length || 0) - (a.extracted_text?.length || 0))
               .slice(0, 5)
@@ -1247,10 +1319,10 @@ export default function JurisCloudOS() {
         await refundAndNotify(friendlyError(sendErr ?? { error: "request_failed", message: "agente nao respondeu" }));
         return;
       }
-      // Guarda a run corrente: fonte de verdade para reconciliar/encerrar o
-      // "pensando" se o Realtime perder o 'final' (ver assinatura de
-      // orchestration_runs e o polling de reconciliação).
-      if (runId) setCurrentRunId(runId);
+      // Guarda a run corrente DESTA conversa no mapa: fonte de verdade para
+      // reconciliar/encerrar o "pensando" se o Realtime perder o 'final' (ver
+      // assinatura de orchestration_runs e o polling de reconciliação).
+      if (runId) patchRunState(sid, { runId });
       // Catch-up: garante que a user message e a 1a etapa aparecam mesmo se o
       // canal assinou apos o INSERT inicial.
       scheduleCatchUp(sid);
