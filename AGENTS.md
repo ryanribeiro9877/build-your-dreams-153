@@ -559,7 +559,7 @@ O Ryan tem padrão de qualidade alto e detesta retrabalho:
     1. Desenvolver na branch designada (ex.: `claude/<feature>`), nunca commitar direto na `main`.
     2. Rodar `vite build` (e lint) antes de entregar.
     3. **Criar o PR** contra `main`.
-    4. **Fazer o merge** do PR na `main` (squash).
+    4. **Fazer o merge** do PR na `main` usando **rebase** (não squash). O rebase preserva o commit autorado por `Claude <noreply@anthropic.com>` como tip da `main` (verificado), evitando o commit gerado pelo GitHub (`noreply@github.com`) que o stop-hook marca como "Unverified".
     5. O merge na `main` **dispara automaticamente o deploy de produção no Vercel** (`build-your-dreams-153.vercel.app`) — é assim que o Ryan visualiza as mudanças no sistema. Sempre confirme que o deploy foi disparado e informe a URL.
     - Não pare no "PR criado": o padrão inclui merge + deploy para que a mudança fique visível em produção.
 
