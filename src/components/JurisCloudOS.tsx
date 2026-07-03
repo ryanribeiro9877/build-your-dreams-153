@@ -29,7 +29,7 @@ import JurisChatPanel from "./juris-cloud/JurisChatPanel";
 // Shared constants & types
 import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/types";
 import { parseAgentPermissions } from "./juris-cloud/types";
-import { deriveLiveStage, type LiveStage } from "./juris-cloud/liveStatus";
+import { deriveLiveStage, stageLabel, type LiveStage } from "./juris-cloud/liveStatus";
 import {
   ACCENT, ACCENT_SOFT,
   DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
@@ -47,6 +47,11 @@ import {
 // function chat-orchestrator. Acima disto, o servidor resume (lossy) os anexos;
 // o cliente avisa o usuário antes de gerar (Mudança 4C). ~4 chars/token.
 const CLIENT_MAX_CASE_TOKENS = 200000;
+
+// Status de um orchestration_run que NÃO representam "processando": o run
+// terminou (done/failed) ou está pausado aguardando confirmação de uma ação
+// agentica. Qualquer outro status (routing_n1 → validating_n1) é "em andamento".
+const RUN_TERMINAL_STATUSES = new Set(["done", "failed", "awaiting_confirmation"]);
 
 // V11: tema único — GlobalStyles não precisa mais receber prop.
 const GlobalStyles = () => (
@@ -835,6 +840,78 @@ export default function JurisCloudOS() {
       .subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, [assistantSessionId]);
+
+  // Card 2.3 — Reconciliação do "processando" ESCOPADA por conversa.
+  //
+  // A fonte da verdade de "há uma peça sendo gerada" é orchestration_runs (o run
+  // vive no backend e sobrevive à troca de conversa), não o booleano local — que
+  // se perde ao alternar de sessão ou recarregar a página. Ao abrir/voltar para
+  // uma conversa, reconstruímos o indicador a partir do ÚLTIMO run daquela sessão
+  // e acompanhamos a evolução do status por Realtime + polling de segurança.
+  //
+  // O filtro por session_id (na query, na assinatura e no polling) garante que o
+  // run de OUTRA conversa jamais vaze o "processando" para a tela da conversa
+  // atual (teste de concorrência do card). Só UM run é rastreado por vez — o da
+  // conversa aberta —, então A processando não polui B.
+  useEffect(() => {
+    if (!assistantSessionId) return;
+    let cancelled = false;
+    // Run que estamos rastreando nesta conversa. Só desligamos o "processando"
+    // quando ESTE run (por id) chega a um estado terminal — evita apagar o
+    // indicador por causa de um run ANTIGO já concluído da mesma sessão.
+    let trackedRunId: string | null = null;
+
+    const applyRun = (row: { id?: string; status?: string | null; created_at?: string | null }) => {
+      if (cancelled || !row?.status) return;
+      const active = !RUN_TERMINAL_STATUSES.has(row.status);
+      if (active) {
+        if (row.id) trackedRunId = row.id;
+        // Ancora o cronômetro no início REAL do run (honesto após refresh/troca).
+        const startedMs = row.created_at ? new Date(row.created_at).getTime() : Date.now();
+        setThinkingStartedAt(prev => prev ?? (Number.isFinite(startedMs) ? startedMs : Date.now()));
+        setThinking(true);
+        // Rótulo imediato a partir do status; as etapas (chat_messages) refinam
+        // depois com "bloco X de N". Não sobrescreve um liveStage já mais rico.
+        setLiveStage(prev => prev ?? { stage: row.status!, label: stageLabel(row.status) });
+      } else if (trackedRunId && row.id === trackedRunId) {
+        // O run que acompanhávamos terminou (rede de segurança; a mensagem final
+        // em chat_messages normalmente já desliga o indicador).
+        trackedRunId = null;
+        setThinking(false);
+      }
+    };
+
+    const fetchLatestRun = async () => {
+      const { data } = await supabase
+        .from("orchestration_runs")
+        .select("id, status, created_at")
+        .eq("session_id", assistantSessionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      applyRun(data as { id: string; status: string; created_at: string });
+    };
+
+    // 1) Reconstrução imediata ao abrir/voltar para a conversa (e após refresh).
+    void fetchLatestRun();
+
+    // 2) Realtime dos runs DESTA sessão (filtro por session_id — sem vazamento).
+    const channel = supabase.channel(`orch:${assistantSessionId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "orchestration_runs", filter: `session_id=eq.${assistantSessionId}` },
+        (payload) => applyRun(payload.new as { id: string; status: string; created_at: string }))
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orchestration_runs", filter: `session_id=eq.${assistantSessionId}` },
+        (payload) => applyRun(payload.new as { id: string; status: string; created_at: string }))
+      .subscribe();
+
+    // 3) Polling de segurança: cobre eventos de Realtime perdidos e a chegada de
+    //    um run recém-criado que o INSERT possa ter escapado. Re-afirma o estado.
+    const pollId = window.setInterval(() => { void fetchLatestRun(); }, 5000);
+
+    return () => { cancelled = true; window.clearInterval(pollId); supabase.removeChannel(channel); };
   }, [assistantSessionId]);
 
   const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
