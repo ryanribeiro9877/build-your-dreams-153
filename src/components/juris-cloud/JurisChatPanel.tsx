@@ -10,6 +10,7 @@ import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
+import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -93,6 +94,9 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
     "Controlador de Prazos": "#A16207",
   };
   const isUser = msg.role === "user";
+  // Estado de ERRO claro (ex.: watchdog de timeout): destaque visual + ícone,
+  // para nunca ficar ambíguo com uma resposta normal (Frente 2).
+  const isError = msg.kind === "error";
   const color = agentColors[msg.agent || ""] || "#EAB308";
   const userInitial =
     user?.email?.split("@")[0]?.charAt(0)?.toUpperCase() || "U";
@@ -122,7 +126,15 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
             <span>{msg.timestamp}</span>
           </div>
         )}
-        <div className="jc-msg-bubble">
+        <div
+          className="jc-msg-bubble"
+          style={isError ? { border: "1px solid rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" } : undefined}
+        >
+          {isError && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, color: "#F87171", fontWeight: 700, fontSize: 12 }}>
+              <AlertTriangle size={13} /> Não foi possível concluir
+            </div>
+          )}
           {msg.content && (() => {
             const fileMatch = msg.content.match(/\[Arquivos:\s*(.+?)\]/);
             const fileNames = fileMatch ? fileMatch[1].split(",").map((n: string) => n.trim()).filter(Boolean) : [];
@@ -217,7 +229,37 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   );
 }
 
-function ThinkingBubble({ agent }: { agent: string }) {
+// Indicador de "processando" com FEEDBACK REAL (Frentes 1 e 2):
+//  - Rótulo amigável da fase (liveStage.label) + "bloco X de N" quando o backend
+//    informa um contador real. Sem dado real → só rótulo + cronômetro (nunca os
+//    três pontinhos mudos sozinhos).
+//  - Cronômetro ao vivo (segundos desde o início do processamento).
+//  - Após LONG_RUN_NOTICE_MS, acrescenta um aviso de que peças longas podem
+//    demorar — sem cancelar nada; o run segue.
+//  - Linha única (não empilha) — o texto é substituído a cada nova etapa.
+function StatusIndicator({
+  agent,
+  liveStage,
+  thinkingStartedAt,
+}: {
+  agent: string;
+  liveStage: LiveStage | null;
+  thinkingStartedAt: number | null;
+}) {
+  // Tick de 1s para o cronômetro andar. Só liga quando há início marcado.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!thinkingStartedAt) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [thinkingStartedAt]);
+
+  const elapsedMs = thinkingStartedAt ? Math.max(0, now - thinkingStartedAt) : 0;
+  const label = liveStage?.label || "Processando";
+  const hasBlocks =
+    typeof liveStage?.blockCurrent === "number" && typeof liveStage?.blockTotal === "number";
+  const longRun = elapsedMs >= LONG_RUN_NOTICE_MS;
+
   return (
     <div className="jc-msg-wrap">
       <div className="jc-msg-avatar" style={{ background: "rgba(234,179,8,0.12)", color: "#EAB308", border: "1px solid rgba(234,179,8,0.28)", fontSize: 11 }}>
@@ -225,8 +267,29 @@ function ThinkingBubble({ agent }: { agent: string }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="jc-msg-meta"><span className="agent-tag">{agent}</span><span>agora</span></div>
-        <div className="jc-msg-bubble" style={{ padding: "14px 18px" }}>
-          <div className="jc-thinking"><span /><span /><span /></div>
+        <div className="jc-msg-bubble" style={{ padding: "12px 16px" }}>
+          <div
+            className="jc-status-line"
+            role="status"
+            aria-live="polite"
+            style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+          >
+            <span className="jc-thinking" aria-hidden="true"><span /><span /><span /></span>
+            <span style={{ fontSize: 12.5, color: "var(--text2, #94A3B8)", fontWeight: 600 }}>
+              {label}
+              {hasBlocks && (
+                <span style={{ color: "#EAB308" }}> · bloco {liveStage!.blockCurrent} de {liveStage!.blockTotal}</span>
+              )}
+              {thinkingStartedAt && (
+                <span style={{ color: "var(--text3, #64748B)", fontWeight: 500 }}> · {formatElapsed(elapsedMs / 1000)}</span>
+              )}
+            </span>
+          </div>
+          {longRun && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--text3, #64748B)", lineHeight: 1.4 }}>
+              Ainda processando — peças longas podem levar alguns minutos. Pode continuar acompanhando; o resultado aparece aqui automaticamente.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -239,6 +302,8 @@ export interface JurisChatPanelProps {
   messages: JcChatMessage[];
   thinking: boolean;
   thinkingAgentName: string;
+  liveStage: LiveStage | null;
+  thinkingStartedAt: number | null;
   showWelcome: boolean;
   setShowWelcome: (v: boolean) => void;
   inputVal: string;
@@ -255,6 +320,8 @@ export default function JurisChatPanel({
   messages,
   thinking,
   thinkingAgentName,
+  liveStage,
+  thinkingStartedAt,
   showWelcome,
   setShowWelcome,
   inputVal,
@@ -331,7 +398,7 @@ export default function JurisChatPanel({
       ) : (
         <div className="jc-messages">
           {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-          {thinking && <ThinkingBubble agent={thinkingAgentName} />}
+          {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}
           <div ref={messagesEndRef} />
         </div>
       )}
