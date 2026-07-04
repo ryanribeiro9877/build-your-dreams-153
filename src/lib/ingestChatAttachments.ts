@@ -10,6 +10,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { extractFileText, sanitizeExtractedText } from "@/lib/extractFileText";
+import { isImageFile } from "@/lib/chatImages";
 
 // Limite de tamanho do bucket `chat-attachments` (15 MiB). DEVE bater com o
 // file_size_limit do bucket no Supabase Storage — se um lado mudar sem o outro,
@@ -22,6 +23,7 @@ export interface IngestResult {
   failedExtraction: string[]; // arquivos que subiram mas não tiveram texto extraído
   failedUpload: string[];     // arquivos que nem subiram (erro de upload ou acima do limite)
   skipped: string[];          // arquivos já anexados nesta sessão (dedup) — não reanexados
+  images: string[];           // imagens anexadas (sem texto por ora — OCR é Track externo)
 }
 
 function sanitizeName(name: string): string {
@@ -52,7 +54,7 @@ export async function ingestChatAttachments(
   userId: string,
   files: File[],
 ): Promise<IngestResult> {
-  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [] };
+  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [], images: [] };
 
   for (const file of files) {
     // Trava anti-duplicação: se o mesmo arquivo já está anexado e ativo NESTA sessão
@@ -85,13 +87,21 @@ export async function ingestChatAttachments(
       continue;
     }
 
+    // Imagem: NÃO tentamos extrair texto (OCR é Track externo — Card 2.7 Passo 3).
+    // A imagem sobe e fica anexada à conversa; o registro em chat_attachments com
+    // storage_path já é o gancho para um OCR futuro localizá-la. Uma imagem sem
+    // texto é ESPERADA — não entra em failedExtraction (que bloqueia a geração).
+    const image = isImageFile(file);
+
     let text: string | null = null;
-    try { text = await extractWithFallback(file); } catch { text = null; }
+    if (!image) {
+      try { text = await extractWithFallback(file); } catch { text = null; }
+    }
     // Defensivo: re-sanitiza no ponto do insert. Garante que nenhum texto cru
     // (byte 0 / surrogate solto) chegue ao Postgres mesmo se um caminho novo de
     // extração esquecer de sanitizar. Sem isto o insert volta a dar 400.
     const safeText = sanitizeExtractedText(text);
-    if (!safeText) result.failedExtraction.push(file.name);
+    if (!image && !safeText) result.failedExtraction.push(file.name);
 
     const { error: insErr } = await supabase.from("chat_attachments").insert({
       session_id: sessionId,
@@ -105,6 +115,7 @@ export async function ingestChatAttachments(
 
     if (insErr) { result.failedUpload.push(file.name); continue; }
     result.uploaded++;
+    if (image) result.images.push(file.name);
   }
 
   return result;

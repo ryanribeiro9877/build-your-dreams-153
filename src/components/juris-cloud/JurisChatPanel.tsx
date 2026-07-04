@@ -11,6 +11,10 @@ import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
+import {
+  isImageFile, validateImageFile, ACCEPTED_IMAGE_MIME_TYPES,
+  type SessionImageAttachment,
+} from "@/lib/chatImages";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -75,7 +79,15 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: JcChatMessage }) {
+function MessageBubble({
+  msg,
+  sessionImages,
+  onOpenImage,
+}: {
+  msg: JcChatMessage;
+  sessionImages: Record<string, SessionImageAttachment>;
+  onOpenImage: (url: string) => void;
+}) {
   const { user } = useAuth();
   // Proposta de acao agentica: renderiza o ActionCard (Confirmar/Cancelar) no
   // lugar do balao normal. A confirmacao chama o chat-orchestrator em mode=confirm;
@@ -139,13 +151,47 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
             const fileMatch = msg.content.match(/\[Arquivos:\s*(.+?)\]/);
             const fileNames = fileMatch ? fileMatch[1].split(",").map((n: string) => n.trim()).filter(Boolean) : [];
             const cleanContent = msg.content.replace(/\n?\[Arquivos:\s*.+?\]/, "").trim();
+            // Card 2.7: separa os anexos que são IMAGENS (com miniatura reexibível)
+            // dos demais (chip com nome). A imagem casa por nome com o registro em
+            // chat_attachments carregado para a conversa (URL assinada).
+            const imageAtts = fileNames
+              .map((name) => sessionImages[name])
+              .filter((a): a is SessionImageAttachment => !!a);
+            const nonImageNames = fileNames.filter((name) => !sessionImages[name]);
             return (
               <>
-                {fileNames.length > 0 && (
+                {imageAtts.length > 0 && (
+                  <div style={{
+                    display: "flex", flexWrap: "wrap", gap: 6,
+                    marginBottom: (nonImageNames.length || cleanContent) ? 8 : 0,
+                  }}>
+                    {imageAtts.map((att) => (
+                      <button
+                        key={att.id}
+                        type="button"
+                        onClick={() => onOpenImage(att.url)}
+                        title={`Abrir ${att.fileName}`}
+                        style={{
+                          padding: 0, border: "1px solid rgba(234,179,8,0.3)",
+                          borderRadius: 8, overflow: "hidden", cursor: "zoom-in",
+                          background: "rgba(0,0,0,0.2)", lineHeight: 0,
+                        }}
+                      >
+                        <img
+                          src={att.url}
+                          alt={att.fileName}
+                          loading="lazy"
+                          style={{ display: "block", maxWidth: 180, maxHeight: 180, objectFit: "cover" }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {nonImageNames.length > 0 && (
                   <div style={{
                     display: "flex", flexWrap: "wrap", gap: 4, marginBottom: cleanContent ? 8 : 0,
                   }}>
-                    {fileNames.map((name: string, i: number) => (
+                    {nonImageNames.map((name: string, i: number) => (
                       <span key={i} style={{
                         display: "inline-flex", alignItems: "center", gap: 4,
                         padding: "3px 8px", borderRadius: 6, fontSize: 10,
@@ -309,6 +355,8 @@ export interface JurisChatPanelProps {
   inputVal: string;
   setInputVal: (v: string) => void;
   handleSend: (text?: string, files?: File[]) => void;
+  /** Card 2.7: imagens já anexadas à conversa aberta (file_name → anexo + URL assinada). */
+  sessionImages: Record<string, SessionImageAttachment>;
   /** STOP instantâneo: cancela a run desta conversa (botão vira quadrado enquanto processa). */
   onStop?: () => void;
   /** Cancelamento em andamento (clique feito, aguardando o backend reagir). */
@@ -331,6 +379,7 @@ export default function JurisChatPanel({
   inputVal,
   setInputVal,
   handleSend,
+  sessionImages,
   onStop,
   stopping,
   isRecording,
@@ -342,11 +391,37 @@ export default function JurisChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  // Card 2.7: aviso claro de rejeição (formato/ tamanho de imagem) e lightbox para
+  // ampliar a miniatura clicada.
+  const [attachWarning, setAttachWarning] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
+
+  // Miniaturas do compositor (antes de enviar): object URLs por arquivo de imagem
+  // anexado. Revogadas quando a lista muda para não vazar memória.
+  const previewUrls = React.useMemo(() => {
+    const map = new Map<File, string>();
+    for (const f of attachedFiles) {
+      if (isImageFile(f)) map.set(f, URL.createObjectURL(f));
+    }
+    return map;
+  }, [attachedFiles]);
+  useEffect(() => {
+    return () => { previewUrls.forEach((url) => URL.revokeObjectURL(url)); };
+  }, [previewUrls]);
+
+  // Fecha o lightbox com ESC.
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxUrl(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxUrl]);
 
   // Envia anexando os nomes a mensagem (chips na UI) E passando os arquivos reais
   // para o backend (Canal A — sobe, extrai texto e grava em chat_attachments).
@@ -384,6 +459,25 @@ export default function JurisChatPanel({
     setAttachedFiles((prev) => [...prev, ...captured]);
   };
 
+  // Card 2.7: entrada dedicada por IMAGEM. Valida tipo (PNG/JPG/WEBP) e tamanho
+  // (limite por imagem) NO FRONT antes de anexar; rejeita não-imagem/arquivo grande
+  // com aviso claro, sem quebrar. As aprovadas entram na mesma fila de anexos e
+  // seguem o fluxo de upload (chat-attachments + chat_attachments por sessão).
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fl = e.target.files;
+    if (!fl || fl.length === 0) return;
+    const captured = Array.from(fl);
+    e.target.value = "";
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const f of captured) {
+      const err = validateImageFile(f);
+      if (err) rejected.push(err); else accepted.push(f);
+    }
+    if (accepted.length) setAttachedFiles((prev) => [...prev, ...accepted]);
+    setAttachWarning(rejected.length ? rejected.join(" ") : null);
+  };
+
   const removeAttachedFile = (i: number) =>
     setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -403,7 +497,7 @@ export default function JurisChatPanel({
         </div>
       ) : (
         <div className="jc-messages">
-          {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+          {messages.map(msg => <MessageBubble key={msg.id} msg={msg} sessionImages={sessionImages} onOpenImage={setLightboxUrl} />)}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}
           <div ref={messagesEndRef} />
         </div>
@@ -412,27 +506,69 @@ export default function JurisChatPanel({
       {/* INPUT */}
       {!showWelcome && (
         <div className="jc-input-area">
+          {attachWarning && (
+            <div role="alert" style={{
+              display: "flex", alignItems: "flex-start", gap: 6, padding: "6px 10px", marginBottom: 8,
+              borderRadius: 8, fontSize: 11, lineHeight: 1.4,
+              background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.4)", color: "#F87171",
+            }}>
+              <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span style={{ flex: 1 }}>{attachWarning}</span>
+              <button type="button" onClick={() => setAttachWarning(null)}
+                style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1, flexShrink: 0 }}
+                aria-label="Fechar aviso">×</button>
+            </div>
+          )}
           {attachedFiles.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 0 8px" }}>
-              {attachedFiles.map((f, i) => (
-                <div key={`${f.name}-${i}`} style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "4px 10px", borderRadius: 8, fontSize: 11,
-                  background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)",
-                  color: "#EAB308", maxWidth: 200,
-                }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                    📎 {f.name}
-                  </span>
-                  <button type="button" onClick={() => removeAttachedFile(i)}
-                    style={{ background: "none", border: "none", color: "#EAB308", cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.7, flexShrink: 0 }}
-                    aria-label={`Remover ${f.name}`}>×</button>
-                </div>
-              ))}
+              {attachedFiles.map((f, i) => {
+                const preview = previewUrls.get(f);
+                if (preview) {
+                  // Miniatura da imagem anexada (preview antes de enviar).
+                  return (
+                    <div key={`${f.name}-${i}`} style={{ position: "relative", lineHeight: 0 }}>
+                      <img src={preview} alt={f.name} title={f.name}
+                        style={{ display: "block", width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid rgba(234,179,8,0.3)" }} />
+                      <button type="button" onClick={() => removeAttachedFile(i)}
+                        style={{
+                          position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+                          background: "#1e1e1e", border: "1px solid rgba(234,179,8,0.5)", color: "#EAB308",
+                          cursor: "pointer", padding: 0, fontSize: 12, lineHeight: 1, display: "flex",
+                          alignItems: "center", justifyContent: "center",
+                        }}
+                        aria-label={`Remover ${f.name}`}>×</button>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={`${f.name}-${i}`} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "4px 10px", borderRadius: 8, fontSize: 11,
+                    background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)",
+                    color: "#EAB308", maxWidth: 200,
+                  }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      📎 {f.name}
+                    </span>
+                    <button type="button" onClick={() => removeAttachedFile(i)}
+                      style={{ background: "none", border: "none", color: "#EAB308", cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.7, flexShrink: 0 }}
+                      aria-label={`Remover ${f.name}`}>×</button>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div className="jc-input-row">
             <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileChange} aria-hidden="true" />
+            <input
+              ref={imageInputRef}
+              type="file"
+              multiple
+              hidden
+              accept={ACCEPTED_IMAGE_MIME_TYPES.join(",")}
+              onChange={handleImageChange}
+              aria-hidden="true"
+            />
             <button
               className="jc-mic-btn"
               onClick={() => fileInputRef.current?.click()}
@@ -447,6 +583,22 @@ export default function JurisChatPanel({
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               <span className="jc-sr-only">Anexar arquivo</span>
+            </button>
+            <button
+              className="jc-mic-btn"
+              onClick={() => imageInputRef.current?.click()}
+              aria-label="Enviar imagem"
+              type="button"
+              title="Enviar imagem (PNG, JPG ou WEBP)"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.2"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <span className="jc-sr-only">Enviar imagem</span>
             </button>
             <textarea ref={textareaRef} className="jc-textarea"
               placeholder={`Fale com os agentes do ${activeDeptLabel}...`}
@@ -522,6 +674,37 @@ export default function JurisChatPanel({
             {isReadOnly && <span style={{ color: "#EAB308", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
             Enter para enviar · Shift+Enter para nova linha
           </div>
+        </div>
+      )}
+
+      {/* Card 2.7: lightbox para ampliar a miniatura clicada. */}
+      {lightboxUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visualização da imagem"
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.8)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 24, cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={lightboxUrl}
+            alt="Imagem anexada"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "92vw", maxHeight: "88vh", borderRadius: 10, boxShadow: "0 8px 40px rgba(0,0,0,0.6)", cursor: "default" }}
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            aria-label="Fechar"
+            style={{
+              position: "fixed", top: 20, right: 24, width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff",
+              cursor: "pointer", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >×</button>
         </div>
       )}
     </>

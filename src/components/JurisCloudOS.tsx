@@ -10,6 +10,7 @@ import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
 import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
+import { loadSessionImages, type SessionImageAttachment } from "@/lib/chatImages";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useBottleneckDetection } from "@/hooks/useBottleneckDetection";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
@@ -783,6 +784,10 @@ export default function JurisCloudOS() {
   const [activeDept, setActiveDept]       = useState("assistente");
   const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
   const [inputVal, setInputVal]           = useState("");
+  // Card 2.7: imagens já anexadas à CONVERSA aberta (mapa file_name → anexo com
+  // URL assinada). Reexibidas como miniatura ao abrir/rolar a conversa; a RLS do
+  // bucket/tabela garante que só o dono da sessão as enxerga.
+  const [sessionImages, setSessionImages] = useState<Record<string, SessionImageAttachment>>({});
   // ── Estado de "processando" POR conversa (session_id) ─────────────────────
   // MAPA session_id → RunState. Substitui o slot ÚNICO (currentRunId do #18) que
   // misturava o estado de duas runs simultâneas (bug 2.3). Cada conversa mantém
@@ -806,6 +811,20 @@ export default function JurisCloudOS() {
   const thinking = openRun?.thinking ?? false;
   const liveStage = openRun?.liveStage ?? null;
   const thinkingStartedAt = openRun?.thinkingStartedAt ?? null;
+
+  // Card 2.7: (re)carrega as imagens da conversa aberta e gera URLs assinadas para
+  // reexibição. Roda ao abrir/trocar de conversa (persistência — a imagem não some
+  // ao voltar) e é reusado após enviar novas imagens.
+  const refreshSessionImages = useCallback(async (sid: string | null) => {
+    if (!sid) { setSessionImages({}); return; }
+    try {
+      const map = await loadSessionImages(sid);
+      setSessionImages(map);
+    } catch (e) {
+      console.warn("[sessionImages] falha ao carregar imagens da conversa:", e);
+    }
+  }, []);
+  useEffect(() => { refreshSessionImages(assistantSessionId); }, [assistantSessionId, refreshSessionImages]);
 
   // Status por conversa (2.4): combina o status da última run (banco) com o
   // sinal AO VIVO do mapa runStates (thinking) — assim uma conversa gerando
@@ -1389,6 +1408,9 @@ export default function JurisCloudOS() {
           // Falha ao estimar orçamento não deve bloquear o envio; segue normalmente.
           console.warn("[handleSend] estimativa de orcamento falhou:", e);
         }
+        // Card 2.7: recarrega as imagens da conversa (URLs assinadas) para que as
+        // recém-enviadas apareçam como miniatura no balão do usuário.
+        void refreshSessionImages(sid);
       }
       // Dispara a orquestracao assincrona. As mensagens chegam via Realtime.
       const { ok, runId, error: sendErr } = await startOrchestration(sid, val);
@@ -1591,6 +1613,7 @@ export default function JurisCloudOS() {
             inputVal={inputVal}
             setInputVal={setInputVal}
             handleSend={handleSend}
+            sessionImages={sessionImages}
             onStop={handleStop}
             stopping={stopping}
             isRecording={isRecording}
