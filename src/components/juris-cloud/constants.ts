@@ -5,7 +5,7 @@ import {
   Briefcase, Target, Microscope, Zap, Radio, CheckCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Agent, AgentRole, JcChatMessage } from "./types";
+import type { Agent, AgentRole } from "./types";
 
 // ── Icon maps ──
 export const DEPT_ICONS: Record<string, LucideIcon> = {
@@ -103,13 +103,6 @@ export const AGENTS_FALLBACK: Agent[] = [
   { id: 401, name: "Detector de Gargalos", status: "active", color: "#ff6b6b", role: "specialist", permissions: ["read","monitor","execute"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 30, reportsTo: 400 },
   { id: 406, name: "Monitor de KPIs Global", status: "active", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400 },
 ];
-
-// ── Static data ──
-// PROCESSES removido: o painel lateral "Processos" agora lê a tabela `processes`
-// (ver useMyProcesses). ALERTS permanece pois ainda alimenta os chips do topo
-// (JurisTopBar) e o indicador systemOnline (JurisCloudOS).
-export const ALERTS: { type: string; text: string; time: string }[] = [];
-export const INITIAL_MESSAGES: JcChatMessage[] = [];
 
 export const ALL_COMMANDS = [
   "Gerar petição inicial", "Ver prazos fatais", "Resumir caso", "Avisar cliente",

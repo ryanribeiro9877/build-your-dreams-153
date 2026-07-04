@@ -25,19 +25,6 @@ export interface Agent {
   description?: string; maxProcessesMonitored?: number; reportsTo?: number;
 }
 
-export interface BriefingKpiItem {
-  label: string;
-  value: string;
-  accent: string;
-}
-
-export interface BriefingCardPayload {
-  type: "briefing";
-  title: string;
-  summary: string;
-  items: BriefingKpiItem[];
-}
-
 export interface ProcessListRow {
   id: string;
   client: string;
@@ -53,7 +40,7 @@ export interface ProcessListPayload {
   processes: ProcessListRow[];
 }
 
-export type AssistantChatCard = BriefingCardPayload | ProcessListPayload;
+export type AssistantChatCard = ProcessListPayload;
 
 export interface JcChatMessage {
   id: number | string;
