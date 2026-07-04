@@ -405,6 +405,8 @@ const GlobalStyles = () => (
     .jc-mic-btn { background: var(--bg4); color: var(--text2); border: 1px solid var(--border); }
     .jc-mic-btn:hover { border-color: var(--gold); color: var(--gold); }
     .jc-mic-btn.recording { background: rgba(234,179,8,0.18); border-color: #EAB308; color: #FEF9C3; animation: pulse 1s infinite; }
+    .jc-mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .jc-mic-btn:disabled:hover { border-color: var(--border); color: var(--text2); }
     .jc-input-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; }
     .jc-right-panel {
       width: 320px; min-width: 320px; background: var(--bg2);
@@ -794,8 +796,16 @@ export default function JurisCloudOS() {
     setSidebarCollapsed,
   } = useUiPreferences();
   const [isRecording, setIsRecording]     = useState(false);
+  // Ditado por voz suportado? (webkitSpeechRecognition/SpeechRecognition).
+  // Detectado no mount; controla o estado desabilitado do botão de microfone.
+  const [speechSupported, setSpeechSupported] = useState(true);
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Ditado longo: o usuário ainda quer o mic ligado? (usado pelo onend p/ reiniciar).
+  const keepListeningRef = useRef(false);
+  // Texto já no input quando o ditado começou + finais acumulados entre reinícios.
+  const dictationBaseRef = useRef("");
+  const dictationFinalRef = useRef("");
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -1101,32 +1111,103 @@ export default function JurisCloudOS() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Voice input
-  const toggleRecording = () => {
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
+  // Ditado por voz — detecta suporte no mount (fallback gracioso se ausente).
+  const getSpeechRecognitionCtor = () => {
+    if (typeof window === "undefined") return undefined;
     const w = window as Window & {
       SpeechRecognition?: new () => SpeechRecognition;
       webkitSpeechRecognition?: new () => SpeechRecognition;
     };
-    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!SR) return;
+    return w.SpeechRecognition ?? w.webkitSpeechRecognition;
+  };
+
+  useEffect(() => {
+    setSpeechSupported(!!getSpeechRecognitionCtor());
+  }, []);
+
+  // Encerra o reconhecimento sem deixar o mic preso ligado.
+  useEffect(() => {
+    return () => {
+      keepListeningRef.current = false;
+      recognitionRef.current?.abort();
+    };
+  }, []);
+
+  // Compõe o input: texto pré-existente + falas finalizadas + trecho provisório.
+  const composeDictation = (interim: string) =>
+    [dictationBaseRef.current, dictationFinalRef.current, interim]
+      .map(s => s.trim())
+      .filter(Boolean)
+      .join(" ");
+
+  // Ditado por voz (fala → texto no input, para o usuário revisar e enviar).
+  // Modo contínuo + interimResults para transcrição fluida; reinicia sozinho no
+  // onend enquanto o usuário mantém o mic ligado, de modo que falas LONGAS não
+  // sejam cortadas quando o navegador encerra a sessão após silêncio/tempo.
+  const toggleRecording = () => {
+    if (isRecording) {
+      // Desligar: para de ouvir e não reinicia (mic nunca fica preso ligado).
+      keepListeningRef.current = false;
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    const SR = getSpeechRecognitionCtor();
+    if (!SR) {
+      setSpeechSupported(false);
+      return;
+    }
+    // Guarda o texto atual do input e zera o acumulador de falas finalizadas.
+    dictationBaseRef.current = inputVal;
+    dictationFinalRef.current = "";
+    keepListeningRef.current = true;
+
     const recognition = new SR();
     recognition.lang = "pt-BR";
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.onresult = (e: SpeechRecognitionEvent) => {
-      const transcript = e.results[0][0].transcript;
-      setInputVal(prev => prev + (prev ? " " : "") + transcript);
+      let interim = "";
+      let final = dictationFinalRef.current;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const txt = res[0].transcript;
+        if (res.isFinal) final = (final + " " + txt).trim();
+        else interim += txt;
+      }
+      dictationFinalRef.current = final;
+      setInputVal(composeDictation(interim));
     };
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = () => setIsRecording(false);
+    recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+      // Erros fatais (permissão negada) encerram o ditado; transitórios
+      // (no-speech, aborted) deixam o onend reiniciar enquanto o mic estiver ligado.
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        keepListeningRef.current = false;
+        setIsRecording(false);
+      }
+    };
+    recognition.onend = () => {
+      // Se o usuário ainda está ditando, reinicia sem perder o texto já transcrito.
+      if (keepListeningRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          // Reinício falhou (estado inesperado) — encerra graciosamente.
+          keepListeningRef.current = false;
+        }
+      }
+      setIsRecording(false);
+    };
     recognitionRef.current = recognition;
-    recognition.start();
-    setIsRecording(true);
+    try {
+      recognition.start();
+      setIsRecording(true);
+    } catch {
+      keepListeningRef.current = false;
+      setIsRecording(false);
+    }
   };
 
   // Catch-up: garante que a user message e as etapas apareçam mesmo se o canal
@@ -1565,6 +1646,7 @@ export default function JurisCloudOS() {
             stopping={stopping}
             isRecording={isRecording}
             toggleRecording={toggleRecording}
+            speechSupported={speechSupported}
             isReadOnly={isReadOnly}
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}
