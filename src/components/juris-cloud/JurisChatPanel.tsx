@@ -315,6 +315,8 @@ export interface JurisChatPanelProps {
   stopping?: boolean;
   isRecording: boolean;
   toggleRecording: () => void;
+  /** Ditado por voz suportado neste navegador? Se não, o botão de mic é desabilitado. */
+  speechSupported: boolean;
   isReadOnly: boolean;
   roleLabel: string;
   activeDeptLabel: string;
@@ -335,6 +337,7 @@ export default function JurisChatPanel({
   stopping,
   isRecording,
   toggleRecording,
+  speechSupported,
   isReadOnly,
   roleLabel,
   activeDeptLabel,
@@ -456,7 +459,21 @@ export default function JurisChatPanel({
             <button
               className={`jc-mic-btn ${isRecording ? "recording" : ""}`}
               onClick={toggleRecording}
-              aria-label={isRecording ? "Parar gravação" : "Gravar áudio"}
+              disabled={!speechSupported}
+              aria-label={
+                !speechSupported
+                  ? "Ditado por voz não suportado neste navegador"
+                  : isRecording
+                    ? "Parar ditado"
+                    : "Ditar por voz"
+              }
+              title={
+                !speechSupported
+                  ? "Ditado não suportado neste navegador"
+                  : isRecording
+                    ? "Parar ditado"
+                    : "Ditar por voz (fala → texto)"
+              }
               type="button"
             >
               {isRecording ? (
@@ -478,7 +495,9 @@ export default function JurisChatPanel({
                   <line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
               )}
-              <span className="jc-sr-only">{isRecording ? "Parar gravação" : "Gravar áudio"}</span>
+              <span className="jc-sr-only">
+                {!speechSupported ? "Ditado não suportado neste navegador" : isRecording ? "Parar ditado" : "Ditar por voz"}
+              </span>
             </button>
             {thinking && onStop ? (
               // STOP instantâneo: enquanto processa, a seta vira um QUADRADO de stop.
