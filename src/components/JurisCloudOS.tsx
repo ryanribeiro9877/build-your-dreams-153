@@ -35,8 +35,7 @@ import { applyRunPatch, type RunState } from "./juris-cloud/runStates";
 import { deriveConversationStatus } from "./juris-cloud/sessionStatus";
 import {
   ACCENT, ACCENT_SOFT,
-  DEPARTMENTS, AGENTS_FALLBACK, ALERTS,
-  INITIAL_MESSAGES,
+  DEPARTMENTS, AGENTS_FALLBACK,
   getTokenCost, formatTokenRefundMessage, formatInsufficientBalanceMessage,
   getAgentsForDepartment, toLegacyAgent,
 } from "./juris-cloud/constants";
@@ -77,7 +76,7 @@ const GlobalStyles = () => (
       --badge-bg: rgba(255,255,255,0.06);
     }
     body, .jc-root, .jc-sidebar, .jc-main, .jc-topbar, .jc-right-panel,
-    .jc-input-area, .jc-msg-bubble, .jc-kpi, .jc-case-card, .jc-alert-item,
+    .jc-input-area, .jc-msg-bubble, .jc-case-card, .jc-alert-item,
     .jc-nav-item, .jc-input-row, .jc-cmd, .jc-user-chip,
     .jc-agent-item, .jc-right-tab, .jc-agents-section {
       transition: background-color var(--theme-transition), border-color var(--theme-transition),
@@ -279,15 +278,6 @@ const GlobalStyles = () => (
       display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
       gap: 8px 10px; flex: 1 1 220px; min-width: 0;
     }
-    .jc-alert-chip {
-      display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 20px;
-      cursor: pointer; font-size: 11px; font-weight: 500; border: 1px solid; transition: opacity 0.15s;
-      max-width: min(240px, 36vw); flex-shrink: 1;
-    }
-    .jc-alert-chip:hover { opacity: 0.8; }
-    .jc-alert-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .jc-alert-chip.fatal { background: rgba(234,179,8,0.12); border-color: rgba(250,204,21,0.45); color: #FEF9C3; }
-    .jc-alert-chip.warning { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.35); color: #FACC15; }
     .jc-user-chip {
       display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px;
       background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; cursor: pointer;
@@ -355,20 +345,6 @@ const GlobalStyles = () => (
       font-family: var(--font-body); font-weight: 500; letter-spacing: 0.02em;
     }
     .jc-msg-text b, .jc-msg-text strong { color: var(--gold2); font-weight: 600; }
-    .jc-card-briefing {
-      background: linear-gradient(135deg, rgba(234,179,8,0.08), rgba(0,0,0,0.12));
-      border: 1px solid rgba(234,179,8,0.28); border-radius: 14px; padding: 20px; margin-top: 2px;
-    }
-    .jc-card-briefing-title { font-family: var(--font-disp); font-size: 22px; font-weight: 600; color: var(--gold2); margin-bottom: 4px; }
-    .jc-card-briefing-sub { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
-    .jc-card-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-    .jc-kpi {
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px;
-    }
-    .jc-kpi:hover { border-color: var(--border2); }
-    .jc-kpi-value { font-family: var(--font-disp); font-size: 26px; font-weight: 600; line-height: 1; }
-    .jc-kpi-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
     .jc-card-processes { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
     .jc-process-row {
       background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
@@ -535,18 +511,13 @@ const GlobalStyles = () => (
       .jc-topbar { padding: 8px 10px 10px; gap: 8px; }
       .jc-topbar-brand { flex-basis: 100%; }
       .jc-topbar-trailing { flex-basis: 100%; justify-content: flex-start; }
-      .jc-alert-chip { display: none; }
       .jc-dept-title { font-size: 16px; }
       .jc-msg-wrap { padding: 8px 16px; }
       .jc-msg-bubble { max-width: 85%; font-size: 13px; }
-      .jc-card-grid { grid-template-columns: 1fr 1fr; }
       .jc-input-area { padding: 8px 12px 12px; }
       .jc-cmd { font-size: 10px; padding: 3px 8px; }
     }
     @media (max-width: 480px) {
-      .jc-card-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-      .jc-kpi { padding: 8px; }
-      .jc-kpi-value { font-size: 20px; }
       .jc-user-chip { display: none; }
     }
   `}</style>
@@ -715,7 +686,7 @@ export default function JurisCloudOS() {
   // "processando" de ninguém.
   const startNewChat = () => {
     setAssistantSessionId(null);
-    setMessages(INITIAL_MESSAGES);
+    setMessages([]);
     setShowWelcome(true);
   };
 
@@ -781,7 +752,7 @@ export default function JurisCloudOS() {
 
   const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
-  const [messages, setMessages]           = useState<JcChatMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages]           = useState<JcChatMessage[]>([]);
   const [inputVal, setInputVal]           = useState("");
   // ── Estado de "processando" POR conversa (session_id) ─────────────────────
   // MAPA session_id → RunState. Substitui o slot ÚNICO (currentRunId do #18) que
@@ -1095,7 +1066,7 @@ export default function JurisCloudOS() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRunKey, assistantSessionId, applyTerminalRun, finishBackgroundRun, fetchAndMergeMessages]);
 
-  const systemOnline = !AGENTS.some(a => a.status === "alert") && !ALERTS.some(a => a.type === "fatal");
+  const systemOnline = !AGENTS.some(a => a.status === "alert");
 
   const announce = (msg: string) => {
     setShortcutAnnouncement(msg);
@@ -1572,7 +1543,6 @@ export default function JurisCloudOS() {
             user={user}
             inboxCount={inboxCount}
             validationCount={validationCount}
-            visibility={visibility}
             isReadOnly={isReadOnly}
             roleLabel={roleLabel}
             entryAgentId={entryAgentId}

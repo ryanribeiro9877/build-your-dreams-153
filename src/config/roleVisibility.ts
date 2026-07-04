@@ -8,7 +8,6 @@ export interface RoleVisibility {
   agentRolesVisible: string[] | "*";
   maxAgentsShown: number;
   showCapacityPanel: boolean;
-  showAlertChips: boolean;
   dashboardWidgets: string[];
   label: string;
 }
@@ -25,7 +24,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: "*",
     maxAgentsShown: 20,
     showCapacityPanel: true,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts", "queues", "capacity", "bottlenecks"],
     label: "Administrador",
   },
@@ -40,7 +38,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: "*",
     maxAgentsShown: 15,
     showCapacityPanel: true,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts", "queues", "capacity", "bottlenecks"],
     label: "Diretor",
   },
@@ -54,7 +51,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["manager", "specialist", "reviewer", "executor", "monitor"],
     maxAgentsShown: 10,
     showCapacityPanel: true,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts", "queues"],
     label: "Gerente",
   },
@@ -68,7 +64,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["specialist", "reviewer", "executor", "monitor"],
     maxAgentsShown: 8,
     showCapacityPanel: false,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts", "queues"],
     label: "Advogado",
   },
@@ -81,7 +76,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["executor", "monitor"],
     maxAgentsShown: 5,
     showCapacityPanel: false,
-    showAlertChips: false,
     dashboardWidgets: ["kpis", "queues"],
     label: "Recepcionista",
   },
@@ -94,7 +88,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["executor"],
     maxAgentsShown: 4,
     showCapacityPanel: false,
-    showAlertChips: false,
     dashboardWidgets: ["kpis"],
     label: "Estagiário",
   },
@@ -107,7 +100,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["manager", "specialist", "executor", "monitor"],
     maxAgentsShown: 8,
     showCapacityPanel: false,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts"],
     label: "Financeiro",
   },
@@ -120,7 +112,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["manager", "specialist", "executor", "monitor"],
     maxAgentsShown: 8,
     showCapacityPanel: false,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts"],
     label: "Marketing",
   },
@@ -133,7 +124,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["executor", "reviewer"],
     maxAgentsShown: 6,
     showCapacityPanel: false,
-    showAlertChips: false,
     dashboardWidgets: ["kpis", "queues"],
     label: "Protocolo",
   },
@@ -146,7 +136,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["executor", "reviewer"],
     maxAgentsShown: 6,
     showCapacityPanel: false,
-    showAlertChips: false,
     dashboardWidgets: ["kpis", "queues"],
     label: "Calculista",
   },
@@ -159,7 +148,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: ["specialist", "reviewer", "monitor"],
     maxAgentsShown: 5,
     showCapacityPanel: false,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts"],
     label: "Compliance",
   },
@@ -172,7 +160,6 @@ export const ROLE_VISIBILITY: Record<string, RoleVisibility> = {
     agentRolesVisible: "*",
     maxAgentsShown: 20,
     showCapacityPanel: true,
-    showAlertChips: true,
     dashboardWidgets: ["kpis", "alerts", "queues", "capacity", "bottlenecks"],
     label: "Tecnologia",
   },
@@ -186,7 +173,6 @@ export function getRoleVisibility(role: string): RoleVisibility {
     agentRolesVisible: [],
     maxAgentsShown: 0,
     showCapacityPanel: false,
-    showAlertChips: false,
     dashboardWidgets: [],
     label: "Desconhecido",
   };

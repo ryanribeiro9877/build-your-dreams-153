@@ -5,7 +5,7 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import {
   AlertTriangle, Lock,
 } from "lucide-react";
-import type { JcChatMessage, BriefingCardPayload, ProcessListRow, Agent } from "./types";
+import type { JcChatMessage, ProcessListRow, Agent } from "./types";
 import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
@@ -34,23 +34,6 @@ function looksLikePeticao(text: string): boolean {
 }
 
 /* ── Sub-components (chat bubbles) ── */
-
-function BriefingCard({ card }: { card: BriefingCardPayload }) {
-  return (
-    <div className="jc-card-briefing">
-      <div className="jc-card-briefing-title">{card.title}</div>
-      <div className="jc-card-briefing-sub">{card.summary}</div>
-      <div className="jc-card-grid">
-        {card.items.map((item, i: number) => (
-          <div className="jc-kpi" key={i} style={{ borderLeftColor: item.accent, borderLeftWidth: 2 }}>
-            <div className="jc-kpi-value" style={{ color: item.accent }}>{item.value}</div>
-            <div className="jc-kpi-label">{item.label}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   return (
@@ -197,7 +180,6 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
               </>
             );
           })()}
-          {msg.card?.type === "briefing" && <BriefingCard card={msg.card} />}
           {msg.card?.type === "process-list" && <ProcessListCard processes={msg.card.processes} />}
           {msg.actions && msg.actions.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>

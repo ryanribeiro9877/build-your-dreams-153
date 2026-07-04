@@ -2,19 +2,10 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import {
-  Menu, AlertTriangle, AlertCircle, CheckCircle, Info,
+  Menu, AlertCircle,
   ClipboardList, ShieldCheck, KanbanSquare,
 } from "lucide-react";
-import { DEPT_ICONS, ALERTS } from "./constants";
-
-/* ── Alert Icon helper ── */
-function AlertIcon({ type }: { type: string }) {
-  const size = 14;
-  if (type === "fatal") return <AlertTriangle size={size} style={{ color: "#FACC15" }} />;
-  if (type === "warning") return <AlertCircle size={size} style={{ color: "#EAB308" }} />;
-  if (type === "success") return <CheckCircle size={size} style={{ color: "#FEF9C3" }} />;
-  return <Info size={size} style={{ color: "#FDE047" }} />;
-}
+import { DEPT_ICONS } from "./constants";
 
 export interface JurisTopBarProps {
   activeDeptData: { id: string; label: string; color: string; badge: number } | undefined;
@@ -22,7 +13,6 @@ export interface JurisTopBarProps {
   user: { email?: string | null; user_metadata?: { display_name?: string } } | null;
   inboxCount: { total: number; overdue: number };
   validationCount: number;
-  visibility: { showAlertChips: boolean };
   isReadOnly: boolean;
   roleLabel: string;
   entryAgentId: string | null;
@@ -36,7 +26,6 @@ export default function JurisTopBar({
   user,
   inboxCount,
   validationCount,
-  visibility,
   isReadOnly,
   roleLabel,
   entryAgentId,
@@ -117,13 +106,6 @@ export default function JurisTopBar({
             <KanbanSquare size={15} strokeWidth={2.5} />
             Kanban
           </button>
-
-          {visibility.showAlertChips && ALERTS.slice(0, 2).map((a, i) => (
-            <div key={i} className={`jc-alert-chip ${a.type}`}>
-              <AlertIcon type={a.type} />
-              <span>{a.text.slice(0, 28)}...</span>
-            </div>
-          ))}
 
           <NotificationCenter />
 
