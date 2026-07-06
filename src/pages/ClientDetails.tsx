@@ -29,6 +29,11 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   cancelled: { bg: "rgba(107,114,128,0.15)", color: "#6b7280" },
 };
 
+// Projeção explícita (minimização de PII — R-2 Fase 1): só os campos que o
+// detalhe renderiza. Sem dados bancários/PIX, filiação ou demais colunas.
+const CLIENT_DETAIL_COLUMNS =
+  "id, full_name, cpf, rg, email, phone, address, city, state, zip_code, notes, status, created_at";
+
 interface Client {
   id: string; full_name: string; cpf: string | null; rg: string | null;
   email: string | null; phone: string | null; address: string | null;
@@ -91,7 +96,7 @@ export default function ClientDetails() {
   const loadAll = useCallback(async (clientId: string) => {
     setLoading(true);
     const [clientRes, docsRes] = await Promise.all([
-      supabase.from("clients").select("*").eq("id", clientId).single(),
+      supabase.from("clients").select(CLIENT_DETAIL_COLUMNS).eq("id", clientId).single(),
       supabase.from("client_documents").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
     ]);
     if (clientRes.error) { toast.error("Cliente não encontrado"); navigate("/clientes"); return; }

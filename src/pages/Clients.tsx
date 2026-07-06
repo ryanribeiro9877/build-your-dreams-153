@@ -17,51 +17,25 @@ const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG"
 
 const PAGE_SIZE = 20;
 
+// Projeção explícita (minimização de PII — R-2 Fase 1): a lista e o painel de
+// detalhe desta tela só renderizam estes campos. Documentos (CPF/RG) aparecem
+// aqui porque a tela os exibe; dados bancários/PIX e filiação NÃO são buscados.
+const CLIENT_LIST_COLUMNS =
+  "id, full_name, cpf, rg, email, phone, address, city, state, zip_code, notes, status, created_at";
+
+// Mantém o tipo alinhado à projeção acima — evita ler no cliente uma coluna
+// que não veio no payload.
 interface Client {
   id: string;
-  tipo_pessoa: string;            // 'fisica' | 'juridica'
   full_name: string;              // nome completo / razão social
-  fantasy_name: string | null;    // nome fantasia (PJ)
   cpf: string | null;
-  cnpj: string | null;
   rg: string | null;
-  rg_issuer: string | null;       // órgão emissor
-  rg_uf: string | null;
-  ie: string | null;              // inscrição estadual (PJ)
-  im: string | null;              // inscrição municipal (PJ)
-  birth_date: string | null;      // nascimento (PF)
-  foundation_date: string | null; // fundação (PJ)
-  gender: string | null;
-  marital_status: string | null;
-  nationality: string | null;
-  natural_city: string | null;    // naturalidade
-  natural_uf: string | null;
-  mother_name: string | null;
-  father_name: string | null;
-  profession: string | null;
-  pis_nit: string | null;
-  legal_rep_name: string | null;  // representante legal (PJ)
-  legal_rep_cpf: string | null;
   email: string | null;
   phone: string | null;           // celular
-  phone_commercial: string | null;
-  phone_home: string | null;
-  zip_code: string | null;
   address: string | null;         // logradouro
-  address_number: string | null;
-  address_complement: string | null;
-  neighborhood: string | null;    // bairro
   city: string | null;
   state: string | null;
-  country: string | null;
-  bank_name: string | null;
-  bank_agency: string | null;
-  bank_account: string | null;
-  bank_account_type: string | null;
-  pix_key: string | null;
-  pix_key_type: string | null;
-  client_origin: string | null;   // origem/captação
-  gov_br_profile: string | null;  // ouro | prata | bronze
+  zip_code: string | null;
   notes: string | null;
   status: string;
   created_at: string;
@@ -231,7 +205,7 @@ export default function Clients() {
 
   async function fetchClients() {
     setLoading(true);
-    const { data, error } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("clients").select(CLIENT_LIST_COLUMNS).order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar clientes");
     else setClients((data as unknown as Client[]) || []);
     setLoading(false);
