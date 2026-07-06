@@ -62,6 +62,8 @@ function ChunkReloadRestore() {
 const Index = lazyWithRetry(() => import("./pages/Index.tsx"));
 const Auth = lazyWithRetry(() => import("./pages/Auth.tsx"));
 const Clients = lazyWithRetry(() => import("./pages/Clients.tsx"));
+const ClientNew = lazyWithRetry(() => import("./pages/ClientNew.tsx"));
+const ClientEdit = lazyWithRetry(() => import("./pages/ClientEdit.tsx"));
 const ClientDetails = lazyWithRetry(() => import("./pages/ClientDetails.tsx"));
 const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
@@ -178,7 +180,9 @@ const App = () => (
               />
               <Route path="/sistema" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+              <Route path="/clientes/novo" element={<ProtectedRoute><ClientNew /></ProtectedRoute>} />
               <Route path="/clientes/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
+              <Route path="/clientes/:id/editar" element={<ProtectedRoute><ClientEdit /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
