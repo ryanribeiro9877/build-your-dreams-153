@@ -2451,7 +2451,11 @@ async function handleCancel(req: Request, body: { runId?: string; sessionId?: st
   } else {
     return errResp(400, "invalid_request", "runId ou sessionId obrigatório");
   }
-  if (!run) return errResp(404, "run_not_found", "Run não encontrada");
+  // Janela inicial (race): o STOP pode chegar ANTES de a run existir em
+  // orchestration_runs (usuário clicou logo após enviar). Não é erro — responde
+  // 2xx com notFound:true para o front ignorar silenciosamente (sem 404 poluindo
+  // o console). Assim que a run existir, um novo cancel a pega normalmente.
+  if (!run) return jsonResp({ ok: true, notFound: true, message: "run ainda não encontrada — nada a cancelar" });
   // Posse: só o dono cancela a PRÓPRIA run (isolamento por conversa/usuário).
   if (run.user_id !== user.id) return errResp(403, "forbidden", "Sem acesso a esta run");
   // Já terminal: nada a cancelar (idempotente).

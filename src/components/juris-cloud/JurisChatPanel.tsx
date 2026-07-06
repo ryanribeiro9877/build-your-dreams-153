@@ -361,6 +361,8 @@ export interface JurisChatPanelProps {
   onStop?: () => void;
   /** Cancelamento em andamento (clique feito, aguardando o backend reagir). */
   stopping?: boolean;
+  /** Só habilita o STOP quando a run já existe (há runId) — evita o cancel na janela inicial (race). */
+  canStop?: boolean;
   isRecording: boolean;
   toggleRecording: () => void;
   isReadOnly: boolean;
@@ -382,6 +384,7 @@ export default function JurisChatPanel({
   sessionImages,
   onStop,
   stopping,
+  canStop,
   isRecording,
   toggleRecording,
   isReadOnly,
@@ -636,12 +639,18 @@ export default function JurisChatPanel({
               // STOP instantâneo: enquanto processa, a seta vira um QUADRADO de stop.
               // Clicar cancela a run DESTA conversa (o botão volta a ser seta ao
               // encerrar). Fica desabilitado no intervalo entre o clique e a reação.
+              //
+              // Correção da race: o stop só fica CLICÁVEL quando já existe runId
+              // (a run foi criada e o front a conhece). Na janela inicial — logo
+              // após enviar, antes de a run existir — o botão aparece mas fica
+              // desabilitado; assim não dispara um cancel que bateria numa run
+              // inexistente. Assim que o runId chega (startOrchestration/2.3), habilita.
               <button
                 className="jc-send-btn is-stop"
                 onClick={() => onStop()}
-                disabled={stopping}
+                disabled={stopping || !canStop}
                 aria-label="Parar geração"
-                title="Parar geração"
+                title={canStop ? "Parar geração" : "Iniciando…"}
                 type="button"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"

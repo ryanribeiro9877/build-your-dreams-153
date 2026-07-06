@@ -1247,6 +1247,11 @@ export default function JurisCloudOS() {
     if (!sid) return;
     const st = runStatesRef.current[sid];
     if (!st?.thinking) return;
+    // Correção da race: só pede o cancel quando a run já existe (há runId). Na
+    // janela inicial (logo após enviar, antes de a run ser criada) um cancel
+    // bateria numa run inexistente — o botão já fica desabilitado por canStop,
+    // mas guardamos aqui também (defesa em profundidade).
+    if (!st.runId) return;
     setStopping(true);
     // Feedback imediato na fase do indicador (não espera o round-trip).
     patchRunState(sid, { liveStage: { label: "Interrompendo…" } });
@@ -1616,6 +1621,7 @@ export default function JurisCloudOS() {
             sessionImages={sessionImages}
             onStop={handleStop}
             stopping={stopping}
+            canStop={!!openRun?.runId}
             isRecording={isRecording}
             toggleRecording={toggleRecording}
             isReadOnly={isReadOnly}
