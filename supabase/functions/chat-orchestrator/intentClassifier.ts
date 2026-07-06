@@ -19,7 +19,7 @@
 // Resumo: o default de tudo é NEGOCIO_COM_INSUMO (gerar). TRIVIAL e SEM_INSUMO só
 // com certeza. normalizeIntent materializa esse default seguro.
 
-export type IntentCategory = "TRIVIAL" | "NEGOCIO_SEM_INSUMO" | "NEGOCIO_COM_INSUMO";
+export type IntentCategory = "TRIVIAL" | "CONSULTA" | "NEGOCIO_SEM_INSUMO" | "NEGOCIO_COM_INSUMO";
 
 // Prompt do classificador (modelo RÁPIDO, 1 chamada curta, saída JSON). Instrui a
 // olhar a MENSAGEM INTEIRA — "bom dia, preciso de uma petição..." é negócio: começar
@@ -31,11 +31,17 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
 - "TRIVIAL": saudação, cortesia, small talk ou pergunta trivial SEM qualquer teor
   jurídico e SEM pedido de trabalho. Ex.: "oi", "bom dia", "tudo bem?", "obrigado".
   Use TRIVIAL SOMENTE com ALTA CONFIANÇA.
-- "NEGOCIO_SEM_INSUMO": é uma demanda jurídica (pedir peça, cálculo, análise etc.),
-  MAS a mensagem NÃO traz informação textual suficiente para fundamentar o trabalho.
+- "CONSULTA": o usuário quer CONSULTAR/BUSCAR/VER um dado JÁ CADASTRADO no sistema
+  (dados de um CLIENTE, tarefas, processos, documentos anexados, ou colaboradores) —
+  NÃO é pedir uma peça nova nem small talk; é uma pergunta de LEITURA sobre o cadastro
+  do escritório. Ex.: "consulte o CPF do cliente Fulano", "qual o telefone do cliente
+  X", "busque o cliente Y", "quais tarefas do cliente Z", "que documentos o cliente W
+  já enviou". Pedir um DADO de um cliente/registro existente é CONSULTA, não peça.
+- "NEGOCIO_SEM_INSUMO": é uma demanda jurídica de TRABALHO (pedir peça, cálculo,
+  análise etc.), MAS a mensagem NÃO traz informação textual suficiente para fundamentar.
   Ex.: "gere uma peça" sozinho; "faça uma petição" sem cliente/réu/fatos/valores;
   pedido vago. Anexos de IMAGEM não contam como insumo (não são lidos até o OCR).
-- "NEGOCIO_COM_INSUMO": demanda jurídica COM dados textuais suficientes para o
+- "NEGOCIO_COM_INSUMO": demanda jurídica de TRABALHO COM dados textuais suficientes para o
   especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
   com texto legível anexado). "bom dia, preciso de uma petição de indébito para o
   cliente João, contrato 123, valor R$5.000, banco X" é NEGOCIO_COM_INSUMO.
@@ -45,8 +51,11 @@ REGRAS DE OURO (assimetria — obedeça à risca):
    preferível processar um "oi" a deixar passar uma demanda jurídica como trivial.
 2) Na dúvida entre COM e SEM insumo, escolha NEGOCIO_COM_INSUMO (gerar). Só use
    NEGOCIO_SEM_INSUMO quando estiver CLARO que faltam dados para fundamentar a peça.
+3) CONSULTA é só para BUSCAR dado já cadastrado. Se o usuário quer PRODUZIR algo novo
+   (peça, cálculo, contrato), é NEGOCIO_*, não CONSULTA. Na dúvida entre CONSULTA e
+   NEGOCIO, escolha NEGOCIO.
 
-Responda APENAS com JSON: {"categoria":"TRIVIAL"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
+Responda APENAS com JSON: {"categoria":"TRIVIAL"|"CONSULTA"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
 
 // System prompt da resposta do FAST-PATH (TRIVIAL) — natural, não template fixo.
 export const FAST_REPLY_SYSTEM = `Você é o assistente virtual de um escritório de advocacia (JurisAI).
@@ -85,6 +94,7 @@ export function mentionsAttachments(message: string): boolean {
 export function normalizeIntent(raw: string | null | undefined): IntentCategory {
   const c = (raw || "").trim().toUpperCase();
   if (c === "TRIVIAL") return "TRIVIAL";
+  if (c === "CONSULTA") return "CONSULTA";
   if (c === "NEGOCIO_SEM_INSUMO" || c === "NEGÓCIO_SEM_INSUMO" || c === "SEM_INSUMO") return "NEGOCIO_SEM_INSUMO";
   return "NEGOCIO_COM_INSUMO"; // default seguro: gerar
 }
@@ -104,8 +114,9 @@ export function shouldClassify(
 }
 
 // Caminho (auditoria/roteamento) correspondente à categoria.
-export function routePathFor(category: IntentCategory): "fast" | "need_info" | "full" {
+export function routePathFor(category: IntentCategory): "fast" | "consulta" | "need_info" | "full" {
   if (category === "TRIVIAL") return "fast";
+  if (category === "CONSULTA") return "consulta";
   if (category === "NEGOCIO_SEM_INSUMO") return "need_info";
   return "full";
 }

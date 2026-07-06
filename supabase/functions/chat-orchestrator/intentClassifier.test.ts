@@ -16,6 +16,10 @@ Deno.test("normalizeIntent: SEM_INSUMO explícito (variações)", () => {
 Deno.test("normalizeIntent: COM_INSUMO explícito", () => {
   assertEquals(normalizeIntent("NEGOCIO_COM_INSUMO"), "NEGOCIO_COM_INSUMO");
 });
+Deno.test("normalizeIntent: CONSULTA explícito (AGT-CONSULTA)", () => {
+  assertEquals(normalizeIntent("CONSULTA"), "CONSULTA");
+  assertEquals(normalizeIntent(" consulta "), "CONSULTA");
+});
 Deno.test("normalizeIntent: desconhecido/vazio/nulo → COM_INSUMO (gerar; nunca TRIVIAL nem bloqueio)", () => {
   const casos: (string | null | undefined)[] = ["", null, undefined, "talvez", "INCERTO", "NEGOCIO", "{quebrado"];
   for (const c of casos) {
@@ -27,6 +31,7 @@ Deno.test("normalizeIntent: desconhecido/vazio/nulo → COM_INSUMO (gerar; nunca
 // ─── routePathFor: mapeamento categoria → caminho de auditoria ───────────────
 Deno.test("routePathFor: cada categoria tem seu caminho", () => {
   assertEquals(routePathFor("TRIVIAL"), "fast");
+  assertEquals(routePathFor("CONSULTA"), "consulta");
   assertEquals(routePathFor("NEGOCIO_SEM_INSUMO"), "need_info");
   assertEquals(routePathFor("NEGOCIO_COM_INSUMO"), "full");
 });
