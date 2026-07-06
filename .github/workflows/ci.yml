@@ -56,3 +56,9 @@ jobs:
 
       - name: Test chat-orchestrator (tools + intent classifier)
         run: deno test supabase/functions/chat-orchestrator/
+
+      - name: Type-check OCR extractor
+        run: deno check supabase/functions/_shared/ocr/index.ts
+
+      - name: Test OCR extractor (deterministic + confidence + anti-ALERTA-1)
+        run: deno test supabase/functions/_shared/ocr/
