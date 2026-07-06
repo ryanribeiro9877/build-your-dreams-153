@@ -1280,6 +1280,12 @@ export default function JurisCloudOS() {
     if (!sid) return;
     const st = runStatesRef.current[sid];
     if (!st?.thinking) return;
+    // Race do STOP cedo (fix 3.x): só dispara o cancel quando a run JÁ existe (o
+    // front conhece o runId — veio do retorno de startOrchestration / mapa 2.3).
+    // Enquanto o runId não chegou, não há run para cancelar no banco: pedir o
+    // cancel agora resultaria em "nada a cancelar". O botão já fica desabilitado
+    // (canStop=false) nessa janela; este guard cobre o caso de corrida.
+    if (!st.runId) return;
     setStopping(true);
     // Feedback imediato na fase do indicador (não espera o round-trip).
     patchRunState(sid, { liveStage: { label: "Interrompendo…" } });
@@ -1370,6 +1376,27 @@ export default function JurisCloudOS() {
           await refundAndNotify("falha ao processar os anexos — reenvie os arquivos");
           return;
         }
+        // Aviso de IMAGEM (Opção 2 — cirúrgico): imagem NÃO tem texto extraível hoje
+        // (OCR é fase 2). Ela NÃO bloqueia e NÃO entra no cálculo de "documentos
+        // ausentes" — só informa de forma explícita que o conteúdo dela não será
+        // lido. A imagem continua anexada à conversa. (failedExtraction agora traz
+        // apenas DOCUMENTOS textuais ilegíveis — imagens vão em imagesWithoutText.)
+        if (ing.imagesWithoutText.length > 0) {
+          const nomes = ing.imagesWithoutText.join(", ");
+          const plural = ing.imagesWithoutText.length > 1;
+          setMessages(prev => [...prev, {
+            id: `local_img_notice_${Date.now()}`, role: "assistant", agent: "Sistema",
+            content:
+              `🖼️ Recebi ${plural ? "suas imagens" : "sua imagem"} **${nomes}**. ` +
+              `Ainda não consigo extrair o texto ${plural ? "delas" : "dela"} automaticamente ` +
+              `(isso virá com o OCR). Vou gerar a peça **sem considerar o conteúdo da imagem** — ` +
+              `se ${plural ? "elas têm" : "ela tem"} informação importante, me conte por texto.`,
+            timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          }]);
+        }
+
+        // GATE (documentos textuais apenas): só bloqueia por upload falho ou por
+        // documento textual sem texto legível. Imagens NÃO entram aqui.
         const failedAll = [...ing.failedUpload, ...ing.failedExtraction];
         if (failedAll.length > 0) {
           await refundTokens(cost, requestId, "Estorno automatico: anexos falharam — geração bloqueada");
@@ -1643,6 +1670,7 @@ export default function JurisCloudOS() {
             setInputVal={setInputVal}
             handleSend={handleSend}
             onStop={handleStop}
+            canStop={!!openRun?.runId}
             stopping={stopping}
             isRecording={isRecording}
             toggleRecording={toggleRecording}
