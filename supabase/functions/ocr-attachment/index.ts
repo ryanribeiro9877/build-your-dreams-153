@@ -8,8 +8,8 @@
 //
 // FLAG: respeita `OCR_ENABLED` (default OFF) como cinto-e-suspensório — mesmo
 // que o front chame, com a flag OFF a função é no-op. NENHUM provedor real entra
-// aqui: o extrator dedicado (Textract/híbrido) chega no Briefing 2 implementando
-// a MESMA interface, plugado por `OCR_ENGINE` (default "stub").
+// aqui: o extrator (stub ou Textract/híbrido) vive em `_shared/ocr/` e é
+// selecionado pelo ÚNICO `getExtractor` do repo, plugado por `OCR_ENGINE`.
 //
 // Auth: o caller manda o próprio JWT; validamos a posse do anexo pela RLS
 // (callerClient). O download do binário e o UPDATE usam service-role (adminClient).
@@ -21,7 +21,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { getExtractor } from "./extractor.ts";
+import { getExtractor } from "../_shared/ocr/index.ts";
 
 function jsonResp(req: Request, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -100,9 +100,21 @@ serve(async (req) => {
 
     const bytes = new Uint8Array(await blob.arrayBuffer());
 
-    // ── Extração (atrás de interface; só o stub nesta fase) ──────────────────────
-    const extractor = getExtractor(Deno.env.get("OCR_ENGINE"));
-    const result = await extractor.extract(bytes, att.mime_type || "", att.file_name);
+    // ── Extração (atrás da interface canônica de _shared/ocr) ────────────────────
+    // getExtractor é o ÚNICO seletor do repo: null quando OCR desligado (flag OFF
+    // ou engine ausente/desconhecido), stub em teste, textract+map em produção.
+    // Os secrets vêm do env do edge (nunca do código).
+    const extractor = await getExtractor((key) => Deno.env.get(key) ?? null);
+    if (!extractor) {
+      // OCR desligado no nível do seletor → no-op (preserva o fallback do gate).
+      return jsonResp(req, 200, { ok: false, reason: "ocr_disabled" });
+    }
+    // A atribuição do documento (sourceDocument) é o nome do arquivo do anexo.
+    const result = await extractor.extract({
+      bytes,
+      mimeType: att.mime_type || undefined,
+      sourceDocument: att.file_name,
+    });
 
     const text = (result.text || "").trim();
     if (!text) {
