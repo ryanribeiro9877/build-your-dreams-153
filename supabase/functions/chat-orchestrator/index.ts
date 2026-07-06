@@ -2305,12 +2305,39 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         return fireNextStep(runId, supabaseUrl, serviceKey);
       }
 
-      let draft = run.draft || "";
+      // ── Card 2.9: NÃO vazar o texto do validador na resposta ──────────────
+      // As observações/crítica do validador consultivo (verdict.feedback) são
+      // raciocínio INTERNO de orquestração — a crítica que ele faz ao rascunho
+      // para melhorá-lo. NUNCA podem ser concatenadas à resposta entregue ao
+      // usuário (draft → content de chat_messages): em contexto jurídico isso
+      // confunde e pode ser propagado sem querer. Antes, quando o orçamento de
+      // regeneração consultiva esgotava, anexávamos ao draft o bloco
+      // `_[REVISAR — observações do validador: …]_` — vazamento. Agora as
+      // observações ficam SÓ no audit interno (orchestration_runs.mech_report +
+      // log), preservadas para debug/auditoria, mas FORA da resposta final.
+      // Este é o único ponto de concatenação: todas as cadeias (peça, correção,
+      // consultiva e o trivial "olá") convergem aqui via validating_n2, então
+      // fechá-lo cobre todos os caminhos de saída.
+      const baseReport = (mechReportPatch.mech_report as Record<string, unknown> | undefined)
+        ?? (run.mech_report as Record<string, unknown> | null) ?? {};
+      const consultiveAudit: Record<string, unknown> = {
+        approved: verdict.approved,
+        rounds: consultiveRounds,
+        ...(verdict.feedback ? { feedback: verdict.feedback } : {}),
+      };
       if (!verdict.approved && verdict.feedback) {
-        draft += `\n\n---\n_[REVISAR — observações do validador: ${verdict.feedback}]_`;
+        // Auditoria: preserva o raciocínio do validador no log interno — retido
+        // do usuário, disponível para debug. (2.1 continua valendo: log técnico
+        // cru não é reexibido na UI.)
+        console.log(`[validator-consultive] run=${runId} REPROVADO após ${consultiveRounds} rodada(s) — observações RETIDAS do usuário (registradas em mech_report.consultive):`, verdict.feedback);
       }
+      const auditReport = { ...baseReport, consultive: consultiveAudit };
+      // A resposta ao usuário é APENAS a peça/resposta final (+ checklist de
+      // pendências mecânicas, que é deliverable de revisão humana, não crítica
+      // interna). Sem qualquer bloco de observações do validador.
+      let draft = run.draft || "";
       if (mechPending.length > 0) draft += formatWarningsChecklist(mechPending);
-      await upd({ status: "validating_n1", draft, ...mechReportPatch });
+      await upd({ status: "validating_n1", draft, mech_report: auditReport });
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n1") {
