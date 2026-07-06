@@ -19,9 +19,19 @@ export const BUCKET_FILE_SIZE_LIMIT = 15 * 1024 * 1024; // 15.728.640 bytes
 
 export interface IngestResult {
   uploaded: number;
-  failedExtraction: string[]; // arquivos que subiram mas não tiveram texto extraído
+  failedExtraction: string[]; // DOCUMENTOS textuais que subiram mas não tiveram texto extraído (bloqueiam)
   failedUpload: string[];     // arquivos que nem subiram (erro de upload ou acima do limite)
   skipped: string[];          // arquivos já anexados nesta sessão (dedup) — não reanexados
+  imagesWithoutText: string[]; // IMAGENS anexadas (sem texto extraível): NÃO bloqueiam — só avisam (OCR é fase 2)
+}
+
+// Uma imagem NUNCA tem texto extraível hoje (OCR é Track externo, fase 2). Por isso
+// ela não pode cair no gate de "anexo sem texto legível" que existe para documentos
+// textuais (PDF/DOCX/TXT). Classifica por mime_type e, como fallback, pela extensão
+// — os mesmos campos gravados em chat_attachments. Mantém png/jpg/jpeg/webp/gif.
+function isImageAttachment(file: File): boolean {
+  if ((file.type || "").toLowerCase().startsWith("image/")) return true;
+  return /\.(png|jpe?g|webp|gif|bmp|heic|heif|avif)$/i.test(file.name);
 }
 
 function sanitizeName(name: string): string {
@@ -52,7 +62,7 @@ export async function ingestChatAttachments(
   userId: string,
   files: File[],
 ): Promise<IngestResult> {
-  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [] };
+  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [], imagesWithoutText: [] };
 
   for (const file of files) {
     // Trava anti-duplicação: se o mesmo arquivo já está anexado e ativo NESTA sessão
@@ -91,7 +101,13 @@ export async function ingestChatAttachments(
     // (byte 0 / surrogate solto) chegue ao Postgres mesmo se um caminho novo de
     // extração esquecer de sanitizar. Sem isto o insert volta a dar 400.
     const safeText = sanitizeExtractedText(text);
-    if (!safeText) result.failedExtraction.push(file.name);
+    // Sem texto extraível: só é FALHA (que bloqueia) para DOCUMENTO textual —
+    // ali o texto era esperado. Para IMAGEM é o normal (OCR ainda não existe): a
+    // imagem fica anexada e apenas gera um AVISO amigável, sem travar a geração.
+    if (!safeText) {
+      if (isImageAttachment(file)) result.imagesWithoutText.push(file.name);
+      else result.failedExtraction.push(file.name);
+    }
 
     const { error: insErr } = await supabase.from("chat_attachments").insert({
       session_id: sessionId,

@@ -293,6 +293,9 @@ export interface JurisChatPanelProps {
   handleSend: (text?: string, files?: File[]) => void;
   /** STOP instantâneo: cancela a run desta conversa (botão vira quadrado enquanto processa). */
   onStop?: () => void;
+  /** A run já existe (runId conhecido)? O STOP só fica ATIVO quando true — evita a
+   *  corrida do clique cedo, antes de a run nascer (que dava 404 no console). */
+  canStop?: boolean;
   /** Cancelamento em andamento (clique feito, aguardando o backend reagir). */
   stopping?: boolean;
   isRecording: boolean;
@@ -316,6 +319,7 @@ export default function JurisChatPanel({
   setInputVal,
   handleSend,
   onStop,
+  canStop,
   stopping,
   isRecording,
   toggleRecording,
@@ -488,9 +492,12 @@ export default function JurisChatPanel({
               <button
                 className="jc-send-btn is-stop"
                 onClick={() => onStop()}
-                disabled={stopping}
+                // Desabilitado até a run existir (canStop) — sem isso, um clique
+                // cedo pediria cancel de uma run inexistente. Também trava durante
+                // o próprio cancelamento (stopping) para não duplicar o pedido.
+                disabled={stopping || !canStop}
                 aria-label="Parar geração"
-                title="Parar geração"
+                title={canStop ? "Parar geração" : "Iniciando…"}
                 type="button"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
