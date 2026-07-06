@@ -20,6 +20,8 @@ const PAGE_SIZE = 20;
 // Projeção explícita (minimização de PII — R-2 Fase 1): a lista e o painel de
 // detalhe desta tela só renderizam estes campos. Documentos (CPF/RG) aparecem
 // aqui porque a tela os exibe; dados bancários/PIX e filiação NÃO são buscados.
+// R-2 Fase 2B: a leitura passa a vir da view `clients_decrypted` (decifra
+// CPF/RG respeitando a RLS is_recepcao_or_socio), nunca das colunas de texto.
 const CLIENT_LIST_COLUMNS =
   "id, full_name, cpf, rg, email, phone, address, city, state, zip_code, notes, status, created_at";
 
@@ -99,6 +101,9 @@ export default function Clients() {
   const [docNotes, setDocNotes] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
+  // R-2 Fase 2B: quando a busca é um CPF (com/sem máscara), resolvemos por
+  // índice cego via RPC (igualdade exata). null = busca não é CPF (usa texto).
+  const [cpfMatchIds, setCpfMatchIds] = useState<string[] | null>(null);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [stateFilter, setStateFilter] = useState("todos");
   const [page, setPage] = useState(1);
@@ -205,7 +210,10 @@ export default function Clients() {
 
   async function fetchClients() {
     setLoading(true);
-    const { data, error } = await supabase.from("clients").select(CLIENT_LIST_COLUMNS).order("created_at", { ascending: false });
+    // R-2 Fase 2B: lê da view decifrada, não das colunas de texto sensível.
+    // (cast: a view ainda não está nos tipos gerados do supabase.)
+    const { data, error } = await (supabase as any)
+      .from("clients_decrypted").select(CLIENT_LIST_COLUMNS).order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar clientes");
     else setClients((data as unknown as Client[]) || []);
     setLoading(false);
@@ -333,13 +341,33 @@ export default function Clients() {
     if (selectedClient) fetchDocuments(selectedClient.id);
   }
 
+  // R-2 Fase 2B: detecta entrada de CPF (só dígitos após remover máscara, 11+
+  // dígitos) e busca por índice cego via RPC — funciona com e sem máscara.
+  // Busca por fragmento de CPF deixou de existir (dado protegido) — esperado.
+  useEffect(() => {
+    const raw = search.trim();
+    const digits = raw.replace(/\D/g, "");
+    const isCpf = digits.length >= 11 && /^[\d.\-/\s]+$/.test(raw);
+    if (!isCpf) { setCpfMatchIds(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await (supabase as any).rpc("search_clients_by_cpf", { cpf_input: raw });
+      if (cancelled) return;
+      setCpfMatchIds(error ? [] : ((data as { id: string }[] | null) ?? []).map(r => r.id));
+    })();
+    return () => { cancelled = true; };
+  }, [search]);
+
   const filtered = useMemo(() => {
     let result = clients;
-    if (search) {
+    if (cpfMatchIds !== null) {
+      // Busca por CPF (índice cego): mostra só os IDs que a RPC devolveu.
+      const ids = new Set(cpfMatchIds);
+      result = result.filter(c => ids.has(c.id));
+    } else if (search) {
       const s = search.toLowerCase();
       result = result.filter(c =>
         c.full_name.toLowerCase().includes(s) ||
-        (c.cpf && c.cpf.includes(s)) ||
         (c.email && c.email.toLowerCase().includes(s)) ||
         (c.phone && c.phone.includes(s)) ||
         (c.city && c.city.toLowerCase().includes(s))
@@ -348,7 +376,7 @@ export default function Clients() {
     if (statusFilter !== "todos") result = result.filter(c => c.status === statusFilter);
     if (stateFilter !== "todos") result = result.filter(c => c.state === stateFilter);
     return result;
-  }, [clients, search, statusFilter, stateFilter]);
+  }, [clients, search, cpfMatchIds, statusFilter, stateFilter]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

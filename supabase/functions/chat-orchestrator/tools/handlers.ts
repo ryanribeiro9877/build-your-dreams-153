@@ -4,10 +4,12 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 export async function runReadTool(admin: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "consultar_cliente": {
+      // R-2 Fase 2B: caminho cifrado. A RPC agent_consultar_cliente detecta
+      // entrada numérica (CPF, com/sem máscara) -> índice cego (igualdade
+      // exata); texto -> full_name. Devolve o CPF já decifrado. Não lê mais a
+      // coluna de texto sensível diretamente.
       const q = String(args.busca ?? "").trim();
-      const { data } = await admin.from("clients")
-        .select("id, full_name, cpf, status")
-        .or(`full_name.ilike.%${q}%,cpf.ilike.%${q}%`).limit(10);
+      const { data } = await admin.rpc("agent_consultar_cliente", { p_busca: q });
       return data ?? [];
     }
     case "consultar_usuario": {
