@@ -1338,7 +1338,28 @@ function buildUniversalGuardrails(): string {
     "sem o resultado dela. É PROIBIDO dizer 'pendência gerada/aberta', 'cadastro realizado', 'agendado' se " +
     "a ferramenta não foi chamada e não retornou sucesso. Se o pedido tiver MAIS DE UMA ação (ex.: 'cadastrar " +
     "E agendar'), chame TODAS as ferramentas correspondentes na mesma resposta.\n" +
+    "G. TEXTO INTERNO DE ORQUESTRAÇÃO — JAMAIS NA PEÇA: observações/críticas do validador ou revisor, as " +
+    "instruções de correção que você recebeu, marcadores internos ([REVISAR], [ORIENTAÇÃO INTERNA], [TESTE ...], " +
+    "\"VIOLAÇÕES DETECTADAS\", \"observações do validador\" e afins) e qualquer meta-comentário sobre o processo de " +
+    "validação/correção são de USO INTERNO. É PROIBIDO reproduzir, transcrever, citar, parafrasear ou referenciar " +
+    "esse texto na peça ou na resposta ao usuário. A correção deve aparecer APLICADA (o texto jurídico já corrigido), " +
+    "NUNCA NARRADA — não escreva 'conforme observação do validador', 'corrigi o valor conforme solicitado', nem " +
+    "reproduza o guia de correção. Entregue apenas o conteúdo jurídico final, como se sempre tivesse estado correto.\n" +
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
+}
+
+// GRD-N3-ECO: o feedback do validador/revisor é ORIENTAÇÃO INTERNA de correção — o N3
+// deve AGIR sobre ele (corrigir a peça), NUNCA ESCREVÊ-LO (citar/parafrasear na peça).
+// Envolve o feedback num rótulo inequívoco para o modelo tratá-lo como instrução, não
+// como conteúdo. A cláusula G de buildUniversalGuardrails() reforça isso no system
+// sempre-ativo. O feedback continua guiando a correção e sendo preservado no audit
+// (mech_report.consultive) — só não pode ser verbalizado na saída.
+function wrapCorrectionGuidance(feedback: string | null | undefined): string {
+  return "[ORIENTAÇÃO INTERNA DE CORREÇÃO — uso interno da orquestração; NÃO reproduza, " +
+    "NÃO cite, NÃO parafraseie e NÃO mencione este bloco na peça. Use-o SOMENTE para " +
+    "APLICAR as correções no texto jurídico:]\n" +
+    (feedback ?? "") +
+    "\n[/ORIENTAÇÃO INTERNA DE CORREÇÃO]";
 }
 
 // ─── Caminho B: geração da peça em BLOCOS (uma chamada por seção) ─────────────
@@ -2081,7 +2102,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           // Corrige UM bloco: passa só o texto deste bloco + as violações da peça.
           const spec = N3_BLOCKS[cIdx];
           const curBlock = stripChecklists(corrBlocks[cIdx] || "");
-          const userMessage = `${run.original_message}\n\nVocê está CORRIGINDO uma petição já redigida, BLOCO A BLOCO. ESTE É O BLOCO ${cIdx + 1}/${N3_BLOCKS.length} (${spec.label}).\n\nVIOLAÇÕES DETECTADAS NA PEÇA (aplicam-se ao documento inteiro — corrija SOMENTE as que afetam ESTE bloco):\n${run.feedback}\n\nREGRA CRÍTICA: se NENHUMA violação se aplica a este bloco, devolva o texto IDÊNTICO, sem nenhuma alteração. NÃO reescreva o que está correto, NÃO resuma, NÃO acrescente seções de outros blocos, NÃO inclua checklist.\n\n═══ TEXTO ATUAL DESTE BLOCO ═══\n${curBlock}\n═══ FIM DESTE BLOCO ═══${BLOCK_CLEAN_RULE}`;
+          const userMessage = `${run.original_message}\n\nVocê está CORRIGINDO uma petição já redigida, BLOCO A BLOCO. ESTE É O BLOCO ${cIdx + 1}/${N3_BLOCKS.length} (${spec.label}).\n\nVIOLAÇÕES DETECTADAS NA PEÇA (aplicam-se ao documento inteiro — corrija SOMENTE as que afetam ESTE bloco):\n${wrapCorrectionGuidance(run.feedback)}\n\nREGRA CRÍTICA: se NENHUMA violação se aplica a este bloco, devolva o texto IDÊNTICO, sem nenhuma alteração. NÃO reescreva o que está correto, NÃO resuma, NÃO acrescente seções de outros blocos, NÃO inclua checklist.\n\n═══ TEXTO ATUAL DESTE BLOCO ═══\n${curBlock}\n═══ FIM DESTE BLOCO ═══${BLOCK_CLEAN_RULE}`;
           await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (bloco ${cIdx + 1} de ${N3_BLOCKS.length})...`, "executing_n3", n3);
           const t0 = Date.now();
           const r = await callCorrection(userMessage, N3_BLOCK_MAX_TOKENS, N3_BLOCK_TIMEOUT_MS);
@@ -2103,7 +2124,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         // com timeout próprio < wall-clock e SEM retry (FIX 2).
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} corrigindo a peça (violações do validador mecânico)...`, "executing_n3", n3);
         const pecaAtual = stripChecklists(run.draft);
-        const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${run.feedback}\n\n═══ PEÇA ATUAL ═══\n${pecaAtual}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
+        const userMessage = `${run.original_message}\n\nA PEÇA COMPLETA JÁ FOI REDIGIDA (abaixo). REESCREVA-A POR INTEIRO corrigindo APENAS as violações listadas — NÃO altere o que está correto, NÃO resuma, NÃO omita seções.\n\n${wrapCorrectionGuidance(run.feedback)}\n\n═══ PEÇA ATUAL ═══\n${pecaAtual}\n═══ FIM DA PEÇA ATUAL ═══${BLOCK_CLEAN_RULE}`;
         const corrMaxTokens = Math.min(Math.max(n3.max_tokens ?? 8000, 8000), 32000);
         const t0 = Date.now();
         const r = await callCorrection(userMessage, corrMaxTokens, LLM_CORRECTION_TIMEOUT_MS);
@@ -2169,7 +2190,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         }
 
         // ── Modo CHAMADA ÚNICA (agentes de resposta curta) ──
-        const corr = run.feedback ? `\n\nINSTRUCOES DE CORRECAO:\n${run.feedback}\n\nReescreva atendendo a essas correcoes.` : "";
+        const corr = run.feedback ? `\n\n${wrapCorrectionGuidance(run.feedback)}\n\nReescreva atendendo a essas correcoes (aplique-as; não as cite na resposta).` : "";
         let streamMsgId: string | null = run.stream_message_id ?? null;
         if (!streamMsgId) {
           const seqS = await nextSeq(admin, run.session_id);
@@ -2341,6 +2362,19 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS)
         : buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
       const verdict = await validateDraft(admin, n2 || n1, run.original_message, run.draft || "", caseCtx, cancelPoll);
+
+      // ───── TEMP TEST HOOK — GRD-N3-ECO — REMOVER APÓS O TESTE ─────
+      // Inerte por padrão. Só ativa se FORCE_CONSULTIVE_REJECT === "true".
+      // Força a reprovação consultiva para exercitar a REGENERAÇÃO (onde o N3
+      // recebe o feedback) e provar que o N3 NÃO ecoa esse texto na peça.
+      // Usar com MAX_CONSULTIVE_ITERATIONS=1 (não 0 — ver CFG-ITER: `|| 2`).
+      if (Deno.env.get("FORCE_CONSULTIVE_REJECT") === "true") {
+        verdict.approved = false;
+        verdict.feedback =
+          "[TESTE GRD-N3-ECO] Reprovacao forcada: ajuste o valor da causa e cite a Sumula 297 do STJ. (Este texto e orientacao interna e NAO deve aparecer na peca.)";
+        console.log("[TESTE GRD-N3-ECO][hook] reprovacao consultiva forcada");
+      }
+      // ─────────────────────────────────────────────────────────────
 
       // ── E1: FECHAR O LOOP CONSULTIVO ──────────────────────────────────────
       // Quando o validador consultivo (LLM) REPROVA com feedback acionável,
