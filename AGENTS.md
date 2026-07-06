@@ -210,7 +210,6 @@ build-your-dreams-153/
 - `external_collaborators` (Robson)
 - `user_tasks` (humano→humano, NÃO confundir com agent_tasks)
 - `inter_assistant_requests` (V19, schema já criado)
-- `captacao_canais` (cooperativa, ressaque, indicação)
 - Novas colunas em `profiles`: `role_template_id`, `organization_id`, `full_name`
 - Novas colunas em `agents`: `owner_user_id`, `source_template_id`, `is_overridden`, `is_personal`
 
@@ -255,7 +254,7 @@ build-your-dreams-153/
 
 **V1**: `agent_role`, `agent_status`, `task_status`, `task_priority`, `permission_type`, `app_role`
 **V7**: `provider_code`, `chat_session_status`, `chat_message_role`, `model_tier`
-**V14**: `org_stage`, `legal_area`, `user_task_status`, `coverage_status`, `inter_assistant_status`, `captacao_canal_tipo`
+**V14**: `org_stage`, `legal_area`, `user_task_status`, `coverage_status`, `inter_assistant_status`
 **V14-update**: `agent_role` ganhou valor `'ceo'` e depois `'assistant_root'`
 **V21**: `'ceo'` **deprecated** (valor morto no enum — nenhum agente ativo o usa). Usar `'assistant_root'` para orquestradores pessoais.
 

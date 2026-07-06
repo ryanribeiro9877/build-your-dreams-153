@@ -859,45 +859,6 @@ export type Database = {
         }
         Relationships: []
       }
-      captacao_canais: {
-        Row: {
-          code: string
-          created_at: string
-          default_assignee_role_code: string | null
-          description: string | null
-          display_name: string
-          id: string
-          is_active: boolean
-          metadata: Json
-          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          default_assignee_role_code?: string | null
-          description?: string | null
-          display_name: string
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          default_assignee_role_code?: string | null
-          description?: string | null
-          display_name?: string
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          tipo?: Database["public"]["Enums"]["captacao_canal_tipo"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
       chat_attachments: {
         Row: {
           created_at: string
@@ -1996,69 +1957,6 @@ export type Database = {
           session_id?: string | null
         }
         Relationships: []
-      }
-      leads: {
-        Row: {
-          assigned_to: string | null
-          campanha: string | null
-          canal_id: string | null
-          created_at: string
-          created_by: string | null
-          email: string | null
-          full_name: string
-          id: string
-          metadata: Json
-          notes: string | null
-          phone: string | null
-          status: Database["public"]["Enums"]["lead_status"]
-          updated_at: string
-        }
-        Insert: {
-          assigned_to?: string | null
-          campanha?: string | null
-          canal_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          full_name: string
-          id?: string
-          metadata?: Json
-          notes?: string | null
-          phone?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
-          updated_at?: string
-        }
-        Update: {
-          assigned_to?: string | null
-          campanha?: string | null
-          canal_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          full_name?: string
-          id?: string
-          metadata?: Json
-          notes?: string | null
-          phone?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "leads_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "leads_canal_id_fkey"
-            columns: ["canal_id"]
-            isOneToOne: false
-            referencedRelation: "captacao_canais"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       llm_provider_configs: {
         Row: {
@@ -3403,25 +3301,6 @@ export type Database = {
           },
         ]
       }
-      leads_funnel: {
-        Row: {
-          campanha: string | null
-          canal_code: string | null
-          canal_display_name: string | null
-          canal_id: string | null
-          status: Database["public"]["Enums"]["lead_status"] | null
-          total: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "leads_canal_id_fkey"
-            columns: ["canal_id"]
-            isOneToOne: false
-            referencedRelation: "captacao_canais"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Functions: {
       add_tokens: {
@@ -4235,12 +4114,6 @@ export type Database = {
         | "calculator"
         | "compliance"
         | "tech"
-      captacao_canal_tipo:
-        | "cooperativa"
-        | "ressaque"
-        | "indicacao"
-        | "site"
-        | "outro"
       coverage_status: "scheduled" | "active" | "finished" | "cancelled"
       email_notification_status:
         | "pending"
@@ -4261,12 +4134,6 @@ export type Database = {
         | "answered"
         | "denied"
         | "expired"
-      lead_status:
-        | "novo"
-        | "em_contato"
-        | "qualificado"
-        | "convertido"
-        | "perdido"
       legal_area:
         | "bancario"
         | "familia"
@@ -4494,13 +4361,6 @@ export const Constants = {
         "compliance",
         "tech",
       ],
-      captacao_canal_tipo: [
-        "cooperativa",
-        "ressaque",
-        "indicacao",
-        "site",
-        "outro",
-      ],
       coverage_status: ["scheduled", "active", "finished", "cancelled"],
       email_notification_status: [
         "pending",
@@ -4524,7 +4384,6 @@ export const Constants = {
         "denied",
         "expired",
       ],
-      lead_status: ["novo", "em_contato", "qualificado", "convertido", "perdido"],
       legal_area: [
         "bancario",
         "familia",

@@ -75,9 +75,9 @@ async function handleSchema(admin: SupabaseClient) {
       "profiles", "user_roles", "clients", "client_documents", "departments", "agents",
       "agent_templates", "role_templates", "role_agent_matrix", "task_types", "role_task_matrix",
       "user_tasks", "inter_assistant_requests", "chat_sessions", "chat_messages",
-      "token_balances", "token_transactions", "llm_provider_configs", "imports", "leads",
+      "token_balances", "token_transactions", "llm_provider_configs", "imports",
       "bottleneck_notifications", "landing_events", "ui_events", "user_ui_preferences",
-      "captacao_canais", "external_collaborators", "user_areas", "role_coverage",
+      "external_collaborators", "user_areas", "role_coverage",
       "agent_tasks", "agent_messages", "agent_orchestration_log", "processes",
       "model_pricing", "integration_api_audit_log",
     ];
