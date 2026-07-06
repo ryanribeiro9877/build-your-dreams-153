@@ -17,6 +17,28 @@ import { extractFileText, sanitizeExtractedText } from "@/lib/extractFileText";
 // claro (em vez de um 400 silencioso do storage).
 export const BUCKET_FILE_SIZE_LIMIT = 15 * 1024 * 1024; // 15.728.640 bytes
 
+// Flag OCR (Briefing 1). Espelho no front da env do edge: default OFF. Com OFF,
+// o caminho de OCR abaixo NUNCA roda e o comportamento é IDÊNTICO ao atual
+// (imagem → imagesWithoutText, só avisa). Só liga em ambiente de teste até o
+// Briefing 2 + hardening ficarem prontos.
+export const OCR_ENABLED =
+  String(import.meta.env.VITE_OCR_ENABLED).toLowerCase() === "true";
+
+// Timeout do invoke SÍNCRONO do OCR: o envio aguarda o OCR para que o texto vire
+// insumo NESTE turno, mas não pode travar indefinidamente. Ao estourar, degrade
+// para imagesWithoutText (comportamento de aviso, não bloqueia).
+const OCR_INVOKE_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("ocr_timeout")), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 export interface IngestResult {
   uploaded: number;
   failedExtraction: string[]; // DOCUMENTOS textuais que subiram mas não tiveram texto extraído (bloqueiam)
@@ -101,26 +123,56 @@ export async function ingestChatAttachments(
     // (byte 0 / surrogate solto) chegue ao Postgres mesmo se um caminho novo de
     // extração esquecer de sanitizar. Sem isto o insert volta a dar 400.
     const safeText = sanitizeExtractedText(text);
+    const isImage = isImageAttachment(file);
     // Sem texto extraível: só é FALHA (que bloqueia) para DOCUMENTO textual —
-    // ali o texto era esperado. Para IMAGEM é o normal (OCR ainda não existe): a
-    // imagem fica anexada e apenas gera um AVISO amigável, sem travar a geração.
-    if (!safeText) {
-      if (isImageAttachment(file)) result.imagesWithoutText.push(file.name);
-      else result.failedExtraction.push(file.name);
+    // ali o texto era esperado. Para IMAGEM a decisão fica ADIADA: se o OCR
+    // estiver ligado, tentamos extrair no servidor antes de marcá-la como
+    // "sem texto" (só cai em imagesWithoutText se o OCR falhar/vier vazio).
+    if (!safeText && !isImage) {
+      result.failedExtraction.push(file.name);
     }
 
-    const { error: insErr } = await supabase.from("chat_attachments").insert({
-      session_id: sessionId,
-      user_id: userId,
-      storage_path: path,
-      file_name: file.name,
-      mime_type: file.type || null,
-      file_size: file.size,
-      extracted_text: safeText,
-    });
+    const { data: inserted, error: insErr } = await supabase
+      .from("chat_attachments")
+      .insert({
+        session_id: sessionId,
+        user_id: userId,
+        storage_path: path,
+        file_name: file.name,
+        mime_type: file.type || null,
+        file_size: file.size,
+        extracted_text: safeText,
+      })
+      .select("id")
+      .single();
 
-    if (insErr) { result.failedUpload.push(file.name); continue; }
+    if (insErr || !inserted) { result.failedUpload.push(file.name); continue; }
     result.uploaded++;
+
+    // OCR (Briefing 1) — só para IMAGEM sem texto extraível no cliente.
+    if (isImage && !safeText) {
+      if (OCR_ENABLED) {
+        // Invoke SÍNCRONO (await): o servidor lê o binário, roda o extrator e
+        // popula extracted_text. Se der certo, a imagem deixa de ir para
+        // imagesWithoutText e entra como insumo NESTE turno (loadCaseDocuments
+        // relê a linha pelo extracted_text já gravado no servidor).
+        let ocrOk = false;
+        try {
+          const { data } = await withTimeout(
+            supabase.functions.invoke("ocr-attachment", { body: { attachmentId: inserted.id } }),
+            OCR_INVOKE_TIMEOUT_MS,
+          );
+          if (data?.ok && typeof data.chars === "number" && data.chars > 0) ocrOk = true;
+        } catch {
+          ocrOk = false; // erro de rede / timeout → degrade seguro
+        }
+        // OCR falhou/vazio/timeout → mantém o aviso, não bloqueia.
+        if (!ocrOk) result.imagesWithoutText.push(file.name);
+      } else {
+        // Flag OFF → comportamento atual intacto: imagem só avisa.
+        result.imagesWithoutText.push(file.name);
+      }
+    }
   }
 
   return result;
