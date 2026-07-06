@@ -54,5 +54,8 @@ jobs:
       - name: Type-check chat-orchestrator
         run: deno check supabase/functions/chat-orchestrator/index.ts
 
+      - name: Type-check ocr-attachment
+        run: deno check supabase/functions/ocr-attachment/index.ts
+
       - name: Test chat-orchestrator (tools + intent classifier)
         run: deno test supabase/functions/chat-orchestrator/
