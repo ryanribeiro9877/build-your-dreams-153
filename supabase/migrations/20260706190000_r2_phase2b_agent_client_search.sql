@@ -52,6 +52,15 @@ $$;
 REVOKE ALL ON FUNCTION public.agent_consultar_cliente(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.agent_consultar_cliente(text) TO authenticated, service_role;
 
+-- ----------------------------------------------------------------------------
+-- Hardening do trigger da 2A: clients_pii_sync() é SECURITY DEFINER e, por
+-- DEFAULT PRIVILEGES do Supabase, ficou executável por anon/authenticated via
+-- /rest/v1/rpc (o advisor sinaliza). Uma função de trigger NÃO precisa de
+-- EXECUTE do papel que dispara o INSERT/UPDATE — o Postgres a executa pelo
+-- mecanismo de trigger — então revogar de todos (deixando só o owner) é seguro
+-- e fecha o aviso. Chamá-la direto via RPC apenas erraria de qualquer forma.
+REVOKE ALL ON FUNCTION public.clients_pii_sync() FROM PUBLIC, anon, authenticated, service_role;
+
 -- ============================================================================
 -- Fim R-2 Fase 2B (DB). O front consome a view/RPC da 2A (authenticated); a
 -- edge consome esta RPC (service_role). Texto puro segue intacto até a 2C.
