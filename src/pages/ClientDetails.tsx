@@ -31,6 +31,8 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 // Projeção explícita (minimização de PII — R-2 Fase 1): só os campos que o
 // detalhe renderiza. Sem dados bancários/PIX, filiação ou demais colunas.
+// R-2 Fase 2B: lido da view `clients_decrypted` (CPF/RG decifrados via RLS
+// is_recepcao_or_socio), nunca das colunas de texto sensível.
 const CLIENT_DETAIL_COLUMNS =
   "id, full_name, cpf, rg, email, phone, address, city, state, zip_code, notes, status, created_at";
 
@@ -96,7 +98,8 @@ export default function ClientDetails() {
   const loadAll = useCallback(async (clientId: string) => {
     setLoading(true);
     const [clientRes, docsRes] = await Promise.all([
-      supabase.from("clients").select(CLIENT_DETAIL_COLUMNS).eq("id", clientId).single(),
+      // R-2 Fase 2B: view decifrada (cast: view não está nos tipos gerados).
+      (supabase as any).from("clients_decrypted").select(CLIENT_DETAIL_COLUMNS).eq("id", clientId).single(),
       supabase.from("client_documents").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
     ]);
     if (clientRes.error) { toast.error("Cliente não encontrado"); navigate("/clientes"); return; }

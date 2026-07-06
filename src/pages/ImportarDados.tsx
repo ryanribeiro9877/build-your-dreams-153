@@ -114,8 +114,10 @@ export default function ImportarDados() {
       .filter(c => c.length > 0);
     const existingCpfs = new Set<string>();
     if (fileCpfs.length > 0) {
-      const { data: existing } = await supabase
-        .from("clients")
+      // R-2 Fase 2B: dedup lê o CPF decifrado da view, não a coluna de texto.
+      // (onlyDigits normaliza, então máscara não interfere.)
+      const { data: existing } = await (supabase as any)
+        .from("clients_decrypted")
         .select("cpf")
         .not("cpf", "is", null);
       for (const c of (existing as unknown as { cpf: string | null }[]) || []) {
