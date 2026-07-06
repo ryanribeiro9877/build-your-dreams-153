@@ -28,7 +28,7 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
-import { toolsFor, isWriteTool } from "./tools/registry.ts";
+import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
 import {
@@ -124,6 +124,11 @@ const CROSS_AREA_ROUTING = (Deno.env.get("CROSS_AREA_ROUTING") ?? "true").toLowe
 // OU o agente não tem allowed_tools, OU é redator segmentado, o executing_n3 se
 // comporta EXATAMENTE como hoje (sem ferramentas).
 const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "true";
+// AGT-CONSULTA: gate SEPARADO para ferramentas de LEITURA (consultar_*). Default
+// LIGADO — consultar um cadastro é leitura segura, executada com a identidade do
+// usuário (RLS/role valem; a RPC de cliente re-checa is_recepcao_or_socio). Isto
+// NÃO liga escrita: escrita segue exclusivamente no CHAT_TOOLS_ENABLED (OFF).
+const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "true").toLowerCase() !== "false";
 
 // ─── Card 2.8: classificador de intenção + suficiência de insumo ─────────────
 // Na ENTRADA (antes do N1), com o modelo RÁPIDO, classifica em 3 categorias e
@@ -1348,6 +1353,68 @@ function buildUniversalGuardrails(): string {
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
 }
 
+// AGT-CONSULTA: enquadramento CONTROLADO para o caminho de consulta a cadastro.
+// Autoriza a CONSULTA VIA FERRAMENTA a registros do próprio escritório — não é
+// "ignore preocupações com dados pessoais". A cautela geral permanece; só o
+// caminho legítimo (tool sobre cliente/registro já cadastrado) é aberto.
+const CONSULTA_TOOL_GUIDANCE =
+  "\n\n═══ CONSULTA A CADASTRO (ferramenta interna de trabalho) ═══\n" +
+  "Consultar o cadastro de um CLIENTE/tarefa/processo/documento JÁ registrado neste sistema é " +
+  "função LEGÍTIMA e esperada — os dados foram cadastrados pelo próprio escritório e o acesso é " +
+  "restrito por papel (recepção/sócio) no banco. Quando o usuário pedir um dado de um cliente " +
+  "cadastrado (ex.: CPF, telefone, e-mail), USE a ferramenta de consulta correspondente e responda " +
+  "com o dado retornado — NUNCA recuse alegando 'não posso acessar dados pessoais'. Se a ferramenta " +
+  "não retornar nada (registro inexistente OU você sem permissão), diga que não encontrou / não tem " +
+  "acesso — NUNCA invente. Esta autorização vale SOMENTE para a consulta via ferramenta a registros " +
+  "do escritório; não despeje dados pessoais de terceiros que não sejam clientes cadastrados.\n" +
+  "═══ FIM ═══\n";
+
+// AGT-CONSULTA: loop curto de LEITURA no ponto de ENTRADA (o próprio "Meu
+// Assistente"). Executa as tools de leitura com a IDENTIDADE do usuário (JWT):
+// RLS/role valem em tudo, e agent_consultar_cliente re-checa is_recepcao_or_socio.
+// Retorna a resposta E as tools usadas — ou null quando o modelo NÃO usa nenhuma
+// tool na 1a iteração (não era consulta de fato → o chamador cai na cadeia completa,
+// sem furar o pipeline de peças). Só LEITURA: chamadas de escrita são ignoradas.
+async function runEntryConsulta(
+  admin: SupabaseClient, jwtClient: SupabaseClient, userId: string,
+  agent: AgentRow, message: string, history: LlmMessage[],
+): Promise<{ answer: string; tools: string[] } | null> {
+  const readDefs = toolsFor(READ_TOOL_NAMES);
+  if (readDefs.length === 0) return null;
+  const system = (agent.system_prompt || "") + buildUniversalGuardrails() + CONSULTA_TOOL_GUIDANCE;
+  const maxTokens = Math.min(Math.max(agent.max_tokens ?? 1200, 800), 4000);
+  const toolMsgs: LlmMessage[] = [];
+  const toolsUsed: string[] = [];
+  const MAX_ITERS = 4;
+  for (let i = 0; i < MAX_ITERS; i++) {
+    const hist = i === 0 ? history : [...history, { role: "user", content: message }, ...toolMsgs];
+    const r = await callLLM(admin, {
+      model: agent.model || "gpt-4o", cacheableSystem: system, systemPrompt: null, history: hist,
+      userMessage: i === 0 ? message : "", temperature: agent.temperature, top_p: agent.top_p,
+      maxTokens, timeoutMs: LLM_AUX_TIMEOUT_MS, tools: readDefs, toolChoice: "auto",
+    });
+    const readCalls = (r.toolCalls ?? []).filter((c) => !isWriteTool(c.function.name));
+    if (readCalls.length === 0) {
+      // Sem tool na 1a iteração e nada consultado → não era consulta de verdade.
+      if (toolsUsed.length === 0) return null;
+      return { answer: (r.content || "").trim(), tools: toolsUsed };
+    }
+    for (const c of readCalls) {
+      const data = await runReadTool(jwtClient, userId, c.function.name, safeJson(c.function.arguments));
+      toolsUsed.push(c.function.name);
+      toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
+      toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: JSON.stringify(data).slice(0, 8000) });
+    }
+  }
+  // Estourou o teto de iterações: pede a resposta final SEM tools (usa o que já leu).
+  const rf = await callLLM(admin, {
+    model: agent.model || "gpt-4o", cacheableSystem: system, systemPrompt: null,
+    history: [...history, { role: "user", content: message }, ...toolMsgs],
+    userMessage: "", temperature: agent.temperature, top_p: agent.top_p, maxTokens, timeoutMs: LLM_AUX_TIMEOUT_MS,
+  });
+  return { answer: (rf.content || "").trim(), tools: toolsUsed };
+}
+
 // GRD-N3-ECO: o feedback do validador/revisor é ORIENTAÇÃO INTERNA de correção — o N3
 // deve AGIR sobre ele (corrigir a peça), NUNCA ESCREVÊ-LO (citar/parafrasear na peça).
 // Envolve o feedback num rótulo inequívoco para o modelo tratá-lo como instrução, não
@@ -2145,11 +2212,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
       if (!segment) {
         // ── CHAT AGÊNTICO: loop de ferramentas (somente chamada única) ──
-        // Gating triplo: flag ligada AND não-segmentado AND o agente declara tools.
-        // Quando QUALQUER condição falha, toolDefs fica vazio e o fluxo abaixo roda
-        // EXATAMENTE como antes (nenhuma mudança de comportamento). Só não roda em
+        // Gate SEPARADO (AGT-CONSULTA): LEITURA no CHAT_READ_TOOLS_ENABLED (default
+        // ON) e ESCRITA no CHAT_TOOLS_ENABLED (default OFF) — independentes. Nunca em
         // passo de CORREÇÃO (run.feedback): aí a peça já existe e segue a regeneração.
-        const toolDefs = (CHAT_TOOLS_ENABLED && !run.feedback) ? toolsFor(n3.allowed_tools) : [];
+        // Quando nada é liberado, toolDefs fica vazio e o fluxo abaixo roda como antes.
+        const gatedToolNames = run.feedback ? [] : (n3.allowed_tools ?? []).filter(
+          (n) => isWriteTool(n) ? CHAT_TOOLS_ENABLED : CHAT_READ_TOOLS_ENABLED);
+        const toolDefs = toolsFor(gatedToolNames);
         if (toolDefs.length > 0) {
           const toolMsgs: LlmMessage[] = [];
           const MAX_READ_ITERS = 4;
@@ -2735,6 +2804,43 @@ serve(async (req) => {
         }
         if (!quickReply) intentCategory = "NEGOCIO_COM_INSUMO"; // sem resposta rápida → gera
       }
+    }
+
+    // AGT-CONSULTA: consulta a dado JÁ cadastrado (cliente/tarefa/processo/doc).
+    // Loop curto de LEITURA com o próprio "Meu Assistente" + tools de leitura,
+    // executadas com a IDENTIDADE do usuário (JWT) — RLS/papel valem e a RPC de
+    // cliente re-checa is_recepcao_or_socio(). Só publica se o modelo REALMENTE usar
+    // uma tool (senão não era consulta → cai na cadeia completa, sem furar o pipeline).
+    if (intentCategory === "CONSULTA") {
+      if (CHAT_READ_TOOLS_ENABLED) {
+        try {
+          const jwtClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+          const chist = await loadSessionHistory(admin, body.sessionId, 6, userMsgId);
+          const consulta = await runEntryConsulta(admin, jwtClient, userId, agent, body.message, chist as unknown as LlmMessage[]);
+          if (consulta && consulta.answer) {
+            const cseq = await nextSeq(admin, body.sessionId);
+            const { data: cRunRow, error: cRunErr } = await admin.from("orchestration_runs").insert({
+              session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+              original_message: body.message, status: "done", entry_agent_id: agent.id,
+              intent_category: "CONSULTA", route_path: "consulta",
+              chain: [{ level: 0, path: "consulta", intent: "CONSULTA", agent: agent.name, tools: consulta.tools }],
+            }).select("id").single();
+            if (cRunErr || !cRunRow) return errResp(500, "db_error", `Falha ao criar run: ${cRunErr?.message}`);
+            const cRunId = (cRunRow as { id: string }).id;
+            await admin.from("chat_messages").insert({
+              session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+              content: consulta.answer, sequence_number: cseq,
+              metadata: { kind: "final", path: "consulta", intent: "CONSULTA", agent_name: agent.name, tools: consulta.tools },
+            });
+            await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+            return json(202, { runId: cRunId, sessionId: body.sessionId, status: "done", path: "consulta", intent: "CONSULTA" });
+          }
+        } catch (e) {
+          console.warn(`[consulta] loop de leitura falhou (${(e as Error)?.message}) — caindo na cadeia completa`);
+        }
+      }
+      // Leitura desligada, nenhuma tool usada, ou erro → gera pela cadeia completa.
+      intentCategory = "NEGOCIO_COM_INSUMO";
     }
 
     if (quickReply && (intentCategory === "TRIVIAL" || intentCategory === "NEGOCIO_SEM_INSUMO")) {

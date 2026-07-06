@@ -3,9 +3,14 @@ export interface ToolDef {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }
 
-const READ_TOOLS = new Set([
+// Ferramentas de LEITURA (consulta a dado já cadastrado). Distintas das de
+// ESCRITA: leitura roda no gate CHAT_READ_TOOLS_ENABLED (default ON) e a de
+// cliente re-checa papel (is_recepcao_or_socio) na RPC; escrita segue no gate
+// de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
+export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
-]);
+];
+const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
 export function isWriteTool(name: string): boolean {
   return !READ_TOOLS.has(name);
