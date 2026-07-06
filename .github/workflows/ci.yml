@@ -54,5 +54,5 @@ jobs:
       - name: Type-check chat-orchestrator
         run: deno check supabase/functions/chat-orchestrator/index.ts
 
-      - name: Test tools module
-        run: deno test supabase/functions/chat-orchestrator/tools/
+      - name: Test chat-orchestrator (tools + intent classifier)
+        run: deno test supabase/functions/chat-orchestrator/
