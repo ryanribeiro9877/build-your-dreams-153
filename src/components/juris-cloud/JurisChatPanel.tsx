@@ -11,6 +11,8 @@ import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
+import { PecaModal } from "./PecaModal";
+import { truncatePecaPreview } from "./pecaPreview";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -60,6 +62,9 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
 
 function MessageBubble({ msg }: { msg: JcChatMessage }) {
   const { user } = useAuth();
+  // "Ver peça completa" abre a peça inteira num painel separado (fora do chat).
+  // A expansão vive no painel, não no balão — ao fechar, o chat volta ao trecho.
+  const [showFullPeca, setShowFullPeca] = useState(false);
   // Proposta de acao agentica: renderiza o ActionCard (Confirmar/Cancelar) no
   // lugar do balao normal. A confirmacao chama o chat-orchestrator em mode=confirm;
   // a atualizacao da timeline volta via realtime/refetch.
@@ -141,42 +146,91 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
                     ))}
                   </div>
                 )}
-                {cleanContent && (
-                  <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>
-                )}
-                {!isUser && msg.agent !== "Sistema" && cleanContent && looksLikePeticao(cleanContent) && (
-                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignSelf: "flex-start" }}>
-                    <button
-                      type="button"
-                      onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
-                      title="Baixar esta resposta em PDF"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
-                        background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
-                        color: "#EAB308", fontWeight: 600,
-                      }}
-                    >
-                      ⬇ Baixar em PDF
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        downloadMessageAsDocx(cleanContent, { title: "peca" })
-                          .catch((e) => console.error("[docx] falha ao exportar:", e));
-                      }}
-                      title="Baixar no padrão Bacellar (.docx com logo e marca d'água)"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
-                        background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)",
-                        color: "#60A5FA", fontWeight: 600,
-                      }}
-                    >
-                      ⬇ Baixar em DOCX (padrão Bacellar)
-                    </button>
-                  </div>
-                )}
+                {cleanContent && (() => {
+                  // É uma PEÇA gerada (não mensagem de chat comum nem aviso do
+                  // sistema)? Só nesses casos truncamos o trecho e oferecemos os
+                  // botões de download + "Ver peça completa".
+                  const isPeca = !isUser && msg.agent !== "Sistema" && looksLikePeticao(cleanContent);
+                  if (!isPeca) {
+                    // Mensagem curta/normal: exibida inteira, sem "Ver mais".
+                    return <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>;
+                  }
+                  // Peça: mostra só o trecho (primeiras linhas) no balão. O download
+                  // e o "Ver peça completa" sempre usam a peça COMPLETA (cleanContent).
+                  const { preview, truncated } = truncatePecaPreview(cleanContent);
+                  return (
+                    <>
+                      <div style={{ position: "relative" }}>
+                        <SafeMarkdown className="jc-msg-text">{preview}</SafeMarkdown>
+                        {truncated && (
+                          // Fade indicando que há mais conteúdo além do trecho.
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              position: "absolute", left: 0, right: 0, bottom: 0, height: 44,
+                              background: "linear-gradient(to bottom, rgba(22,22,31,0), var(--bg3, #16161f))",
+                              pointerEvents: "none",
+                            }}
+                          />
+                        )}
+                      </div>
+                      {truncated && (
+                        <button
+                          type="button"
+                          onClick={() => setShowFullPeca(true)}
+                          title="Abrir a peça completa num painel separado"
+                          style={{
+                            alignSelf: "flex-start", marginTop: 6,
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            padding: "4px 10px", borderRadius: 8, fontSize: 11.5, cursor: "pointer",
+                            background: "transparent", border: "1px solid rgba(234,179,8,0.4)",
+                            color: "#EAB308", fontWeight: 600,
+                          }}
+                        >
+                          Ver peça completa →
+                        </button>
+                      )}
+                      <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignSelf: "flex-start" }}>
+                        <button
+                          type="button"
+                          onClick={() => downloadMessageAsPdf(cleanContent, { agentName: msg.agent, title: "peca" })}
+                          title="Baixar esta resposta em PDF"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
+                            background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
+                            color: "#EAB308", fontWeight: 600,
+                          }}
+                        >
+                          ⬇ Baixar em PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            downloadMessageAsDocx(cleanContent, { title: "peca" })
+                              .catch((e) => console.error("[docx] falha ao exportar:", e));
+                          }}
+                          title="Baixar no padrão Bacellar (.docx com logo e marca d'água)"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            padding: "5px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer",
+                            background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)",
+                            color: "#60A5FA", fontWeight: 600,
+                          }}
+                        >
+                          ⬇ Baixar em DOCX (padrão Bacellar)
+                        </button>
+                      </div>
+                      {showFullPeca && (
+                        <PecaModal
+                          content={cleanContent}
+                          agentName={msg.agent}
+                          onClose={() => setShowFullPeca(false)}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
               </>
             );
           })()}
