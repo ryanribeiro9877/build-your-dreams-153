@@ -14,6 +14,11 @@ export interface OcrField {
   value: string;
   confidence: number; // 0..1
   sourceDocument: string; // nome/id do anexo de origem — ATRIBUIÇÃO (hardening no Briefing 2)
+  // Briefing 2 (aditivo/opcional — não quebra o contrato): valor incerto (abaixo
+  // do limiar) ou divergente entre documentos. O consumidor trata como
+  // [A PREENCHER]/[REVISAR] e NUNCA afirma o valor. Anti-ALERTA-1.
+  needsReview?: boolean;
+  reviewReason?: string; // ex.: "cpf_digito_invalido", "divergencia_entre_documentos", "llm_reforco"
 }
 
 export interface OcrResult {
@@ -48,9 +53,29 @@ export function getExtractor(engine?: string | null): Extractor {
   switch ((engine || "stub").trim().toLowerCase()) {
     case "stub":
       return stubExtractor;
+    case "textract":
+      // Extrator dedicado híbrido (Briefing 2). Import dinâmico: o stub e a Edge
+      // Function não pagam o custo de carregar o módulo do Textract salvo quando
+      // OCR_ENGINE=textract. Mantém o contrato — só o extract() muda.
+      return lazyTextract();
     default:
       // Engine desconhecido: cai no stub para não quebrar o fluxo (a flag só liga
-      // em teste). O Briefing 2 troca este fallback pelo extrator dedicado.
+      // em teste).
       return stubExtractor;
   }
+}
+
+// Carrega o extrator Textract sob demanda e o memoiza. `extract()` do wrapper
+// resolve o módulo na primeira chamada — mantém getExtractor() síncrono.
+let _textract: Extractor | null = null;
+function lazyTextract(): Extractor {
+  return {
+    async extract(bytes: Uint8Array, mime: string, fileName: string): Promise<OcrResult> {
+      if (!_textract) {
+        const mod = await import("./textractExtractor.ts");
+        _textract = mod.textractExtractor;
+      }
+      return _textract.extract(bytes, mime, fileName);
+    },
+  };
 }
