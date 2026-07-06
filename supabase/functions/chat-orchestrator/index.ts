@@ -2342,6 +2342,18 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         : buildCaseContextForValidator(caseDocs, MAX_VALIDATOR_CASE_TOKENS);
       const verdict = await validateDraft(admin, n2 || n1, run.original_message, run.draft || "", caseCtx, cancelPoll);
 
+      // ───── TEMP TEST HOOK — CARD 2.9 — REMOVER APÓS O TESTE ─────
+      // Inerte por padrão. Só ativa se a env var FORCE_CONSULTIVE_REJECT === "true".
+      // Força o verdict consultivo a reprovar, para exercitar o caminho de degrade
+      // e provar que o feedback NÃO vaza para a resposta do usuário.
+      if (Deno.env.get("FORCE_CONSULTIVE_REJECT") === "true") {
+        verdict.approved = false;
+        verdict.feedback =
+          "[TESTE 2.9] Reprovacao forcada para validar o nao-vazamento do feedback do validador consultivo.";
+        console.log("[TESTE 2.9][hook] reprovacao consultiva forcada");
+      }
+      // ─────────────────────────────────────────────────────────────
+
       // ── E1: FECHAR O LOOP CONSULTIVO ──────────────────────────────────────
       // Quando o validador consultivo (LLM) REPROVA com feedback acionável,
       // devolvemos a peça ao N3 para regenerar — em vez de só anexar [REVISAR] e
