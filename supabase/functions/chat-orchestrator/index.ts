@@ -33,7 +33,8 @@ import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts
 import { decideActionRoute } from "./tools/rbac.ts";
 import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
-  eligibleForFastPath, normalizeIntent,
+  NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
+  mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -124,18 +125,19 @@ const CROSS_AREA_ROUTING = (Deno.env.get("CROSS_AREA_ROUTING") ?? "true").toLowe
 // comporta EXATAMENTE como hoje (sem ferramentas).
 const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "true";
 
-// ─── Card 2.8: classificador de intenção (fast-path para triviais) ───────────
-// Desvia mensagens TRIVIAIS (saudação/small talk) para uma resposta rápida (1-2
-// chamadas do modelo RÁPIDO), sem acionar a cadeia N2/N3. ASSIMÉTRICO: só desvia
-// com ALTA confiança de trivial — NEGOCIO/INCERTO (e qualquer falha) seguem a
-// cadeia completa, INALTERADA. Reversível por env (default LIGADO).
+// ─── Card 2.8: classificador de intenção + suficiência de insumo ─────────────
+// Na ENTRADA (antes do N1), com o modelo RÁPIDO, classifica em 3 categorias e
+// evita a cadeia cara quando não vale a pena: TRIVIAL → fast-path; NEGOCIO_SEM_
+// INSUMO → pede dados (sem N3); NEGOCIO_COM_INSUMO → cadeia completa (inalterada).
+// DUAS assimetrias, sempre para o lado seguro: dúvida trivial→negócio; dúvida de
+// insumo→gerar. Reversível por env (default LIGADO).
 const INTENT_FASTPATH_ENABLED = (Deno.env.get("INTENT_FASTPATH_ENABLED") ?? "true").toLowerCase() !== "false";
-// Modelo RÁPIDO do classificador e da resposta trivial — mesmo perfil rápido do
-// N1 (ex.: gpt-4o-mini). NUNCA um flagship lento. O provedor é derivado do FORMATO
-// do model (com "/" -> OpenRouter; sem "/" -> OpenAI), como no resto da função.
+// Modelo RÁPIDO do classificador e das respostas curtas (fast-path / pede-dados) —
+// mesmo perfil rápido do N1 (ex.: gpt-4o-mini). NUNCA um flagship lento. O provedor
+// é derivado do FORMATO do model (com "/" -> OpenRouter; sem "/" -> OpenAI).
 const INTENT_CLASSIFIER_MODEL = Deno.env.get("INTENT_CLASSIFIER_MODEL") || "gpt-4o-mini";
-// Acima deste tamanho a mensagem não é sequer candidata a trivial (defesa: texto
-// longo dificilmente é conversa fiada — cai na cadeia completa, o "erro barato").
+// Acima deste tamanho a mensagem não é classificada (defesa: texto longo quase
+// sempre traz insumo → cadeia completa/gerar, a direção segura, sem gastar a chamada).
 const INTENT_TRIVIAL_MAX_CHARS = Number(Deno.env.get("INTENT_TRIVIAL_MAX_CHARS")) || 500;
 
 // Timeout das chamadas de LLM. NÃO impomos limite artificial baixo: deixamos cada
@@ -1685,34 +1687,46 @@ async function chooseSpecialistAndAcaoTipo(
   }
 }
 
-// ─── Card 2.8: classificador de intenção + resposta do fast-path ────────────
-// Classifica a MENSAGEM INTEIRA com o modelo RÁPIDO (1 chamada curta, saída JSON).
-// ASSIMÉTRICO: só devolve "TRIVIAL" quando o modelo tem certeza; qualquer erro,
-// timeout ou JSON inválido vira "NEGOCIO" (cadeia completa) — NUNCA fast-path por
-// acidente. normalizeIntent garante que rótulos desconhecidos caem em INCERTO.
-async function classifyIntent(admin: SupabaseClient, model: string, message: string): Promise<IntentCategory> {
+// ─── Card 2.8: classificador de intenção + respostas curtas do desvio ───────
+// Classifica a MENSAGEM INTEIRA com o modelo RÁPIDO (1 chamada curta, saída JSON),
+// informando ao modelo se HÁ documento com texto legível anexado (imagens NÃO
+// contam como insumo até o OCR). ASSIMÉTRICO: qualquer erro/timeout/JSON inválido
+// vira "NEGOCIO_COM_INSUMO" (cadeia completa) — nunca desvia por acidente. E
+// normalizeIntent só produz TRIVIAL/SEM_INSUMO com rótulo explícito.
+async function classifyIntent(
+  admin: SupabaseClient, model: string, message: string, opts: { hasReadableDocs: boolean },
+): Promise<IntentCategory> {
+  const docsNote = opts.hasReadableDocs
+    ? "CONTEXTO: HÁ documento(s) com TEXTO LEGÍVEL anexado(s) a esta conversa — isso CONTA como insumo textual."
+    : "CONTEXTO: NÃO há nenhum documento com texto legível anexado. Imagens anexadas NÃO contam como insumo (não são lidas até o OCR). Julgue a suficiência de insumo APENAS pelo texto da mensagem.";
   try {
     const r = await callLLM(admin, {
       model, systemPrompt: INTENT_CLASSIFIER_RULES, history: [],
-      userMessage: `Mensagem do usuário (analise-a INTEIRA):\n${message}`,
-      temperature: 0, top_p: null, maxTokens: 20, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
+      userMessage: `${docsNote}\n\nMensagem do usuário (analise-a INTEIRA):\n${message}`,
+      temperature: 0, top_p: null, maxTokens: 24, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
     });
     const parsed = JSON.parse(r.content) as { categoria?: string };
     return normalizeIntent(parsed.categoria);
   } catch (e) {
     // Fail-safe: na dúvida, cadeia completa (respeita a assimetria de segurança).
-    console.warn(`[intent] classificação falhou (${(e as Error)?.message}) — tratando como NEGOCIO (cadeia completa)`);
-    return "NEGOCIO";
+    console.warn(`[intent] classificação falhou (${(e as Error)?.message}) — tratando como NEGOCIO_COM_INSUMO (cadeia completa)`);
+    return "NEGOCIO_COM_INSUMO";
   }
 }
 
-// Gera a resposta do FAST-PATH (Opção B: natural, não template fixo). 1 chamada do
-// modelo RÁPIDO, acolhedora, convidando o usuário a informar a demanda jurídica.
+// Gera uma resposta CURTA do desvio (Opção B: natural, não template fixo) com o
+// modelo RÁPIDO: acolhe (TRIVIAL) ou pede os dados de forma específica (SEM_INSUMO).
 // Passa um trecho curto do histórico para soar contextual em conversas em curso.
-async function generateFastReply(admin: SupabaseClient, model: string, message: string, history: HistMsg[]): Promise<string> {
+async function generateQuickReply(
+  admin: SupabaseClient, model: string, message: string, history: HistMsg[],
+  opts: { category: IntentCategory; mentionedAttachment: boolean },
+): Promise<string> {
+  const sys = opts.category === "TRIVIAL"
+    ? FAST_REPLY_SYSTEM
+    : NEED_INFO_SYSTEM + (opts.mentionedAttachment ? NEED_INFO_OCR_NOTE : "");
   const r = await callLLM(admin, {
-    model, systemPrompt: FAST_REPLY_SYSTEM, history,
-    userMessage: message, temperature: 0.5, top_p: null, maxTokens: 200, timeoutMs: LLM_AUX_TIMEOUT_MS,
+    model, systemPrompt: sys, history,
+    userMessage: message, temperature: 0.5, top_p: null, maxTokens: 220, timeoutMs: LLM_AUX_TIMEOUT_MS,
   });
   return (r.content || "").trim();
 }
@@ -2656,51 +2670,63 @@ serve(async (req) => {
 
     const userMsgId = (userMsg as { id: string } | null)?.id ?? null;
 
-    // ─── Card 2.8: classificador de intenção (fast-path para triviais) ───
-    // ANTES do N1, com o modelo RÁPIDO. ASSIMÉTRICO: só desvia ao fast-path com
-    // ALTA confiança de trivial; NEGOCIO/INCERTO (e qualquer falha) seguem a
-    // cadeia completa INALTERADA. O pré-filtro (eligibleForFastPath) só empurra
-    // para a cadeia completa — nunca força fast-path.
-    let intentCategory: IntentCategory = "NEGOCIO";
-    let fastReply: string | null = null;
-    if (eligibleForFastPath(body.message, { enabled: INTENT_FASTPATH_ENABLED, maxChars: INTENT_TRIVIAL_MAX_CHARS })) {
-      intentCategory = await classifyIntent(admin, INTENT_CLASSIFIER_MODEL, body.message);
-      if (intentCategory === "TRIVIAL") {
-        const fastHist = await loadSessionHistory(admin, body.sessionId, 6, userMsgId);
+    // ─── Card 2.8: classificador de intenção + suficiência de insumo ───
+    // ANTES do N1, com o modelo RÁPIDO. Decide entre TRIVIAL (fast-path),
+    // NEGOCIO_SEM_INSUMO (pede dados, sem N3) e NEGOCIO_COM_INSUMO (cadeia
+    // completa). DUAS assimetrias, sempre para o lado seguro: qualquer falha e o
+    // default caem em NEGOCIO_COM_INSUMO (gerar). shouldClassify só LIBERA a
+    // chamada — nunca força desvio.
+    let intentCategory: IntentCategory = "NEGOCIO_COM_INSUMO";
+    let quickReply: string | null = null; // resposta curta do desvio (fast-path OU pede-dados)
+    if (shouldClassify(body.message, { enabled: INTENT_FASTPATH_ENABLED, maxChars: INTENT_TRIVIAL_MAX_CHARS })) {
+      // Insumo textual de DOCUMENTOS: PDF/DOCX/TXT com texto extraído contam;
+      // imagens (sem OCR) têm extracted_text nulo e ficam de fora de loadCaseDocuments.
+      const hasReadableDocs = (await loadCaseDocuments(admin, body.sessionId)).length > 0;
+      intentCategory = await classifyIntent(admin, INTENT_CLASSIFIER_MODEL, body.message, { hasReadableDocs });
+      // Assimetria B (determinística): documento legível = insumo → NUNCA bloqueia
+      // a geração, mesmo que o modelo tenha dito SEM_INSUMO.
+      if (intentCategory === "NEGOCIO_SEM_INSUMO" && hasReadableDocs) intentCategory = "NEGOCIO_COM_INSUMO";
+
+      if (intentCategory === "TRIVIAL" || intentCategory === "NEGOCIO_SEM_INSUMO") {
+        const hist = await loadSessionHistory(admin, body.sessionId, 6, userMsgId);
         try {
-          fastReply = await generateFastReply(admin, INTENT_CLASSIFIER_MODEL, body.message, fastHist);
+          quickReply = await generateQuickReply(admin, INTENT_CLASSIFIER_MODEL, body.message, hist, {
+            category: intentCategory, mentionedAttachment: mentionsAttachments(body.message),
+          });
         } catch (e) {
-          // Resposta trivial falhou → não deixa o usuário sem resposta: cai na
-          // cadeia completa (que também acolhe). Fail-safe seguro.
-          console.warn(`[intent] resposta fast-path falhou (${(e as Error)?.message}) — caindo na cadeia completa`);
-          fastReply = null;
+          // Resposta curta falhou → não deixa o usuário sem resposta: cai na
+          // cadeia completa (que também acolhe/gera). Fail-safe seguro.
+          console.warn(`[intent] resposta rápida (${intentCategory}) falhou (${(e as Error)?.message}) — caindo na cadeia completa`);
+          quickReply = null;
         }
-        if (!fastReply) intentCategory = "NEGOCIO"; // sem resposta rápida → cadeia completa
+        if (!quickReply) intentCategory = "NEGOCIO_COM_INSUMO"; // sem resposta rápida → gera
       }
     }
 
-    if (fastReply) {
-      // FAST-PATH: registra o run já CONCLUÍDO (auditoria) e publica a resposta
-      // final direto — SEM stages, SEM N2/N3, SEM fireNextStep.
-      const { data: fastRunRow, error: fastRunErr } = await admin.from("orchestration_runs").insert({
+    if (quickReply && (intentCategory === "TRIVIAL" || intentCategory === "NEGOCIO_SEM_INSUMO")) {
+      // DESVIO (fast-path trivial OU pede-dados): registra o run já CONCLUÍDO
+      // (auditoria) e publica a resposta final direto — SEM stages, SEM N2/N3,
+      // SEM N3, SEM fireNextStep.
+      const routePath = routePathFor(intentCategory); // "fast" | "need_info"
+      const { data: quickRunRow, error: quickRunErr } = await admin.from("orchestration_runs").insert({
         session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
         original_message: body.message, status: "done", entry_agent_id: agent.id,
-        intent_category: intentCategory, route_path: "fast",
-        chain: [{ level: 0, path: "fast", intent: intentCategory, agent: agent.name }],
+        intent_category: intentCategory, route_path: routePath,
+        chain: [{ level: 0, path: routePath, intent: intentCategory, agent: agent.name }],
       }).select("id").single();
-      if (fastRunErr || !fastRunRow) return errResp(500, "db_error", `Falha ao criar run: ${fastRunErr?.message}`);
-      const fastRunId = (fastRunRow as { id: string }).id;
-      const fseq = await nextSeq(admin, body.sessionId);
+      if (quickRunErr || !quickRunRow) return errResp(500, "db_error", `Falha ao criar run: ${quickRunErr?.message}`);
+      const quickRunId = (quickRunRow as { id: string }).id;
+      const qseq = await nextSeq(admin, body.sessionId);
       await admin.from("chat_messages").insert({
         session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
-        content: fastReply, sequence_number: fseq,
-        metadata: { kind: "final", path: "fast", intent: intentCategory, agent_name: agent.name },
+        content: quickReply, sequence_number: qseq,
+        metadata: { kind: "final", path: routePath, intent: intentCategory, agent_name: agent.name },
       });
       await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
-      return json(202, { runId: fastRunId, sessionId: body.sessionId, status: "done", path: "fast", intent: intentCategory });
+      return json(202, { runId: quickRunId, sessionId: body.sessionId, status: "done", path: routePath, intent: intentCategory });
     }
 
-    // ─── Cadeia completa (NEGOCIO/INCERTO) — comportamento atual INALTERADO ───
+    // ─── Cadeia completa (NEGOCIO_COM_INSUMO) — comportamento atual INALTERADO ───
     // Cria o run e dispara o 1o passo
     const { data: runRow, error: runErr } = await admin.from("orchestration_runs").insert({
       session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
