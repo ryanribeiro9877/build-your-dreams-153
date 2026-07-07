@@ -38,6 +38,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       }),
     },
     from: vi.fn(() => createQueryChain()),
+    rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
     channel: vi.fn(() => ({
       on: vi.fn().mockReturnThis(),
       subscribe: vi.fn().mockReturnValue({}),
@@ -337,6 +338,7 @@ describe("Tooltip overlay (collapsed sidebar)", () => {
           }),
         },
         from: vi.fn(() => createQueryChain()),
+        rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
         channel: vi.fn(() => ({
           on: vi.fn().mockReturnThis(),
           subscribe: vi.fn().mockReturnValue({}),
