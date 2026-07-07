@@ -84,16 +84,14 @@ export function maskCep(v: string | null | undefined): string | null {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-const MESES = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-];
-
-// Data por extenso pt-BR: "7 de julho de 2026". Aceita Date ou "AAAA-MM-DD".
-export function formatDateExtenso(d: Date | string): string {
+// Data numérica pt-BR "DD/MM/AAAA" — o formato que os modelos do jurídico já
+// usam ("14/05/2026"). Aceita Date ou "AAAA-MM-DD". Sem deslize de fuso.
+export function formatDateBr(d: Date | string): string {
   const dt = typeof d === "string" ? parseIsoDate(d) : d;
   if (!dt || isNaN(dt.getTime())) return typeof d === "string" ? d : "";
-  return `${dt.getUTCDate()} de ${MESES[dt.getUTCMonth()]} de ${dt.getUTCFullYear()}`;
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getUTCFullYear()}`;
 }
 
 // Parse seguro de "AAAA-MM-DD" como data UTC (sem deslize de fuso).
@@ -131,6 +129,7 @@ export function baseCooperadoValues(
     nacionalidade: c.nationality ?? null,
     estado_civil: c.marital_status ?? null,
     profissao: c.profession ?? null,
+    data_nascimento: c.birth_date ? formatDateBr(c.birth_date) : null,
     endereco: c.address ?? null,
     numero: c.address_number ?? null,
     complemento: c.address_complement ?? null,
@@ -141,8 +140,8 @@ export function baseCooperadoValues(
     cidade_uf: cidadeUf(c.city, c.state),
     email: c.email ?? null,
     telefone: c.phone ?? null,
-    // Data de emissão do documento (fecho da declaração etc.).
-    data: formatDateExtenso(now),
+    // Data de emissão do documento (fecho da procuração/declaração/ficha).
+    data: formatDateBr(now),
   };
 }
 

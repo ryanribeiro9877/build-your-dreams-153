@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
-  maskCpf, maskCnpj, maskCep, formatDateExtenso, cidadeUf,
+  maskCpf, maskCnpj, maskCep, formatDateBr, cidadeUf,
   baseCooperadoValues, COOPERADO_DOC_DEFS, renderCooperadoDoc,
   type CooperadoClientData,
 } from "./cooperadoDocs";
@@ -26,9 +28,9 @@ describe("formatadores determinísticos", () => {
     expect(maskCep(null)).toBeNull();
   });
 
-  it("formatDateExtenso em pt-BR sem deslize de fuso", () => {
-    expect(formatDateExtenso("2026-07-07")).toBe("7 de julho de 2026");
-    expect(formatDateExtenso(new Date(Date.UTC(2026, 0, 1)))).toBe("1 de janeiro de 2026");
+  it("formatDateBr em DD/MM/AAAA sem deslize de fuso", () => {
+    expect(formatDateBr("2026-07-07")).toBe("07/07/2026");
+    expect(formatDateBr(new Date(Date.UTC(2026, 0, 1)))).toBe("01/01/2026");
   });
 
   it("cidadeUf monta 'Cidade/UF' e tolera faltas", () => {
@@ -58,7 +60,7 @@ describe("baseCooperadoValues — dado exato do cadastro", () => {
     expect(v.cpf).toBe("084.822.105-21");
     expect(v.cidade_uf).toBe("Salvador/BA");
     expect(v.cep).toBe("40010-000");
-    expect(v.data).toBe("7 de julho de 2026");
+    expect(v.data).toBe("07/07/2026");
   });
   it("campo ausente fica null (o preenchedor marca [A PREENCHER])", () => {
     expect(v.profissao).toBeNull();
@@ -100,5 +102,58 @@ describe("renderCooperadoDoc — preenche a partir de template em memória", () 
     expect(doc).toContain("Salvador/BA");
     expect(doc).toContain("[A PREENCHER: profissao]"); // não cadastrado
     expect(out.missing).toContain("profissao");
+  });
+});
+
+// Preenche os templates REAIS do jurídico (public/templates/) com dados de
+// amostra e confere que os valores exatos entram, sem placeholder residual, e
+// que o corpo jurídico/dados fixos (OUTORGADO, CNPJ da COHAPM) permanecem.
+describe("templates reais em public/templates/", () => {
+  const dir = resolve(__dirname, "../../public/templates");
+  const NOW = new Date(Date.UTC(2026, 4, 14)); // 14/05/2026, como nos modelos
+  async function docTextOf(bytes: Uint8Array): Promise<string> {
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    return [...xml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]).join("");
+  }
+  const noPlaceholderLeft = (t: string) => expect(t).not.toMatch(/\{\{[a-z_]+\}\}/);
+
+  it("procuração preenche a qualificação e preserva o OUTORGADO fixo", async () => {
+    const def = COOPERADO_DOC_DEFS.find((d) => d.documentType === "procuracao")!;
+    const bytes = readFileSync(resolve(dir, def.templateFile));
+    const out = await renderCooperadoDoc(def, CLIENT, bytes, { now: NOW });
+    const t = await docTextOf(out.bytes);
+    expect(t).toContain("MARIA SILVA");
+    expect(t).toContain("084.822.105-21");
+    expect(t).toContain("Rua A");
+    expect(t).toContain("Salvador/BA");        // {{cidade}} + "/BA" fixo do modelo
+    expect(t).toContain("14/05/2026");
+    expect(t).toContain("OAB/BA 80.891");       // OUTORGADO fixo, intocado
+    noPlaceholderLeft(t);
+  });
+
+  it("declaração preenche a qualificação do declarante", async () => {
+    const def = COOPERADO_DOC_DEFS.find((d) => d.documentType === "declaracao_hipossuficiencia")!;
+    const bytes = readFileSync(resolve(dir, def.templateFile));
+    const out = await renderCooperadoDoc(def, CLIENT, bytes, { now: NOW });
+    const t = await docTextOf(out.bytes);
+    expect(t).toContain("MARIA SILVA");
+    expect(t).toContain("084.822.105-21");
+    expect(t).toContain("artigos 98 e 99");     // corpo jurídico fixo intacto
+    noPlaceholderLeft(t);
+  });
+
+  it("ficha preenche os campos e preserva o CNPJ da COHAPM", async () => {
+    const def = COOPERADO_DOC_DEFS.find((d) => d.documentType === "termo_cooperado")!;
+    const bytes = readFileSync(resolve(dir, def.templateFile));
+    const out = await renderCooperadoDoc(def, CLIENT, bytes, { now: NOW });
+    const t = await docTextOf(out.bytes);
+    expect(t).toContain("MARIA SILVA");
+    expect(t).toContain("084.822.105-21");
+    expect(t).toContain("Salvador/BA");         // Cidade/UF
+    expect(t).toContain("01.710.828/0001-04");  // CNPJ da cooperativa, fixo
+    expect(t).not.toContain("Arminda");          // amostra removida do template
+    // campos sem cadastro viram [A PREENCHER] (ex.: rg, telefone, email)
+    expect(t).toContain("[A PREENCHER: rg]");
+    expect(out.missing).toEqual(expect.arrayContaining(["rg", "telefone", "email"]));
   });
 });
