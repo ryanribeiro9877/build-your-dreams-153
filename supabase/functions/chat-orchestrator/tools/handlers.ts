@@ -46,11 +46,14 @@ export async function runWriteTool(userClient: SupabaseClient, userId: string, n
   try {
     switch (name) {
       case "cadastrar_cliente": {
-        const payload: Record<string, unknown> = { created_by: userId, full_name: args.full_name, status: "ativo" };
-        for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) payload[k] = args[k];
-        const { data, error } = await userClient.from("clients").insert(payload).select("id, full_name").single();
-        if (error) return { ok: false, error: error.message };
-        return { ok: true, result: data };
+        const p_data: Record<string, unknown> = { full_name: args.full_name, status: "ativo" };
+        for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) p_data[k] = args[k];
+        const { data, error } = await userClient.rpc("save_client", { p_id: null, p_data });
+        if (error) {
+          if (error.code === "23505") return { ok: false, error: "CPF já cadastrado no sistema." };
+          return { ok: false, error: error.message };
+        }
+        return { ok: true, result: { id: data } };
       }
       case "criar_card_tarefa": {
         const { data, error } = await userClient.rpc("create_user_task", {

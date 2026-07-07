@@ -150,8 +150,8 @@ export default function ImportarDados() {
         }
       }
 
-      const payload: Record<string, unknown> = { ...mapped, created_by: user.id };
-      const { error } = await supabase.from("clients").insert(payload as never);
+      const p_data: Record<string, unknown> = { ...mapped };
+      const { error } = await (supabase as any).rpc("save_client", { p_id: null, p_data });
       if (error) {
         out.push({ linha, nome, status: "erro", motivo: error.message });
         continue;

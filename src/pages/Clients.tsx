@@ -245,12 +245,15 @@ export default function Clients() {
     if (!docRgVerso) { toast.error("Anexe o RG (verso)"); return; }
     if (!docComprovante) { toast.error("Anexe o Comprovante de Residência"); return; }
 
-    const payload: Record<string, unknown> = { created_by: user.id };
-    for (const [k, v] of Object.entries(form)) payload[k] = v === "" ? null : v;
-    const { data: inserted, error } = await supabase.from("clients").insert(payload as any).select("id").single();
-    if (error || !inserted) { toast.error("Erro ao criar cliente: " + (error?.message || "sem retorno")); return; }
-
-    const clientId = (inserted as unknown as { id: string }).id;
+    const p_data: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(form)) p_data[k] = v === "" ? null : v;
+    const { data: clientId, error } = await (supabase as any).rpc("save_client", { p_id: null, p_data });
+    if (error) {
+      if (error.code === "23505") { toast.error("CPF já cadastrado no sistema."); return; }
+      if (error.code === "42501") { toast.error("Sem permissão para cadastrar clientes."); return; }
+      toast.error("Erro ao criar cliente: " + error.message);
+      return;
+    }
 
     // Upload documents
     const docsToUpload: { file: File; type: string; name: string }[] = [

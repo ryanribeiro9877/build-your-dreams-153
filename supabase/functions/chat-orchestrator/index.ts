@@ -1863,6 +1863,43 @@ async function isRunCancelled(admin: SupabaseClient, runId: string): Promise<boo
   return !!(data as { cancel_requested?: boolean } | null)?.cancel_requested;
 }
 
+// ─── finalização da run (status → done) ──────────────────────────────────────
+// Publica a resposta final (atualiza a linha de streaming existente ou insere uma
+// nova), contabiliza uso e dispara o resumo rolante em segundo plano. Extraído do
+// passo validating_n1 para ser REUSADO pelo fast-path de ACAO_COM_TOOL, que finaliza
+// sem passar pela malha de validação de peça (mecânica/consultiva). NÃO faz chamada
+// de LLM. Trabalha sobre o objeto `run` em memória (o chamador pode ter atualizado
+// run.draft/n3_usage/chain antes de chamar).
+async function finalizeRun(admin: SupabaseClient, run: any, n1: AgentRow) {
+  const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
+  const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
+  const u = (run.n3_usage as { model?: string; input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
+  const usageCols = { model_used: u.model ?? null, input_tokens: u.input_tokens ?? null, output_tokens: u.output_tokens ?? null, duration_ms: u.duration_ms ?? null };
+  if (run.stream_message_id) {
+    // Já existe a linha (chamada única): vira a resposta FINAL (sem inserir duplicata).
+    await admin.from("chat_messages")
+      .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta, ...usageCols })
+      .eq("id", run.stream_message_id);
+  } else {
+    const seq = await nextSeq(admin, run.session_id);
+    await admin.from("chat_messages").insert({
+      session_id: run.session_id, user_id: run.user_id, role: "assistant",
+      agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
+      metadata: finalMeta, ...usageCols,
+    });
+  }
+  await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+  await admin.from("orchestration_runs").update({ status: "done", updated_at: new Date().toISOString() }).eq("id", run.id);
+  // Resumo rolante (memória "eterna"): condensa as mensagens além da janela em
+  // chat_sessions.summary. Em segundo plano — não atrasa a resposta. Fail-open.
+  const histLimit = n1.history_limit ?? 10;
+  const prevSummary = await loadSessionSummary(admin, run.session_id);
+  // @ts-ignore EdgeRuntime existe no runtime do Supabase
+  EdgeRuntime.waitUntil(
+    updateRollingSummary(admin, n1.model || "gpt-4o-mini", run.session_id, histLimit, prevSummary),
+  );
+}
+
 // ─── maquina de estado: processa UM passo ───────────────────────────────────
 async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: string, serviceKey: string) {
   const { data: runRow } = await admin.from("orchestration_runs").select("*").eq("id", runId).maybeSingle();
@@ -2153,6 +2190,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         if (toolDefs.length > 0) {
           const toolMsgs: LlmMessage[] = [];
           const MAX_READ_ITERS = 4;
+          const toolLoopT0 = Date.now(); // instrumentação: duração real do N3 no tool-loop
           for (let i = 0; i < MAX_READ_ITERS; i++) {
             const userMsg = i === 0 ? run.original_message : "";
             const histForCall: LlmMessage[] = i === 0
@@ -2165,12 +2203,27 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               timeoutMs: N3_BLOCK_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto", cancelPoll,
             });
             if (!r.toolCalls || r.toolCalls.length === 0) {
-              // Resposta textual normal → finaliza para validação (como hoje).
+              // Resposta textual (sem escrita): a ação se resolveu em conversa
+              // (ex.: "me informe nome e CPF"). Registra a duração REAL do N3
+              // (antes gravava duration_ms:0) para instrumentar o fast-path.
+              const durationMs = Date.now() - toolLoopT0;
+              const usage = { model: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens, duration_ms: durationMs };
+              const nextChain = [...(run.chain || []), { level: 3, agent: n3.name }];
+              console.log(`[N3-tool-text] run=${runId} model=${r.rawModel} out=${r.outputTokens}tok dur=${durationMs}ms iters=${i + 1} chars=${r.content.length}`);
+              // FAST-PATH ACAO_COM_TOOL: resposta operacional é FINAL — pula toda a
+              // malha de validação de peça (validating_n2 mecânico/consultivo +
+              // validating_n1) e finaliza direto (menos hops, menos latência).
+              if (run.intent_category === "ACAO_COM_TOOL") {
+                console.log(`[fast-path] run=${runId} ACAO_COM_TOOL — finalizando direto do executing_n3`);
+                run.draft = r.content; run.n3_usage = usage; run.chain = nextChain;
+                await finalizeRun(admin, run, n1);
+                return;
+              }
+              // Peça / demais: segue para a malha de validação (comportamento atual).
               await insertStage(admin, run.session_id, run.user_id, `${n3.name} respondeu.`, "validating_n2", n3);
               await upd({
                 status: "validating_n2", draft: r.content, feedback: null,
-                n3_usage: { model: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens, duration_ms: 0 },
-                chain: [...(run.chain || []), { level: 3, agent: n3.name }],
+                n3_usage: usage, chain: nextChain,
               });
               return fireNextStep(runId, supabaseUrl, serviceKey);
             }
@@ -2287,6 +2340,25 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n2") {
+      // ── FAST-PATH ACAO_COM_TOOL: sem validação consultiva de peça ──────────
+      // Uma AÇÃO de tool (cadastrar/consultar/criar tarefa…) é determinística: o
+      // resultado é binário (executou ou não), não uma peça jurídica que precise de
+      // revisão de qualidade. A validação consultiva (validateDraft, mais abaixo) foi
+      // desenhada para PEÇAS; sobre uma resposta operacional curta (ex.: "me informe
+      // nome e CPF para cadastrar") ela REPROVA como se fosse peça defeituosa e dispara
+      // o loop de regeneração (MAX_CONSULTIVE_ITERATIONS rodadas de N3, ~30s cada).
+      // MEDIDO (run cec3a38f, "quero cadastrar um cliente"): ~63s dos ~85s totais vêm
+      // DESSAS duas rodadas de regeneração — não de reinvocação HTTP (os saltos entre
+      // passos são ~0,4-2,5s). Ações pulam a malha consultiva e vão direto à
+      // finalização (validating_n1). NÃO relaxa nada de PEÇA: NEGOCIO_COM_INSUMO segue
+      // intacto pela validação abaixo. Ações de ESCRITA (cadastrar_cliente etc.) nem
+      // chegam aqui — pausam em awaiting_confirmation no executing_n3 (proposeAction),
+      // e sua execução real (2C) acontece em handleConfirm, sem passar por este bloco.
+      if (run.intent_category === "ACAO_COM_TOOL") {
+        console.log(`[fast-path] run=${runId} ACAO_COM_TOOL — finalizando sem validação de peça (validating_n2→done)`);
+        await finalizeRun(admin, run, n1);
+        return;
+      }
       // ── V25 FRENTE 1: validador MECÂNICO pós-N3 (código, sem LLM) ──
       // Roda sobre a peça CONCATENADA do Caminho B ANTES do validador LLM (N2).
       // Violações "error" devolvem ao N3 com feedback objetivo (até MAX_ITERATIONS
@@ -2439,39 +2511,11 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       return fireNextStep(runId, supabaseUrl, serviceKey);
 
     } else if (run.status === "validating_n1") {
-      // FINALIZAÇÃO (sem 2a validação): só se chega aqui quando o N2 já aprovou
-      // (ou atingiu o teto de iterações). Evita uma chamada de LLM redundante no
-      // caminho feliz — a validação única do N2 já cobriu qualidade + anti-alucinação
-      // + alçada + citação. Reduz a latência da cadeia.
-      const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
-      const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
-      // Uso acumulado (model/tokens/duração) gravado na mensagem final.
-      const u = (run.n3_usage as { model?: string; input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
-      const usageCols = { model_used: u.model ?? null, input_tokens: u.input_tokens ?? null, output_tokens: u.output_tokens ?? null, duration_ms: u.duration_ms ?? null };
-      if (run.stream_message_id) {
-        // Já existe a linha (chamada única): vira a resposta FINAL (sem inserir duplicata).
-        await admin.from("chat_messages")
-          .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta, ...usageCols })
-          .eq("id", run.stream_message_id);
-      } else {
-        const seq = await nextSeq(admin, run.session_id);
-        await admin.from("chat_messages").insert({
-          session_id: run.session_id, user_id: run.user_id, role: "assistant",
-          agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
-          metadata: finalMeta, ...usageCols,
-        });
-      }
-      await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
-      await upd({ status: "done" });
-      // Resumo rolante (memória "eterna"): se a conversa passou da janela de N
-      // mensagens, condensa as mais antigas em chat_sessions.summary. Em segundo
-      // plano — não atrasa a resposta ao usuário. Fail-open.
-      const histLimit = n1.history_limit ?? 10;
-      const prevSummary = await loadSessionSummary(admin, run.session_id);
-      // @ts-ignore EdgeRuntime existe no runtime do Supabase
-      EdgeRuntime.waitUntil(
-        updateRollingSummary(admin, n1.model || "gpt-4o-mini", run.session_id, histLimit, prevSummary),
-      );
+      // FINALIZAÇÃO (sem 2a validação de LLM): só se chega aqui quando o N2 já
+      // aprovou (ou atingiu o teto de iterações). A publicação da resposta final,
+      // a contabilização de uso e o resumo rolante vivem em finalizeRun (reusado
+      // também pelo fast-path de ACAO_COM_TOOL).
+      await finalizeRun(admin, run, n1);
     }
   } catch (e) {
     // STOP instantâneo: se o erro é o abort POR CANCELAMENTO (CANCEL_MARKER) OU o
