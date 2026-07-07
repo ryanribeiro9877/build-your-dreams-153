@@ -226,6 +226,17 @@
 .cli-cep-hint { color: #1E66C7; font-weight: 700; font-size: 10px; }
 .cli-cep-error { font-size: 10px; color: #B4442E; margin-top: 3px; display: block; font-weight: 700; }
 
+/* WhatsApp — checkbox no form (abaixo de cada telefone) */
+.cli-wa-check { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+  cursor: pointer; font-size: 12px; font-weight: 700; color: var(--cli-ink); }
+.cli-wa-check input { accent-color: #25D366; width: 15px; height: 15px; cursor: pointer; }
+
+/* WhatsApp — selo no detalhe (aba Contatos / Resumo) */
+.cli-wa-badge { display: inline-flex; align-items: center; margin-left: 8px; vertical-align: middle;
+  font-size: 10px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase;
+  padding: 2px 8px; border: 2px solid var(--cli-ink); border-radius: 999px;
+  background: #25D366; color: #0B2A14; box-shadow: 2px 2px 0 var(--cli-ink); }
+
 /* pix radios */
 .cli-pixrow { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; margin-top: 4px; }
 .cli-pixrow .lbl { font-size: 11px; font-weight: 800; color: var(--cli-ink); text-transform: uppercase; letter-spacing: .5px; }

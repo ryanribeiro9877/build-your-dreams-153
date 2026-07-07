@@ -156,9 +156,39 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
     navigate(`/clientes/${clientId}`);
   }
 
+  // Validação condicional do PIX: com "Possui PIX? = Sim", tipo + valor da
+  // chave são obrigatórios (Gap B). Além da obrigatoriedade, confere o formato
+  // conforme o tipo. Retorna a mensagem de erro, ou null se estiver ok.
+  // Não altera o armazenamento (R-2): o valor segue pela via cifrada normal.
+  function validatePix(): string | null {
+    if (!hasPix) return null;
+    if (!form.pix_key_type) return "Selecione o tipo da chave PIX";
+    const value = form.pix_key.trim();
+    if (!value) return "Informe a chave PIX";
+    const digits = value.replace(/\D/g, "");
+    switch (form.pix_key_type) {
+      case "cpf":
+        if (digits.length !== 11) return "Chave PIX (CPF) inválida — informe 11 dígitos";
+        break;
+      case "cnpj":
+        if (digits.length !== 14) return "Chave PIX (CNPJ) inválida — informe 14 dígitos";
+        break;
+      case "telefone":
+        if (digits.length < 10 || digits.length > 11) return "Chave PIX (telefone) inválida — informe DDD + número";
+        break;
+      case "email":
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Chave PIX (email) inválida";
+        break;
+      // "aleatoria": qualquer valor não vazio já foi aceito acima.
+    }
+    return null;
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (saving || cpfDuplicate) return;
+    const pixError = validatePix();
+    if (pixError) { toast.error(pixError); return; }
     if (mode === "create") void handleCreate();
     else void handleUpdate();
   }
@@ -280,9 +310,21 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
         {/* Contato */}
         <div className="cli-formsec">Contato</div>
         <div><label className="cli-label">Email</label><input type="email" className="cli-input" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
-        <div><label className="cli-label">Celular</label><input className="cli-input" value={form.phone} onChange={e => setForm({...form, phone: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
-        <div><label className="cli-label">Telefone Comercial</label><input className="cli-input" value={form.phone_commercial} onChange={e => setForm({...form, phone_commercial: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
-        <div><label className="cli-label">Telefone Residencial</label><input className="cli-input" value={form.phone_home} onChange={e => setForm({...form, phone_home: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} /></div>
+        <div>
+          <label className="cli-label">Celular</label>
+          <input className="cli-input" value={form.phone} onChange={e => setForm({...form, phone: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} />
+          <label className="cli-wa-check"><input type="checkbox" checked={form.phone_is_whatsapp} onChange={e => setForm({...form, phone_is_whatsapp: e.target.checked})} /> WhatsApp</label>
+        </div>
+        <div>
+          <label className="cli-label">Telefone Comercial</label>
+          <input className="cli-input" value={form.phone_commercial} onChange={e => setForm({...form, phone_commercial: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} />
+          <label className="cli-wa-check"><input type="checkbox" checked={form.phone_commercial_is_whatsapp} onChange={e => setForm({...form, phone_commercial_is_whatsapp: e.target.checked})} /> WhatsApp</label>
+        </div>
+        <div>
+          <label className="cli-label">Telefone Residencial</label>
+          <input className="cli-input" value={form.phone_home} onChange={e => setForm({...form, phone_home: formatPhone(e.target.value)})} placeholder="(71) 99999-9999" maxLength={15} />
+          <label className="cli-wa-check"><input type="checkbox" checked={form.phone_home_is_whatsapp} onChange={e => setForm({...form, phone_home_is_whatsapp: e.target.checked})} /> WhatsApp</label>
+        </div>
 
         {/* Endereço */}
         <div className="cli-formsec">Endereço</div>
