@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +27,8 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
   const [hasPix, setHasPix] = useState(!!(initialValues?.pix_key));
+  // CPF-UNICO: aviso em tempo real de "CPF já cadastrado no sistema".
+  const [cpfDuplicate, setCpfDuplicate] = useState(false);
 
   // Documentos obrigatórios — só no cadastro. Na edição, documentos são
   // gerenciados na aba "Documentos" do detalhe.
@@ -63,6 +65,26 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
     }
   }
 
+  // CPF-UNICO (Passo 2): ao completar um CPF (11 dígitos), consulta o índice
+  // cego via RPC `search_clients_by_cpf`. Se houver um cliente diferente do
+  // atual (na edição, exclui o próprio id), marca duplicata → mensagem vermelha
+  // e bloqueia o salvar. Debounce leve; só dispara com CPF completo.
+  useEffect(() => {
+    const digits = form.cpf.replace(/\D/g, "");
+    if (digits.length !== 11) { setCpfDuplicate(false); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const { data, error } = await (supabase as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { id: string }[] | null; error: unknown }>;
+      }).rpc("search_clients_by_cpf", { cpf_input: form.cpf });
+      if (cancelled) return;
+      if (error) { setCpfDuplicate(false); return; }
+      const matches = ((data as { id: string }[] | null) ?? []).filter(r => r.id !== clientId);
+      setCpfDuplicate(matches.length > 0);
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [form.cpf, clientId]);
+
   async function handleCreate() {
     if (!user) return;
     if (!docRgFrente) { toast.error("Anexe o RG (frente)"); return; }
@@ -74,7 +96,15 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
     for (const k of FORM_COLUMNS) payload[k] = form[k] === "" ? null : form[k];
     const { data: inserted, error } = await supabase.from("clients").insert(payload as never).select("id").single();
     if (error || !inserted) {
-      toast.error("Erro ao criar cliente: " + (error?.message || "sem retorno"));
+      // Passo 3: unicidade real é o índice `clients_cpf_bidx_uniq`. Se um insert
+      // bater nele (corrida/importação/bypass), o Postgres devolve 23505 →
+      // mesma mensagem vermelha em vez de um erro genérico.
+      if ((error as { code?: string } | null)?.code === "23505") {
+        setCpfDuplicate(true);
+        toast.error("CPF já cadastrado no sistema.");
+      } else {
+        toast.error("Erro ao criar cliente: " + (error?.message || "sem retorno"));
+      }
       setSaving(false);
       return;
     }
@@ -112,7 +142,13 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
     for (const k of FORM_COLUMNS) payload[k] = form[k] === "" ? null : form[k];
     const { error } = await supabase.from("clients").update(payload as never).eq("id", clientId);
     if (error) {
-      toast.error("Erro ao salvar: " + error.message);
+      // Passo 3: mesma defesa do índice único no caminho de edição.
+      if ((error as { code?: string }).code === "23505") {
+        setCpfDuplicate(true);
+        toast.error("CPF já cadastrado no sistema.");
+      } else {
+        toast.error("Erro ao salvar: " + error.message);
+      }
       setSaving(false);
       return;
     }
@@ -122,7 +158,7 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (saving) return;
+    if (saving || cpfDuplicate) return;
     if (mode === "create") void handleCreate();
     else void handleUpdate();
   }
@@ -191,7 +227,11 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
           </>
         ) : (
           <>
-            <div><label className="cli-label">CPF</label><input className="cli-input" value={form.cpf} onChange={e => setForm({...form, cpf: formatCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} /></div>
+            <div>
+              <label className="cli-label">CPF</label>
+              <input className="cli-input" style={cpfDuplicate ? { borderColor: "#B4442E" } : undefined} value={form.cpf} onChange={e => setForm({...form, cpf: formatCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} />
+              {cpfDuplicate && <span className="cli-cep-error">CPF já cadastrado no sistema.</span>}
+            </div>
             <div><label className="cli-label">RG</label><input className="cli-input" value={form.rg} onChange={e => setForm({...form, rg: formatRG(e.target.value)})} placeholder="00.000.000-0" maxLength={12} /></div>
             <div><label className="cli-label">Órgão Emissor</label><input className="cli-input" value={form.rg_issuer} onChange={e => setForm({...form, rg_issuer: toUpper(e.target.value)})} placeholder="SSP" /></div>
             <div>
@@ -353,7 +393,7 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
       </div>
 
       <div className="cli-form-actions">
-        <button type="submit" className="cli-btn" disabled={saving}>
+        <button type="submit" className="cli-btn" disabled={saving || cpfDuplicate}>
           {saving ? "Salvando…" : mode === "create" ? "Cadastrar Cliente" : "Salvar Alterações"}
         </button>
         <button type="button" className="cli-btn ghost" disabled={saving} onClick={() => navigate(mode === "edit" && clientId ? `/clientes/${clientId}` : "/clientes")}>
