@@ -7,7 +7,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import ClientForm from "@/components/clients/ClientForm";
 import {
   type ClientFull, type ClientFormValues, CLIENT_FULL_COLUMNS, formValuesFromClient,
-  ALLOWED_ROLES, RestrictedAccess,
+  ALLOWED_ROLES, RestrictedAccess, canEditJuridicalStatus,
 } from "@/components/clients/shared";
 
 export default function ClientEdit() {
@@ -15,6 +15,7 @@ export default function ClientEdit() {
   const { workspace } = useMyWorkspace();
   const navigate = useNavigate();
   const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
+  const canEditJuridico = canEditJuridicalStatus(workspace?.role_template?.code, workspace?.is_master);
 
   const [values, setValues] = useState<ClientFormValues | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +45,7 @@ export default function ClientEdit() {
           <button className="cli-back" onClick={() => navigate(`/clientes/${id}`)}>← Detalhe</button>
           <span className="cli-title">Editar Cliente</span>
         </div>
-        <ClientForm mode="edit" clientId={id} initialValues={values} />
+        <ClientForm mode="edit" clientId={id} initialValues={values} canEditJuridico={canEditJuridico} />
       </div>
     </div>
   );

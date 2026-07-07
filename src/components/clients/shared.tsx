@@ -31,6 +31,8 @@ export const CLIENT_FULL_COLUMNS = [
   "nationality", "natural_city", "natural_uf", "profession", "pis_nit",
   "mother_name", "father_name", "legal_rep_name", "legal_rep_cpf",
   "client_origin", "gov_br_profile",
+  "status_comercial", "status_juridico", "status_documental",
+  "status_atendimento", "status_processo",
   "email", "phone", "phone_commercial", "phone_home",
   "zip_code", "address", "address_number", "address_complement",
   "neighborhood", "city", "state", "country",
@@ -79,6 +81,11 @@ export interface ClientFull {
   legal_rep_cpf: string | null;
   client_origin: string | null;
   gov_br_profile: string | null;
+  status_comercial: string | null;
+  status_juridico: string | null;
+  status_documental: string | null;
+  status_atendimento: string | null;
+  status_processo: string | null;
   email: string | null;
   phone: string | null;
   phone_commercial: string | null;
@@ -115,6 +122,8 @@ export type ClientFormValues = {
   bank_name: string; bank_agency: string; bank_account: string; bank_account_type: string;
   pix_key: string; pix_key_type: string;
   client_origin: string; gov_br_profile: string; notes: string;
+  status_comercial: string; status_juridico: string; status_documental: string;
+  status_atendimento: string; status_processo: string;
 };
 
 export const EMPTY_FORM: ClientFormValues = {
@@ -128,6 +137,9 @@ export const EMPTY_FORM: ClientFormValues = {
   city: "", state: "BA", country: "BRASIL",
   bank_name: "", bank_agency: "", bank_account: "", bank_account_type: "corrente", pix_key: "", pix_key_type: "cpf",
   client_origin: "indicacao", gov_br_profile: "ouro", notes: "",
+  // Dimensões de status: nullable/sem default no banco — "" (→ null) até o form definir.
+  status_comercial: "", status_juridico: "", status_documental: "",
+  status_atendimento: "", status_processo: "",
 };
 
 /** Preenche o form a partir de um registro decifrado (para edição). */
@@ -159,12 +171,102 @@ export function formValuesFromClient(c: ClientFull): ClientFormValues {
     client_origin: s(c.client_origin) || "indicacao",
     gov_br_profile: s(c.gov_br_profile) || "ouro",
     notes: s(c.notes),
+    status_comercial: s(c.status_comercial),
+    status_juridico: s(c.status_juridico),
+    status_documental: s(c.status_documental),
+    status_atendimento: s(c.status_atendimento),
+    status_processo: s(c.status_processo),
   };
 }
 
 /* ---------- Constantes ---------- */
 
 export const ALLOWED_ROLES = ["socio", "lider_recepcao", "recepcionista"];
+
+/* ---------- Dimensões de status (card 3.2) ----------
+   5 dimensões independentes. Tokens snake_case batem com os CHECKs do banco;
+   os rótulos são só de exibição. `juridical: true` marca as dimensões cujo
+   ownership é do sócio/advogado — recepção vê read-only (camada 1 = UI;
+   camada 2 = trigger clients_status_ownership_guard). */
+export type ClientStatusDimensionKey =
+  | "status_comercial" | "status_atendimento" | "status_documental"
+  | "status_juridico" | "status_processo";
+
+export interface StatusDimension {
+  key: ClientStatusDimensionKey;
+  label: string;
+  juridical: boolean;
+  options: { value: string; label: string }[];
+}
+
+export const STATUS_DIMENSIONS: StatusDimension[] = [
+  {
+    key: "status_comercial", label: "Comercial", juridical: false,
+    options: [
+      { value: "prospecto", label: "Prospecto" },
+      { value: "em_negociacao", label: "Em negociação" },
+      { value: "ativo", label: "Ativo" },
+      { value: "inativo", label: "Inativo" },
+      { value: "perdido", label: "Perdido" },
+    ],
+  },
+  {
+    key: "status_atendimento", label: "Atendimento", juridical: false,
+    options: [
+      { value: "aguardando_contato", label: "Aguardando contato" },
+      { value: "em_atendimento", label: "Em atendimento" },
+      { value: "atendido", label: "Atendido" },
+      { value: "sem_retorno", label: "Sem retorno" },
+    ],
+  },
+  {
+    key: "status_documental", label: "Documental", juridical: false,
+    options: [
+      { value: "pendente", label: "Pendente" },
+      { value: "incompleto", label: "Incompleto" },
+      { value: "completo", label: "Completo" },
+      { value: "vencido", label: "Vencido" },
+    ],
+  },
+  {
+    key: "status_juridico", label: "Jurídico", juridical: true,
+    options: [
+      { value: "sem_processo", label: "Sem processo" },
+      { value: "com_processo_ativo", label: "Com processo ativo" },
+      { value: "processo_inativo", label: "Processo inativo" },
+      { value: "em_recurso", label: "Em recurso" },
+      { value: "arquivado", label: "Arquivado" },
+      { value: "encerrado", label: "Encerrado" },
+    ],
+  },
+  {
+    key: "status_processo", label: "Processo", juridical: true,
+    options: [
+      { value: "inicial", label: "Inicial" },
+      { value: "audiencia", label: "Audiência" },
+      { value: "em_andamento", label: "Em andamento" },
+      { value: "sentenca", label: "Sentença" },
+      { value: "recurso", label: "Recurso" },
+      { value: "transitado_em_julgado", label: "Transitado em julgado" },
+    ],
+  },
+];
+
+/** Rótulo de exibição de um valor de dimensão (fallback: o próprio token). */
+export function statusValueLabel(key: ClientStatusDimensionKey, value: string | null | undefined): string {
+  if (!value) return "—";
+  const dim = STATUS_DIMENSIONS.find(d => d.key === key);
+  return dim?.options.find(o => o.value === value)?.label ?? value;
+}
+
+/** Permissão de edição das dimensões jurídicas (jurídico/processo): só sócio,
+    advogado (adv_*) ou master admin. Espelha o helper is_socio_or_advogado()
+    do banco; a recepção edita as outras três dimensões. */
+export function canEditJuridicalStatus(roleCode: string | null | undefined, isMaster = false): boolean {
+  if (isMaster) return true;
+  if (!roleCode) return false;
+  return roleCode === "socio" || roleCode.startsWith("adv_");
+}
 
 export const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -252,6 +354,27 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 export function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_BADGE_CLASS[status] ?? "is-neutral";
   return <span className={`cli-badge ${cls}`}>● {status}</span>;
+}
+
+/** Chips das 5 dimensões de status (Resumo/detalhe). Dimensões sem valor
+    aparecem como "não definido" — nunca dado fabricado (§3). */
+export function StatusChips({ client }: { client: ClientFull }) {
+  return (
+    <div className="cli-statuschips">
+      {STATUS_DIMENSIONS.map(dim => {
+        const value = client[dim.key];
+        return (
+          <span
+            key={dim.key}
+            className={`cli-statuschip${value ? "" : " empty"}${dim.juridical ? " juridical" : ""}`}
+          >
+            <span className="dim">{dim.label}</span>
+            <span className="val">{value ? statusValueLabel(dim.key, value) : "não definido"}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 /** Valor de PII: mascarado por padrão, clique revela ("protegido" → "visível").

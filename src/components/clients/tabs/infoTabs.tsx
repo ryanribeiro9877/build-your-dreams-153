@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  type ClientFull, InfoField, InfoGrid, EmptyState, formatDateBR,
+  type ClientFull, InfoField, InfoGrid, EmptyState, formatDateBR, StatusChips,
 } from "../shared";
 
 const GENDER_LABELS: Record<string, string> = { masculino: "Masculino", feminino: "Feminino" };
@@ -62,6 +62,10 @@ export function ResumoTab({ client }: { client: ClientFull }) {
             <div className="lbl">{k.label}</div>
           </div>
         ))}
+      </div>
+      <div className="cli-card lift" style={{ marginBottom: 18 }}>
+        <div className="cli-sec-title">Status</div>
+        <StatusChips client={client} />
       </div>
       <div className="cli-card lift">
         <div className="cli-sec-title">Contatos principais</div>

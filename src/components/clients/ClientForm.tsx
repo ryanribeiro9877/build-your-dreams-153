@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
-  type ClientFormValues, EMPTY_FORM, STATES,
+  type ClientFormValues, EMPTY_FORM, STATES, STATUS_DIMENSIONS,
   toUpper, formatCPF, formatRG, formatCEP, formatPhone, formatPixKey,
 } from "./shared";
 
@@ -12,13 +12,16 @@ interface ClientFormProps {
   mode: "create" | "edit";
   clientId?: string;
   initialValues?: ClientFormValues;
+  // Sócio/advogado/master: pode editar as dimensões jurídicas (jurídico/processo).
+  // Recepção recebe false → esses dois selects ficam somente-leitura (camada 1).
+  canEditJuridico?: boolean;
 }
 
 // Campos do formulário que mapeiam 1:1 para colunas de `clients`.
 // Projeção explícita no UPDATE (R-2 — nada de select/update em "*").
 const FORM_COLUMNS = Object.keys(EMPTY_FORM) as (keyof ClientFormValues)[];
 
-export default function ClientForm({ mode, clientId, initialValues }: ClientFormProps) {
+export default function ClientForm({ mode, clientId, initialValues, canEditJuridico = false }: ClientFormProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -171,6 +174,29 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
             <input className="cli-input" style={{ marginTop: 6 }} value={form.client_origin === "outro" ? "" : form.client_origin} onChange={e => setForm({...form, client_origin: e.target.value})} placeholder="Informe a origem..." />
           ) : null}
         </div>
+
+        {/* Status (5 dimensões) — jurídico/processo somente-leitura p/ recepção */}
+        <div className="cli-formsec">Status</div>
+        {STATUS_DIMENSIONS.map(dim => {
+          const locked = dim.juridical && !canEditJuridico;
+          return (
+            <div key={dim.key}>
+              <label className="cli-label">
+                {dim.label}
+                {locked && <span className="cli-lock-tag" title="Somente sócio/advogado edita"> 🔒 somente leitura</span>}
+              </label>
+              <select
+                className="cli-select"
+                value={form[dim.key]}
+                disabled={locked}
+                onChange={e => setForm({ ...form, [dim.key]: e.target.value })}
+              >
+                <option value="">— não definido —</option>
+                {dim.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          );
+        })}
 
         {/* Identificação */}
         <div className="cli-formsec">{isPJ ? "Dados da Empresa" : "Dados Pessoais"}</div>
