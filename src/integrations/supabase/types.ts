@@ -1115,6 +1115,44 @@ export type Database = {
           },
         ]
       }
+      client_document_events: {
+        Row: {
+          actor: string | null
+          at: string
+          client_id: string
+          details: Json | null
+          document_id: string | null
+          event: string
+          id: string
+        }
+        Insert: {
+          actor?: string | null
+          at?: string
+          client_id: string
+          details?: Json | null
+          document_id?: string | null
+          event: string
+          id?: string
+        }
+        Update: {
+          actor?: string | null
+          at?: string
+          client_id?: string
+          details?: Json | null
+          document_id?: string | null
+          event?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_document_events_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "client_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_documents: {
         Row: {
           client_id: string
@@ -1127,7 +1165,11 @@ export type Database = {
           id: string
           mime_type: string | null
           notes: string | null
+          origem: string | null
+          status: string
           uploaded_by: string
+          validated_at: string | null
+          validated_by: string | null
         }
         Insert: {
           client_id: string
@@ -1140,7 +1182,11 @@ export type Database = {
           id?: string
           mime_type?: string | null
           notes?: string | null
+          origem?: string | null
+          status?: string
           uploaded_by: string
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Update: {
           client_id?: string
@@ -1153,7 +1199,11 @@ export type Database = {
           id?: string
           mime_type?: string | null
           notes?: string | null
+          origem?: string | null
+          status?: string
           uploaded_by?: string
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Relationships: [
           {

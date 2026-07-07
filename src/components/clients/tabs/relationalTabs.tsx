@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { USER_TASK_STATUS_LABELS } from "@/lib/userTaskLabels";
 import type { UserTaskStatus } from "@/types/jurisai";
 import {
-  type ClientFull, EmptyState, TabLoading, DOCUMENT_TYPE_LABELS, formatDateBR,
+  type ClientFull, EmptyState, TabLoading, formatDateBR,
+  DOCUMENT_TYPE_LABELS, DOCUMENT_TYPE_OPTIONS,
+  DOC_STATUS_META, DOC_ORIGEM_LABELS, DOC_ORIGEM_OPTIONS,
 } from "../shared";
 
 const PRIORITY_META: Record<string, { label: string; cls: string }> = {
@@ -20,24 +23,68 @@ const statusLabel = (s: string) => USER_TASK_STATUS_LABELS[s as UserTaskStatus] 
 interface DocRow {
   id: string; document_name: string; document_type: string;
   file_path: string; file_size: number | null; notes: string | null; created_at: string;
+  status: string; origem: string | null;
+}
+
+interface DocEvent {
+  id: string; document_id: string | null; event: string;
+  at: string; details: Record<string, unknown> | null;
+}
+
+// Statuses que a aba deixa a recepção/sócio alternar. Validação/rejeição fina
+// (quem pode validar) fica para o card de Validação — aqui a policy de UPDATE
+// só habilita a mudança de status por recepção/sócio.
+const STATUS_CYCLE = ["pendente", "recebido", "validado", "rejeitado"] as const;
+
+function statusBadge(status: string) {
+  const meta = DOC_STATUS_META[status] ?? { label: status, cls: "n" };
+  return <span className={`cli-chip ${meta.cls}`}>{meta.label}</span>;
+}
+
+function eventLabel(ev: DocEvent): string {
+  const d = ev.details ?? {};
+  const name = typeof d.document_name === "string" ? ` · ${d.document_name}` : "";
+  switch (ev.event) {
+    case "upload": return `Enviado${name}`;
+    case "exclusao": return `Excluído${name}`;
+    case "validacao": return "Validado";
+    case "rejeicao": return "Rejeitado";
+    case "status_change": return `Status: ${d.from ?? "?"} → ${d.to ?? "?"}`;
+    default: return ev.event;
+  }
 }
 
 export function DocumentosTab({ client }: { client: ClientFull }) {
+  const { user } = useAuth();
   const [docs, setDocs] = useState<DocRow[] | null>(null);
+  const [events, setEvents] = useState<DocEvent[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase.from("client_documents")
-        .select("id, document_name, document_type, file_path, file_size, notes, created_at")
+  // Upload form state
+  const [file, setFile] = useState<File | null>(null);
+  const [upType, setUpType] = useState<string>(DOCUMENT_TYPE_OPTIONS[0].value);
+  const [upOrigem, setUpOrigem] = useState<string>(DOC_ORIGEM_OPTIONS[0].value);
+  const [uploading, setUploading] = useState(false);
+
+  const load = useCallback(async () => {
+    const [docsRes, evRes] = await Promise.all([
+      supabase.from("client_documents")
+        .select("id, document_name, document_type, file_path, file_size, notes, created_at, status, origem")
         .eq("client_id", client.id)
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      if (error) { toast.error("Erro ao carregar documentos"); setDocs([]); return; }
-      setDocs((data as DocRow[]) ?? []);
-    })();
-    return () => { cancelled = true; };
+        .order("created_at", { ascending: false }),
+      supabase.from("client_document_events")
+        .select("id, document_id, event, at, details")
+        .eq("client_id", client.id)
+        .order("at", { ascending: false }),
+    ]);
+    if (docsRes.error) { toast.error("Erro ao carregar documentos"); setDocs([]); return; }
+    setDocs((docsRes.data as DocRow[]) ?? []);
+    setEvents((evRes.data as DocEvent[]) ?? []);
   }, [client.id]);
+
+  useEffect(() => { void load(); }, [load]);
 
   async function openDoc(filePath: string) {
     const { data, error } = await supabase.storage.from("client-documents").createSignedUrl(filePath, 60);
@@ -45,27 +92,147 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function handleUpload() {
+    if (!file || !user) { toast.error("Selecione um arquivo"); return; }
+    setUploading(true);
+    const filePath = `${client.id}/${Date.now()}_${file.name}`;
+    const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
+    if (upErr) { toast.error(`Erro ao enviar: ${upErr.message}`); setUploading(false); return; }
+    const { error } = await supabase.from("client_documents").insert({
+      client_id: client.id, client_name: client.full_name,
+      document_type: upType, document_name: file.name,
+      file_path: filePath, file_size: file.size, mime_type: file.type || null,
+      origem: upOrigem, uploaded_by: user.id,
+    });
+    if (error) {
+      // limpa o binário órfão se o registro falhar
+      await supabase.storage.from("client-documents").remove([filePath]);
+      toast.error(`Erro ao registrar documento: ${error.message}`);
+    } else {
+      toast.success("Documento enviado");
+      setFile(null);
+      setUpType(DOCUMENT_TYPE_OPTIONS[0].value);
+      setUpOrigem(DOC_ORIGEM_OPTIONS[0].value);
+      await load();
+    }
+    setUploading(false);
+  }
+
+  async function changeStatus(doc: DocRow, status: string) {
+    if (status === doc.status) return;
+    setBusyId(doc.id);
+    const { error } = await supabase.from("client_documents").update({ status }).eq("id", doc.id);
+    if (error) toast.error(`Não foi possível alterar o status: ${error.message}`);
+    else await load();
+    setBusyId(null);
+  }
+
   if (docs === null) return <TabLoading />;
-  if (docs.length === 0) return <EmptyState icon="▤" title="Nenhum documento anexado" hint="Documentos enviados no cadastro ou pela recepção aparecem aqui." />;
+
+  const docEvents = (docId: string) => events.filter(e => e.document_id === docId);
 
   return (
-    <div className="cli-card lift" style={{ padding: 18 }}>
-      <div className="cli-sec-title" style={{ padding: "2px 4px 10px" }}>Documentos · {docs.length}</div>
-      {docs.map(doc => (
-        <div key={doc.id} className="cli-row">
-          <div className="dot">▤</div>
-          <div className="body">
-            <div className="t">{doc.document_name}</div>
-            <div className="s">
-              {DOCUMENT_TYPE_LABELS[doc.document_type] || doc.document_type}
-              {doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
-              {` · ${formatDateBR(doc.created_at)}`}
-              {doc.notes ? ` · ${doc.notes}` : ""}
-            </div>
+    <div style={{ display: "grid", gap: 14 }}>
+      {/* Upload */}
+      <div className="cli-card lift" style={{ padding: 18 }}>
+        <div className="cli-sec-title" style={{ padding: "2px 4px 10px" }}>Anexar documento</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 220px" }}>
+            <label className="cli-label">Arquivo</label>
+            <input className="cli-input file" type="file"
+              onChange={e => setFile(e.target.files?.[0] ?? null)} />
           </div>
-          <button className="go" onClick={() => void openDoc(doc.file_path)} title="Abrir documento">→</button>
+          <div style={{ flex: "0 1 180px" }}>
+            <label className="cli-label">Tipo</label>
+            <select className="cli-select" value={upType} onChange={e => setUpType(e.target.value)}>
+              {DOCUMENT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: "0 1 160px" }}>
+            <label className="cli-label">Origem</label>
+            <select className="cli-select" value={upOrigem} onChange={e => setUpOrigem(e.target.value)}>
+              {DOC_ORIGEM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <button className="cli-btn sm" disabled={!file || uploading} onClick={() => void handleUpload()}>
+            {uploading ? "Enviando…" : "Enviar"}
+          </button>
         </div>
-      ))}
+      </div>
+
+      {/* Lista */}
+      <div className="cli-card lift" style={{ padding: 18 }}>
+        <div className="cli-sec-title" style={{ padding: "2px 4px 10px" }}>Documentos · {docs.length}</div>
+        {docs.length === 0
+          ? <EmptyState icon="▤" title="Nenhum documento anexado" hint="Documentos enviados no cadastro ou pela recepção aparecem aqui." />
+          : docs.map(doc => {
+            const evs = docEvents(doc.id);
+            const open = expanded === doc.id;
+            return (
+              <div key={doc.id}>
+                <div className="cli-row">
+                  <div className="dot">▤</div>
+                  <div className="body">
+                    <div className="t">{doc.document_name}</div>
+                    <div className="s">
+                      {DOCUMENT_TYPE_LABELS[doc.document_type] || doc.document_type}
+                      {doc.origem ? ` · ${DOC_ORIGEM_LABELS[doc.origem] ?? doc.origem}` : ""}
+                      {doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
+                      {` · ${formatDateBR(doc.created_at)}`}
+                      {doc.notes ? ` · ${doc.notes}` : ""}
+                    </div>
+                  </div>
+                  <span style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto", flexShrink: 0 }}>
+                    {statusBadge(doc.status)}
+                    <select className="cli-select" style={{ padding: "6px 26px 6px 10px", fontSize: 12 }}
+                      value={doc.status} disabled={busyId === doc.id}
+                      onChange={e => void changeStatus(doc, e.target.value)}
+                      title="Alterar status">
+                      {STATUS_CYCLE.map(s => <option key={s} value={s}>{DOC_STATUS_META[s].label}</option>)}
+                    </select>
+                    {evs.length > 0 && (
+                      <button className="go" onClick={() => setExpanded(open ? null : doc.id)}
+                        title="Histórico do documento" aria-expanded={open}>{open ? "▾" : "≡"}</button>
+                    )}
+                    <button className="go" onClick={() => void openDoc(doc.file_path)} title="Abrir documento">→</button>
+                  </span>
+                </div>
+                {open && evs.length > 0 && (
+                  <div style={{ padding: "4px 4px 12px 44px", display: "grid", gap: 4 }}>
+                    {evs.map(ev => (
+                      <div key={ev.id} className="s" style={{ fontSize: 12 }}>
+                        {eventLabel(ev)} · {formatDateBR(ev.at)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+      </div>
+
+      {/* Histórico do cliente (inclui exclusões de documentos removidos) */}
+      {events.length > 0 && (
+        <div className="cli-card lift" style={{ padding: 18 }}>
+          <button className="cli-sec-title" style={{ padding: "2px 4px 10px", background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}
+            onClick={() => setShowHistory(h => !h)} aria-expanded={showHistory}>
+            Histórico · {events.length} {showHistory ? "▾" : "▸"}
+          </button>
+          {showHistory && (
+            <div style={{ display: "grid", gap: 4 }}>
+              {events.map(ev => (
+                <div key={ev.id} className="cli-row" style={{ padding: "8px 4px" }}>
+                  <div className="dot">•</div>
+                  <div className="body">
+                    <div className="t" style={{ fontSize: 13 }}>{eventLabel(ev)}</div>
+                    <div className="s">{formatDateBR(ev.at)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
