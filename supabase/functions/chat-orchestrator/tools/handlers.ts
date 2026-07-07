@@ -46,10 +46,26 @@ export async function runWriteTool(userClient: SupabaseClient, userId: string, n
   try {
     switch (name) {
       case "cadastrar_cliente": {
+        // PII pela via cifrada do R-2: grava cpf/cnpj em texto e o trigger
+        // clients_pii_sync (Fase 2A) cifra em cpf_enc/cpf_bidx no INSERT — MESMO
+        // caminho que o cadastro manual (ClientForm.tsx) usa hoje (Fase 2B). Não
+        // gravamos as colunas *_enc diretamente: o trigger atual roda
+        // pii_encrypt(NEW.cpf) no INSERT e sobrescreveria qualquer _enc pré-setado
+        // quando o texto viesse nulo — hoje a "via cifrada" É o trigger. Só a
+        // Fase 2C (drop do texto puro) troca isso, e terá de migrar o trigger +
+        // um RPC de escrita cifrada usado por ClientForm E por esta tool juntos.
         const payload: Record<string, unknown> = { created_by: userId, full_name: args.full_name, status: "ativo" };
         for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) payload[k] = args[k];
         const { data, error } = await userClient.from("clients").insert(payload).select("id, full_name").single();
-        if (error) return { ok: false, error: error.message };
+        if (error) {
+          // Unicidade real de CPF = índice cego clients_cpf_bidx_uniq. Um INSERT
+          // duplicado devolve 23505 → mesma mensagem da UX do cadastro, em vez de
+          // um erro genérico de constraint.
+          if ((error as { code?: string }).code === "23505") {
+            return { ok: false, error: "CPF já cadastrado no sistema." };
+          }
+          return { ok: false, error: error.message };
+        }
         return { ok: true, result: data };
       }
       case "criar_card_tarefa": {
