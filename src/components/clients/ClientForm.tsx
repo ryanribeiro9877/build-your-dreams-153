@@ -92,14 +92,20 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
     if (!docComprovante) { toast.error("Anexe o Comprovante de Residência"); return; }
 
     setSaving(true);
-    const payload: Record<string, unknown> = { created_by: user.id };
+    // R-2 Fase 2C: escrita pela via CIFRADA. Em vez de inserir na tabela (que
+    // gravaria a PII em texto puro), chamamos a RPC save_client, que cifra a
+    // PII server-side em *_enc/cpf_bidx e NUNCA toca as colunas de texto.
+    // created_by é fixado server-side (auth.uid()).
+    const payload: Record<string, unknown> = {};
     for (const k of FORM_COLUMNS) payload[k] = form[k] === "" ? null : form[k];
-    const { data: inserted, error } = await supabase.from("clients").insert(payload as never).select("id").single();
-    if (error || !inserted) {
-      // Passo 3: unicidade real é o índice `clients_cpf_bidx_uniq`. Se um insert
+    const { data: newId, error } = await (supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { code?: string; message?: string } | null }>;
+    }).rpc("save_client", { p_id: null, p_data: payload });
+    if (error || !newId) {
+      // Passo 3: unicidade real é o índice `clients_cpf_bidx_uniq`. Se o insert
       // bater nele (corrida/importação/bypass), o Postgres devolve 23505 →
       // mesma mensagem vermelha em vez de um erro genérico.
-      if ((error as { code?: string } | null)?.code === "23505") {
+      if (error?.code === "23505") {
         setCpfDuplicate(true);
         toast.error("CPF já cadastrado no sistema.");
       } else {
@@ -108,7 +114,6 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
       setSaving(false);
       return;
     }
-    const newId = (inserted as unknown as { id: string }).id;
 
     const docsToUpload: { file: File; type: string; name: string }[] = [
       { file: docRgFrente, type: "rg", name: "RG Frente" },
@@ -137,17 +142,21 @@ export default function ClientForm({ mode, clientId, initialValues }: ClientForm
   async function handleUpdate() {
     if (!clientId) return;
     setSaving(true);
-    // Projeção explícita das colunas editáveis (R-2 — sem "*").
+    // R-2 Fase 2C: edição pela via CIFRADA (RPC save_client) — a PII é recifrada
+    // server-side em *_enc/cpf_bidx a partir do valor decifrado que o form
+    // devolve; as colunas de texto puro nunca são tocadas.
     const payload: Record<string, unknown> = {};
     for (const k of FORM_COLUMNS) payload[k] = form[k] === "" ? null : form[k];
-    const { error } = await supabase.from("clients").update(payload as never).eq("id", clientId);
+    const { error } = await (supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { code?: string; message?: string } | null }>;
+    }).rpc("save_client", { p_id: clientId, p_data: payload });
     if (error) {
       // Passo 3: mesma defesa do índice único no caminho de edição.
-      if ((error as { code?: string }).code === "23505") {
+      if (error.code === "23505") {
         setCpfDuplicate(true);
         toast.error("CPF já cadastrado no sistema.");
       } else {
-        toast.error("Erro ao salvar: " + error.message);
+        toast.error("Erro ao salvar: " + (error.message || "sem retorno"));
       }
       setSaving(false);
       return;

@@ -42,21 +42,18 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
 }
 
 // WRITE — recebe um client com a IDENTIDADE DO USUÁRIO (JWT), para RLS/RBAC valerem.
-export async function runWriteTool(userClient: SupabaseClient, userId: string, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
+export async function runWriteTool(userClient: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
   try {
     switch (name) {
       case "cadastrar_cliente": {
-        // PII pela via cifrada do R-2: grava cpf/cnpj em texto e o trigger
-        // clients_pii_sync (Fase 2A) cifra em cpf_enc/cpf_bidx no INSERT — MESMO
-        // caminho que o cadastro manual (ClientForm.tsx) usa hoje (Fase 2B). Não
-        // gravamos as colunas *_enc diretamente: o trigger atual roda
-        // pii_encrypt(NEW.cpf) no INSERT e sobrescreveria qualquer _enc pré-setado
-        // quando o texto viesse nulo — hoje a "via cifrada" É o trigger. Só a
-        // Fase 2C (drop do texto puro) troca isso, e terá de migrar o trigger +
-        // um RPC de escrita cifrada usado por ClientForm E por esta tool juntos.
-        const payload: Record<string, unknown> = { created_by: userId, full_name: args.full_name, status: "ativo" };
-        for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) payload[k] = args[k];
-        const { data, error } = await userClient.from("clients").insert(payload).select("id, full_name").single();
+        // R-2 Fase 2C: escrita pela via CIFRADA. Chamamos a RPC save_client
+        // (MESMO caminho do cadastro manual, ClientForm.tsx), que cifra a PII
+        // server-side em *_enc/cpf_bidx e NUNCA grava as colunas de texto puro.
+        // created_by é fixado server-side (auth.uid()); userClient carrega o JWT
+        // do usuário, então a RLS/role-check (is_recepcao_or_socio) valem.
+        const data: Record<string, unknown> = { full_name: args.full_name, status: "ativo" };
+        for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) data[k] = args[k];
+        const { data: newId, error } = await userClient.rpc("save_client", { p_id: null, p_data: data });
         if (error) {
           // Unicidade real de CPF = índice cego clients_cpf_bidx_uniq. Um INSERT
           // duplicado devolve 23505 → mesma mensagem da UX do cadastro, em vez de
@@ -66,7 +63,7 @@ export async function runWriteTool(userClient: SupabaseClient, userId: string, n
           }
           return { ok: false, error: error.message };
         }
-        return { ok: true, result: data };
+        return { ok: true, result: { id: newId, full_name: args.full_name } };
       }
       case "criar_card_tarefa": {
         const { data, error } = await userClient.rpc("create_user_task", {

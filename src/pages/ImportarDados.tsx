@@ -116,10 +116,11 @@ export default function ImportarDados() {
     if (fileCpfs.length > 0) {
       // R-2 Fase 2B: dedup lê o CPF decifrado da view, não a coluna de texto.
       // (onlyDigits normaliza, então máscara não interfere.)
-      const { data: existing } = await (supabase as any)
-        .from("clients_decrypted")
-        .select("cpf")
-        .not("cpf", "is", null);
+      const { data: existing } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => { not: (c: string, op: string, v: unknown) => Promise<{ data: { cpf: string | null }[] | null }> };
+        };
+      }).from("clients_decrypted").select("cpf").not("cpf", "is", null);
       for (const c of (existing as unknown as { cpf: string | null }[]) || []) {
         if (c.cpf) existingCpfs.add(onlyDigits(c.cpf));
       }
@@ -150,10 +151,14 @@ export default function ImportarDados() {
         }
       }
 
-      const payload: Record<string, unknown> = { ...mapped, created_by: user.id };
-      const { error } = await supabase.from("clients").insert(payload as never);
+      // R-2 Fase 2C: importação pela via CIFRADA (RPC save_client) — cifra a PII
+      // (cpf/cnpj) server-side em *_enc/cpf_bidx, sem gravar texto puro.
+      // created_by é fixado server-side (auth.uid()).
+      const { error } = await (supabase as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string } | null }>;
+      }).rpc("save_client", { p_id: null, p_data: mapped });
       if (error) {
-        out.push({ linha, nome, status: "erro", motivo: error.message });
+        out.push({ linha, nome, status: "erro", motivo: error.message || "erro" });
         continue;
       }
       if (cpfDigits) { existingCpfs.add(cpfDigits); seenInFile.add(cpfDigits); }
