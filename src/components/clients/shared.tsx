@@ -32,6 +32,7 @@ export const CLIENT_FULL_COLUMNS = [
   "mother_name", "father_name", "legal_rep_name", "legal_rep_cpf",
   "client_origin", "gov_br_profile",
   "email", "phone", "phone_commercial", "phone_home",
+  "phone_is_whatsapp", "phone_commercial_is_whatsapp", "phone_home_is_whatsapp",
   "zip_code", "address", "address_number", "address_complement",
   "neighborhood", "city", "state", "country",
   "bank_name", "bank_agency", "bank_account", "bank_account_type",
@@ -83,6 +84,9 @@ export interface ClientFull {
   phone: string | null;
   phone_commercial: string | null;
   phone_home: string | null;
+  phone_is_whatsapp: boolean | null;
+  phone_commercial_is_whatsapp: boolean | null;
+  phone_home_is_whatsapp: boolean | null;
   zip_code: string | null;
   address: string | null;
   address_number: string | null;
@@ -110,6 +114,7 @@ export type ClientFormValues = {
   mother_name: string; father_name: string; profession: string; pis_nit: string;
   legal_rep_name: string; legal_rep_cpf: string;
   email: string; phone: string; phone_commercial: string; phone_home: string;
+  phone_is_whatsapp: boolean; phone_commercial_is_whatsapp: boolean; phone_home_is_whatsapp: boolean;
   zip_code: string; address: string; address_number: string; address_complement: string;
   neighborhood: string; city: string; state: string; country: string;
   bank_name: string; bank_agency: string; bank_account: string; bank_account_type: string;
@@ -124,6 +129,7 @@ export const EMPTY_FORM: ClientFormValues = {
   nationality: "BRASILEIRA", natural_city: "", natural_uf: "BA", mother_name: "", father_name: "",
   profession: "", pis_nit: "", legal_rep_name: "", legal_rep_cpf: "",
   email: "", phone: "", phone_commercial: "", phone_home: "",
+  phone_is_whatsapp: false, phone_commercial_is_whatsapp: false, phone_home_is_whatsapp: false,
   zip_code: "", address: "", address_number: "", address_complement: "", neighborhood: "",
   city: "", state: "BA", country: "BRASIL",
   bank_name: "", bank_agency: "", bank_account: "", bank_account_type: "corrente", pix_key: "", pix_key_type: "cpf",
@@ -150,6 +156,9 @@ export function formValuesFromClient(c: ClientFull): ClientFormValues {
     legal_rep_name: s(c.legal_rep_name), legal_rep_cpf: s(c.legal_rep_cpf),
     email: s(c.email), phone: s(c.phone),
     phone_commercial: s(c.phone_commercial), phone_home: s(c.phone_home),
+    phone_is_whatsapp: !!c.phone_is_whatsapp,
+    phone_commercial_is_whatsapp: !!c.phone_commercial_is_whatsapp,
+    phone_home_is_whatsapp: !!c.phone_home_is_whatsapp,
     zip_code: s(c.zip_code), address: s(c.address), address_number: s(c.address_number),
     address_complement: s(c.address_complement), neighborhood: s(c.neighborhood),
     city: s(c.city), state: s(c.state) || "BA", country: s(c.country) || "BRASIL",
@@ -267,11 +276,18 @@ export function Reveal({ value, revealLast = 0 }: { value: string; revealLast?: 
   );
 }
 
-/** Campo rótulo/valor. `protect` transforma o valor em PII mascarada. */
-export function InfoField({ label, value, protect }: {
+/** Selo "WhatsApp" para telefones marcados (aba Contatos / Resumo). */
+export function WhatsAppBadge() {
+  return <span className="cli-wa-badge" title="Este número é WhatsApp">WhatsApp</span>;
+}
+
+/** Campo rótulo/valor. `protect` transforma o valor em PII mascarada.
+    `badge` é renderizado ao lado do valor (ex.: selo de WhatsApp). */
+export function InfoField({ label, value, protect, badge }: {
   label: string;
   value: React.ReactNode;
   protect?: { revealLast?: number };
+  badge?: React.ReactNode;
 }) {
   const empty = value === null || value === undefined || value === "";
   return (
@@ -283,6 +299,7 @@ export function InfoField({ label, value, protect }: {
           : protect && typeof value === "string"
             ? <Reveal value={value} revealLast={protect.revealLast} />
             : value}
+        {!empty && badge}
       </div>
     </div>
   );

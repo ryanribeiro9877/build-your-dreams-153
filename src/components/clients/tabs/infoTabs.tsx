@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  type ClientFull, InfoField, InfoGrid, EmptyState, formatDateBR,
+  type ClientFull, InfoField, InfoGrid, EmptyState, formatDateBR, WhatsAppBadge,
 } from "../shared";
 
 const GENDER_LABELS: Record<string, string> = { masculino: "Masculino", feminino: "Feminino" };
@@ -67,7 +67,7 @@ export function ResumoTab({ client }: { client: ClientFull }) {
         <div className="cli-sec-title">Contatos principais</div>
         <InfoGrid>
           <InfoField label="Email" value={client.email} />
-          <InfoField label="Celular" value={client.phone} protect={{ revealLast: 2 }} />
+          <InfoField label="Celular" value={client.phone} protect={{ revealLast: 2 }} badge={client.phone_is_whatsapp ? <WhatsAppBadge /> : undefined} />
           <InfoField label="Cidade" value={client.city ? `${client.city}${client.state ? " / " + client.state : ""}` : null} />
           <InfoField label="Cadastrado em" value={formatDateBR(client.created_at)} />
         </InfoGrid>
@@ -168,9 +168,9 @@ export function ContatosTab({ client }: { client: ClientFull }) {
       <div className="cli-sec-title">Contatos</div>
       <InfoGrid>
         <InfoField label="Email" value={client.email} />
-        <InfoField label="Celular" value={client.phone} protect={{ revealLast: 2 }} />
-        <InfoField label="Telefone Comercial" value={client.phone_commercial} protect={{ revealLast: 2 }} />
-        <InfoField label="Telefone Residencial" value={client.phone_home} protect={{ revealLast: 2 }} />
+        <InfoField label="Celular" value={client.phone} protect={{ revealLast: 2 }} badge={client.phone_is_whatsapp ? <WhatsAppBadge /> : undefined} />
+        <InfoField label="Telefone Comercial" value={client.phone_commercial} protect={{ revealLast: 2 }} badge={client.phone_commercial_is_whatsapp ? <WhatsAppBadge /> : undefined} />
+        <InfoField label="Telefone Residencial" value={client.phone_home} protect={{ revealLast: 2 }} badge={client.phone_home_is_whatsapp ? <WhatsAppBadge /> : undefined} />
       </InfoGrid>
     </div>
   );
