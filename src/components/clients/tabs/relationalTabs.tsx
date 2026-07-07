@@ -54,6 +54,19 @@ function eventLabel(ev: DocEvent): string {
   }
 }
 
+// Token do tipo do documento associado ao evento. Preferir o `details` (o trigger
+// de upload grava o tipo ali e ele sobrevive à exclusão do doc); fallback: cruzar
+// por document_id → client_documents.document_type quando o doc ainda existir.
+function eventDocType(ev: DocEvent, docs: DocRow[]): string | null {
+  const fromDetails = ev.details?.document_type;
+  if (typeof fromDetails === "string") return fromDetails;
+  if (ev.document_id) {
+    const doc = docs.find(d => d.id === ev.document_id);
+    if (doc) return doc.document_type;
+  }
+  return null;
+}
+
 export function DocumentosTab({ client }: { client: ClientFull }) {
   const { user } = useAuth();
   const [docs, setDocs] = useState<DocRow[] | null>(null);
@@ -220,15 +233,26 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
           </button>
           {showHistory && (
             <div style={{ display: "grid", gap: 4 }}>
-              {events.map(ev => (
-                <div key={ev.id} className="cli-row" style={{ padding: "8px 4px" }}>
-                  <div className="dot">•</div>
-                  <div className="body">
-                    <div className="t" style={{ fontSize: 13 }}>{eventLabel(ev)}</div>
-                    <div className="s">{formatDateBR(ev.at)}</div>
+              {events.map(ev => {
+                const typeToken = eventDocType(ev, docs);
+                const typeLabel = typeToken ? (DOCUMENT_TYPE_LABELS[typeToken] ?? typeToken) : null;
+                return (
+                  <div key={ev.id} className="cli-row" style={{ padding: "8px 4px", flexWrap: "wrap" }}>
+                    <div className="dot">•</div>
+                    <div className="body">
+                      <div className="t" style={{ fontSize: 13 }}>{eventLabel(ev)}</div>
+                      <div className="s">{formatDateBR(ev.at)}</div>
+                    </div>
+                    {typeLabel && (
+                      <span style={{
+                        marginLeft: "auto", alignSelf: "center", paddingLeft: 12,
+                        fontWeight: 800, textTransform: "uppercase", color: "var(--cli-ink)",
+                        fontSize: 12, letterSpacing: ".4px", textAlign: "right",
+                      }}>{typeLabel}</span>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
