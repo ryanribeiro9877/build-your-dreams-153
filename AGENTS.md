@@ -520,6 +520,16 @@ Corrige a causa raiz do caso Carmem x Santander: o especialista redigia **sem le
 
 ---
 
+### 3.3 — Marcador de WhatsApp + PIX condicional obrigatório (fechamento de lacunas)
+
+Dois detalhes pequenos, sem tabela nova e **sem tocar em `pix_key`/`pix_key_enc`** (R-2 intacto):
+
+- **Gap A — WhatsApp por telefone:** migration aditiva `20260707131354_client_phone_whatsapp_flags` adiciona 3 booleanos `NOT NULL DEFAULT false` em `clients` (`phone_is_whatsapp`, `phone_commercial_is_whatsapp`, `phone_home_is_whatsapp`) e os expõe na view `clients_decrypted` (append no fim, preservando os `status_*` e a decifra de PII). No `ClientForm` há um checkbox "WhatsApp" abaixo de cada telefone; na aba **Contatos** (e no Resumo) um selo verde "WhatsApp" aparece nos números marcados, sem quebrar o mascaramento anti-shoulder-surfing (`InfoField` ganhou prop opcional `badge`).
+- **Gap B — PIX condicional:** verificado que o **valor** da chave não era obrigatório. `ClientForm.validatePix()` agora exige tipo + valor quando "Possui PIX? = Sim" (bloqueia o save) e valida o formato por tipo (CPF 11 díg., CNPJ 14, telefone 10-11, email regex, aleatória não-vazia). É validação de input (front) — o armazenamento segue pela via cifrada do R-2, inalterado.
+- **`has_pix`:** decidido **não** persistir — "Possui PIX?" é estado de UI derivado de `pix_key` preenchido e, com a nova validação (Sim ⇒ chave preenchida; Não ⇒ chave limpa), permanece consistente. Coluna dispensável.
+
+---
+
 ## 7. Gaps conhecidos / Backlog técnico
 
 ### Crítico (impede produção plena)
