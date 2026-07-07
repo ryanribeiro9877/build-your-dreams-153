@@ -178,11 +178,36 @@ export const ALLOWED_ROLES = ["socio", "lider_recepcao", "recepcionista"];
 export const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  rg: "RG", cpf: "CPF", comprovante_residencia: "Comprovante de Residência",
+  rg: "RG", cpf: "CPF", comprovante: "Comprovante",
+  comprovante_residencia: "Comprovante de Residência",
   extrato_conta: "Extrato Bancário", extrato_ir: "Extrato de Imposto de Renda",
   extrato_inss: "Extrato INSS", cnis: "CNIS", procuracao: "Procuração",
-  contrato: "Contrato", certidao: "Certidão", outro: "Outro",
+  contrato: "Contrato", termo_cooperado: "Termo de Cooperado",
+  certidao: "Certidão", outro: "Outro",
 };
+
+// Tipos oferecidos no upload da aba Documentos (vocabulário canônico do card 3.6).
+// O CHECK no banco aceita um superset (inclui os tipos legados do cadastro).
+export const DOCUMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  "rg", "cpf", "comprovante", "procuracao", "contrato", "termo_cooperado", "outro",
+].map(v => ({ value: v, label: DOCUMENT_TYPE_LABELS[v] ?? v }));
+
+// Status do documento (3.6) — badge com classe de cor no estilo .cli-chip.
+export const DOC_STATUS_META: Record<string, { label: string; cls: string }> = {
+  pendente: { label: "Pendente", cls: "p" },
+  recebido: { label: "Recebido", cls: "n" },
+  validado: { label: "Validado", cls: "ok" },
+  rejeitado: { label: "Rejeitado", cls: "d" },
+};
+
+export const DOC_ORIGEM_LABELS: Record<string, string> = {
+  cliente: "Cliente", recepcao: "Recepção", advogado: "Advogado",
+  sistema: "Sistema", import: "Importação", ocr: "OCR",
+};
+
+// Origens escolhíveis no upload manual (default recepção).
+export const DOC_ORIGEM_OPTIONS: { value: string; label: string }[] =
+  ["recepcao", "cliente", "advogado"].map(v => ({ value: v, label: DOC_ORIGEM_LABELS[v] }));
 
 /* ---------- Formatadores (máscaras) ---------- */
 
