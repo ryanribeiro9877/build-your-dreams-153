@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import {
   type ClientFull, CLIENT_FULL_COLUMNS, ALLOWED_ROLES, RestrictedAccess,
-  statusBadgeStyle, ghostButtonStyle, goldButtonStyle, pageStyle,
+  StatusBadge, EmptyState,
 } from "@/components/clients/shared";
 import {
   ResumoTab, DadosPessoaisTab, GovBrTab, ContatosTab, EnderecoTab, ObservacoesTab,
@@ -15,12 +15,11 @@ import {
   DocumentosTab, TarefasTab, PendenciasTab, ProcessosTab,
 } from "@/components/clients/tabs/relationalTabs";
 import { PecasTab, HistoricoTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
-import { EmptyState } from "@/components/clients/shared";
 
 // Empty-states honestos — abas sem fonte de dado própria hoje (§3).
-const ReunioesTab = () => <EmptyState title="Nenhuma reunião registrada" hint="Ainda não há uma fonte de reuniões vinculada ao cliente." />;
-const AudienciasTab = () => <EmptyState title="Nenhuma audiência registrada" hint="Ainda não há uma fonte de audiências vinculada ao cliente." />;
-const ProtocolosTab = () => <EmptyState title="Nenhum protocolo registrado" hint="Ainda não há uma fonte de protocolos vinculada ao cliente." />;
+const ReunioesTab = () => <EmptyState icon="👥" title="Nenhuma reunião registrada" hint="Quando houver uma fonte de reuniões no sistema, elas aparecem aqui." />;
+const AudienciasTab = () => <EmptyState icon="⚖" title="Nenhuma audiência registrada" hint="Quando houver uma fonte de audiências no sistema, elas aparecem aqui." />;
+const ProtocolosTab = () => <EmptyState icon="🗎" title="Nenhum protocolo registrado" hint="Quando houver uma fonte de protocolos no sistema, eles aparecem aqui." />;
 
 // Shell das 16 abas, na ordem do card. Cada aba renderiza sob demanda
 // (só a ativa é montada → carga lazy do seu conteúdo).
@@ -83,41 +82,38 @@ export default function ClientDetails() {
   if (!client) return null;
 
   const ActiveComp = (TABS.find(t => t.key === activeKey) ?? TABS[0]).Comp;
+  const isPJ = client.tipo_pessoa === "juridica";
 
   return (
-    <div style={{ ...pageStyle, maxWidth: 1100, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn-voltar" onClick={() => navigate("/clientes")} style={ghostButtonStyle}>← Clientes</button>
-        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
-          {client.full_name}
-        </h1>
-        <span style={statusBadgeStyle(client.status)}>{client.status}</span>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => navigate(`/clientes/${client.id}/editar`)} style={goldButtonStyle}>Editar</button>
-      </div>
+    <div className="cli-root">
+      <div className="cli-wrap">
+        {/* top bar */}
+        <div className="cli-top">
+          <button className="cli-back" onClick={() => navigate("/clientes")}>← Clientes</button>
+          <span className="cli-title">{client.full_name}</span>
+          <StatusBadge status={client.status} />
+          <span className="cli-pf">{isPJ ? "Pessoa jurídica" : "Pessoa física"}</span>
+          <span className="cli-spacer" />
+          <button className="cli-btn" onClick={() => navigate(`/clientes/${client.id}/editar`)}>✎ Editar</button>
+        </div>
 
-      {/* Tab bar */}
-      <div style={{
-        display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap",
-        borderBottom: "1px solid var(--border)", paddingBottom: 12,
-      }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setActive(t.key)} style={{
-            padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-            fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-            background: activeKey === t.key ? "linear-gradient(135deg, #c9a84c, #e8c96a)" : "var(--bg2)",
-            color: activeKey === t.key ? "#0a0a12" : "var(--text2)",
-            transition: "all 0.2s",
-          }}>{t.label}</button>
-        ))}
-      </div>
+        {/* tabs */}
+        <div className="cli-tabs" role="tablist">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              className={`cli-tab${activeKey === t.key ? " active" : ""}`}
+              role="tab"
+              aria-selected={activeKey === t.key}
+              onClick={() => setActive(t.key)}
+            >{t.label}</button>
+          ))}
+        </div>
 
-      {/* Active tab content (lazy) */}
-      <div style={{
-        background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, minHeight: 240,
-      }}>
-        <ActiveComp key={activeKey} client={client} />
+        {/* active tab content (lazy) */}
+        <div className="cli-panel" key={activeKey}>
+          <ActiveComp client={client} />
+        </div>
       </div>
     </div>
   );

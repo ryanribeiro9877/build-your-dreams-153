@@ -3,15 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { type ClientFull, EmptyState, TabLoading, formatDateBR } from "../shared";
 
-const rowStyle: React.CSSProperties = {
-  padding: 14, borderRadius: 10, marginBottom: 8,
-  background: "var(--bg)", border: "1px solid var(--border)",
-};
-const badge = (bg: string, color: string): React.CSSProperties => ({
-  padding: "2px 10px", borderRadius: 6, fontSize: 10, fontWeight: 600,
-  background: bg, color, textTransform: "uppercase", letterSpacing: "0.04em",
-});
-
 // Busca os ids das sessões de chat do cliente. `null` enquanto carrega.
 function useClientSessionIds(clientId: string) {
   const [ids, setIds] = useState<string[] | null>(null);
@@ -58,26 +49,21 @@ export function PecasTab({ client }: { client: ClientFull }) {
   // Peça "gerada" = orquestração que produziu conteúdo (draft ou blocks).
   const pecas = runs.filter(r => !!r.draft || (Array.isArray(r.blocks) && r.blocks.length > 0));
   if (pecas.length === 0) {
-    return <EmptyState title="Nenhuma peça gerada" hint="Peças produzidas pela orquestração da IA nas sessões do cliente aparecem aqui." />;
+    return <EmptyState icon="✦" title="Nenhuma peça gerada" hint="Peças produzidas pela orquestração da IA nas sessões do cliente aparecem aqui." />;
   }
   return (
-    <div>
+    <div className="cli-card lift">
+      <div className="cli-sec-title">Peças · {pecas.length}</div>
       {pecas.map(run => (
-        <div key={run.id} style={rowStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 4 }}>
-                {run.acao_tipo || "Peça gerada"}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text3)", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                {run.original_message}
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-              <span style={badge("rgba(107,114,128,0.15)", "#9ca3af")}>{run.status}</span>
-              <span style={{ fontSize: 10, color: "var(--text3)" }}>{formatDateBR(run.created_at)}</span>
+        <div key={run.id} className="cli-row">
+          <div className="dot">✦</div>
+          <div className="body">
+            <div className="t">{run.acao_tipo || "Peça gerada"}</div>
+            <div className="s" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {run.original_message} · {formatDateBR(run.created_at)}
             </div>
           </div>
+          <span className="cli-chip n" style={{ marginLeft: "auto" }}>{run.status}</span>
         </div>
       ))}
     </div>
@@ -109,26 +95,23 @@ export function HistoricoTab({ client }: { client: ClientFull }) {
 
   if (sessions === null) return <TabLoading />;
   if (sessions.length === 0) {
-    return <EmptyState title="Nenhuma sessão de IA" hint="O histórico de conversas e orquestrações da IA vinculadas ao cliente aparece aqui." />;
+    return <EmptyState icon="✦" title="Nenhuma sessão de IA" hint="O histórico de conversas e orquestrações da IA vinculadas ao cliente aparece aqui." />;
   }
   return (
-    <div>
+    <div className="cli-card lift">
+      <div className="cli-sec-title">Histórico · {sessions.length}</div>
       {sessions.map(s => (
-        <div key={s.id} style={rowStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 4 }}>
-                {s.title || "Sessão sem título"}
-              </div>
-              {s.summary && <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>{s.summary}</div>}
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10, color: "var(--text3)" }}>
-                <span>{s.message_count ?? 0} mensagens</span>
-                <span>Início: {formatDateBR(s.created_at)}</span>
-                {s.last_message_at && <span>Última: {formatDateBR(s.last_message_at)}</span>}
-              </div>
+        <div key={s.id} className="cli-row">
+          <div className="dot">✦</div>
+          <div className="body">
+            <div className="t">{s.title || "Sessão sem título"}</div>
+            <div className="s">
+              {s.summary ? `${s.summary} · ` : ""}
+              {s.message_count ?? 0} mensagens · Início {formatDateBR(s.created_at)}
+              {s.last_message_at ? ` · Última ${formatDateBR(s.last_message_at)}` : ""}
             </div>
-            <span style={badge("rgba(107,114,128,0.15)", "#9ca3af")}>{s.status}</span>
           </div>
+          <span className="cli-chip n" style={{ marginLeft: "auto" }}>{s.status}</span>
         </div>
       ))}
     </div>
@@ -166,19 +149,22 @@ export function AudiosTab({ client }: { client: ClientFull }) {
 
   if (sessionIds === null || rows === null) return <TabLoading />;
   if (rows.length === 0) {
-    return <EmptyState title="Nenhum áudio ou transcrição" hint="Áudios enviados nas sessões do cliente e suas transcrições aparecem aqui." />;
+    return <EmptyState icon="♪" title="Nenhum áudio ou transcrição" hint="Áudios enviados nas sessões do cliente e suas transcrições aparecem aqui." />;
   }
   return (
-    <div>
+    <div className="cli-card lift">
+      <div className="cli-sec-title">Áudios / Transcrições · {rows.length}</div>
       {rows.map(a => (
-        <div key={a.id} style={rowStyle}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 4 }}>{a.file_name}</div>
-          <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 6 }}>{formatDateBR(a.created_at)}</div>
+        <div key={a.id} style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <span style={{ fontWeight: 800, fontSize: 15, color: "var(--cli-ink)" }}>♪ {a.file_name}</span>
+            <span style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>{formatDateBR(a.created_at)}</span>
+          </div>
           {a.extracted_text
-            ? <div style={{ fontSize: 12, color: "var(--text2)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.extracted_text}</div>
+            ? <div className="cli-notes">{a.extracted_text}</div>
             : a.summary
-              ? <div style={{ fontSize: 12, color: "var(--text2)" }}>{a.summary}</div>
-              : <div style={{ fontSize: 11, color: "var(--text3)" }}>Transcrição ainda não disponível.</div>}
+              ? <div className="cli-notes">{a.summary}</div>
+              : <div style={{ fontSize: 13, color: "var(--cli-muted)", fontWeight: 500 }}>Transcrição ainda não disponível.</div>}
         </div>
       ))}
     </div>

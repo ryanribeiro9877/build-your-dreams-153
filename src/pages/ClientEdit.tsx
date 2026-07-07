@@ -7,7 +7,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import ClientForm from "@/components/clients/ClientForm";
 import {
   type ClientFull, type ClientFormValues, CLIENT_FULL_COLUMNS, formValuesFromClient,
-  ALLOWED_ROLES, RestrictedAccess, ghostButtonStyle, pageStyle,
+  ALLOWED_ROLES, RestrictedAccess,
 } from "@/components/clients/shared";
 
 export default function ClientEdit() {
@@ -38,14 +38,14 @@ export default function ClientEdit() {
   if (loading || !values) return <HexagonLoader variant="fullscreen" label="Carregando cliente..." />;
 
   return (
-    <div style={{ ...pageStyle, maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn-voltar" onClick={() => navigate(`/clientes/${id}`)} style={ghostButtonStyle}>← Detalhe</button>
-        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
-          Editar Cliente
-        </h1>
+    <div className="cli-root">
+      <div className="cli-wrap">
+        <div className="cli-top">
+          <button className="cli-back" onClick={() => navigate(`/clientes/${id}`)}>← Detalhe</button>
+          <span className="cli-title">Editar Cliente</span>
+        </div>
+        <ClientForm mode="edit" clientId={id} initialValues={values} />
       </div>
-      <ClientForm mode="edit" clientId={id} initialValues={values} />
     </div>
   );
 }
