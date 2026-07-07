@@ -142,6 +142,18 @@ describe("templates reais em public/templates/", () => {
     noPlaceholderLeft(t);
   });
 
+  it("contrato de honorários preenche a qualificação e preserva os 35% fixos", async () => {
+    const def = COOPERADO_DOC_DEFS.find((d) => d.documentType === "contrato_honorarios")!;
+    const bytes = readFileSync(resolve(dir, def.templateFile));
+    const out = await renderCooperadoDoc(def, CLIENT, bytes, { now: NOW });
+    const t = await docTextOf(out.bytes);
+    expect(t).toContain("MARIA SILVA");
+    expect(t).toContain("084.822.105-21");
+    expect(t).toContain("35%");                  // honorário fixo do modelo
+    expect(t).toContain("OAB/BA 80.891");         // CONTRATADO fixo
+    noPlaceholderLeft(t);
+  });
+
   it("ficha preenche os campos e preserva o CNPJ da COHAPM", async () => {
     const def = COOPERADO_DOC_DEFS.find((d) => d.documentType === "termo_cooperado")!;
     const bytes = readFileSync(resolve(dir, def.templateFile));
