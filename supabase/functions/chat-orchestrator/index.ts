@@ -1602,9 +1602,18 @@ async function loadActionPerms(admin: SupabaseClient, userId: string): Promise<{
 }
 
 // Resumo legível (PT-BR) de uma ação proposta, para exibir ao usuário na bolha.
+// Mascara o CPF no RESUMO exibido no ActionCard (anti-shoulder-surfing). Mantém
+// só os 3 primeiros e os 2 últimos dígitos; o valor cheio segue em args para a
+// tool cadastrar_cliente, apenas o texto do card é mascarado.
+function maskCpfDisplay(v: unknown): string {
+  const d = String(v ?? "").replace(/\D/g, "");
+  if (d.length !== 11) return "informado";
+  return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
+}
+
 function humanSummary(tool: string, args: Record<string, unknown>): string {
   switch (tool) {
-    case "cadastrar_cliente": return `Cadastrar cliente "${args.full_name ?? "[A PREENCHER]"}"${args.cpf ? `, CPF ${args.cpf}` : ""}.`;
+    case "cadastrar_cliente": return `Cadastrar cliente "${args.full_name ?? "[A PREENCHER]"}"${args.cpf ? `, CPF ${maskCpfDisplay(args.cpf)}` : ""}.`;
     case "criar_card_tarefa": return `Criar card "${args.title}" para o responsável indicado${args.deadline_at ? `, prazo ${args.deadline_at}` : ""}.`;
     case "solicitar_documentos": return `Solicitar documentos (${(args.documentos as string[] ?? []).join(", ")}).`;
     case "pedir_acesso_arquivos": return `Pedir acesso a arquivos: ${args.descricao ?? ""}.`;
