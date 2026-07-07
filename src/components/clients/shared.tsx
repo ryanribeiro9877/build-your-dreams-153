@@ -1,11 +1,12 @@
+import { useState } from "react";
 import type React from "react";
 import { useNavigate } from "react-router-dom";
 
 /* ============================================================
    Clientes — módulo compartilhado (layout 3.1)
-   Estilos, projeções de colunas (R-2), tipos e componentes
-   reutilizados pelas telas separadas de Clientes:
-   Listagem · Detalhe (abas) · Edição · Novo.
+   Projeções de colunas (R-2), tipos, formatadores e os
+   componentes de UI da identidade "neo-brutalista" (ver
+   src/styles/clientes.css, tudo escopado sob `.cli-root`).
 ============================================================ */
 
 /* ---------- R-2: projeções explícitas de colunas ----------
@@ -40,7 +41,6 @@ export const CLIENT_FULL_COLUMNS = [
 
 /* ---------- Tipos ---------- */
 
-// Linha resumida da listagem (alinhada a CLIENT_LIST_COLUMNS).
 export interface ClientListRow {
   id: string;
   full_name: string;
@@ -51,7 +51,6 @@ export interface ClientListRow {
   created_at: string;
 }
 
-// Registro completo do detalhe/edição (alinhado a CLIENT_FULL_COLUMNS).
 export interface ClientFull {
   id: string;
   full_name: string;
@@ -102,7 +101,6 @@ export interface ClientFull {
   created_at: string;
 }
 
-// Formulário (todas as chaves como string — mesmo shape do EMPTY_FORM).
 export type ClientFormValues = {
   tipo_pessoa: string; status: string;
   full_name: string; fantasy_name: string; cpf: string; cnpj: string;
@@ -231,138 +229,95 @@ export function formatDateBR(value: string | null | undefined): string {
   return d.toLocaleDateString("pt-BR");
 }
 
-/* ---------- Estilos (design system existente — inline + CSS vars) ---------- */
-
-export const pageStyle: React.CSSProperties = {
-  minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
-  fontFamily: "'Roboto', sans-serif", padding: 20,
-};
-
-export const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: 12,
-  background: "#0a0a12", border: "1px solid rgba(201,168,76,0.2)", color: "#f5f5f5",
-  fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-  transition: "border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease",
-};
-
-export const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  color: "#c9a84c",
-  cursor: "pointer",
-  appearance: "none" as const,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 12px center",
-  paddingRight: "36px",
-};
-
-export const labelStyle: React.CSSProperties = {
-  display: "block", fontSize: 10, color: "var(--text3)", marginBottom: 4,
-  textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600,
-};
-
-export const secTitle: React.CSSProperties = {
-  gridColumn: "1 / -1", fontSize: 11, fontWeight: 700, color: "var(--gold, #c9a84c)",
-  textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 10, marginBottom: -2,
-  borderBottom: "1px solid var(--border)", paddingBottom: 4,
-};
-
-export const sectionStyle: React.CSSProperties = {
-  background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12,
-  padding: 20, marginBottom: 16,
-};
-
-export const goldButtonStyle: React.CSSProperties = {
-  padding: "10px 20px", borderRadius: 10, border: "none", cursor: "pointer",
-  background: "linear-gradient(135deg, #c9a84c, #e8c96a)", color: "#0a0a12",
-  fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-  boxShadow: "0 4px 12px rgba(201,168,76,0.3)",
-  transition: "transform 0.2s ease, box-shadow 0.2s ease",
-};
-
-export const ghostButtonStyle: React.CSSProperties = {
-  padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
-  background: "var(--bg2)", color: "var(--text2)", cursor: "pointer", fontSize: 13,
-  fontFamily: "'DM Sans', sans-serif",
-};
-
-export function statusBadgeStyle(status: string): React.CSSProperties {
-  const map: Record<string, { bg: string; color: string }> = {
-    ativo: { bg: "rgba(45,212,160,0.15)", color: "#2dd4a0" },
-    em_analise: { bg: "rgba(251,191,36,0.15)", color: "#fbbf24" },
-    prospecto: { bg: "rgba(59,130,246,0.15)", color: "#3b82f6" },
-    inativo: { bg: "rgba(239,68,68,0.15)", color: "#ef4444" },
-  };
-  const c = map[status] ?? { bg: "rgba(107,114,128,0.15)", color: "#9ca3af" };
-  return {
-    padding: "2px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
-    background: c.bg, color: c.color, textTransform: "uppercase", letterSpacing: "0.04em",
-  };
+/** Mascara caracteres alfanuméricos com •, preservando separadores.
+    `revealLast` mantém os N últimos alfanuméricos visíveis. */
+export function maskValue(value: string, revealLast = 0): string {
+  const total = (value.match(/[A-Za-z0-9]/g) ?? []).length;
+  const keepFrom = Math.max(0, total - revealLast);
+  let i = 0;
+  return value.replace(/[A-Za-z0-9]/g, (ch) => {
+    const out = i < keepFrom ? "•" : ch;
+    i += 1;
+    return out;
+  });
 }
 
-/* ---------- Componentes reutilizados ---------- */
+/* ---------- Componentes de UI ---------- */
 
-/** Campo rótulo/valor em modo leitura. */
-export function InfoField({ label, value }: { label: string; value: React.ReactNode }) {
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  ativo: "is-ativo", inativo: "is-inativo", prospecto: "is-prospecto", em_analise: "is-em_analise",
+};
+
+/** Badge de status no estilo do mockup. */
+export function StatusBadge({ status }: { status: string }) {
+  const cls = STATUS_BADGE_CLASS[status] ?? "is-neutral";
+  return <span className={`cli-badge ${cls}`}>● {status}</span>;
+}
+
+/** Valor de PII: mascarado por padrão, clique revela ("protegido" → "visível").
+    O valor decifrado já vem da view `clients_decrypted` (RLS); o mascaramento
+    é proteção adicional contra shoulder-surfing. */
+export function Reveal({ value, revealLast = 0 }: { value: string; revealLast?: number }) {
+  const [shown, setShown] = useState(false);
   return (
-    <div>
-      <span style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-      <div style={{ color: "var(--text1)", fontWeight: 500, fontSize: 13, marginTop: 2, wordBreak: "break-word" }}>
-        {value === null || value === undefined || value === "" ? <span style={{ color: "var(--text3)" }}>—</span> : value}
+    <button type="button" className="cli-reveal" onClick={() => setShown(s => !s)} aria-pressed={shown}>
+      <span className="tag">{shown ? "visível" : "protegido"}</span>
+      <span>{shown ? value : maskValue(value, revealLast)}</span>
+    </button>
+  );
+}
+
+/** Campo rótulo/valor. `protect` transforma o valor em PII mascarada. */
+export function InfoField({ label, value, protect }: {
+  label: string;
+  value: React.ReactNode;
+  protect?: { revealLast?: number };
+}) {
+  const empty = value === null || value === undefined || value === "";
+  return (
+    <div className="cli-field">
+      <div className="k">{label}</div>
+      <div className={`v${empty ? " empty" : ""}`}>
+        {empty
+          ? "—"
+          : protect && typeof value === "string"
+            ? <Reveal value={value} revealLast={protect.revealLast} />
+            : value}
       </div>
     </div>
   );
 }
 
-/** Grade padrão de campos em modo leitura. */
 export function InfoGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-      {children}
-    </div>
-  );
+  return <div className="cli-fgrid">{children}</div>;
 }
 
 /** Empty-state honesto (§2/§3) — nunca dado fabricado. */
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({ icon = "∅", title, hint }: { icon?: string; title: string; hint?: string }) {
   return (
-    <div style={{
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 6, padding: "48px 20px", textAlign: "center",
-    }}>
-      <div style={{ fontSize: 13, color: "var(--text2)", fontWeight: 500 }}>{title}</div>
-      {hint && <div style={{ fontSize: 11, color: "var(--text3)", maxWidth: 360 }}>{hint}</div>}
+    <div className="cli-empty">
+      <div className="e-ic">{icon}</div>
+      <h3>{title}</h3>
+      {hint && <p>{hint}</p>}
     </div>
   );
 }
 
-/** Loader inline curto para carga lazy de aba. */
 export function TabLoading() {
-  return (
-    <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text3)", fontSize: 12 }}>
-      Carregando…
-    </div>
-  );
+  return <div className="cli-loading">Carregando…</div>;
 }
 
 /** Tela de acesso restrito (recepção/sócio) — herda a RLS, não a contorna. */
 export function RestrictedAccess() {
   const navigate = useNavigate();
   return (
-    <div style={{
-      minHeight: "100vh", background: "var(--bg)", color: "var(--text1)",
-      fontFamily: "'Roboto', sans-serif", padding: 40,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
-    }}>
-      <div style={{ fontSize: 48 }}>🔒</div>
-      <h1 style={{ fontSize: 22, fontWeight: 600, color: "var(--gold, #c9a84c)" }}>Acesso restrito</h1>
-      <p style={{ color: "var(--text3)", fontSize: 13, textAlign: "center", maxWidth: 400 }}>
-        A gestão de clientes é exclusiva da <strong>Recepção</strong>.
-      </p>
-      <button className="btn-voltar" onClick={() => navigate("/sistema")} style={ghostButtonStyle}>
-        ← Voltar ao Sistema
-      </button>
+    <div className="cli-root">
+      <div className="cli-restricted">
+        <div className="lock">🔒</div>
+        <h1>Acesso restrito</h1>
+        <p>A gestão de clientes é exclusiva da <strong>Recepção</strong>.</p>
+        <button className="cli-btn ghost" onClick={() => navigate("/sistema")}>← Voltar ao Sistema</button>
+      </div>
     </div>
   );
 }

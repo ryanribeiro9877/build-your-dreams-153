@@ -6,8 +6,7 @@ import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import {
   type ClientListRow, CLIENT_LIST_COLUMNS, ALLOWED_ROLES, RestrictedAccess,
-  statusBadgeStyle, goldButtonStyle, ghostButtonStyle, inputStyle, selectStyle,
-  pageStyle, formatDateBR,
+  StatusBadge, EmptyState, formatDateBR,
 } from "@/components/clients/shared";
 
 const PAGE_SIZE = 20;
@@ -96,117 +95,83 @@ export default function Clients() {
   if (workspace && !hasAccess) return <RestrictedAccess />;
 
   return (
-    <div style={pageStyle}>
-      <style>{`
-        .client-row { transition: background 0.15s ease, border-color 0.15s ease; }
-        .client-row:hover { background: rgba(201,168,76,0.08) !important; border-color: rgba(201,168,76,0.4) !important; }
-      `}</style>
-
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="btn-voltar" onClick={() => navigate("/sistema")} style={ghostButtonStyle}>← Voltar</button>
-        <h1 style={{ fontFamily: "'Roboto', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--gold, #c9a84c)", margin: 0 }}>
-          Gestão de Clientes
-        </h1>
-        <span style={{ fontSize: 12, color: "var(--text3)", background: "var(--bg2)", padding: "4px 10px", borderRadius: 6 }}>
-          {clients.length} total
-        </span>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => navigate("/clientes/novo")} style={goldButtonStyle}>+ Novo Cliente</button>
-      </div>
-
-      {/* Search + Filters */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          style={{ ...inputStyle, maxWidth: 340, flex: "1 1 220px" }}
-          placeholder="Buscar por nome, cidade ou CPF exato…"
-          value={search} onChange={e => setSearch(e.target.value)}
-        />
-        <select style={{ ...selectStyle, maxWidth: 180 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="todos">Todos os status</option>
-          {Object.entries(statusCounts).map(([s, c]) => (
-            <option key={s} value={s}>{s} ({c})</option>
-          ))}
-        </select>
-        <select style={{ ...selectStyle, maxWidth: 120 }} value={stateFilter} onChange={e => setStateFilter(e.target.value)}>
-          <option value="todos">Todos UF</option>
-          {uniqueStates.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <span style={{ fontSize: 11, color: "var(--text3)" }}>
-          {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      {/* List */}
-      {loading ? <HexagonLoader variant="inline" /> : filtered.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-          Nenhum cliente encontrado.
+    <div className="cli-root">
+      <div className="cli-wrap">
+        {/* top bar */}
+        <div className="cli-top">
+          <button className="cli-back" onClick={() => navigate("/sistema")}>← Voltar</button>
+          <span className="cli-title">Gestão de Clientes</span>
+          <span className="cli-count">{clients.length} total</span>
+          <span className="cli-spacer" />
+          <button className="cli-btn" onClick={() => navigate("/clientes/novo")}>+ Novo Cliente</button>
         </div>
-      ) : (
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-          {/* Column header */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr", gap: 12, padding: "10px 16px",
-            fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em",
-            fontWeight: 700, borderBottom: "1px solid var(--border)",
-          }}>
-            <div>Nome</div><div>Cidade/UF</div><div>Cadastro</div><div>Status</div>
-          </div>
-          {paginated.map(client => (
-            <div
-              key={client.id}
-              className="client-row"
-              onClick={() => navigate(`/clientes/${client.id}`)}
-              style={{
-                display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr", gap: 12,
-                padding: "12px 16px", cursor: "pointer", alignItems: "center",
-                borderBottom: "1px solid var(--border)", borderLeft: "2px solid transparent",
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {client.full_name}
-                {client.tipo_pessoa === "juridica" && (
-                  <span style={{ fontSize: 9, color: "var(--text3)", marginLeft: 6, fontWeight: 500 }}>PJ</span>
-                )}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                {client.city ? `${client.city}${client.state ? "/" + client.state : ""}` : "—"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text3)" }}>{formatDateBR(client.created_at)}</div>
-              <div><span style={statusBadgeStyle(client.status)}>{client.status}</span></div>
+
+        {/* search + filters */}
+        <div className="cli-toolbar">
+          <input
+            className="cli-input"
+            style={{ maxWidth: 360, flex: "1 1 240px" }}
+            placeholder="Buscar por nome, cidade ou CPF exato…"
+            value={search} onChange={e => setSearch(e.target.value)}
+          />
+          <select className="cli-select" style={{ maxWidth: 190 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="todos">Todos os status</option>
+            {Object.entries(statusCounts).map(([s, c]) => (
+              <option key={s} value={s}>{s} ({c})</option>
+            ))}
+          </select>
+          <select className="cli-select" style={{ maxWidth: 130 }} value={stateFilter} onChange={e => setStateFilter(e.target.value)}>
+            <option value="todos">Todos UF</option>
+            {uniqueStates.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <span style={{ fontSize: 12, color: "var(--cli-muted-light)", fontWeight: 600 }}>
+            {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* list */}
+        {loading ? <HexagonLoader variant="inline" /> : filtered.length === 0 ? (
+          <EmptyState icon="⌕" title="Nenhum cliente encontrado" hint="Ajuste a busca ou os filtros, ou cadastre um novo cliente." />
+        ) : (
+          <div className="cli-table">
+            <div className="cli-thead">
+              <div>Nome</div><div>Cidade/UF</div><div>Cadastro</div><div>Status</div>
             </div>
-          ))}
-        </div>
-      )}
+            {paginated.map(client => (
+              <div key={client.id} className="cli-trow" onClick={() => navigate(`/clientes/${client.id}`)}>
+                <div className="name">
+                  {client.full_name}
+                  {client.tipo_pessoa === "juridica" && <span className="pj">PJ</span>}
+                </div>
+                <div className="muted">{client.city ? `${client.city}${client.state ? "/" + client.state : ""}` : "—"}</div>
+                <div className="muted">{formatDateBR(client.created_at)}</div>
+                <div><StatusBadge status={client.status} /></div>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{
-            ...ghostButtonStyle, opacity: page === 1 ? 0.5 : 1, cursor: page === 1 ? "default" : "pointer",
-          }}>← Anterior</button>
-          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-            let pageNum: number;
-            if (totalPages <= 7) pageNum = i + 1;
-            else if (page <= 4) pageNum = i + 1;
-            else if (page >= totalPages - 3) pageNum = totalPages - 6 + i;
-            else pageNum = page - 3 + i;
-            return (
-              <button key={pageNum} onClick={() => setPage(pageNum)} style={{
-                padding: "6px 12px", borderRadius: 6, fontSize: 12,
-                border: pageNum === page ? "1px solid rgba(201,168,76,0.5)" : "1px solid var(--border)",
-                background: pageNum === page ? "rgba(201,168,76,0.15)" : "var(--bg2)",
-                color: pageNum === page ? "#c9a84c" : "var(--text2)",
-                cursor: "pointer", fontWeight: pageNum === page ? 700 : 400, fontFamily: "'DM Sans', sans-serif",
-              }}>{pageNum}</button>
-            );
-          })}
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={{
-            ...ghostButtonStyle, opacity: page === totalPages ? 0.5 : 1, cursor: page === totalPages ? "default" : "pointer",
-          }}>Próxima →</button>
-          <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 8 }}>Pág. {page}/{totalPages}</span>
-        </div>
-      )}
+        {/* pagination */}
+        {totalPages > 1 && (
+          <div className="cli-pager">
+            <button className="cli-pg" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>← Anterior</button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 7) pageNum = i + 1;
+              else if (page <= 4) pageNum = i + 1;
+              else if (page >= totalPages - 3) pageNum = totalPages - 6 + i;
+              else pageNum = page - 3 + i;
+              return (
+                <button key={pageNum} className={`cli-pg${pageNum === page ? " active" : ""}`} onClick={() => setPage(pageNum)}>
+                  {pageNum}
+                </button>
+              );
+            })}
+            <button className="cli-pg" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Próxima →</button>
+            <span className="cli-pageinfo">Pág. {page}/{totalPages}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
