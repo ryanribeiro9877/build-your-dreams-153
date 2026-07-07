@@ -2,12 +2,14 @@
 //
 // Card 2.8 — Classificador de intenção + suficiência de insumo.
 //
-// Roda na ENTRADA (antes do N1) e toma UMA de TRÊS decisões, evitando rodar a
+// Roda na ENTRADA (antes do N1) e toma UMA de QUATRO decisões, evitando rodar a
 // cadeia cara (N3) quando não vale a pena:
 //   - TRIVIAL              → fast-path: resposta natural e acolhedora (sem N2/N3).
 //   - NEGOCIO_SEM_INSUMO   → demanda jurídica SEM dados textuais suficientes para
 //                            fundamentar a peça → pede os dados (sem N2/N3, sem N3).
 //   - NEGOCIO_COM_INSUMO   → demanda jurídica COM dados suficientes → cadeia completa.
+//   - ACAO_COM_TOOL        → ação operacional (cadastrar, consultar, criar tarefa…)
+//                            → cadeia completa (N3 tem as tools).
 //
 // PRINCÍPIO DE SEGURANÇA — DUAS assimetrias, ambas "na dúvida, o mais seguro":
 //   A) Trivial vs. negócio: o erro barato é rodar a cadeia para um "oi"; o GRAVE é
@@ -19,7 +21,7 @@
 // Resumo: o default de tudo é NEGOCIO_COM_INSUMO (gerar). TRIVIAL e SEM_INSUMO só
 // com certeza. normalizeIntent materializa esse default seguro.
 
-export type IntentCategory = "TRIVIAL" | "NEGOCIO_SEM_INSUMO" | "NEGOCIO_COM_INSUMO";
+export type IntentCategory = "TRIVIAL" | "NEGOCIO_SEM_INSUMO" | "NEGOCIO_COM_INSUMO" | "ACAO_COM_TOOL";
 
 // Prompt do classificador (modelo RÁPIDO, 1 chamada curta, saída JSON). Instrui a
 // olhar a MENSAGEM INTEIRA — "bom dia, preciso de uma petição..." é negócio: começar
@@ -31,22 +33,35 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
 - "TRIVIAL": saudação, cortesia, small talk ou pergunta trivial SEM qualquer teor
   jurídico e SEM pedido de trabalho. Ex.: "oi", "bom dia", "tudo bem?", "obrigado".
   Use TRIVIAL SOMENTE com ALTA CONFIANÇA.
-- "NEGOCIO_SEM_INSUMO": é uma demanda jurídica (pedir peça, cálculo, análise etc.),
-  MAS a mensagem NÃO traz informação textual suficiente para fundamentar o trabalho.
-  Ex.: "gere uma peça" sozinho; "faça uma petição" sem cliente/réu/fatos/valores;
-  pedido vago. Anexos de IMAGEM não contam como insumo (não são lidos até o OCR).
-- "NEGOCIO_COM_INSUMO": demanda jurídica COM dados textuais suficientes para o
-  especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
+- "ACAO_COM_TOOL": pedido de AÇÃO OPERACIONAL no sistema — NÃO é uma peça jurídica,
+  é uma operação executável: cadastrar cliente, consultar cliente/CPF/processo/tarefas/
+  documentos, criar tarefa/card, solicitar documentos, pedir acesso a arquivos,
+  criar/transferir/resolver pendência, agendar reunião. Mesmo que o usuário não
+  forneça todos os dados, classifique como ACAO_COM_TOOL se a intenção é claramente
+  uma dessas ações. Ex.: "quero cadastrar um cliente", "consulte o CPF do cliente",
+  "crie uma tarefa para fulano", "me mostre as pendências", "Ryan Ribeiro CPF
+  123.456.789-00 endereço rua X" (quando o contexto da conversa é um cadastro).
+- "NEGOCIO_SEM_INSUMO": é uma demanda de PEÇA JURÍDICA (pedir petição, cálculo,
+  análise, contestação etc.), MAS a mensagem NÃO traz informação textual suficiente
+  para fundamentar a peça. Ex.: "gere uma peça" sozinho; "faça uma petição" sem
+  cliente/réu/fatos/valores; pedido vago. Anexos de IMAGEM não contam como insumo
+  (não são lidos até o OCR). NÃO use para ações operacionais (cadastrar, consultar
+  etc.) — essas são ACAO_COM_TOOL.
+- "NEGOCIO_COM_INSUMO": demanda de PEÇA JURÍDICA COM dados textuais suficientes para
+  o especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
   com texto legível anexado). "bom dia, preciso de uma petição de indébito para o
   cliente João, contrato 123, valor R$5.000, banco X" é NEGOCIO_COM_INSUMO.
 
 REGRAS DE OURO (assimetria — obedeça à risca):
-1) Na MENOR dúvida entre TRIVIAL e negócio, escolha uma categoria de NEGOCIO. É
-   preferível processar um "oi" a deixar passar uma demanda jurídica como trivial.
-2) Na dúvida entre COM e SEM insumo, escolha NEGOCIO_COM_INSUMO (gerar). Só use
-   NEGOCIO_SEM_INSUMO quando estiver CLARO que faltam dados para fundamentar a peça.
+1) Na MENOR dúvida entre TRIVIAL e negócio/ação, escolha NEGOCIO ou ACAO_COM_TOOL.
+   É preferível processar um "oi" a deixar passar uma demanda como trivial.
+2) Na dúvida entre COM e SEM insumo (para PEÇAS), escolha NEGOCIO_COM_INSUMO (gerar).
+   Só use NEGOCIO_SEM_INSUMO quando estiver CLARO que faltam dados para a peça.
+3) Se a mensagem pedir uma AÇÃO operacional (cadastrar, consultar, solicitar, criar
+   tarefa, pendência, agendar), use ACAO_COM_TOOL — NÃO confunda com NEGOCIO (peça).
+   Mesmo "cadastrar" seguido de dados (nome, CPF, endereço) é ACAO_COM_TOOL, não peça.
 
-Responda APENAS com JSON: {"categoria":"TRIVIAL"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
+Responda APENAS com JSON: {"categoria":"TRIVIAL"|"ACAO_COM_TOOL"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
 
 // System prompt da resposta do FAST-PATH (TRIVIAL) — natural, não template fixo.
 export const FAST_REPLY_SYSTEM = `Você é o assistente virtual de um escritório de advocacia (JurisAI).
@@ -77,14 +92,14 @@ export function mentionsAttachments(message: string): boolean {
   return /\[\s*Arquivos?\s*:/i.test(message || "");
 }
 
-// Normaliza a saída do classificador para a categoria canônica. ASSIMÉTRICO (ambos
-// os eixos): apenas "TRIVIAL" explícito vira TRIVIAL; apenas "NEGOCIO_SEM_INSUMO"
-// explícito vira SEM_INSUMO; QUALQUER outra coisa (vazio, ambíguo, rótulo
-// desconhecido, "NEGOCIO_COM_INSUMO") cai no default SEGURO NEGOCIO_COM_INSUMO —
-// cadeia completa / gerar. Nunca produz TRIVIAL nem SEM_INSUMO por acidente.
+// Normaliza a saída do classificador para a categoria canônica. ASSIMÉTRICO: apenas
+// rótulos EXPLÍCITOS viram TRIVIAL, SEM_INSUMO ou ACAO_COM_TOOL; QUALQUER outra
+// coisa (vazio, ambíguo, desconhecido, "NEGOCIO_COM_INSUMO") cai no default SEGURO
+// NEGOCIO_COM_INSUMO — cadeia completa / gerar. Nunca produz desvio por acidente.
 export function normalizeIntent(raw: string | null | undefined): IntentCategory {
   const c = (raw || "").trim().toUpperCase();
   if (c === "TRIVIAL") return "TRIVIAL";
+  if (c === "ACAO_COM_TOOL" || c === "AÇÃO_COM_TOOL" || c === "ACAO") return "ACAO_COM_TOOL";
   if (c === "NEGOCIO_SEM_INSUMO" || c === "NEGÓCIO_SEM_INSUMO" || c === "SEM_INSUMO") return "NEGOCIO_SEM_INSUMO";
   return "NEGOCIO_COM_INSUMO"; // default seguro: gerar
 }
@@ -107,5 +122,5 @@ export function shouldClassify(
 export function routePathFor(category: IntentCategory): "fast" | "need_info" | "full" {
   if (category === "TRIVIAL") return "fast";
   if (category === "NEGOCIO_SEM_INSUMO") return "need_info";
-  return "full";
+  return "full"; // NEGOCIO_COM_INSUMO e ACAO_COM_TOOL → cadeia completa
 }

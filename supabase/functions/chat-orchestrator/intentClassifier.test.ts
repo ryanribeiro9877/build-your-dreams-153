@@ -13,6 +13,12 @@ Deno.test("normalizeIntent: SEM_INSUMO explícito (variações)", () => {
   assertEquals(normalizeIntent("negócio_sem_insumo"), "NEGOCIO_SEM_INSUMO");
   assertEquals(normalizeIntent("SEM_INSUMO"), "NEGOCIO_SEM_INSUMO");
 });
+Deno.test("normalizeIntent: ACAO_COM_TOOL explícito (variações)", () => {
+  assertEquals(normalizeIntent("ACAO_COM_TOOL"), "ACAO_COM_TOOL");
+  assertEquals(normalizeIntent("ação_com_tool"), "ACAO_COM_TOOL");
+  assertEquals(normalizeIntent("ACAO"), "ACAO_COM_TOOL");
+  assertEquals(normalizeIntent(" acao_com_tool "), "ACAO_COM_TOOL");
+});
 Deno.test("normalizeIntent: COM_INSUMO explícito", () => {
   assertEquals(normalizeIntent("NEGOCIO_COM_INSUMO"), "NEGOCIO_COM_INSUMO");
 });
@@ -29,6 +35,7 @@ Deno.test("routePathFor: cada categoria tem seu caminho", () => {
   assertEquals(routePathFor("TRIVIAL"), "fast");
   assertEquals(routePathFor("NEGOCIO_SEM_INSUMO"), "need_info");
   assertEquals(routePathFor("NEGOCIO_COM_INSUMO"), "full");
+  assertEquals(routePathFor("ACAO_COM_TOOL"), "full");
 });
 
 // ─── mentionsAttachments: marcador de anexos do front ────────────────────────
