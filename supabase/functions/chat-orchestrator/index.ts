@@ -131,11 +131,13 @@ const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "
 const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "true").toLowerCase() !== "false";
 
 // ─── Card 2.8: classificador de intenção + suficiência de insumo ─────────────
-// Na ENTRADA (antes do N1), com o modelo RÁPIDO, classifica em 3 categorias e
-// evita a cadeia cara quando não vale a pena: TRIVIAL → fast-path; NEGOCIO_SEM_
-// INSUMO → pede dados (sem N3); NEGOCIO_COM_INSUMO → cadeia completa (inalterada).
-// DUAS assimetrias, sempre para o lado seguro: dúvida trivial→negócio; dúvida de
-// insumo→gerar. Reversível por env (default LIGADO).
+// Na ENTRADA (antes do N1), com o modelo RÁPIDO, classifica em 5 categorias e
+// evita a cadeia cara quando não vale a pena: TRIVIAL → fast-path; CONSULTA →
+// loop de leitura por tool (síncrono); ACAO_COM_TOOL → cadeia com N3+tools por
+// caminho CURTO (sem N2-director nem validações); NEGOCIO_SEM_INSUMO → pede dados
+// (sem N3); NEGOCIO_COM_INSUMO → cadeia completa (inalterada). DUAS assimetrias,
+// sempre para o lado seguro: dúvida trivial→negócio; dúvida de insumo→gerar.
+// Reversível por env (default LIGADO).
 const INTENT_FASTPATH_ENABLED = (Deno.env.get("INTENT_FASTPATH_ENABLED") ?? "true").toLowerCase() !== "false";
 // Modelo RÁPIDO do classificador e das respostas curtas (fast-path / pede-dados) —
 // mesmo perfil rápido do N1 (ex.: gpt-4o-mini). NUNCA um flagship lento. O provedor
@@ -1879,6 +1881,13 @@ async function validateDraft(admin: SupabaseClient, validator: AgentRow, userMsg
 // e publica a mensagem de erro — assim o fluxo nunca fica pendurado em silencio.
 function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
   const url = `${supabaseUrl}/functions/v1/chat-orchestrator`;
+  // INSTRUMENTAÇÃO (fast-path Parte 2): mede o round-trip da REINVOCAÇÃO do passo.
+  // Cada salto da máquina de estados é um fetch a esta própria função (nova
+  // invocação, possível cold start). Se o "custo por salto" (~13-15s medido) vier
+  // daqui, o log abaixo mostra o tempo até a resposta do disparo. Confirmar a causa
+  // ANTES de otimizar (pode ser boot do worker, não o número de passos).
+  const fireT0 = Date.now();
+  console.log(`[timing][fireNextStep] run=${runId} disparando reinvocação t0=${fireT0}`);
   // @ts-ignore EdgeRuntime existe no runtime do Supabase
   EdgeRuntime.waitUntil(
     fetch(url, {
@@ -1890,6 +1899,7 @@ function fireNextStep(runId: string, supabaseUrl: string, serviceKey: string) {
       },
       body: JSON.stringify({ runId }),
     }).then(async (resp) => {
+      console.log(`[timing][fireNextStep] run=${runId} reinvocação respondeu status=${resp.status} em ${Date.now() - fireT0}ms`);
       if (resp.ok) return;
       console.error(`[fireNextStep] run=${runId} status=${resp.status}`);
       // Reinvocação recusada (ex.: 401 do gateway): exatamente o sinal de
@@ -1944,6 +1954,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
   const { data: runRow } = await admin.from("orchestration_runs").select("*").eq("id", runId).maybeSingle();
   const run = runRow as any;
   if (!run || TERMINAL_RUN_STATUS.includes(run.status)) return;
+
+  // INSTRUMENTAÇÃO (fast-path Parte 2): marca o início deste passo e o GAP desde o
+  // passo anterior (updated_at) e desde a criação do run. O gap "desde último passo"
+  // é exatamente o custo do salto (reinvocação + boot do worker) que queremos medir
+  // e reduzir. Rodar um cadastro e ler estes logs ANTES de assumir a causa.
+  const stepT0 = Date.now();
+  const createdMs = run.created_at ? Date.parse(run.created_at) : stepT0;
+  const updatedMs = run.updated_at ? Date.parse(run.updated_at) : stepT0;
+  console.log(`[timing][processStep] run=${runId} status=${run.status} intent=${run.intent_category ?? "?"} route=${run.route_path ?? "?"} +${stepT0 - createdMs}ms desde criação (gap desde último passo: ${stepT0 - updatedMs}ms)`);
 
   // Model do N3 corrente, para enriquecer o contexto do Sentry no catch externo
   // (n3 é declarado dentro dos blocos do try, fora de escopo aqui).
@@ -2013,6 +2032,35 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     }
   };
 
+  // Caminho CURTO da AÇÃO (ACAO_COM_TOOL): finaliza o run como 'done' publicando a
+  // resposta TEXTUAL do N3 como final, PULANDO as validações consultivas N2/N1 — uma
+  // ação operacional é binária (executou/erro/confirmação), não é peça a revisar em
+  // camadas. A ESCRITA de fato (cadastrar_cliente etc.) NÃO passa por aqui: aquela
+  // PAUSA em awaiting_confirmation via proposeAction (RBAC + confirmação intactos).
+  // Aqui trata só a resposta textual do especialista (ex.: esclarecimento/confirmação
+  // em linguagem natural, ou quando a escrita está gated por CHAT_TOOLS_ENABLED).
+  const finishAcaoDone = async (
+    content: string, n3: AgentRow,
+    usage: { model?: string; input_tokens?: number; output_tokens?: number; duration_ms?: number } | null,
+    streamMsgId: string | null,
+  ) => {
+    const chain = [...(run.chain || []), { level: 3, agent: n3.name, path: "acao_curta" }];
+    const finalMeta = { kind: "final", path: "full", intent: "ACAO_COM_TOOL", agent_name: n3.name, chain };
+    const u = usage || {};
+    const usageCols = { model_used: u.model ?? null, input_tokens: u.input_tokens ?? null, output_tokens: u.output_tokens ?? null, duration_ms: u.duration_ms ?? null };
+    if (streamMsgId) {
+      await admin.from("chat_messages").update({ content, agent_id: n3.id, metadata: finalMeta, ...usageCols }).eq("id", streamMsgId);
+    } else {
+      const seqF = await nextSeq(admin, run.session_id);
+      await admin.from("chat_messages").insert({
+        session_id: run.session_id, user_id: run.user_id, role: "assistant", agent_id: n3.id,
+        content, sequence_number: seqF, metadata: finalMeta, ...usageCols,
+      });
+    }
+    await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+    await admin.from("orchestration_runs").update({ status: "done", chain, updated_at: new Date().toISOString() }).eq("id", runId);
+  };
+
   try {
     const n1 = await loadAgent(admin, run.entry_agent_id);
     if (!n1 || !n1.owner_user_id) return await fail("Agente de entrada invalido");
@@ -2031,8 +2079,14 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
     if (run.status === "routing_n1") {
       const directors = await loadSubAgents(admin, n1.owner_user_id, ["director"]);
-      if (directors.length === 0) {
-        // Sem N2: pula direto para escolher N3
+      // ACAO_COM_TOOL (caminho CURTO): PULA o N2-director. Uma ação operacional
+      // (cadastrar, criar tarefa, pendência…) não precisa da curadoria de peça do
+      // Diretor. Reusa EXATAMENTE o atalho já existente de "sem diretores": vai
+      // direto ao routing_n2, que escolhe o especialista (N3) portador das tools
+      // (ex.: "Especialista Cadastro ProJuris"). PEÇA (NEGOCIO_*) segue pelo Diretor.
+      const isAcao = run.intent_category === "ACAO_COM_TOOL";
+      if (isAcao || directors.length === 0) {
+        if (isAcao && directors.length > 0) console.log(`[fast-path] run=${runId} ACAO_COM_TOOL — pulando N2-director (${directors.length} disponível(is))`);
         await upd({ status: "routing_n2", target_n2_id: null });
         return fireNextStep(runId, supabaseUrl, serviceKey);
       }
@@ -2243,6 +2297,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               timeoutMs: N3_BLOCK_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto", cancelPoll,
             });
             if (!r.toolCalls || r.toolCalls.length === 0) {
+              // ACAO_COM_TOOL (caminho CURTO): resposta textual do especialista É a
+              // final — finaliza em 'done' SEM validação N2/N1 (ação é binária).
+              if (run.intent_category === "ACAO_COM_TOOL") {
+                await finishAcaoDone(r.content, n3, { model: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens, duration_ms: 0 }, null);
+                return;
+              }
               // Resposta textual normal → finaliza para validação (como hoje).
               await insertStage(admin, run.session_id, run.user_id, `${n3.name} respondeu.`, "validating_n2", n3);
               await upd({
@@ -2296,6 +2356,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           used: { case_docs: caseDocs.map((d) => d.file_name), models: modelDocs.map((d) => d.file_name) },
           ...(acaoTipoWarning ? { model_warning: acaoTipoWarning } : {}),
         };
+        // ACAO_COM_TOOL (caminho CURTO): sem escrita a propor (ex.: tools de escrita
+        // gated por CHAT_TOOLS_ENABLED, ou o especialista respondeu em texto) → a
+        // resposta já streamada É a final; finaliza em 'done' SEM validação N2/N1.
+        if (run.intent_category === "ACAO_COM_TOOL") {
+          await finishAcaoDone(r.content, n3, usage, streamMsgId);
+          return;
+        }
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} concluiu o rascunho. Em revisao...`, "validating_n2", n3);
         await upd({ status: "validating_n2", draft: r.content, feedback: null, n3_usage: usage, chain: [...(run.chain || []), ctxNote] });
         return fireNextStep(runId, supabaseUrl, serviceKey);
