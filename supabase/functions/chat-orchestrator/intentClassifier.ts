@@ -2,24 +2,41 @@
 //
 // Card 2.8 — Classificador de intenção + suficiência de insumo.
 //
-// Roda na ENTRADA (antes do N1) e toma UMA de TRÊS decisões, evitando rodar a
-// cadeia cara (N3) quando não vale a pena:
+// Roda na ENTRADA (antes do N1) e toma UMA de CINCO decisões, evitando rodar a
+// cadeia cara (N3 redator) quando não vale a pena:
 //   - TRIVIAL              → fast-path: resposta natural e acolhedora (sem N2/N3).
-//   - NEGOCIO_SEM_INSUMO   → demanda jurídica SEM dados textuais suficientes para
-//                            fundamentar a peça → pede os dados (sem N2/N3, sem N3).
-//   - NEGOCIO_COM_INSUMO   → demanda jurídica COM dados suficientes → cadeia completa.
+//   - CONSULTA             → LEITURA de dado já cadastrado (cliente/tarefa/processo/
+//                            documento/colaborador) → loop curto de leitura por tool.
+//   - ACAO_COM_TOOL        → ESCRITA/EXECUÇÃO operacional (cadastrar, criar tarefa,
+//                            solicitar documento, pendência, agenda) → cadeia com N3
+//                            e ferramentas, por caminho CURTO (sem N2-director nem
+//                            validações de qualidade — uma tool é binária).
+//   - NEGOCIO_SEM_INSUMO   → demanda de PEÇA jurídica SEM dados textuais suficientes
+//                            para fundamentar → pede os dados (sem N3).
+//   - NEGOCIO_COM_INSUMO   → demanda de PEÇA COM dados suficientes → cadeia completa.
+//
+// FRONTEIRA CONSULTA × ACAO_COM_TOOL (ambas são "ação por tool"; distinguir):
+//   CONSULTA = LEITURA de um dado já cadastrado ("qual o CPF do cliente X").
+//   ACAO_COM_TOOL = ESCRITA/EXECUÇÃO ("cadastrar cliente", "criar tarefa"). Nenhuma
+//   das duas é peça. Ambas roteiam ao N3 (caminho de ferramentas), com rótulos
+//   distintos no audit.
 //
 // PRINCÍPIO DE SEGURANÇA — DUAS assimetrias, ambas "na dúvida, o mais seguro":
-//   A) Trivial vs. negócio: o erro barato é rodar a cadeia para um "oi"; o GRAVE é
-//      tratar demanda jurídica como trivial e pular a orquestração. → Na dúvida,
-//      NÃO é trivial (vai para negócio). Fast-path só com ALTA confiança de trivial.
-//   B) Insumo suficiente vs. insuficiente: o erro barato é gerar uma peça a mais; o
-//      GRAVE é BLOQUEAR uma demanda que TINHA insumo (frustra o advogado). → Na
-//      dúvida, GERAR (com insumo). Só bloqueia (pede dados) com clareza de que falta.
-// Resumo: o default de tudo é NEGOCIO_COM_INSUMO (gerar). TRIVIAL e SEM_INSUMO só
-// com certeza. normalizeIntent materializa esse default seguro.
+//   A) Trivial vs. negócio/ação: o erro barato é rodar a cadeia para um "oi"; o GRAVE
+//      é tratar demanda como trivial e pular a orquestração. → Na dúvida, NÃO é
+//      trivial. Fast-path só com ALTA confiança de trivial.
+//   B) Insumo suficiente vs. insuficiente (para PEÇAS): o erro barato é gerar uma peça
+//      a mais; o GRAVE é BLOQUEAR uma demanda que TINHA insumo. → Na dúvida, GERAR.
+// Resumo: o default de tudo é NEGOCIO_COM_INSUMO (gerar). TRIVIAL, CONSULTA,
+// ACAO_COM_TOOL e SEM_INSUMO só com rótulo explícito. normalizeIntent materializa
+// esse default seguro.
 
-export type IntentCategory = "TRIVIAL" | "CONSULTA" | "NEGOCIO_SEM_INSUMO" | "NEGOCIO_COM_INSUMO";
+export type IntentCategory =
+  | "TRIVIAL"
+  | "CONSULTA"
+  | "NEGOCIO_SEM_INSUMO"
+  | "NEGOCIO_COM_INSUMO"
+  | "ACAO_COM_TOOL";
 
 // Prompt do classificador (modelo RÁPIDO, 1 chamada curta, saída JSON). Instrui a
 // olhar a MENSAGEM INTEIRA — "bom dia, preciso de uma petição..." é negócio: começar
@@ -31,31 +48,44 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
 - "TRIVIAL": saudação, cortesia, small talk ou pergunta trivial SEM qualquer teor
   jurídico e SEM pedido de trabalho. Ex.: "oi", "bom dia", "tudo bem?", "obrigado".
   Use TRIVIAL SOMENTE com ALTA CONFIANÇA.
-- "CONSULTA": o usuário quer CONSULTAR/BUSCAR/VER um dado JÁ CADASTRADO no sistema
-  (dados de um CLIENTE, tarefas, processos, documentos anexados, ou colaboradores) —
-  NÃO é pedir uma peça nova nem small talk; é uma pergunta de LEITURA sobre o cadastro
-  do escritório. Ex.: "consulte o CPF do cliente Fulano", "qual o telefone do cliente
-  X", "busque o cliente Y", "quais tarefas do cliente Z", "que documentos o cliente W
-  já enviou". Pedir um DADO de um cliente/registro existente é CONSULTA, não peça.
-- "NEGOCIO_SEM_INSUMO": é uma demanda jurídica de TRABALHO (pedir peça, cálculo,
-  análise etc.), MAS a mensagem NÃO traz informação textual suficiente para fundamentar.
-  Ex.: "gere uma peça" sozinho; "faça uma petição" sem cliente/réu/fatos/valores;
-  pedido vago. Anexos de IMAGEM não contam como insumo (não são lidos até o OCR).
-- "NEGOCIO_COM_INSUMO": demanda jurídica de TRABALHO COM dados textuais suficientes para o
-  especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
+- "CONSULTA": o usuário quer CONSULTAR/BUSCAR/VER (LEITURA) um dado JÁ CADASTRADO no
+  sistema (dados de um CLIENTE, tarefas, processos, documentos anexados, ou
+  colaboradores) — NÃO é pedir uma peça nova, NÃO é escrever/criar nada, nem small
+  talk; é uma pergunta de LEITURA sobre o cadastro do escritório. Ex.: "consulte o CPF
+  do cliente Fulano", "qual o telefone do cliente X", "busque o cliente Y", "quais
+  tarefas do cliente Z", "que documentos o cliente W já enviou". Pedir um DADO de um
+  cliente/registro existente é CONSULTA, não peça.
+- "ACAO_COM_TOOL": pedido de AÇÃO OPERACIONAL de ESCRITA/EXECUÇÃO no sistema — NÃO é
+  uma peça jurídica nem uma leitura: é uma operação que CRIA ou MODIFICA algo:
+  cadastrar cliente, criar tarefa/card, solicitar documentos, pedir acesso a arquivos,
+  criar/transferir/resolver pendência, agendar reunião. Mesmo que o usuário não forneça
+  todos os dados, classifique como ACAO_COM_TOOL se a intenção é claramente uma dessas
+  ações de escrita. Ex.: "quero cadastrar um cliente", "crie uma tarefa para fulano",
+  "solicite os documentos do cooperado", "abra uma pendência", "Ryan Ribeiro CPF
+  123.456.789-00 endereço rua X" (quando o contexto da conversa é um cadastro).
+- "NEGOCIO_SEM_INSUMO": é uma demanda de PEÇA JURÍDICA (pedir petição, cálculo,
+  análise, contestação etc.), MAS a mensagem NÃO traz informação textual suficiente
+  para fundamentar a peça. Ex.: "gere uma peça" sozinho; "faça uma petição" sem
+  cliente/réu/fatos/valores; pedido vago. Anexos de IMAGEM não contam como insumo
+  (não são lidos até o OCR). NÃO use para ações operacionais (cadastrar, criar tarefa
+  etc.) — essas são ACAO_COM_TOOL; nem para leitura de cadastro — essa é CONSULTA.
+- "NEGOCIO_COM_INSUMO": demanda de PEÇA JURÍDICA COM dados textuais suficientes para
+  o especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
   com texto legível anexado). "bom dia, preciso de uma petição de indébito para o
   cliente João, contrato 123, valor R$5.000, banco X" é NEGOCIO_COM_INSUMO.
 
 REGRAS DE OURO (assimetria — obedeça à risca):
-1) Na MENOR dúvida entre TRIVIAL e negócio, escolha uma categoria de NEGOCIO. É
-   preferível processar um "oi" a deixar passar uma demanda jurídica como trivial.
-2) Na dúvida entre COM e SEM insumo, escolha NEGOCIO_COM_INSUMO (gerar). Só use
-   NEGOCIO_SEM_INSUMO quando estiver CLARO que faltam dados para fundamentar a peça.
-3) CONSULTA é só para BUSCAR dado já cadastrado. Se o usuário quer PRODUZIR algo novo
-   (peça, cálculo, contrato), é NEGOCIO_*, não CONSULTA. Na dúvida entre CONSULTA e
-   NEGOCIO, escolha NEGOCIO.
+1) Na MENOR dúvida entre TRIVIAL e negócio/ação, escolha uma categoria de negócio ou
+   ação. É preferível processar um "oi" a deixar passar uma demanda como trivial.
+2) Na dúvida entre COM e SEM insumo (para PEÇAS), escolha NEGOCIO_COM_INSUMO (gerar).
+   Só use NEGOCIO_SEM_INSUMO quando estiver CLARO que faltam dados para a peça.
+3) REGRA DE OURO da natureza: AÇÃO de ESCRITA (cadastrar, criar, solicitar, agendar,
+   abrir/transferir/resolver pendência) → ACAO_COM_TOOL; LEITURA de cadastro (consultar,
+   buscar, ver um dado existente) → CONSULTA; produzir uma PEÇA/documento jurídico novo
+   → NEGOCIO_*. Nenhuma ação operacional (escrita ou leitura) é peça. Na dúvida entre
+   CONSULTA/ACAO e NEGOCIO (peça), só use NEGOCIO quando for claramente redação de peça.
 
-Responda APENAS com JSON: {"categoria":"TRIVIAL"|"CONSULTA"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
+Responda APENAS com JSON: {"categoria":"TRIVIAL"|"CONSULTA"|"ACAO_COM_TOOL"|"NEGOCIO_SEM_INSUMO"|"NEGOCIO_COM_INSUMO"}.`;
 
 // System prompt da resposta do FAST-PATH (TRIVIAL) — natural, não template fixo.
 export const FAST_REPLY_SYSTEM = `Você é o assistente virtual de um escritório de advocacia (JurisAI).
@@ -86,15 +116,16 @@ export function mentionsAttachments(message: string): boolean {
   return /\[\s*Arquivos?\s*:/i.test(message || "");
 }
 
-// Normaliza a saída do classificador para a categoria canônica. ASSIMÉTRICO (ambos
-// os eixos): apenas "TRIVIAL" explícito vira TRIVIAL; apenas "NEGOCIO_SEM_INSUMO"
-// explícito vira SEM_INSUMO; QUALQUER outra coisa (vazio, ambíguo, rótulo
-// desconhecido, "NEGOCIO_COM_INSUMO") cai no default SEGURO NEGOCIO_COM_INSUMO —
-// cadeia completa / gerar. Nunca produz TRIVIAL nem SEM_INSUMO por acidente.
+// Normaliza a saída do classificador para a categoria canônica. ASSIMÉTRICO: apenas
+// rótulos EXPLÍCITOS viram TRIVIAL, CONSULTA, ACAO_COM_TOOL ou SEM_INSUMO; QUALQUER
+// outra coisa (vazio, ambíguo, rótulo desconhecido, "NEGOCIO_COM_INSUMO", "NEGOCIO",
+// "INCERTO") cai no default SEGURO NEGOCIO_COM_INSUMO — cadeia completa / gerar. Nunca
+// produz um desvio (fast/consulta/ação/bloqueio) por acidente.
 export function normalizeIntent(raw: string | null | undefined): IntentCategory {
   const c = (raw || "").trim().toUpperCase();
   if (c === "TRIVIAL") return "TRIVIAL";
   if (c === "CONSULTA") return "CONSULTA";
+  if (c === "ACAO_COM_TOOL" || c === "AÇÃO_COM_TOOL" || c === "ACAO" || c === "AÇÃO") return "ACAO_COM_TOOL";
   if (c === "NEGOCIO_SEM_INSUMO" || c === "NEGÓCIO_SEM_INSUMO" || c === "SEM_INSUMO") return "NEGOCIO_SEM_INSUMO";
   return "NEGOCIO_COM_INSUMO"; // default seguro: gerar
 }
@@ -114,9 +145,14 @@ export function shouldClassify(
 }
 
 // Caminho (auditoria/roteamento) correspondente à categoria.
+//   TRIVIAL            → "fast"     (resposta curta acolhedora)
+//   CONSULTA           → "consulta" (loop de leitura por tool, síncrono no START)
+//   NEGOCIO_SEM_INSUMO → "need_info"(pede dados, sem N3)
+//   ACAO_COM_TOOL      → "full"     (cadeia com N3+tools; caminho CURTO no processStep)
+//   NEGOCIO_COM_INSUMO → "full"     (cadeia completa de peça)
 export function routePathFor(category: IntentCategory): "fast" | "consulta" | "need_info" | "full" {
   if (category === "TRIVIAL") return "fast";
   if (category === "CONSULTA") return "consulta";
   if (category === "NEGOCIO_SEM_INSUMO") return "need_info";
-  return "full";
+  return "full"; // NEGOCIO_COM_INSUMO e ACAO_COM_TOOL → cadeia com N3
 }
