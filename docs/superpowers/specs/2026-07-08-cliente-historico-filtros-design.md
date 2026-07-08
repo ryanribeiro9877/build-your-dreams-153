@@ -105,24 +105,25 @@ Substituir o carregamento atual (`clients_decrypted` + filtro client-side +
 - **Erro `42501`** tratado com mensagem clara (não mostrar lista vazia silenciosa).
 - Botão "Limpar filtros".
 
-## Filtros salvos — nova tabela `client_saved_filters`
+## Filtros salvos — tabela `client_saved_filters` (JÁ APLICADA no banco)
 
-**Migration aditiva** `supabase/migrations/<timestamp>_client_saved_filters.sql`,
-espelhando o padrão de `kanban_saved_filters`:
-- Tabela: `id uuid pk`, `user_id uuid → auth.users`, `name text`, `filter jsonb`,
-  `created_at`, `updated_at`; índice por `user_id`; RLS `FOR ALL` com
-  `user_id = auth.uid()`; trigger `update_updated_at_column`.
-- RPCs (SECURITY DEFINER/INVOKER conforme o padrão do kanban):
-  `get_my_client_saved_filters()`, `client_save_filter(p_name text, p_filter jsonb)`,
-  `client_delete_saved_filter(p_id uuid)`.
-- **NÃO aplicar** (`db push` proibido; validar/aplicar com o Ryan).
+Tabela, RLS e as 3 RPCs **já existem no banco** (confirmado no project
+`tsltxvswzdnlmvljpryh`) — espelham o padrão de `kanban_saved_filters`.
+**Não criar migration** delas. Consumir direto:
+
+- `get_my_client_saved_filters()` → `SETOF client_saved_filters`
+  (colunas: `id, user_id, name, filter jsonb, created_at, updated_at`).
+- `client_save_filter(p_name text, p_filter jsonb)` → retorna a linha inserida.
+- `client_delete_saved_filter(p_id uuid)` → `void`.
 
 FE:
 - Dropdown "Filtros salvos" (aplica o `filter` jsonb ao estado), botão "Salvar filtro
   atual" (pede nome), e excluir.
-- **Degradação graciosa:** ao montar, tenta `get_my_client_saved_filters()`; se a função
-  ainda não existe no banco (erro de função ausente / não encontrada), esconde a UI de
-  filtros salvos. Quando o Ryan aplicar a migration, a UI liga automaticamente.
+- A UI de filtros salvos **liga de imediato** (as funções já respondem). Manter a
+  **degradação graciosa** apenas como salvaguarda: se `get_my_client_saved_filters()`
+  falhar por função ausente, esconder a UI em vez de quebrar a tela.
+- Seguir o padrão de `useSavedFilters`/`deleteSavedFilter` já usado no Kanban
+  ([useKanban.ts](../../../src/hooks/useKanban.ts)).
 
 ## Fora de escopo (não tocar)
 As 2 RPCs (`client_timeline`, `search_clients`), classificador, fast-path, `save_client`,

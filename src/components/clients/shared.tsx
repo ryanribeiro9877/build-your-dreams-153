@@ -52,6 +52,40 @@ export interface ClientListRow {
   created_at: string;
 }
 
+// Card 3.9 — linha retornada por search_clients (note: sem tipo_pessoa).
+export interface SearchClientRow {
+  id: string;
+  full_name: string;
+  status: string;
+  client_origin: string | null;
+  city: string | null;
+  state: string | null;
+  gov_br_profile: string | null;
+  created_at: string;
+}
+
+// Opções de dropdown reutilizadas nos filtros (3.9). Espelham o cadastro.
+export const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ativo", label: "Ativo" },
+  { value: "inativo", label: "Inativo" },
+  { value: "prospecto", label: "Prospecto" },
+  { value: "em_analise", label: "Em análise" },
+];
+
+export const ORIGEM_OPTIONS: { value: string; label: string }[] = [
+  { value: "indicacao", label: "Indicação" },
+  { value: "ressaque", label: "Ressaque" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "marketing", label: "Marketing" },
+  { value: "site", label: "Site" },
+  { value: "outro", label: "Outro" },
+];
+
+export const TIPO_PESSOA_OPTIONS: { value: string; label: string }[] = [
+  { value: "fisica", label: "Pessoa física" },
+  { value: "juridica", label: "Pessoa jurídica" },
+];
+
 export interface ClientFull {
   id: string;
   full_name: string;
