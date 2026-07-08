@@ -77,7 +77,7 @@ export function HistoricoTab({ client }: { client: ClientFull }) {
 
   useEffect(() => {
     let cancelled = false;
-    setEvents(null); setDenied(false);
+    setEvents(null); setDenied(false); setActive("todos");
     (async () => {
       const { data, error } = await (supabase as unknown as {
         rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: TimelineEvent[] | null; error: { code?: string } | null }>;
