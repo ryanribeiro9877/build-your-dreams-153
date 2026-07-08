@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
-import ClientForm from "@/components/clients/ClientForm";
+import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import {
   type ClientFull, type ClientFormValues, CLIENT_FULL_COLUMNS, formValuesFromClient,
   ALLOWED_ROLES, RestrictedAccess,
@@ -44,7 +44,14 @@ export default function ClientEdit() {
           <button className="cli-back" onClick={() => navigate(`/clientes/${id}`)}>← Detalhe</button>
           <span className="cli-title">Editar Cliente</span>
         </div>
-        <ClientForm mode="edit" clientId={id} initialValues={values} />
+        <ClienteFormWizard
+          mode="edit"
+          variant="page"
+          clientId={id}
+          initialValues={values}
+          onSaved={(cid) => navigate(`/clientes/${cid}`)}
+          onCancel={() => navigate(`/clientes/${id}`)}
+        />
       </div>
     </div>
   );

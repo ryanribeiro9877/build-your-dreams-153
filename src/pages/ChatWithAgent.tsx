@@ -6,6 +6,7 @@ import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator"
 import { supabase } from "@/integrations/supabase/client";
 import type { ChatMessageRow, ChatSessionRow } from "@/types/jurisai";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
+import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
@@ -267,7 +268,18 @@ export default function ChatWithAgent() {
                 </div>
               ) : (
                 messages.map(m => (
-                  <MessageBubble key={m.id} message={m} />
+                  m.role === "assistant" && m.metadata?.kind === "cadastro_form" ? (
+                    // CADASTRO-MODELO-A §7: o agente sinalizou o cadastro → renderiza
+                    // o wizard inline (mesma fonte única do "+ Novo Cliente"). Os dados
+                    // NÃO trafegam pelo chat — o wizard grava direto via save_client
+                    // (cifrado), então chat_messages não retém CPF/RG/bancário (§8).
+                    <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <MessageBubble message={m} />
+                      <ClienteFormWizard mode="create" variant="chat" />
+                    </div>
+                  ) : (
+                    <MessageBubble key={m.id} message={m} />
+                  )
                 ))
               )}
               {pending && (
