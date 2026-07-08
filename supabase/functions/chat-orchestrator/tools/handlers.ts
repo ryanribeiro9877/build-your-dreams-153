@@ -1,4 +1,5 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveCep } from "../cep.ts";
 
 // READ — recebe o client admin (service-role) e o user_id para escopar.
 export async function runReadTool(admin: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -35,6 +36,18 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
       const { data } = await admin.from("client_documents")
         .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id)).limit(50);
       return data ?? [];
+    }
+    case "consultar_cep": {
+      // Reusa a cascata ViaCEP→BrasilAPI→OpenCEP (cep.ts). NÃO grava nada: o
+      // especialista mostra o resultado e pede aprovação antes de usar no cadastro.
+      const digits = String(args.cep ?? "").replace(/\D/g, "");
+      if (digits.length !== 8) return { erro: "CEP inválido (precisa ter 8 dígitos)", cep: String(args.cep ?? "") };
+      const r = await resolveCep(digits);
+      return {
+        cep: r.cep, logradouro: r.logradouro, bairro: r.bairro,
+        cidade: r.localidade, uf: r.uf, fonte: r.fonte,
+        encontrado: r.fonte !== "faixa" && !!r.localidade,
+      };
     }
     default:
       throw new Error(`ferramenta de leitura desconhecida: ${name}`);

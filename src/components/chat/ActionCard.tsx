@@ -49,8 +49,8 @@ export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm }: {
     </div>
   );
   return (
-    <div className="action-card" style={{ border: "1px solid var(--border, #ccc)", borderRadius: 10, padding: 12, margin: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-      <p style={{ margin: 0 }}>{proposal.resumo}</p>
+    <div className="action-card" style={{ border: "1px solid var(--border, #ccc)", borderRadius: 10, padding: 12, margin: "8px 0", display: "flex", flexDirection: "column", gap: 8, overflowWrap: "break-word", wordBreak: "normal" }}>
+      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{proposal.resumo}</p>
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" disabled={busy} onClick={() => act("confirm")}>{label}</button>
         <button type="button" disabled={busy} onClick={() => act("cancel")}>{secondaryLabel}</button>

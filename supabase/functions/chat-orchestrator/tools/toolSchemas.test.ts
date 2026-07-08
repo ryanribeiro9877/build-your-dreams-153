@@ -17,6 +17,12 @@ Deno.test("isWriteTool classifica leitura vs escrita", () => {
   assertEquals(isWriteTool("criar_card_tarefa"), true);
 });
 
+Deno.test("consultar_cep é READ (gated por CHAT_READ_TOOLS_ENABLED, não por escrita)", () => {
+  assertEquals(isWriteTool("consultar_cep"), false);
+  assert(TOOLS["consultar_cep"], "faltou schema de consultar_cep");
+  assert(TOOLS["consultar_cep"].function.parameters, "consultar_cep sem parameters");
+});
+
 Deno.test("todo write tool tem schema de parâmetros", () => {
   for (const name of ["cadastrar_cliente","criar_card_tarefa","solicitar_documentos","pedir_acesso_arquivos"]) {
     const def = TOOLS[name];

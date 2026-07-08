@@ -101,7 +101,7 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
       }}>
         {isUser ? userInitial : (msg.agent ? getInitials(msg.agent) : "AI")}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "80%" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "90%", minWidth: 0 }}>
         {!isUser && msg.agent && (
           <div className="jc-msg-meta">
             <span className="agent-tag">{msg.agent}</span>
