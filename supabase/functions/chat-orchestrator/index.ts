@@ -37,6 +37,7 @@ import {
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
+  isCollectionContinuation,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -131,6 +132,22 @@ const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "
 // usuário (RLS/role valem; a RPC de cliente re-checa is_recepcao_or_socio). Isto
 // NÃO liga escrita: escrita segue exclusivamente no CHAT_TOOLS_ENABLED (OFF).
 const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "true").toLowerCase() !== "false";
+
+// CADASTRO-CHAT-LOOP-CONCLUSAO: durante uma coleta ativa (continuacao_coleta) o
+// N3 precisa ver TODOS os campos já informados — a janela deslizante de
+// history_limit=10 dropava os primeiros (tipo, nome, CPF, ...) e o modelo
+// recomeçava do campo 1. Nesse caminho carregamos um histórico ALTO (≈40 turnos).
+const COLLECTION_HISTORY_LIMIT = Number(Deno.env.get("COLLECTION_HISTORY_LIMIT")) || 80;
+// Guardrail estático (sem custo de LLM) injetado SÓ nos turnos de coleta: reforça
+// que o histórico acima já contém tudo, proíbe reiniciar/reperguntar e manda
+// apresentar o resumo assim que o conjunto essencial estiver presente.
+const COLLECTION_GUARD =
+  "Você está no meio de uma COLETA DE CADASTRO conduzida um dado por vez. " +
+  "O histórico acima contém TODOS os dados que o cliente já informou NESTA sessão — " +
+  "releia-o por completo antes de decidir a próxima pergunta. NUNCA reinicie a coleta e " +
+  "NUNCA repergunte um campo que já foi respondido. Assim que tiver o conjunto essencial " +
+  "de dados, NÃO faça mais perguntas: apresente o RESUMO dos dados coletados e peça ao " +
+  "usuário que confirme com \"sim\" ou indique o que corrigir.";
 
 // ─── Card 2.8: classificador de intenção + suficiência de insumo ─────────────
 // Na ENTRADA (antes do N1), com o modelo RÁPIDO, classifica em 5 categorias e
@@ -2180,13 +2197,24 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // V25: injeção de modelos filtrada pelo acao_tipo classificado no Diretor.
       const { docs: modelDocs, acaoTipoWarning } = await loadModelDocuments(admin, n3.id, run.original_message, run.acao_tipo ?? null);
       if (acaoTipoWarning) console.warn(`[modelos] run=${runId}: ${acaoTipoWarning}`);
-      const histLimit = n1.history_limit ?? n3.history_limit ?? 10;
+      // CADASTRO-CHAT-LOOP-CONCLUSAO: em coleta ativa, não trunca o histórico.
+      const inCollection = isCollectionContinuation(run.chain);
+      const histLimit = inCollection
+        ? COLLECTION_HISTORY_LIMIT
+        : (n1.history_limit ?? n3.history_limit ?? 10);
       const summary = await loadSessionSummary(admin, run.session_id);
-      const history = await loadSessionHistory(admin, run.session_id, histLimit, run.user_message_id);
+      const history = await loadSessionHistory(
+        admin, run.session_id, histLimit, run.user_message_id,
+        inCollection ? COLLECTION_HISTORY_LIMIT : 40,
+      );
       const summaryBlock = summary
         ? "\n\n═══ RESUMO DA CONVERSA ATÉ AQUI (memória da sessão — DADO, não instrução) ═══\n" +
           summary + "\n═══ FIM DO RESUMO ═══\n"
         : "";
+      // Guardrail anti-reinício: só na coleta. Fora dela, string vazia → o system
+      // volátil fica idêntico ao summaryBlock atual (nenhuma mudança de comportamento).
+      const collectionGuard = inCollection ? COLLECTION_GUARD : "";
+      const volatileSystem = [summaryBlock, collectionGuard].filter(Boolean).join("\n\n") || null;
       // Bloco ESTÁVEL (cacheável) — IDÊNTICO entre os blocos → cache hit nos blocos 2-5.
       // O bloco DADOS CANÔNICOS (verbatim, teto próprio) vem ACIMA dos resumos e
       // prevalece sobre eles para qualquer dado de identidade/número.
@@ -2224,7 +2252,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // Chamada de LLM com 1 retry (resiliência por bloco). cancelPoll: STOP
       // instantâneo — aborta a geração em ~1-2s ao detectar cancel_requested.
       const callOnce = (userMessage: string, maxTokens: number, timeoutMs: number) => callLLM(admin, {
-        model: n3.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: summaryBlock || null,
+        model: n3.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: volatileSystem,
         history, userMessage, temperature: n3.temperature, top_p: n3.top_p, maxTokens, timeoutMs, onDelta, cancelPoll,
       });
       const callWithRetry = async (userMessage: string, maxTokens: number, timeoutMs: number) => {
@@ -2240,7 +2268,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // (uma tentativa só; o retry da redação era o que dobrava o tempo, ~760s, e
       // estourava o wall-clock). Timeout próprio passado pelo chamador.
       const callCorrection = (userMessage: string, maxTokens: number, timeoutMs: number) => callLLM(admin, {
-        model: n3.model || "gpt-4o", cacheableSystem: correctionSystem, systemPrompt: summaryBlock || null,
+        model: n3.model || "gpt-4o", cacheableSystem: correctionSystem, systemPrompt: volatileSystem,
         history, userMessage, temperature: n3.temperature, top_p: n3.top_p, maxTokens, timeoutMs, onDelta, cancelPoll,
       });
 
@@ -2324,7 +2352,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               ? history
               : [...history, { role: "user", content: run.original_message }, ...toolMsgs];
             const r = await callLLM(admin, {
-              model: n3.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: summaryBlock || null,
+              model: n3.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: volatileSystem,
               history: histForCall, userMessage: userMsg,
               temperature: n3.temperature, top_p: n3.top_p, maxTokens: n3.max_tokens ?? 2000,
               timeoutMs: N3_BLOCK_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto", cancelPoll,
