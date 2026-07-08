@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useAuth } from "@/hooks/useAuth";
 import { useMasterAdmin } from "@/hooks/useMasterAdmin";
+import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import {
   useKanbanBoards,
   useKanbanBoard,
@@ -79,27 +80,23 @@ export default function KanbanBoard() {
   const [showWorkflows, setShowWorkflows] = useState(false);
 
   // Opções e concessões para o modal de configuração.
-  const [memberOptions, setMemberOptions] = useState<GrantOption[]>([]);
+  // Pessoas (responsáveis/menção): via RPC list_assignable_users com fallback —
+  // contorna o RLS de `profiles` que limitaria não-admins a verem só a si mesmos.
+  const { users: assignableUsers } = useAssignableUsers();
+  const memberOptions = useMemo<GrantOption[]>(
+    () => assignableUsers.map((u) => ({ user_id: u.user_id, full_name: u.name })),
+    [assignableUsers],
+  );
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
 
   useEffect(() => {
-    // Carrega pessoas (responsáveis/menção) e cargos. Pessoas servem ao modal de
-    // detalhe (menção/responsável) para todos; cargos só ao modal de config (admin).
+    // Carrega cargos para o modal de config (admin). Pessoas vêm do hook acima.
     let cancelled = false;
     (async () => {
-      const { data: members } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, display_name");
       const { data: roles } = await supabase
         .from("role_templates" as "agents")
         .select("code, display_name");
       if (cancelled) return;
-      setMemberOptions(
-        ((members as Array<{ user_id: string; full_name: string | null; display_name: string | null }> | null) ?? [])
-          .filter((m) => !!m.user_id)
-          .map((m) => ({ user_id: m.user_id, full_name: m.full_name || m.display_name || m.user_id }))
-          .sort((a, b) => a.full_name.localeCompare(b.full_name, "pt-BR")),
-      );
       setRoleOptions(
         ((roles as unknown as Array<{ code: string; display_name: string }> | null) ?? [])
           .map((r) => ({ code: r.code, display_name: r.display_name }))
