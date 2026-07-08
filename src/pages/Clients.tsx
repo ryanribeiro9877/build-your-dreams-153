@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
@@ -26,26 +26,30 @@ export default function Clients() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [page, setPage] = useState(1);
 
-  const fetchClients = useCallback(async (f: ClientFilters) => {
-    setLoading(true);
-    const { data, error } = await (supabase as unknown as {
-      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: SearchClientRow[] | null; error: { code?: string } | null }>;
-    }).rpc("search_clients", { p_filtros: buildFiltros(f) });
-    if (error) {
-      if (error.code === "42501") { setDenied(true); setClients([]); }
-      else toast.error("Erro ao buscar clientes");
-    } else {
-      setDenied(false);
-      setClients((data as SearchClientRow[]) ?? []);
-    }
-    setLoading(false);
-  }, []);
-
-  // debounce dos filtros → 1 chamada de RPC
+  // debounce dos filtros → 1 chamada de RPC. A guarda `cancelled` garante que
+  // só o resultado da busca mais recente atualize o estado (uma resposta antiga,
+  // atrasada na rede, não sobrescreve a atual — nem exibe dados fora dos filtros).
   useEffect(() => {
-    const h = setTimeout(() => { void fetchClients(filters); }, 300);
-    return () => clearTimeout(h);
-  }, [filters, fetchClients]);
+    let cancelled = false;
+    const h = setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        const { data, error } = await (supabase as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: SearchClientRow[] | null; error: { code?: string } | null }>;
+        }).rpc("search_clients", { p_filtros: buildFiltros(filters) });
+        if (cancelled) return;
+        if (error) {
+          if (error.code === "42501") { setDenied(true); setClients([]); }
+          else toast.error("Erro ao buscar clientes");
+        } else {
+          setDenied(false);
+          setClients((data as SearchClientRow[]) ?? []);
+        }
+        setLoading(false);
+      })();
+    }, 300);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [filters]);
 
   useEffect(() => { setPage(1); }, [filters]);
 
