@@ -23,6 +23,7 @@ export default function Clients() {
   const [clients, setClients] = useState<SearchClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  const [errored, setErrored] = useState(false);
   const [filters, setFilters] = useState<ClientFilters>(EMPTY_FILTERS);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [page, setPage] = useState(1);
@@ -60,10 +61,12 @@ export default function Clients() {
         }).rpc("search_clients", { p_filtros: buildFiltros(filters) });
         if (cancelled) return;
         if (error) {
-          if (error.code === "42501") { setDenied(true); setClients([]); }
-          else toast.error("Erro ao buscar clientes");
+          setClients([]);
+          if (error.code === "42501") { setDenied(true); setErrored(false); }
+          else { setDenied(false); setErrored(true); toast.error("Não foi possível buscar clientes"); }
         } else {
           setDenied(false);
+          setErrored(false);
           setClients((data as SearchClientRow[]) ?? []);
         }
         setLoading(false);
@@ -125,6 +128,8 @@ export default function Clients() {
 
         {denied ? (
           <EmptyState icon="🔒" title="Acesso restrito" hint="Apenas recepção ou sócio podem buscar clientes." />
+        ) : errored ? (
+          <EmptyState icon="⚠" title="Não foi possível buscar clientes" hint="Ocorreu um erro ao consultar a base. Tente novamente em instantes." />
         ) : loading ? <HexagonLoader variant="inline" /> : clients.length === 0 ? (
           <EmptyState icon="⌕" title="Nenhum cliente encontrado" hint="Ajuste a busca ou os filtros, ou cadastre um novo cliente." />
         ) : (
