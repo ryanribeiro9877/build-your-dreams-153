@@ -27,6 +27,7 @@ import {
   extractTitlesForAudit, violationKey, stripChecklists, reconcileCalcJson,
   ufFromCep,
 } from "./mechanicalValidator.ts";
+import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -797,16 +798,8 @@ function buildCaseContextForValidator(caseDocs: CaseDoc[], maxTokens: number): s
 // Lê o texto CRU (d.raw), nunca o resumo. Só captura o que casa LITERALMENTE — ausência
 // != invenção. Este bloco prevalece sobre os resumos para qualquer dado de identidade/número.
 interface CanonicalValue { value: string; file: string; fromPlanilha: boolean; }
-// V25.7: resolução de CEP → cidade/UF. ViaCEP (B) quando responde; senão a faixa
-// oficial CEP→UF (A, offline, do validador) garante ao menos a UF. Nunca inventa.
-interface CepInfo {
-  cep: string;                 // "43.700-000"
-  uf: string | null;
-  localidade: string | null;   // cidade (via provedor de CEP; null só na faixa offline)
-  bairro: string | null;
-  logradouro: string | null;
-  fonte: "viacep" | "brasilapi" | "opencep" | "faixa";
-}
+// CepInfo/resolveCep/fetchCepJson/fmtCep foram extraídos para ./cep.ts (reuso pela
+// tool consultar_cep do cadastro). Aqui só reimportamos o que a esteira de peças usa.
 // Resultado da leitura DETERMINÍSTICA da planilha de indébito (TRAVA do indébito).
 // O código lê o TOTAL declarado e CALCULA o dobro; o N3 não produz nenhum número.
 // status="ambiguo" (indebito=dobro=null) é um resultado VÁLIDO e esperado para
@@ -1064,51 +1057,7 @@ function extractCanonicalFacts(caseDocs: CaseDoc[]): CanonicalFacts {
 // Obs.: bairro/logradouro só existem para CEP de RUA; em CEP de município são
 // vazios em TODAS as bases — nesses casos o bairro vem do comprovante (endereço
 // verbatim), não do CEP.
-const VIACEP_TIMEOUT_MS = Number(Deno.env.get("VIACEP_TIMEOUT_MS")) || 4000;
 const VIACEP_MAX = 6;
-function fmtCep(cep: string): string { return `${cep.slice(0, 2)}.${cep.slice(2, 5)}-${cep.slice(5)}`; }
-async function fetchCepJson(url: string): Promise<Record<string, unknown> | null> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), VIACEP_TIMEOUT_MS);
-  try {
-    const resp = await fetch(url, { signal: ctrl.signal });
-    if (!resp.ok) { console.warn(`[cep] ${url} HTTP ${resp.status}`); return null; }
-    return await resp.json() as Record<string, unknown>;
-  } catch (e) {
-    console.warn(`[cep] ${url} falhou (${e instanceof Error ? e.name : "erro"})`);
-    return null;
-  } finally { clearTimeout(timer); }
-}
-function s(v: unknown): string | null { const t = typeof v === "string" ? v.trim() : ""; return t || null; }
-async function resolveCep(cep: string): Promise<CepInfo> {
-  const ufFaixa = ufFromCep(parseInt(cep.slice(0, 5), 10));
-  const fmt = fmtCep(cep);
-
-  // 1) ViaCEP — cidade + bairro/logradouro (quando CEP de rua).
-  const v = await fetchCepJson(`https://viacep.com.br/ws/${cep}/json/`);
-  if (v && !v.erro && s(v.uf)) {
-    console.log(`[cep] viacep ${cep} -> ${s(v.localidade)}/${s(v.uf)}`);
-    return { cep: fmt, uf: s(v.uf), localidade: s(v.localidade), bairro: s(v.bairro), logradouro: s(v.logradouro), fonte: "viacep" };
-  }
-
-  // 2) BrasilAPI — agrega provedores; resolve o CEP GERAL de município que o ViaCEP não tem.
-  const b = await fetchCepJson(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-  if (b && s(b.city) && s(b.state)) {
-    console.log(`[cep] brasilapi ${cep} -> ${s(b.city)}/${s(b.state)} (${s(b.service) ?? "?"})`);
-    return { cep: fmt, uf: s(b.state), localidade: s(b.city), bairro: s(b.neighborhood), logradouro: s(b.street), fonte: "brasilapi" };
-  }
-
-  // 3) OpenCEP — base alternativa.
-  const o = await fetchCepJson(`https://opencep.com/v1/${cep}`);
-  if (o && s(o.localidade) && s(o.uf)) {
-    console.log(`[cep] opencep ${cep} -> ${s(o.localidade)}/${s(o.uf)}`);
-    return { cep: fmt, uf: s(o.uf), localidade: s(o.localidade), bairro: s(o.bairro), logradouro: s(o.logradouro), fonte: "opencep" };
-  }
-
-  // 4) Faixa offline — garante ao menos a UF; cidade → [A PREENCHER].
-  console.warn(`[cep] ${cep} não resolvido por provedor -> faixa ${ufFaixa}`);
-  return { cep: fmt, uf: ufFaixa, localidade: null, bairro: null, logradouro: null, fonte: "faixa" };
-}
 // Enriquece os CEPs coletados (paralelo, com teto). Tolerante a falha: nunca derruba o run.
 async function enrichCepInfo(facts: CanonicalFacts): Promise<void> {
   const ceps = [...facts.ceps].filter((c) => /^\d{8}$/.test(c)).slice(0, VIACEP_MAX);
@@ -1613,10 +1562,34 @@ function maskCpfDisplay(v: unknown): string {
   if (d.length !== 11) return "informado";
   return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
 }
+function maskCnpjDisplay(v: unknown): string {
+  const d = String(v ?? "").replace(/\D/g, "");
+  if (d.length !== 14) return "informado";
+  return `${d.slice(0, 2)}.***.***/****-${d.slice(12)}`;
+}
+
+// Resumo do cadastro para o ActionCard: mostra os DADOS REAIS coletados (CPF/CNPJ
+// mascarados). Renderizado com white-space pre-wrap no front, então as quebras de
+// linha aparecem. Só entram campos efetivamente informados.
+function summarizeCadastro(args: Record<string, unknown>): string {
+  const g = (k: string) => { const v = args[k]; return (typeof v === "string" ? v.trim() : v ? String(v) : "") || ""; };
+  const linhas = [`Cadastrar cliente: ${g("full_name") || "[A PREENCHER]"}`];
+  const tipo = g("tipo_pessoa") === "juridica" ? "Pessoa jurídica" : g("tipo_pessoa") === "fisica" ? "Pessoa física" : "";
+  if (tipo) linhas.push(`Tipo: ${tipo}`);
+  if (g("cpf")) linhas.push(`CPF: ${maskCpfDisplay(g("cpf"))}`);
+  if (g("cnpj")) linhas.push(`CNPJ: ${maskCnpjDisplay(g("cnpj"))}`);
+  if (g("phone")) linhas.push(`Telefone: ${g("phone")}`);
+  if (g("email")) linhas.push(`E-mail: ${g("email")}`);
+  const rua = [g("address"), g("address_number")].filter(Boolean).join(", ");
+  const ciduf = [g("city"), g("state")].filter(Boolean).join(" - ");
+  const end = [rua, g("address_complement"), g("neighborhood"), ciduf, g("zip_code") ? `CEP ${g("zip_code")}` : ""].filter(Boolean);
+  if (end.length) linhas.push(`Endereço: ${end.join(" · ")}`);
+  return linhas.join("\n");
+}
 
 function humanSummary(tool: string, args: Record<string, unknown>): string {
   switch (tool) {
-    case "cadastrar_cliente": return `Cadastrar cliente "${args.full_name ?? "[A PREENCHER]"}"${args.cpf ? `, CPF ${maskCpfDisplay(args.cpf)}` : ""}.`;
+    case "cadastrar_cliente": return summarizeCadastro(args);
     case "criar_card_tarefa": return `Criar card "${args.title}" para o responsável indicado${args.deadline_at ? `, prazo ${args.deadline_at}` : ""}.`;
     case "solicitar_documentos": return `Solicitar documentos (${(args.documentos as string[] ?? []).join(", ")}).`;
     case "pedir_acesso_arquivos": return `Pedir acesso a arquivos: ${args.descricao ?? ""}.`;
@@ -1632,12 +1605,56 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
 // de confirmação no chat POR AÇÃO e PAUSA o run em awaiting_confirmation (NÃO
 // dispara o próximo passo — o run só prossegue quando o usuário confirma/cancela
 // TODAS as ações via modo confirm). A execução de fato acontece em handleConfirm.
+// CADASTRO-CHAT-FIX-4: na coleta um-dado-por-vez, o modelo (pequeno) chama
+// cadastrar_cliente com args quase vazios → resumo/save_client saíam [A PREENCHER].
+// Em vez de manter estado por turno, na hora de confirmar fazemos UMA extração
+// estruturada de TODOS os campos a partir do histórico da coleta (modelo confiável,
+// jsonMode). Os args EXPLÍCITOS do modelo têm prioridade; a extração só PREENCHE o
+// que veio vazio. Endereço aprovado do CEP também é capturado do histórico.
+const CADASTRO_FIELDS = [
+  "full_name", "tipo_pessoa", "cpf", "cnpj", "email", "phone",
+  "zip_code", "address", "address_number", "address_complement", "neighborhood", "city", "state",
+] as const;
+async function enrichCadastroArgs(
+  admin: SupabaseClient, run: any, partialArgs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  try {
+    const hist = await loadSessionHistory(admin, run.session_id, 30, run.user_message_id);
+    const transcript = [
+      ...hist.map((h) => `${h.role === "user" ? "USUÁRIO" : "ASSISTENTE"}: ${h.content}`),
+      `USUÁRIO: ${run.original_message ?? ""}`,
+    ].join("\n").slice(-8000);
+    const sys = 'Você extrai os dados de cadastro de cliente desta conversa. Responda APENAS com JSON válido com EXATAMENTE estas chaves (todas string): full_name, tipo_pessoa, cpf, cnpj, email, phone, zip_code, address, address_number, address_complement, neighborhood, city, state. Regras: tipo_pessoa é "fisica" ou "juridica" (ou ""). "address" é o logradouro (rua/avenida). Use "" para o que o usuário NÃO informou. NUNCA invente. Considere o endereço que o usuário CONFIRMOU a partir da consulta de CEP como informado.';
+    const r = await callLLM(admin, {
+      model: INTENT_CLASSIFIER_MODEL, systemPrompt: sys, history: [],
+      userMessage: `CONVERSA:\n${transcript}\n\nExtraia o JSON dos dados de cadastro.`,
+      temperature: 0, top_p: null, maxTokens: 400, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
+    });
+    const extracted = JSON.parse(r.content) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...partialArgs };
+    for (const k of CADASTRO_FIELDS) {
+      const cur = merged[k];
+      if (typeof cur === "string" ? cur.trim() : cur) continue; // arg explícito do modelo prevalece
+      const ex = extracted[k];
+      if (typeof ex === "string" && ex.trim()) merged[k] = ex.trim();
+    }
+    const preenchidos = CADASTRO_FIELDS.filter((k) => merged[k] && String(merged[k]).trim());
+    console.log(`[cadastro-extract] run=${run.id} campos_preenchidos=[${preenchidos.join(",")}]`);
+    return merged;
+  } catch (e) {
+    console.warn(`[cadastro-extract] run=${run.id} falhou (${(e as Error)?.message}) — usando args do modelo`);
+    return partialArgs;
+  }
+}
+
 async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string) {
   const perms = await loadActionPerms(admin, run.user_id);
   const proposals: Record<string, unknown>[] = [];
   for (const call of calls) {
     const tool = call.function.name;
-    const args = safeJson(call.function.arguments);
+    let args = safeJson(call.function.arguments);
+    // Cadastro: completa os args a partir do histórico da coleta (ver enrichCadastroArgs).
+    if (tool === "cadastrar_cliente") args = await enrichCadastroArgs(admin, run, args);
     const route = decideActionRoute(perms, tool);
     const { data: actionRow } = await admin.from("agent_actions").insert({
       run_id: run.id, session_id: run.session_id, user_id: run.user_id, agent_id: n3.id,

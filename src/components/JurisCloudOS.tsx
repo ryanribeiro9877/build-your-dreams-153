@@ -331,8 +331,11 @@ const GlobalStyles = () => (
       font-size: 11px; font-weight: 700; font-family: var(--font-body);
     }
     .jc-msg-bubble {
-      max-width: 75%; background: var(--bg3); border: 1px solid var(--border);
+      max-width: 88%; background: var(--bg3); border: 1px solid var(--border);
       border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: var(--text1);
+      /* Quebra só palavras REALMENTE longas (URLs/tokens); nunca corta no meio de
+         palavras curtas como "física". word-break: normal evita a quebra agressiva. */
+      overflow-wrap: break-word; word-break: normal; hyphens: none;
     }
     .jc-msg-wrap.user .jc-msg-bubble { background: var(--user-bubble-bg); border-color: var(--user-bubble-border); }
     .jc-msg-meta {

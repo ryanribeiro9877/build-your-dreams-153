@@ -9,6 +9,7 @@ export interface ToolDef {
 // de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
+  "consultar_cep",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -47,6 +48,11 @@ export const TOOLS: Record<string, ToolDef> = {
     name: "consultar_documentos",
     description: "Lista os documentos já anexados de um cliente.",
     parameters: { type: "object", properties: { client_id: str("id do cliente") }, required: ["client_id"] },
+  }},
+  consultar_cep: { type: "function", function: {
+    name: "consultar_cep",
+    description: "Consulta um CEP (ViaCEP→BrasilAPI→OpenCEP) e retorna logradouro, bairro, cidade e UF. Use no cadastro quando o usuário informar o CEP: consulte, MOSTRE o endereço encontrado e peça a confirmação do usuário ANTES de gravar. Nunca invente endereço.",
+    parameters: { type: "object", properties: { cep: str("CEP com 8 dígitos (com ou sem máscara)") }, required: ["cep"] },
   }},
   cadastrar_cliente: { type: "function", function: {
     name: "cadastrar_cliente",
