@@ -331,18 +331,22 @@ const GlobalStyles = () => (
       font-size: 11px; font-weight: 700; font-family: var(--font-body);
     }
     .jc-msg-bubble {
-      /* width:fit-content faz o balão medir SÓ o conteúdo (nunca menor que o
-         min-content). Sem isto, o balão é um bloco que preenche a coluna flex —
-         e quando a coluna é espremida abaixo da largura do texto, o
-         overflow-wrap quebrava até números curtos ("41950610") no meio. Com
-         fit-content a largura tem piso no min-content: curto NUNCA quebra; longo
-         quebra naturalmente no max-width. */
-      width: fit-content; max-width: 88%;
+      /* Dimensionamento por CARACTERE, não por fração do pai. width:fit-content
+         faz o balão medir SÓ o conteúdo; o teto é 70ch (~80 caracteres reais em
+         Plus Jakarta Sans 14px cabem numa linha; medido: 80 chars ≈ 65-69ch),
+         limitado a 75vw em telas estreitas.
+         POR QUE ch/vw e NÃO %: um max-width em % é resolvido contra a largura do
+         wrapper-coluna pai — que por sua vez é derivada do conteúdo do balão
+         (dependência circular) e pode colapsar (o pai tem min-width:0). Quando
+         isso acontecia, 88% virava ~2px e o max-width FURAVA o piso do
+         min-content, forçando "físi/ca" e "1234/5678/910". ch/vw não dependem do
+         pai: curto NUNCA quebra; só passa de ~80 caracteres quebra, no espaço. */
+      width: fit-content; max-width: min(70ch, 75vw);
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: var(--text1);
       /* Quebra só palavras REALMENTE longas (URLs/tokens) quando não couberem;
          nunca corta no meio de palavras curtas. break-all quebraria sempre. */
-      overflow-wrap: break-word; word-break: normal; hyphens: none;
+      white-space: normal; overflow-wrap: break-word; word-break: normal; hyphens: none;
     }
     /* Mensagem do usuário: balão encostado à direita (junto do avatar). Como o
        balão agora é fit-content, sem isto ele ficaria alinhado à esquerda da coluna. */
@@ -595,7 +599,9 @@ const GlobalStyles = () => (
       .jc-topbar-trailing { flex-basis: 100%; justify-content: flex-start; }
       .jc-dept-title { font-size: 16px; }
       .jc-msg-wrap { padding: 8px 16px; }
-      .jc-msg-bubble { max-width: 85%; font-size: 13px; }
+      /* Mesmo racional do desktop: teto por caractere (não %) para não colapsar.
+         Em mobile deixamos ir a 88vw para aproveitar a tela estreita. */
+      .jc-msg-bubble { max-width: min(70ch, 88vw); font-size: 13px; }
       .jc-input-area { padding: 8px 12px 12px; }
       .jc-cmd { font-size: 10px; padding: 3px 8px; }
     }
