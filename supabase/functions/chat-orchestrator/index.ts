@@ -143,7 +143,7 @@ const COLLECTION_HISTORY_LIMIT = Number(Deno.env.get("COLLECTION_HISTORY_LIMIT")
 // apresentar o resumo assim que o conjunto essencial estiver presente.
 const COLLECTION_GUARD =
   "Você está no meio de uma COLETA DE CADASTRO conduzida um dado por vez. " +
-  "O histórico acima contém TODOS os dados que o cliente já informou NESTA sessão — " +
+  "O histórico desta conversa contém TODOS os dados que o cliente já informou NESTA sessão — " +
   "releia-o por completo antes de decidir a próxima pergunta. NUNCA reinicie a coleta e " +
   "NUNCA repergunte um campo que já foi respondido. Assim que tiver o conjunto essencial " +
   "de dados, NÃO faça mais perguntas: apresente o RESUMO dos dados coletados e peça ao " +
