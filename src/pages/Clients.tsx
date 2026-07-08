@@ -11,6 +11,7 @@ import {
 import {
   ClientFiltersPanel, type ClientFilters, EMPTY_FILTERS, buildFiltros,
 } from "@/components/clients/ClientFiltersPanel";
+import { useClientSavedFilters } from "@/hooks/useClientSavedFilters";
 
 const PAGE_SIZE = 20;
 
@@ -25,6 +26,26 @@ export default function Clients() {
   const [filters, setFilters] = useState<ClientFilters>(EMPTY_FILTERS);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [page, setPage] = useState(1);
+
+  const { savedFilters, available: savedAvailable, save, remove } = useClientSavedFilters();
+
+  async function handleSaveFilter() {
+    const name = window.prompt("Nome do filtro salvo:");
+    if (!name || !name.trim()) return;
+    try { await save(name.trim(), filters); toast.success("Filtro salvo"); }
+    catch { toast.error("Não foi possível salvar o filtro"); }
+  }
+
+  function applySaved(id: string) {
+    const sf = savedFilters.find(s => s.id === id);
+    if (!sf) return;
+    setFilters({ ...EMPTY_FILTERS, ...sf.filter });
+  }
+
+  async function handleRemoveSaved(id: string) {
+    try { await remove(id); toast.success("Filtro removido"); }
+    catch { toast.error("Não foi possível remover o filtro"); }
+  }
 
   // debounce dos filtros → 1 chamada de RPC. A guarda `cancelled` garante que
   // só o resultado da busca mais recente atualize o estado (uma resposta antiga,
@@ -81,6 +102,24 @@ export default function Clients() {
             onChange={e => patch({ nome: e.target.value })} />
           <button className="cli-btn ghost sm" onClick={() => setFilters(EMPTY_FILTERS)}>Limpar filtros</button>
         </div>
+
+        {savedAvailable && (
+          <div className="cli-toolbar" style={{ gap: 8 }}>
+            <select className="cli-select" style={{ maxWidth: 240 }} defaultValue=""
+              onChange={e => { if (e.target.value) { applySaved(e.target.value); e.target.value = ""; } }}>
+              <option value="">Filtros salvos…</option>
+              {savedFilters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <button className="cli-btn ghost sm" onClick={() => void handleSaveFilter()}>Salvar filtro atual</button>
+            {savedFilters.length > 0 && (
+              <select className="cli-select" style={{ maxWidth: 200 }} defaultValue=""
+                onChange={e => { if (e.target.value) { void handleRemoveSaved(e.target.value); e.target.value = ""; } }}>
+                <option value="">Excluir salvo…</option>
+                {savedFilters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+          </div>
+        )}
 
         {showAdvanced && <ClientFiltersPanel filters={filters} onChange={patch} />}
 
