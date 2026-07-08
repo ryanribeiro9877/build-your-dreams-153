@@ -2,6 +2,7 @@ import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
+  isCollectionContinuation,
 } from "./intentClassifier.ts";
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──
@@ -133,4 +134,27 @@ Deno.test("findActiveCollection: último turno real NÃO é coleta → não cont
 Deno.test("findActiveCollection: vazio / só erros → null", () => {
   assertEquals(findActiveCollection([]), null);
   assertEquals(findActiveCollection([ERR, ERR]), null);
+});
+
+// ─── CHAT-COLETA-CONTINUIDADE: detecção de turno de continuação de coleta ────
+Deno.test("isCollectionContinuation: chain de continuação → true", () => {
+  assertEquals(isCollectionContinuation([
+    { level: 0, path: "continuacao_coleta", intent: "ACAO_COM_TOOL", agent: "Especialista Cadastro ProJuris", resumed: true },
+  ]), true);
+});
+
+Deno.test("isCollectionContinuation: chain de cadeia completa (N1/N2/N3) → false", () => {
+  assertEquals(isCollectionContinuation([
+    { level: 1, agent: "Meu Assistente" },
+    { level: 2, agent: "Diretor de Área" },
+    { level: 3, agent: "Especialista Cadastro ProJuris" },
+  ]), false);
+});
+
+Deno.test("isCollectionContinuation: vazio / null / não-array → false", () => {
+  assertEquals(isCollectionContinuation([]), false);
+  assertEquals(isCollectionContinuation(null), false);
+  assertEquals(isCollectionContinuation(undefined), false);
+  assertEquals(isCollectionContinuation("continuacao_coleta"), false);
+  assertEquals(isCollectionContinuation([{ level: 0 }]), false);
 });
