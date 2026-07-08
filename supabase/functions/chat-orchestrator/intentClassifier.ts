@@ -199,3 +199,32 @@ export function isCollectionEscape(message: string): boolean {
   if (!m) return false;
   return COLLECTION_ESCAPE_RE.some((re) => re.test(m));
 }
+
+// Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451
+// "content policy", 5xx, timeout do watchdog). Um erro NÃO é um turno real do
+// especialista: não pode "encerrar" uma coleta em andamento.
+export function isErrorMeta(meta: unknown): boolean {
+  if (!meta || typeof meta !== "object") return false;
+  return (meta as { kind?: unknown }).kind === "error";
+}
+
+// Dada a lista de mensagens do assistente (MAIS RECENTE primeiro), acha o último
+// turno SIGNIFICATIVO e diz se é uma coleta de ação ativa + qual especialista.
+// Pula mensagens de erro transitório: se o LLM do especialista falhou (ex.: 451
+// intermitente) e o usuário reenvia o dado, a coleta deve CONTINUAR com o mesmo
+// especialista — sem a robustez, a bolha de erro virava o "último turno" e a
+// resposta caía em TRIVIAL (o "Meu Assistente" sequestrava a conversa).
+export function findActiveCollection(
+  rows: Array<{ agent_id?: string | null; metadata?: unknown }>,
+): { agentId: string } | null {
+  for (const row of rows || []) {
+    if (isErrorMeta(row?.metadata)) continue; // erro transitório: ignora e olha o anterior
+    // Primeiro turno NÃO-erro define o estado atual: só continua a coleta se ele
+    // for uma pergunta de coleta de ação; qualquer outro turno real encerra a busca.
+    if (isAwaitingCollectionMeta(row?.metadata) && row?.agent_id) {
+      return { agentId: String(row.agent_id) };
+    }
+    return null;
+  }
+  return null;
+}
