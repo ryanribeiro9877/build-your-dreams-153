@@ -228,3 +228,13 @@ export function findActiveCollection(
   }
   return null;
 }
+
+// A continuação de coleta (CHAT-COLETA-CONTINUIDADE) cria a run com
+// chain[0].path === "continuacao_coleta" (ver index.ts, criação da contRun).
+// Detectar esse caminho permite tratar o turno como parte de uma coleta em
+// andamento: carregar o histórico COMPLETO (sem a janela deslizante que dropava
+// os campos iniciais) e injetar o guardrail anti-reinício.
+export function isCollectionContinuation(chain: unknown): boolean {
+  const c = Array.isArray(chain) ? chain[0] : null;
+  return !!c && typeof c === "object" && (c as { path?: unknown }).path === "continuacao_coleta";
+}
