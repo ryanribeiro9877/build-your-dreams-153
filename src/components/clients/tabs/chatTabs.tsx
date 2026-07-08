@@ -70,54 +70,6 @@ export function PecasTab({ client }: { client: ClientFull }) {
   );
 }
 
-/* ---------- Histórico (chat_sessions do cliente) ---------- */
-
-interface SessionRow {
-  id: string; title: string | null; status: string; summary: string | null;
-  message_count: number | null; created_at: string | null; last_message_at: string | null;
-}
-
-export function HistoricoTab({ client }: { client: ClientFull }) {
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase.from("chat_sessions")
-        .select("id, title, status, summary, message_count, created_at, last_message_at")
-        .eq("client_id", client.id)
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      setSessions(error ? [] : ((data as SessionRow[]) ?? []));
-    })();
-    return () => { cancelled = true; };
-  }, [client.id]);
-
-  if (sessions === null) return <TabLoading />;
-  if (sessions.length === 0) {
-    return <EmptyState icon="✦" title="Nenhuma sessão de IA" hint="O histórico de conversas e orquestrações da IA vinculadas ao cliente aparece aqui." />;
-  }
-  return (
-    <div className="cli-card lift">
-      <div className="cli-sec-title">Histórico · {sessions.length}</div>
-      {sessions.map(s => (
-        <div key={s.id} className="cli-row">
-          <div className="dot">✦</div>
-          <div className="body">
-            <div className="t">{s.title || "Sessão sem título"}</div>
-            <div className="s">
-              {s.summary ? `${s.summary} · ` : ""}
-              {s.message_count ?? 0} mensagens · Início {formatDateBR(s.created_at)}
-              {s.last_message_at ? ` · Última ${formatDateBR(s.last_message_at)}` : ""}
-            </div>
-          </div>
-          <span className="cli-chip n" style={{ marginLeft: "auto" }}>{s.status}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ---------- Áudios / Transcrições (chat_attachments de áudio) ---------- */
 
 interface AudioRow {

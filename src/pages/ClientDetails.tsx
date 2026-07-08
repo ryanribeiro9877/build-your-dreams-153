@@ -14,7 +14,8 @@ import {
 import {
   DocumentosTab, TarefasTab, PendenciasTab, ProcessosTab,
 } from "@/components/clients/tabs/relationalTabs";
-import { PecasTab, HistoricoTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
+import { PecasTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
+import { HistoricoTab } from "@/components/clients/tabs/historicoTab";
 
 // Empty-states honestos — abas sem fonte de dado própria hoje (§3).
 const ReunioesTab = () => <EmptyState icon="👥" title="Nenhuma reunião registrada" hint="Quando houver uma fonte de reuniões no sistema, elas aparecem aqui." />;
