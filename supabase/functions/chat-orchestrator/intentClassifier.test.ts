@@ -1,7 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
-  isAwaitingCollectionMeta, isCollectionEscape,
+  isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
 } from "./intentClassifier.ts";
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──
@@ -100,4 +100,37 @@ Deno.test("isCollectionEscape: início claro de outra ação/peça = escape", ()
   assertEquals(isCollectionEscape("gere uma petição inicial"), true);
   assertEquals(isCollectionEscape("redija uma contestação"), true);
   assertEquals(isCollectionEscape("faça uma procuração"), true);
+});
+
+// ─── CHAT-COLETA-CONTINUIDADE-FIX: robustez a erro transitório do provedor ───
+const COLLECT_Q = { agent_id: "spec-1", metadata: { kind: "final", intent: "ACAO_COM_TOOL", agent_name: "Especialista Cadastro ProJuris" } };
+const ERR = { agent_id: "spec-1", metadata: { kind: "error", error: "openrouter 451" } };
+
+Deno.test("isErrorMeta: só metadata.kind='error'", () => {
+  assertEquals(isErrorMeta({ kind: "error", error: "x" }), true);
+  assertEquals(isErrorMeta({ kind: "final", intent: "ACAO_COM_TOOL" }), false);
+  assertEquals(isErrorMeta(null), false);
+});
+
+Deno.test("findActiveCollection: última msg é a pergunta de coleta → continua", () => {
+  assertEquals(findActiveCollection([COLLECT_Q]), { agentId: "spec-1" });
+});
+
+Deno.test("findActiveCollection: bolha de erro (451) ANTES da pergunta → PULA erro e continua", () => {
+  // Mais recente primeiro: erro transitório do provedor, depois a pergunta de coleta.
+  assertEquals(findActiveCollection([ERR, COLLECT_Q]), { agentId: "spec-1" });
+  // Vários erros seguidos também são pulados.
+  assertEquals(findActiveCollection([ERR, ERR, COLLECT_Q]), { agentId: "spec-1" });
+});
+
+Deno.test("findActiveCollection: último turno real NÃO é coleta → não continua", () => {
+  assertEquals(findActiveCollection([{ agent_id: "a", metadata: { kind: "final", intent: "CONSULTA" } }]), null);
+  // ActionCard/execução encerram a coleta (não são erro, são turno real):
+  assertEquals(findActiveCollection([{ agent_id: "a", metadata: { kind: "action_done", ok: true } }, COLLECT_Q]), null);
+  assertEquals(findActiveCollection([{ agent_id: "a", metadata: { kind: "action_proposal", proposal: {} } }, COLLECT_Q]), null);
+});
+
+Deno.test("findActiveCollection: vazio / só erros → null", () => {
+  assertEquals(findActiveCollection([]), null);
+  assertEquals(findActiveCollection([ERR, ERR]), null);
 });

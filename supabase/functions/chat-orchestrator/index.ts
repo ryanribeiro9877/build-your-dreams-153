@@ -35,7 +35,7 @@ import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
-  isAwaitingCollectionMeta, isCollectionEscape,
+  isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -2000,6 +2000,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
   const cancelPoll: CancelPoll = { intervalMs: CANCEL_POLL_MS, check: () => isRunCancelled(admin, runId) };
 
   const fail = async (msg: string) => {
+    // Instrumentação sempre-ativa: QUALQUER falha de run fica visível nos logs
+    // (não só 402/401). Foi assim que o 451 do provedor na coleta de continuação
+    // ficou rastreável sem depender de ler a coluna `error` no banco.
+    console.warn(`[fail] run=${runId} intent=${run.intent_category ?? "?"} status→failed error=${String(msg).slice(0, 300)}`);
     await admin.from("orchestration_runs").update({ status: "failed", error: msg, updated_at: new Date().toISOString() }).eq("id", runId);
     // Mensagem acionável por TIPO de falha. Para 402 (sem crédito) e 401 (chave),
     // "tente novamente" não resolve — o usuário precisa saber o que fazer.
@@ -2860,21 +2864,25 @@ serve(async (req) => {
     // pra depois") ou início claro de outra ação (ver isCollectionEscape). Default:
     // continuar. Vale para QUALQUER coleta de ação, não só cadastro.
     {
-      const { data: lastAsst } = await admin.from("chat_messages")
+      // Olha as ÚLTIMAS mensagens do assistente (não só a última): findActiveCollection
+      // PULA bolhas de erro transitório (ex.: 451 do provedor) para não perder a
+      // coleta — sem isso, uma falha do LLM derrubava o reenvio do usuário em TRIVIAL.
+      const { data: recentAsst } = await admin.from("chat_messages")
         .select("agent_id, metadata")
         .eq("session_id", body.sessionId).eq("role", "assistant")
-        .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
-      const lastMeta = (lastAsst as { agent_id?: string; metadata?: unknown } | null)?.metadata;
-      const activeSpecialistId = (lastAsst as { agent_id?: string } | null)?.agent_id ?? null;
-      const awaiting = isAwaitingCollectionMeta(lastMeta);
-      if (awaiting && activeSpecialistId) {
+        .order("sequence_number", { ascending: false }).limit(6);
+      const rows = (recentAsst as Array<{ agent_id?: string; metadata?: unknown }> | null) ?? [];
+      const active = findActiveCollection(rows);
+      const activeSpecialistId = active?.agentId ?? null;
+      if (activeSpecialistId) {
+        const skippedErrors = rows.findIndex((r) => (r?.metadata as { kind?: unknown })?.kind !== "error");
         const escaped = isCollectionEscape(body.message);
         if (escaped) {
           console.log(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA (especialista=${activeSpecialistId}) — ESCAPE explícito ("${body.message.slice(0, 40)}") → reclassificar`);
         } else {
           const specialist = await loadAgent(admin, activeSpecialistId);
           if (specialist && specialist.is_active) {
-            console.log(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA → CONTINUAR com ${specialist.name} (${specialist.id}), sem classificar (msg="${body.message.slice(0, 40)}")`);
+            console.log(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA → CONTINUAR com ${specialist.name} (${specialist.id}), sem classificar (msg="${body.message.slice(0, 40)}", bolhas_erro_puladas=${skippedErrors > 0 ? skippedErrors : 0})`);
             const { data: contRunRow, error: contRunErr } = await admin.from("orchestration_runs").insert({
               session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
               original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
