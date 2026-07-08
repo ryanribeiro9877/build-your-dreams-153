@@ -25,6 +25,19 @@ describe("ActionCard", () => {
     expect(screen.getByRole("button", { name: /encaminhar ao admin/i })).toBeInTheDocument();
   });
 
+  it("no cadastro de cliente, o botão secundário é 'Corrigir' (não 'Cancelar')", () => {
+    render(<ActionCard proposal={proposal} onDone={() => {}} confirmFn={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /corrigir/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cancelar/i })).not.toBeInTheDocument();
+  });
+
+  it("em ações não-cadastro, o botão secundário continua 'Cancelar'", () => {
+    const outra = { ...proposal, tool: "criar_card_tarefa", resumo: 'Criar card "X".' };
+    render(<ActionCard proposal={outra} onDone={() => {}} confirmFn={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /cancelar/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /corrigir/i })).not.toBeInTheDocument();
+  });
+
   it("chama confirmFn com (run_id, action_id, 'confirm') ao confirmar", () => {
     const spy = vi.fn().mockResolvedValue({ ok: true });
     render(<ActionCard proposal={proposal} onDone={() => {}} confirmFn={spy} />);

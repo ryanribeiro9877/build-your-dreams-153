@@ -52,7 +52,13 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         // created_by é fixado server-side (auth.uid()); userClient carrega o JWT
         // do usuário, então a RLS/role-check (is_recepcao_or_socio) valem.
         const data: Record<string, unknown> = { full_name: args.full_name, status: "ativo" };
-        for (const k of ["cpf","cnpj","tipo_pessoa","email","phone"]) if (args[k]) data[k] = args[k];
+        for (const k of [
+          "cpf","cnpj","tipo_pessoa","email","phone",
+          // Endereço (não é PII cifrada no esquema 2C): a save_client já mapeia
+          // estas chaves no INSERT (p_data->>'zip_code' etc.). Sem esta lista, a
+          // tool aceitava o dado mas não o repassava (lacuna do CADASTRO-ENDERECO).
+          "zip_code","address","address_number","address_complement","neighborhood","city","state",
+        ]) if (args[k]) data[k] = args[k];
         const { data: newId, error } = await userClient.rpc("save_client", { p_id: null, p_data: data });
         if (error) {
           // Unicidade real de CPF = índice cego clients_cpf_bidx_uniq. Um INSERT

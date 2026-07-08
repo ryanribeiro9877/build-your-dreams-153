@@ -17,6 +17,11 @@ export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm }: {
   // documentos + checklist do cooperado no lugar do "Ação confirmada.".
   const [created, setCreated] = useState<{ id: string; name?: string } | null>(null);
   const label = proposal.route === "pendencia" ? "Encaminhar ao Admin" : "Confirmar";
+  // COOP-DOCS-3B: no cadastro de cliente, o botão secundário é "Corrigir" (não
+  // "Cancelar") — ao clicar, cancela esta proposta e o especialista, no próximo
+  // turno, pergunta qual dado ajustar (regra no prompt do agente).
+  const isCadastro = proposal.tool === "cadastrar_cliente";
+  const secondaryLabel = isCadastro ? "Corrigir" : "Cancelar";
 
   const act = async (decision: "confirm" | "cancel") => {
     setBusy(true);
@@ -34,13 +39,21 @@ export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm }: {
   };
 
   if (created) return <CooperadoChecklistCard clientId={created.id} clientName={created.name} />;
-  if (resolved) return <div className="action-card action-card--done">{resolved === "confirm" ? "Ação confirmada." : "Ação cancelada."}</div>;
+  if (resolved) return (
+    <div className="action-card action-card--done">
+      {resolved === "confirm"
+        ? "Ação confirmada."
+        : isCadastro
+          ? 'Certo — me diga qual dado deseja ajustar (ex.: "o CPF é 111.222.333-44") que eu corrijo.'
+          : "Ação cancelada."}
+    </div>
+  );
   return (
     <div className="action-card" style={{ border: "1px solid var(--border, #ccc)", borderRadius: 10, padding: 12, margin: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
       <p style={{ margin: 0 }}>{proposal.resumo}</p>
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" disabled={busy} onClick={() => act("confirm")}>{label}</button>
-        <button type="button" disabled={busy} onClick={() => act("cancel")}>Cancelar</button>
+        <button type="button" disabled={busy} onClick={() => act("cancel")}>{secondaryLabel}</button>
       </div>
     </div>
   );
