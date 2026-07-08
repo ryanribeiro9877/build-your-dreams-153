@@ -498,8 +498,12 @@ async function loadFirmSpecialists(
 interface HistMsg { role: string; content: string; }
 async function loadSessionHistory(
   admin: SupabaseClient, sessionId: string, limit: number, excludeMessageId?: string | null,
+  maxCap = 40,
 ): Promise<HistMsg[]> {
-  const safeLimit = Math.max(0, Math.min(limit, 40));
+  // maxCap: teto de segurança do nº de mensagens. Default 40 (callers normais).
+  // Na coleta ativa passamos um teto maior para NÃO truncar os campos iniciais
+  // (tipo, nome, CPF, ...) — causa raiz do loop CADASTRO-CHAT-LOOP-CONCLUSAO.
+  const safeLimit = Math.max(0, Math.min(limit, Math.max(1, maxCap)));
   if (safeLimit === 0) return [];
   // Pega um pouco mais para compensar mensagens de erro/estágio filtradas.
   const { data } = await admin.from("chat_messages")
