@@ -37,7 +37,7 @@ import {
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
-  isCollectionContinuation,
+  isCollectionContinuation, isCadastroClienteRequest,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -2909,6 +2909,36 @@ serve(async (req) => {
     }
 
     const userMsgId = (userMsg as { id: string } | null)?.id ?? null;
+
+    // ─── CADASTRO-MODELO-A: disparar o formulário em vez de coletar dado-a-dado ───
+    // Troca de abordagem (supersede a coleta conversacional / Modelo B): num pedido
+    // claro de "cadastrar cliente", o agente NÃO conduz a coleta; devolve uma
+    // mensagem que o front reconhece (metadata.kind="cadastro_form") e monta o
+    // ClienteFormWizard inline. O envio grava direto via save_client (cifrado) — o
+    // mesmo caminho do "+ Novo Cliente". Sem tool-calling: independe de
+    // CHAT_TOOLS_ENABLED. Detecção determinística (não gasta o classificador).
+    if (isCadastroClienteRequest(body.message)) {
+      const { data: cadRunRow, error: cadRunErr } = await admin.from("orchestration_runs").insert({
+        session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+        original_message: body.message, status: "done", entry_agent_id: agent.id,
+        intent_category: "ACAO_COM_TOOL", route_path: "cadastro_form",
+        chain: [{ level: 0, path: "cadastro_form", intent: "ACAO_COM_TOOL", agent: agent.name }],
+      }).select("id").single();
+      if (cadRunErr || !cadRunRow) return errResp(500, "db_error", `Falha ao criar run: ${cadRunErr?.message}`);
+      const cadRunId = (cadRunRow as { id: string }).id;
+      const cadSeq = await nextSeq(admin, body.sessionId);
+      const cadContent =
+        "Claro! Preencha o formulário de cadastro abaixo — é o mesmo do cadastro manual, " +
+        "em 5 etapas (Classificação, Dados, Contato, Endereço, Bancário/PIX) com uma revisão final. " +
+        "Ao confirmar, o cliente é gravado com os dados sensíveis cifrados.";
+      await admin.from("chat_messages").insert({
+        session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+        content: cadContent, sequence_number: cadSeq,
+        metadata: { kind: "cadastro_form", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+      });
+      await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+      return json(202, { runId: cadRunId, sessionId: body.sessionId, status: "done", path: "cadastro_form", intent: "ACAO_COM_TOOL" });
+    }
 
     // ─── CHAT-COLETA-CONTINUIDADE: continuar coleta ativa em vez de reclassificar ──
     // ANTES do classificador: se a última mensagem do assistente foi uma pergunta

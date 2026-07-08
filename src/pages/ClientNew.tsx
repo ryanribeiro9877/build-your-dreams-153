@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
-import ClientForm from "@/components/clients/ClientForm";
+import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { ALLOWED_ROLES, RestrictedAccess } from "@/components/clients/shared";
 
 export default function ClientNew() {
@@ -17,7 +17,9 @@ export default function ClientNew() {
           <button className="cli-back" onClick={() => navigate("/clientes")}>← Clientes</button>
           <span className="cli-title">Novo Cliente</span>
         </div>
-        <ClientForm mode="create" />
+        {/* Fonte única (CADASTRO-MODELO-A): o mesmo wizard usado no chat.
+            Após confirmar, o wizard abre a fase de documentos; "Concluir" volta à lista. */}
+        <ClienteFormWizard mode="create" variant="page" onCancel={() => navigate("/clientes")} />
       </div>
     </div>
   );

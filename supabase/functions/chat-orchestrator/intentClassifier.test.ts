@@ -2,8 +2,30 @@ import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
-  isCollectionContinuation,
+  isCollectionContinuation, isCadastroClienteRequest,
 } from "./intentClassifier.ts";
+
+// ─── CADASTRO-MODELO-A: disparo do formulário (isCadastroClienteRequest) ──────
+Deno.test("isCadastroClienteRequest: pedidos de cadastro → true", () => {
+  assertEquals(isCadastroClienteRequest("quero cadastrar um cliente"), true);
+  assertEquals(isCadastroClienteRequest("cadastrar cliente"), true);
+  assertEquals(isCadastroClienteRequest("cadastro de cliente novo"), true);
+  assertEquals(isCadastroClienteRequest("adicionar um novo cliente"), true);
+  assertEquals(isCadastroClienteRequest("registrar cliente"), true);
+});
+Deno.test("isCadastroClienteRequest: consultas/leituras de cliente → false", () => {
+  assertEquals(isCadastroClienteRequest("consulte o CPF do cliente Fulano"), false);
+  assertEquals(isCadastroClienteRequest("busque o cliente João"), false);
+  assertEquals(isCadastroClienteRequest("quais os dados do cliente X"), false);
+  assertEquals(isCadastroClienteRequest("mostre o cliente Maria"), false);
+  assertEquals(isCadastroClienteRequest("qual o telefone do cliente Y"), false);
+});
+Deno.test("isCadastroClienteRequest: sem alvo cliente / vazio → false", () => {
+  assertEquals(isCadastroClienteRequest("crie uma tarefa"), false);
+  assertEquals(isCadastroClienteRequest("gere uma petição"), false);
+  assertEquals(isCadastroClienteRequest(""), false);
+  assertEquals(isCadastroClienteRequest("bom dia"), false);
+});
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──
 Deno.test("normalizeIntent: TRIVIAL explícito", () => {

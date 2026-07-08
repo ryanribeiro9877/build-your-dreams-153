@@ -200,6 +200,28 @@ export function isCollectionEscape(message: string): boolean {
   return COLLECTION_ESCAPE_RE.some((re) => re.test(m));
 }
 
+// ─── CADASTRO-MODELO-A: disparo do formulário de cadastro ────────────────────
+// Troca de abordagem: em vez de conduzir a coleta conversacional (Modelo B), um
+// pedido claro de "cadastrar cliente" faz o front renderizar o ClienteFormWizard
+// inline (Modelo A). Detecção DETERMINÍSTICA (não depende de tool-calling nem do
+// classificador por LLM): verbo de cadastro + alvo "cliente". Conservador para
+// não colidir com CONSULTA ("buscar/ver o cliente X" NÃO dispara o form).
+const CADASTRO_VERBO_RE = /\b(cadastr\w*|adicion\w*|inclu[íi]?\w*|registr\w*|cria(r|ndo)?)\b/i;
+const CADASTRO_ALVO_RE = /\bclientes?\b/i;
+// "novo(s) cliente(s)" como comando (ex.: o usuário digita "novo cliente").
+const CADASTRO_FRASE_RE = /\bnovos?\s+clientes?\b/i;
+// Leituras/consultas que mencionam "cliente" mas NÃO são cadastro.
+const CADASTRO_NEGATIVE_RE = /\b(consult\w*|busc\w*|ver|mostr\w*|list\w*|qual|quais|dados do|informa\w*|telefone|cpf do|endere[çc]o do)\b/i;
+
+export function isCadastroClienteRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  // "quero ver os dados do cliente" é consulta → nunca dispara o form.
+  if (CADASTRO_NEGATIVE_RE.test(m)) return false;
+  if (CADASTRO_FRASE_RE.test(m)) return true;
+  return CADASTRO_ALVO_RE.test(m) && CADASTRO_VERBO_RE.test(m);
+}
+
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451
 // "content policy", 5xx, timeout do watchdog). Um erro NÃO é um turno real do
 // especialista: não pode "encerrar" uma coleta em andamento.

@@ -243,6 +243,51 @@
 .cli-pixrow label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--cli-ink); }
 .cli-pixrow input { accent-color: var(--cli-amber); width: 16px; height: 16px; }
 
+/* ---------- wizard (CADASTRO-MODELO-A) ---------- */
+.cli-wizard-chat { margin: 8px 0; }
+.cli-wizard .cli-steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.cli-step { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
+  border: 2.5px solid var(--cli-ink); background: #fff; color: var(--cli-muted); font-weight: 800;
+  font-size: 11px; letter-spacing: .3px; text-transform: uppercase; }
+.cli-step .n { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: 999px; background: var(--cli-cream-line); color: var(--cli-ink); font-size: 11px; }
+.cli-step.done { background: var(--cli-green); color: var(--cli-green-deep); }
+.cli-step.done .n { background: var(--cli-green-deep); color: var(--cli-green); }
+.cli-step.active { background: var(--cli-amber); color: var(--cli-amber-deep); box-shadow: 3px 3px 0 var(--cli-ink); }
+.cli-step.active .n { background: var(--cli-amber-deep); color: var(--cli-amber); }
+
+/* revisão */
+.cli-review { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 18px;
+  background: #fff; border: 2.5px solid var(--cli-ink); border-radius: 11px; padding: 14px; }
+.cli-review-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0;
+  border-bottom: 1px dashed var(--cli-cream-line); font-size: 13px; }
+.cli-review-row .k { font-weight: 800; color: var(--cli-muted); text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+.cli-review-row .v { font-weight: 700; color: var(--cli-ink); text-align: right; word-break: break-word; }
+.cli-review-row .v.empty { color: var(--cli-red-deep); background: var(--cli-red); border-radius: 5px; padding: 0 6px; font-size: 11px; }
+.cli-review-note { grid-column: 1 / -1; margin-top: 12px; font-size: 12px; color: var(--cli-ink-soft);
+  background: #fff; border: 2.5px solid var(--cli-ink); border-radius: 11px; padding: 12px; line-height: 1.5; }
+
+/* fase de documentos */
+.cli-doc-panel { grid-column: 1 / -1; background: #fff; border: 2.5px solid var(--cli-ink); border-radius: 11px;
+  padding: 14px; margin-top: 12px; }
+.cli-doc-title { font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--cli-amber-deep); margin-bottom: 10px; }
+.cli-doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.cli-doc-hint { font-size: 11px; color: var(--cli-muted); font-weight: 600; }
+.cli-doc-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.cli-doc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px;
+  border: 2.5px solid var(--cli-ink); background: var(--cli-amber); color: var(--cli-amber-deep);
+  font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--cli-ink); }
+.cli-doc-check { display: flex; flex-direction: column; gap: 5px; }
+.cli-doc-check-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--cli-ink); }
+.cli-doc-check-row .lbl { flex: 1; text-transform: capitalize; }
+.cli-doc-check-row .st { font-weight: 800; font-size: 11px; }
+.cli-doc-check-row .dot { width: 9px; height: 9px; border-radius: 999px; background: var(--cli-muted); flex-shrink: 0; }
+.cli-doc-check-row .dot.s-pendente { background: var(--cli-amber); }
+.cli-doc-check-row .dot.s-recebido { background: #60A5FA; }
+.cli-doc-check-row .dot.s-validado { background: var(--cli-green); }
+.cli-doc-check-row .dot.s-rejeitado { background: var(--cli-red); }
+
 /* ---------- restricted access ---------- */
 .cli-restricted { display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 16px; min-height: 100vh; text-align: center; }

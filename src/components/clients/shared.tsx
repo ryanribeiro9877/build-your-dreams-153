@@ -276,6 +276,54 @@ export function formatPhone(value: string): string {
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
 }
 
+export function formatCNPJ(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0,2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`;
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+}
+
+/* ---------- Validadores (dígitos verificadores, e-mail) ----------
+   Fonte única: usados pelo cadastro (wizard) e por qualquer tela que
+   precise validar. Anti-alucinação — nunca "consertam" o dado, só dizem
+   se é válido. Um valor VAZIO é considerado válido (obrigatoriedade é
+   checada à parte) para não travar campos opcionais. */
+
+export function isValidCPF(value: string): boolean {
+  const d = (value || "").replace(/\D/g, "");
+  if (d === "") return true; // vazio: obrigatoriedade é responsabilidade de quem chama
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(d[i]) * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return calc(9) === Number(d[9]) && calc(10) === Number(d[10]);
+}
+
+export function isValidCNPJ(value: string): boolean {
+  const d = (value || "").replace(/\D/g, "");
+  if (d === "") return true;
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (len: number) => {
+    const weights = len === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(d[i]) * weights[i];
+    const r = sum % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === Number(d[12]) && calc(13) === Number(d[13]);
+}
+
+export function isValidEmail(value: string): boolean {
+  const v = (value || "").trim();
+  if (v === "") return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
 export function formatPixKey(value: string, type: string): string {
   const digits = value.replace(/\D/g, "");
   if (type === "cpf") {
