@@ -35,6 +35,7 @@ import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
+  isAwaitingCollectionMeta, isCollectionEscape,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -2848,6 +2849,50 @@ serve(async (req) => {
     }
 
     const userMsgId = (userMsg as { id: string } | null)?.id ?? null;
+
+    // ─── CHAT-COLETA-CONTINUIDADE: continuar coleta ativa em vez de reclassificar ──
+    // ANTES do classificador: se a última mensagem do assistente foi uma pergunta
+    // de coleta de um especialista de AÇÃO (Modelo B, metadata.intent=ACAO_COM_TOOL),
+    // esta mensagem é a RESPOSTA esperada — NÃO reclassificar do zero (senão "física",
+    // "Ryan", um CPF etc. viram TRIVIAL e o fast-path sequestra o cadastro). Roteia
+    // direto ao MESMO especialista (executing_n3), pulando classificador e N1/N2.
+    // Escape conservador: só sai da coleta em abandono explícito ("cancela", "deixa
+    // pra depois") ou início claro de outra ação (ver isCollectionEscape). Default:
+    // continuar. Vale para QUALQUER coleta de ação, não só cadastro.
+    {
+      const { data: lastAsst } = await admin.from("chat_messages")
+        .select("agent_id, metadata")
+        .eq("session_id", body.sessionId).eq("role", "assistant")
+        .order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+      const lastMeta = (lastAsst as { agent_id?: string; metadata?: unknown } | null)?.metadata;
+      const activeSpecialistId = (lastAsst as { agent_id?: string } | null)?.agent_id ?? null;
+      const awaiting = isAwaitingCollectionMeta(lastMeta);
+      if (awaiting && activeSpecialistId) {
+        const escaped = isCollectionEscape(body.message);
+        if (escaped) {
+          console.log(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA (especialista=${activeSpecialistId}) — ESCAPE explícito ("${body.message.slice(0, 40)}") → reclassificar`);
+        } else {
+          const specialist = await loadAgent(admin, activeSpecialistId);
+          if (specialist && specialist.is_active) {
+            console.log(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA → CONTINUAR com ${specialist.name} (${specialist.id}), sem classificar (msg="${body.message.slice(0, 40)}")`);
+            const { data: contRunRow, error: contRunErr } = await admin.from("orchestration_runs").insert({
+              session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+              original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+              target_n3_id: specialist.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+              chain: [{ level: 0, path: "continuacao_coleta", intent: "ACAO_COM_TOOL", agent: specialist.name, resumed: true }],
+            }).select("id").single();
+            if (contRunErr || !contRunRow) return errResp(500, "db_error", `Falha ao criar run: ${contRunErr?.message}`);
+            const contRunId = (contRunRow as { id: string }).id;
+            await insertStage(admin, body.sessionId, userId, `${specialist.name} retomando o cadastro...`, "executing_n3", specialist);
+            fireNextStep(contRunId, supabaseUrl, serviceKey);
+            return json(202, { runId: contRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", resumed: true });
+          }
+          console.warn(`[coleta-continuidade] session=${body.sessionId} coleta ATIVA mas especialista ${activeSpecialistId} indisponível → reclassificar`);
+        }
+      } else {
+        console.log(`[coleta-continuidade] session=${body.sessionId} sem coleta ativa → classificar normalmente`);
+      }
+    }
 
     // ─── Card 2.8: classificador de intenção + suficiência de insumo ───
     // ANTES do N1, com o modelo RÁPIDO. Decide entre TRIVIAL (fast-path),

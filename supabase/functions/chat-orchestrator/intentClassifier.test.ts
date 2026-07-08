@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
+  isAwaitingCollectionMeta, isCollectionEscape,
 } from "./intentClassifier.ts";
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──
@@ -64,4 +65,39 @@ Deno.test("shouldClassify: vazio não é classificável", () => {
 });
 Deno.test("shouldClassify: mensagem longa vai direto à cadeia completa (gerar)", () => {
   assertEquals(shouldClassify("a".repeat(600), { enabled: true, maxChars: 500 }), false);
+});
+
+// ─── CHAT-COLETA-CONTINUIDADE: detecção de coleta ativa ──────────────────────
+Deno.test("isAwaitingCollectionMeta: pergunta de coleta (final + ACAO_COM_TOOL) = true", () => {
+  assertEquals(isAwaitingCollectionMeta({ kind: "final", intent: "ACAO_COM_TOOL", agent_name: "Especialista Cadastro ProJuris" }), true);
+});
+Deno.test("isAwaitingCollectionMeta: ActionCard/execução concluída NÃO são coleta ativa", () => {
+  // action_proposal (aguardando clique) e action_done (executado) não têm intent.
+  assertEquals(isAwaitingCollectionMeta({ kind: "action_proposal", proposal: {} }), false);
+  assertEquals(isAwaitingCollectionMeta({ kind: "action_done", ok: true }), false);
+});
+Deno.test("isAwaitingCollectionMeta: outros finais/stages/nulos = false", () => {
+  assertEquals(isAwaitingCollectionMeta({ kind: "final", intent: "CONSULTA" }), false);
+  assertEquals(isAwaitingCollectionMeta({ kind: "final", path: "full", intent: "NEGOCIO_COM_INSUMO" }), false);
+  assertEquals(isAwaitingCollectionMeta({ kind: "stage", stage: "executing_n3" }), false);
+  assertEquals(isAwaitingCollectionMeta(null), false);
+  assertEquals(isAwaitingCollectionMeta(undefined), false);
+  assertEquals(isAwaitingCollectionMeta("final"), false);
+});
+
+// ─── CHAT-COLETA-CONTINUIDADE: escape hatch conservador ──────────────────────
+Deno.test("isCollectionEscape: respostas de coleta NÃO são escape (default continuar)", () => {
+  for (const m of ["física", "jurídica", "Ryan Ribeiro", "111.222.333-44", "30130-000", "Rua das Flores", "não tem", "sem complemento", "meu@email.com"]) {
+    assertEquals(isCollectionEscape(m), false, `"${m}" não deveria ser escape`);
+  }
+});
+Deno.test("isCollectionEscape: abandono explícito = escape", () => {
+  for (const m of ["cancela", "pode cancelar", "cancelar", "deixa pra depois", "deixa para amanhã", "esquece isso", "muda de assunto"]) {
+    assertEquals(isCollectionEscape(m), true, `"${m}" deveria ser escape`);
+  }
+});
+Deno.test("isCollectionEscape: início claro de outra ação/peça = escape", () => {
+  assertEquals(isCollectionEscape("gere uma petição inicial"), true);
+  assertEquals(isCollectionEscape("redija uma contestação"), true);
+  assertEquals(isCollectionEscape("faça uma procuração"), true);
 });

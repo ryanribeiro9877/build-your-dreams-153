@@ -156,3 +156,46 @@ export function routePathFor(category: IntentCategory): "fast" | "consulta" | "n
   if (category === "NEGOCIO_SEM_INSUMO") return "need_info";
   return "full"; // NEGOCIO_COM_INSUMO e ACAO_COM_TOOL → cadeia com N3
 }
+
+// ─── CHAT-COLETA-CONTINUIDADE: continuidade de coleta dado-a-dado ─────────────
+// O classificador decide CADA mensagem isoladamente. Numa coleta Modelo B
+// (especialista pergunta um dado por vez), a resposta curta do usuário ("física",
+// "Ryan", um CPF, um CEP) não tem cara de ação e caía em TRIVIAL → fast-path →
+// "Meu Assistente" sequestrava a conversa e o cadastro morria no meio. A correção
+// é detectar, ANTES de classificar, que há coleta ativa e continuar com o MESMO
+// especialista, tratando a mensagem como a resposta esperada.
+
+// Há coleta ativa aguardando o usuário? Sinal: a ÚLTIMA mensagem do assistente na
+// sessão foi um turno textual de um especialista de AÇÃO (finishAcaoDone grava
+// metadata { kind:"final", intent:"ACAO_COM_TOOL", ... }). A escrita de fato
+// (ActionCard) NÃO passa por aqui — ela vira kind:"action_proposal"/"action_done",
+// sem intent — então cadastro concluído/aguardando confirmação não dispara falso
+// positivo. Pergunta de coleta em andamento SIM.
+export function isAwaitingCollectionMeta(meta: unknown): boolean {
+  if (!meta || typeof meta !== "object") return false;
+  const m = meta as { kind?: unknown; intent?: unknown };
+  return m.kind === "final" && m.intent === "ACAO_COM_TOOL";
+}
+
+// Escape hatch conservador: mesmo em coleta ativa, o usuário pode abandonar
+// explicitamente (cancelar, deixar pra depois) ou claramente iniciar outra ação
+// (gerar uma peça). Só nesses casos NÃO continuamos a coleta — o default é
+// continuar. Mantido enxuto de propósito: dados de cadastro (nome, CPF, telefone,
+// e-mail, CEP, endereço) não contêm estas expressões, então falso-escape é raro.
+// Sem \b APÓS token possivelmente acentuado (ã/á/ç): em regex ASCII o boundary
+// não casa depois de caractere não-ASCII e daria falso-negativo ("amanhã", "lá").
+const COLLECTION_ESCAPE_RE = [
+  /\bcancela(r)?\b/i,
+  /\bdeixa (pra|para) (depois|outra hora|amanh)/i,
+  /\bdeixa (pra|para) l[áa]/i,
+  /\besque[çc](e|a|er)/i,
+  /\bpara com isso\b/i,
+  /\bmuda(r)? de assunto\b/i,
+  // Início claro de OUTRA ação/peça (não é dado de cadastro):
+  /\b(gere|gerar|redi[jg]a|redigir|elabor[ae]|fa[çc]a|crie|criar)\b[^.]*(peti[çc][ãa]o|contesta[çc][ãa]o|recurso|contrato|procura[çc][ãa]o|notifica[çc][ãa]o|pe[çc]a)/i,
+];
+export function isCollectionEscape(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  return COLLECTION_ESCAPE_RE.some((re) => re.test(m));
+}
