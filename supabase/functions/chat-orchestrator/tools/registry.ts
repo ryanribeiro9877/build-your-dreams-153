@@ -58,6 +58,13 @@ export const TOOLS: Record<string, ToolDef> = {
       tipo_pessoa: { type: "string", enum: ["fisica", "juridica"], description: "tipo de pessoa" },
       email: str("e-mail"),
       phone: str("telefone/celular"),
+      zip_code: str("CEP (só dígitos ou com máscara)"),
+      address: str("logradouro (rua/avenida)"),
+      address_number: str("número"),
+      address_complement: str("complemento (opcional)"),
+      neighborhood: str("bairro"),
+      city: str("cidade"),
+      state: str("UF (sigla do estado, ex.: MG)"),
     }, required: ["full_name"] },
   }},
   criar_card_tarefa: { type: "function", function: {
