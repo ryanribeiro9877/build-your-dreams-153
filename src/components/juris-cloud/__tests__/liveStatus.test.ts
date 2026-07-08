@@ -31,8 +31,14 @@ describe("stageLabel", () => {
   it("mapeia fases conhecidas para rótulos amigáveis", () => {
     expect(stageLabel("routing_n1")).toBe("Analisando o caso");
     expect(stageLabel("executing_n3")).toBe("Redigindo a peça");
+    // Fluxo de AÇÃO (cadastro): rótulo condizente, nunca "Redigindo a peça".
+    expect(stageLabel("executing_acao")).toBe("Processando o cadastro");
     expect(stageLabel("validating_n2")).toBe("Revisando a peça");
     expect(stageLabel("validating_n1")).toBe("Revisão final");
+  });
+
+  it("cadastro (executing_acao) NÃO mostra rótulo de peça", () => {
+    expect(stageLabel("executing_acao")).not.toBe("Redigindo a peça");
   });
 
   it("usa fallback neutro para fase desconhecida/ausente", () => {

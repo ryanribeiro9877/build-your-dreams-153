@@ -12,11 +12,15 @@ vi.mock("@/integrations/supabase/client", () => ({
 import { ActionCard } from "../ActionCard";
 
 describe("ActionCard", () => {
-  const proposal = { action_id: "a1", run_id: "r1", tool: "cadastrar_cliente", args: { full_name: "José" }, resumo: 'Cadastrar cliente "José".', route: "execute" as const };
+  // O resumo real (summarizeCadastro no edge) chega multi-linha, um "Rótulo: valor"
+  // por linha, com CPF já mascarado — é isso que o ActionCard transforma em campos.
+  const proposal = { action_id: "a1", run_id: "r1", tool: "cadastrar_cliente", args: { full_name: "José" }, resumo: "Cadastrar cliente: José\nTipo: Pessoa física\nCPF: 111.***.***-44", route: "execute" as const };
 
-  it("mostra o resumo e botão Confirmar quando route=execute", () => {
+  it("mostra os campos do cadastro e botão Confirmar quando route=execute", () => {
     render(<ActionCard proposal={proposal} onDone={() => {}} confirmFn={vi.fn()} />);
+    // Título do quadro (Modelo B) + valor de um campo rotulado.
     expect(screen.getByText(/Cadastrar cliente/)).toBeInTheDocument();
+    expect(screen.getByText("José")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirmar/i })).toBeInTheDocument();
   });
 

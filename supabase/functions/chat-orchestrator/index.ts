@@ -2099,6 +2099,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       }
     };
 
+    // CADASTRO-CHAT-REFINO #4: o rótulo do "processando" no FE vem do metadata.stage.
+    // Para AÇÃO (ACAO_COM_TOOL: cadastro etc.) usamos "executing_acao" no lugar de
+    // "executing_n3" — assim o FE mostra "Processando o cadastro…" em vez do enganoso
+    // "Redigindo a peça…". O run.STATUS segue "executing_n3" (máquina de estados
+    // intacta); muda só o rótulo exibido. PEÇA (NEGOCIO_*) continua "executing_n3".
+    const acaoStage = run.intent_category === "ACAO_COM_TOOL" ? "executing_acao" : "executing_n3";
+
     if (run.status === "routing_n1") {
       const directors = await loadSubAgents(admin, n1.owner_user_id, ["director"]);
       // ACAO_COM_TOOL (caminho CURTO): PULA o N2-director. Uma ação operacional
@@ -2144,7 +2151,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // V25: o Diretor escolhe o N3 E classifica o acao_tipo (persistido no run).
       const { agent: n3, acaoTipo } = await chooseSpecialistAndAcaoTipo(admin, router, run.original_message, specialists, ROUTING_INTENT_RULES, cancelPoll);
       ctxModel = n3?.model ?? undefined;
-      await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, "executing_n3", n3);
+      await insertStage(admin, run.session_id, run.user_id, `${router.name} acionou ${n3.name} para executar.`, acaoStage, n3);
       await upd({
         status: "executing_n3", target_n3_id: n3.id, acao_tipo: acaoTipo,
         chain: [...(run.chain || []), { level: 3, agent: n3.name, ...(acaoTipo ? { acao_tipo: acaoTipo } : {}) }],
@@ -2163,7 +2170,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // Contexto comum (estável → cacheável): resumos dos anexos + modelos + memória.
       const caseDocs = await loadCaseDocuments(admin, run.session_id);
       if (caseDocs.length > 0 && (!segment || blockIdx === 0)) {
-        await insertStage(admin, run.session_id, run.user_id, `${n3.name} analisando os documentos do caso...`, "executing_n3", n3);
+        await insertStage(admin, run.session_id, run.user_id, `${n3.name} analisando os documentos do caso...`, acaoStage, n3);
         await ensureAllCaseSummaries(admin, caseDocs);
       }
       // V25: injeção de modelos filtrada pelo acao_tipo classificado no Diretor.
@@ -2908,7 +2915,7 @@ serve(async (req) => {
             }).select("id").single();
             if (contRunErr || !contRunRow) return errResp(500, "db_error", `Falha ao criar run: ${contRunErr?.message}`);
             const contRunId = (contRunRow as { id: string }).id;
-            await insertStage(admin, body.sessionId, userId, `${specialist.name} retomando o cadastro...`, "executing_n3", specialist);
+            await insertStage(admin, body.sessionId, userId, `${specialist.name} retomando o cadastro...`, "executing_acao", specialist);
             fireNextStep(contRunId, supabaseUrl, serviceKey);
             return json(202, { runId: contRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", resumed: true });
           }
