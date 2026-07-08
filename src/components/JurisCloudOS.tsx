@@ -331,13 +331,90 @@ const GlobalStyles = () => (
       font-size: 11px; font-weight: 700; font-family: var(--font-body);
     }
     .jc-msg-bubble {
-      max-width: 88%; background: var(--bg3); border: 1px solid var(--border);
+      /* width:fit-content faz o balão medir SÓ o conteúdo (nunca menor que o
+         min-content). Sem isto, o balão é um bloco que preenche a coluna flex —
+         e quando a coluna é espremida abaixo da largura do texto, o
+         overflow-wrap quebrava até números curtos ("41950610") no meio. Com
+         fit-content a largura tem piso no min-content: curto NUNCA quebra; longo
+         quebra naturalmente no max-width. */
+      width: fit-content; max-width: 88%;
+      background: var(--bg3); border: 1px solid var(--border);
       border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: var(--text1);
-      /* Quebra só palavras REALMENTE longas (URLs/tokens); nunca corta no meio de
-         palavras curtas como "física". word-break: normal evita a quebra agressiva. */
+      /* Quebra só palavras REALMENTE longas (URLs/tokens) quando não couberem;
+         nunca corta no meio de palavras curtas. break-all quebraria sempre. */
       overflow-wrap: break-word; word-break: normal; hyphens: none;
     }
-    .jc-msg-wrap.user .jc-msg-bubble { background: var(--user-bubble-bg); border-color: var(--user-bubble-border); }
+    /* Mensagem do usuário: balão encostado à direita (junto do avatar). Como o
+       balão agora é fit-content, sem isto ele ficaria alinhado à esquerda da coluna. */
+    .jc-msg-wrap.user .jc-msg-bubble {
+      background: var(--user-bubble-bg); border-color: var(--user-bubble-border);
+      align-self: flex-end;
+    }
+    /* ── ActionCard — proposta de ação (cadastro etc.), visual "Modelo B" ──
+       Quadro âmbar destacado, campos rotulados um a um com faixas escuras
+       alternadas e botões com hover/clique. */
+    .action-card {
+      max-width: 560px; margin: 10px 32px; overflow: hidden;
+      background: var(--bg2, #16161f);
+      border: 1px solid rgba(234,179,8,0.45); border-radius: 14px;
+      box-shadow: 0 0 0 1px rgba(234,179,8,0.06), 0 10px 26px rgba(0,0,0,0.38);
+      animation: fadeUp 0.3s ease both;
+    }
+    .action-card__head {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      background: rgba(234,179,8,0.10); border-bottom: 1px solid rgba(234,179,8,0.28);
+      font-family: var(--font-body); font-weight: 700; font-size: 13px; color: #FACC15;
+      letter-spacing: 0.02em;
+    }
+    .action-card__note {
+      padding: 8px 16px 0; font-size: 11.5px; color: var(--text3, #8a8a99); line-height: 1.4;
+    }
+    .action-card__fields { display: flex; flex-direction: column; padding: 4px 0; }
+    .action-card__row {
+      display: flex; gap: 12px; align-items: baseline; padding: 9px 16px;
+    }
+    /* Faixa escura contrastante alternada entre os campos. */
+    .action-card__row:nth-child(odd) { background: rgba(0,0,0,0.28); }
+    .action-card__label {
+      min-width: 96px; flex-shrink: 0; color: var(--text3, #8a8a99);
+      font-family: var(--font-body); font-size: 10.5px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .action-card__value {
+      flex: 1; min-width: 0; color: var(--text1, #e4e4e7); font-size: 13.5px; font-weight: 500;
+      overflow-wrap: break-word; word-break: normal;
+    }
+    .action-card__desc {
+      padding: 12px 16px; font-size: 13.5px; color: var(--text1, #e4e4e7);
+      line-height: 1.5; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    }
+    .action-card__actions {
+      display: flex; gap: 10px; padding: 12px 16px;
+      border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+    }
+    .action-card__btn {
+      flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 16px; border-radius: 10px; border: 1px solid transparent;
+      font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: filter .15s ease, transform .1s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .action-card__btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .action-card__btn--primary {
+      background: var(--gold, #EAB308); color: var(--logo-text, #1a1a10); border-color: rgba(234,179,8,0.6);
+    }
+    .action-card__btn--primary:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 0 18px rgba(234,179,8,0.38); }
+    .action-card__btn--primary:not(:disabled):active { transform: translateY(0) scale(0.98); filter: brightness(0.94); box-shadow: none; }
+    .action-card__btn--ghost {
+      background: rgba(255,255,255,0.04); color: var(--text2, #cbd5e1); border-color: rgba(148,163,184,0.35);
+    }
+    .action-card__btn--ghost:not(:disabled):hover { background: rgba(255,255,255,0.09); border-color: rgba(148,163,184,0.6); transform: translateY(-1px); }
+    .action-card__btn--ghost:not(:disabled):active { transform: translateY(0) scale(0.98); background: rgba(255,255,255,0.05); }
+    .action-card--done {
+      max-width: 560px; margin: 10px 32px; padding: 12px 16px;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(234,179,8,0.06); border: 1px solid rgba(234,179,8,0.25); border-radius: 12px;
+      font-size: 13px; color: var(--text2, #cbd5e1); line-height: 1.45;
+    }
     .jc-msg-meta {
       font-size: 10px; color: var(--text3); margin-bottom: 4px;
       font-family: var(--font-body); display: flex; align-items: center; gap: 6px;

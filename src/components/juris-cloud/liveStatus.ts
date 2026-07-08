@@ -46,6 +46,9 @@ const STAGE_LABELS: Record<string, string> = {
   routing_n1: "Analisando o caso",
   routing_n2: "Encaminhando ao especialista",
   executing_n3: "Redigindo a peça",
+  // CADASTRO-CHAT-REFINO #4: fluxo de AÇÃO (cadastro etc.) — rótulo condizente,
+  // nunca "Redigindo a peça". Emitido pelo edge como stage "executing_acao".
+  executing_acao: "Processando o cadastro",
   validating_n2: "Revisando a peça",
   validating_n1: "Revisão final",
 };
