@@ -2930,10 +2930,7 @@ serve(async (req) => {
       if (cadRunErr || !cadRunRow) return errResp(500, "db_error", `Falha ao criar run: ${cadRunErr?.message}`);
       const cadRunId = (cadRunRow as { id: string }).id;
       const cadSeq = await nextSeq(admin, body.sessionId);
-      const cadContent =
-        "Claro! Preencha o formulário de cadastro abaixo — é o mesmo do cadastro manual, " +
-        "em 5 etapas (Classificação, Dados, Contato, Endereço, Bancário/PIX) com uma revisão final. " +
-        "Ao confirmar, o cliente é gravado com os dados sensíveis cifrados.";
+      const cadContent = "Claro!\nPreencha o formulário de cadastro do cliente abaixo:";
       await admin.from("chat_messages").insert({
         session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
         content: cadContent, sequence_number: cadSeq,
