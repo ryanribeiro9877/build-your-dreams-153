@@ -12,14 +12,31 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-// document_type padronizado por slot (§7·B·A). Os obrigatórios do conjunto
-// alimentam o checklist/gate (client_document_checklist) do cliente.
+// Slot = identidade do campo de upload na UI (frente/verso são dois slots
+// distintos, por decisão do Rodrigo). NÃO é o document_type gravado.
 export type ClientDocSlot =
   | "rg_frente"
   | "rg_verso"
   | "comprovante_residencia"
   | "extrato_ir"
   | "extrato_bancario";
+
+// Mapa slot → document_type gravado em client_documents.
+// O document_type PRECISA pertencer ao CHECK de produção
+// (client_documents_document_type_check) e casar com o vocabulário do gate
+// (required_document_sets: rg, comprovante, ...), senão (a) o INSERT quebra com
+// check_violation e (b) o gate documental (client_document_checklist) nunca fecha.
+// RG frente e verso gravam ambos como 'rg' (o gate exige um 'rg' validado, não
+// importa a face). Comprovante de residência grava 'comprovante' (o que o gate
+// exige). Extrato bancário grava 'extrato_conta' (valor válido no CHECK).
+// CPF não é slot: já consta no próprio RG (decisão do Rodrigo, 2026-07-09).
+export const DOC_TYPE_BY_SLOT: Record<ClientDocSlot, string> = {
+  rg_frente: "rg",
+  rg_verso: "rg",
+  comprovante_residencia: "comprovante",
+  extrato_ir: "extrato_ir",
+  extrato_bancario: "extrato_conta",
+};
 
 export const CLIENT_DOC_SLOTS: { slot: ClientDocSlot; label: string; required: boolean }[] = [
   { slot: "rg_frente", label: "RG — Frente", required: true },
@@ -52,7 +69,7 @@ export async function uploadClientDocument(
   const { error: insErr } = await supabase.from("client_documents").insert({
     client_id: clientId,
     client_name: clientName,
-    document_type: slot,
+    document_type: DOC_TYPE_BY_SLOT[slot],
     document_name: label,
     file_path: filePath,
     file_size: file.size,
