@@ -36,3 +36,20 @@ export function deriveEndTime(start: string, durationMin = 15): string {
   const mm = total % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
+
+// Máquina de estados (Trilha B 5.2). Terminais (canceled/no_show/done) não saem
+// do estado — espelha o gate de update_meeting no banco.
+export const MEETING_STATUS_TRANSITIONS: Record<MeetingStatus, MeetingStatus[]> = {
+  scheduled: ["confirmed", "rescheduled", "canceled", "no_show", "done"],
+  confirmed: ["rescheduled", "canceled", "no_show", "done"],
+  rescheduled: ["confirmed", "canceled", "no_show", "done"],
+  canceled: [],
+  no_show: [],
+  done: [],
+};
+
+/** Opções de status válidas a partir do estado atual (inclui o próprio). */
+export function statusOptionsFor(current: MeetingStatus): { value: MeetingStatus; label: string }[] {
+  const allowed = new Set<MeetingStatus>([current, ...MEETING_STATUS_TRANSITIONS[current]]);
+  return MEETING_STATUS_OPTIONS.filter((o) => allowed.has(o.value));
+}

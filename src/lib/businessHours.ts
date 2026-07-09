@@ -8,6 +8,8 @@ export interface BusinessHours {
   open_time: string;               // "HH:MM"
   close_time: string;              // "HH:MM"
   windows: [string, string][];     // [["08:00","11:00"],["13:00","16:00"]]
+  max_parallel: number;            // capacidade simultânea por slot (Trilha B 5.2)
+  slot_minutes: number;            // duração base do slot em minutos (Trilha B 5.2)
   holidays: string[];              // ["YYYY-MM-DD"]
 }
 
@@ -19,6 +21,8 @@ export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   open_time: "08:00",
   close_time: "17:00",
   windows: [["08:00", "11:00"], ["13:00", "16:00"]],
+  max_parallel: 2,
+  slot_minutes: 15,
   holidays: [],
 };
 
@@ -70,6 +74,8 @@ export async function loadBusinessHours(): Promise<BusinessHours> {
       open_time: String(j.open_time ?? "08:00").slice(0, 5),
       close_time: String(j.close_time ?? "17:00").slice(0, 5),
       windows: (j.windows as [string, string][]) ?? DEFAULT_BUSINESS_HOURS.windows,
+      max_parallel: Number(j.max_parallel ?? DEFAULT_BUSINESS_HOURS.max_parallel),
+      slot_minutes: Number(j.slot_minutes ?? DEFAULT_BUSINESS_HOURS.slot_minutes),
       holidays: ((j.holidays as string[]) ?? []).map((s) => String(s).slice(0, 10)),
     };
   } catch { return DEFAULT_BUSINESS_HOURS; }
