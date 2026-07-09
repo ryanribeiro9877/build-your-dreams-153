@@ -1,4 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// clientDocuments.ts importa o client do Supabase no topo; sem VITE_SUPABASE_URL
+// (ambiente de teste/CI) o createClient lança "supabaseUrl is required." na carga
+// do módulo. Este teste só lê constantes puras, então stubamos o client.
+vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
+
 import { CLIENT_DOC_SLOTS, DOC_TYPE_BY_SLOT, type ClientDocSlot } from "./clientDocuments";
 
 // Contrato do banco (produção), verificado via information_schema em 2026-07-09:
