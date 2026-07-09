@@ -218,6 +218,8 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   extrato_inss: "Extrato INSS", cnis: "CNIS", procuracao: "Procuração",
   contrato: "Contrato", termo_cooperado: "Termo de Cooperado",
   certidao: "Certidão", outro: "Outro",
+  audio_atendimento: "Áudio do atendimento",
+  resumo_atendimento: "Resumo do atendimento",
 };
 
 // Tipos oferecidos no upload da aba Documentos (vocabulário canônico do card 3.6).

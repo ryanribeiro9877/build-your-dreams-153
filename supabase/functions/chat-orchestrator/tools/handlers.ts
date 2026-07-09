@@ -35,7 +35,11 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
     }
     case "consultar_documentos": {
       const { data } = await admin.from("client_documents")
-        .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id)).limit(50);
+        .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id))
+        .neq("document_type", "audio_atendimento")
+        .neq("document_type", "resumo_atendimento")
+        .order("created_at", { ascending: false })
+        .limit(50);
       return data ?? [];
     }
     case "consultar_cep": {

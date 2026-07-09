@@ -116,9 +116,7 @@ serve(async (req) => {
     const blob = new Blob([JSON.stringify(summary, null, 2)], { type: "application/json" });
     const { error: upErr } = await caller.storage.from("client-documents").upload(filePath, blob, { contentType: "application/json", upsert: false });
     if (upErr) return jsonResp(req, 500, { ok: false, reason: "upload_failed", message: upErr.message });
-    const d = new Date(geradoEm);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const nome = `Resumo do atendimento ${pad(d.getUTCDate())}/${pad(d.getUTCMonth()+1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    const nome = `Resumo do atendimento ${new Date(geradoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`;
     const { error: insErr } = await caller.from("client_documents").insert({
       client_id: clientId, uploaded_by: uid, client_name: clientName, document_type: "resumo_atendimento",
       document_name: nome, file_path: filePath, file_size: blob.size, mime_type: "application/json",
