@@ -2,7 +2,7 @@ import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
-  isCollectionContinuation, isCadastroClienteRequest,
+  isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
 } from "./intentClassifier.ts";
 
 // ─── CADASTRO-MODELO-A: disparo do formulário (isCadastroClienteRequest) ──────
@@ -25,6 +25,22 @@ Deno.test("isCadastroClienteRequest: sem alvo cliente / vazio → false", () => 
   assertEquals(isCadastroClienteRequest("gere uma petição"), false);
   assertEquals(isCadastroClienteRequest(""), false);
   assertEquals(isCadastroClienteRequest("bom dia"), false);
+});
+
+// ─── TAREFA-CHAT (card 4.1): disparo do cartão de confirmação (isTarefaChatRequest) ──
+Deno.test("isTarefaChatRequest: cria tarefa explícita", () => {
+  assertEquals(isTarefaChatRequest("cria uma tarefa pra eu ligar pro João amanhã 10h"), true);
+});
+Deno.test("isTarefaChatRequest: agendar/lembrete", () => {
+  assertEquals(isTarefaChatRequest("me lembra de enviar o contrato até sexta"), true);
+  assertEquals(isTarefaChatRequest("agenda uma tarefa de revisão pra segunda"), true);
+});
+Deno.test("isTarefaChatRequest: NÃO confunde com cadastro de cliente", () => {
+  assertEquals(isTarefaChatRequest("cadastrar cliente João da Silva"), false);
+});
+Deno.test("isTarefaChatRequest: NÃO confunde com consulta", () => {
+  assertEquals(isTarefaChatRequest("quais as tarefas do time hoje?"), false);
+  assertEquals(isTarefaChatRequest("mostra as tarefas atrasadas"), false);
 });
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──

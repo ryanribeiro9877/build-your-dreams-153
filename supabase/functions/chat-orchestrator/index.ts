@@ -37,7 +37,7 @@ import {
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
-  isCollectionContinuation, isCadastroClienteRequest,
+  isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -132,6 +132,9 @@ const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "
 // usuário (RLS/role valem; a RPC de cliente re-checa is_recepcao_or_socio). Isto
 // NÃO liga escrita: escrita segue exclusivamente no CHAT_TOOLS_ENABLED (OFF).
 const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "true").toLowerCase() !== "false";
+// Card 4.1 — escrita de tarefa pelo chat é DESACOPLADA do tool-calling (CHAT_TOOLS OFF).
+// Flag dedicada, reversível. Default ON.
+const TAREFA_CHAT_ENABLED = (Deno.env.get("TAREFA_CHAT_ENABLED") ?? "true") === "true";
 
 // CADASTRO-CHAT-LOOP-CONCLUSAO: durante uma coleta ativa (continuacao_coleta) o
 // N3 precisa ver TODOS os campos já informados — a janela deslizante de

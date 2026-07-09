@@ -222,6 +222,24 @@ export function isCadastroClienteRequest(message: string): boolean {
   return CADASTRO_ALVO_RE.test(m) && CADASTRO_VERBO_RE.test(m);
 }
 
+// ─── TAREFA-CHAT (card 4.1): disparo do cartão de confirmação de tarefa ───────
+// TAREFA-CHAT (card 4.1): detecção determinística de "criar tarefa" pelo chat.
+// Conservador: exige verbo de criação/agenda + alvo tarefa/lembrete, OU um verbo
+// de ação com marcador de prazo. NUNCA dispara em consulta ("quais/mostra ...").
+const TAREFA_CONSULTA_RE = /\b(quais|quantas|mostr\w*|list\w*|ver|status|atrasad\w*|do time|da equipe)\b/i;
+const TAREFA_ALVO_RE = /\b(tarefa|tarefas|lembrete|lembra(r|-me)?|to-?do|afazer)\b/i;
+const TAREFA_VERBO_RE = /\b(cria(r|ndo)?|agend\w*|marc\w*|anot\w*|abr\w*|nova)\b/i;
+// verbo de ação + marcador de prazo relativo (ligar amanhã, enviar até sexta)
+const TAREFA_ACAO_PRAZO_RE = /\b(lig\w*|envi\w*|protocol\w*|revis\w*|entreg\w*|retorn\w*|cobr\w*)\b.*\b(hoje|amanh[ãa]|depois de amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|semana que vem|[àa]s?\s*\d{1,2}\s*h|\d{1,2}:\d{2}|at[ée]\s)/i;
+
+export function isTarefaChatRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  if (TAREFA_CONSULTA_RE.test(m)) return false;
+  if (TAREFA_ALVO_RE.test(m) && TAREFA_VERBO_RE.test(m)) return true;
+  return TAREFA_ACAO_PRAZO_RE.test(m);
+}
+
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451
 // "content policy", 5xx, timeout do watchdog). Um erro NÃO é um turno real do
 // especialista: não pode "encerrar" uma coleta em andamento.
