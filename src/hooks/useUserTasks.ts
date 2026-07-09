@@ -299,13 +299,16 @@ export async function updateUserTaskStatus(
 
 // ─── Reagendar / assumir / criar tarefa de departamento ───────────────────────
 // As RPCs abaixo (reschedule_user_task, claim_user_task, create_department_task)
-// ainda não estão nos tipos gerados de `supabase/types` — mesmo cast local usado
-// em `useAssignableUsers.ts` (RPC por nome, sem o overload tipado do client).
+// ainda não estão nos tipos gerados de `supabase/types` — cast local por nome.
+// IMPORTANTE: chamar `.rpc` SEMPRE acoplado ao `supabase` (obj.rpc(...)); extrair
+// a referência e chamá-la solta quebra em `this.rest` undefined (bug conhecido —
+// crash CLIENTES-BUSCA 2026-07-08). Por isso o wrapper reencaminha acoplado.
 type RpcCaller = (
   fn: string,
   args?: Record<string, unknown>,
 ) => Promise<{ data: unknown; error: unknown }>;
-const rpcUntyped = (supabase as unknown as { rpc: RpcCaller }).rpc;
+const rpcUntyped: RpcCaller = (fn, args) =>
+  (supabase as unknown as { rpc: RpcCaller }).rpc(fn, args);
 
 export async function rescheduleUserTask(
   taskId: string,
