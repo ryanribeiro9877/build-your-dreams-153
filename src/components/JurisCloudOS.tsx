@@ -18,7 +18,7 @@ import { useUiPreferences } from "@/hooks/useUiPreferences";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings, Upload, UserPlus, Coins,
+  Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -1645,6 +1645,7 @@ export default function JurisCloudOS() {
   // Menu items
   const MENU_ITEMS: MenuItem[] = [
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
+    { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenuItem("agenda") },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
