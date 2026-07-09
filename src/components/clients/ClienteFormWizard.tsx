@@ -9,7 +9,7 @@ import {
 } from "./shared";
 import { fetchMunicipios } from "@/lib/ibge";
 import {
-  CLIENT_DOC_SLOTS, type ClientDocSlot, uploadClientDocuments,
+  CLIENT_DOC_SLOTS, type ClientDocSlot, uploadClientDocuments, uploadSignedDocument,
 } from "@/lib/clientDocuments";
 import { runCooperadoOnboarding, type CooperadoOnboardingResult } from "@/lib/cooperadoOnboarding";
 import { REVISAO_ANTES_ASSINATURA } from "@/lib/cooperadoDocs";
@@ -30,6 +30,11 @@ const FORM_COLUMNS = Object.keys(EMPTY_FORM) as (keyof ClientFormValues)[];
 // Opção do wizard: "não possui chave PIX" (§6). Não é um pix_key_type real —
 // no payload vira pix_key_type/pix_key = null.
 const PIX_NONE = "sem_chave";
+
+// Valor gravado quando um telefone OPCIONAL é marcado como "não possui" (ponto 2).
+// É explícito (não vazio) para NÃO virar [A PREENCHER] no documento/revisão —
+// [A PREENCHER] é só para obrigatório realmente ausente.
+const NAO_POSSUI = "não possui";
 
 const STEPS = [
   { key: "classificacao", label: "Classificação" },
@@ -66,6 +71,13 @@ export default function ClienteFormWizard({
   const [pixMode, setPixMode] = useState<string>(
     initialValues && !initialValues.pix_key ? PIX_NONE : (initialValues?.pix_key_type || "cpf"),
   );
+
+  // Telefones opcionais marcados "não possui" (ponto 2).
+  const [phoneCommNone, setPhoneCommNone] = useState(initialValues?.phone_commercial === NAO_POSSUI);
+  const [phoneHomeNone, setPhoneHomeNone] = useState(initialValues?.phone_home === NAO_POSSUI);
+
+  // Ref do card no chat para scrollIntoView (ponto 1).
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const patch = (p: Partial<ClientFormValues>) => setForm(prev => ({ ...prev, ...p }));
   const isPJ = form.tipo_pessoa === "juridica";
@@ -124,6 +136,12 @@ export default function ClienteFormWizard({
     if (!isPJ && form.natural_uf) void loadNaturalMunicipios(form.natural_uf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ponto 1: no chat, trazer o card para a área visível ao montar e a cada etapa
+  // (o card tem altura limitada ao viewport; o scroll de página não é exigido).
+  useEffect(() => {
+    if (variant === "chat") cardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [variant, step, reviewing]);
 
   // Garante que um valor já salvo apareça no select mesmo antes de o IBGE responder.
   const cityChoices = useMemo(() => {
@@ -268,7 +286,7 @@ export default function ClienteFormWizard({
   const currentIndex = reviewing ? STEPS.length : step;
 
   const card = (
-    <div className="cli-form-card cli-wizard">
+    <div className="cli-form-card cli-wizard" ref={cardRef}>
       {/* progresso */}
       <div className="cli-steps" role="list">
         {STEPS.map((s, i) => (
@@ -443,13 +461,27 @@ export default function ClienteFormWizard({
         </div>
         <div>
           <label className="cli-label">Telefone Comercial</label>
-          <input className="cli-input" value={form.phone_commercial} onChange={e => patch({ phone_commercial: formatPhone(e.target.value) })} placeholder="(71) 3333-3333" maxLength={15} />
-          <label className="cli-wa-check"><input type="checkbox" checked={form.phone_commercial_is_whatsapp} onChange={e => patch({ phone_commercial_is_whatsapp: e.target.checked })} /> WhatsApp</label>
+          <input className="cli-input" value={phoneCommNone ? "" : form.phone_commercial} disabled={phoneCommNone}
+            onChange={e => patch({ phone_commercial: formatPhone(e.target.value) })} placeholder={phoneCommNone ? "não possui" : "(71) 3333-3333"} maxLength={15} />
+          <label className="cli-wa-check">
+            <input type="checkbox" checked={phoneCommNone}
+              onChange={e => { setPhoneCommNone(e.target.checked); patch({ phone_commercial: e.target.checked ? NAO_POSSUI : "", phone_commercial_is_whatsapp: false }); }} /> não possui
+          </label>
+          {!phoneCommNone && (
+            <label className="cli-wa-check"><input type="checkbox" checked={form.phone_commercial_is_whatsapp} onChange={e => patch({ phone_commercial_is_whatsapp: e.target.checked })} /> WhatsApp</label>
+          )}
         </div>
         <div>
           <label className="cli-label">Telefone Residencial</label>
-          <input className="cli-input" value={form.phone_home} onChange={e => patch({ phone_home: formatPhone(e.target.value) })} placeholder="(71) 3333-3333" maxLength={15} />
-          <label className="cli-wa-check"><input type="checkbox" checked={form.phone_home_is_whatsapp} onChange={e => patch({ phone_home_is_whatsapp: e.target.checked })} /> WhatsApp</label>
+          <input className="cli-input" value={phoneHomeNone ? "" : form.phone_home} disabled={phoneHomeNone}
+            onChange={e => patch({ phone_home: formatPhone(e.target.value) })} placeholder={phoneHomeNone ? "não possui" : "(71) 3333-3333"} maxLength={15} />
+          <label className="cli-wa-check">
+            <input type="checkbox" checked={phoneHomeNone}
+              onChange={e => { setPhoneHomeNone(e.target.checked); patch({ phone_home: e.target.checked ? NAO_POSSUI : "", phone_home_is_whatsapp: false }); }} /> não possui
+          </label>
+          {!phoneHomeNone && (
+            <label className="cli-wa-check"><input type="checkbox" checked={form.phone_home_is_whatsapp} onChange={e => patch({ phone_home_is_whatsapp: e.target.checked })} /> WhatsApp</label>
+          )}
         </div>
       </>
     );
@@ -570,8 +602,11 @@ export default function ClienteFormWizard({
     }
     add("E-mail", form.email);
     add("Celular", form.phone + (form.phone_is_whatsapp ? " (WhatsApp)" : ""));
-    add("Tel. Comercial", form.phone_commercial + (form.phone_commercial_is_whatsapp ? " (WhatsApp)" : ""));
-    add("Tel. Residencial", form.phone_home + (form.phone_home_is_whatsapp ? " (WhatsApp)" : ""));
+    // Opcionais: "não possui" (marcado) ou "—" (vazio) — nunca [A PREENCHER].
+    const optPhone = (v: string, wa: boolean) =>
+      v === NAO_POSSUI ? "não possui" : v ? v + (wa ? " (WhatsApp)" : "") : "—";
+    add("Tel. Comercial", optPhone(form.phone_commercial, form.phone_commercial_is_whatsapp));
+    add("Tel. Residencial", optPhone(form.phone_home, form.phone_home_is_whatsapp));
     add("CEP", form.zip_code);
     add("Endereço", [form.address, form.address_number, form.address_complement].filter(Boolean).join(", "));
     add("Bairro", form.neighborhood);
@@ -631,6 +666,9 @@ function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
 }) {
   const [files, setFiles] = useState<Partial<Record<ClientDocSlot, File>>>({});
   const [uploading, setUploading] = useState(false);
+  const [sentSlots, setSentSlots] = useState<Set<ClientDocSlot>>(new Set());   // ponto 5
+  const [signedSent, setSignedSent] = useState<Set<string>>(new Set());        // ponto 6 (por documentType)
+  const [signedBusy, setSignedBusy] = useState<string | null>(null);
   const [genLoading, setGenLoading] = useState(true);
   const [res, setRes] = useState<CooperadoOnboardingResult | null>(null);
 
@@ -659,10 +697,28 @@ function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
     setUploading(false);
     const failed = results.filter(r => !r.ok);
     const ok = results.filter(r => r.ok);
-    if (ok.length) toast.success(`${ok.length} documento(s) enviado(s)`);
+    if (ok.length) {
+      toast.success(`${ok.length} documento(s) enviado(s)`);
+      setSentSlots(prev => { const n = new Set(prev); ok.forEach(r => n.add(r.slot)); return n; });
+    }
     if (failed.length) toast.error(`Falha em ${failed.length} documento(s)`);
     setFiles({});
     await reloadChecklist();
+  }
+
+  // Ponto 6: anexar o documento GERADO já assinado (mesmo document_type do gerado,
+  // status 'recebido') — move o item do checklist de "pendente de assinatura" p/ "recebido".
+  async function handleSigned(documentType: string, label: string, file: File) {
+    setSignedBusy(documentType);
+    const r = await uploadSignedDocument(clientId, clientName, userId, documentType, label, file);
+    setSignedBusy(null);
+    if (r.ok) {
+      setSignedSent(prev => new Set(prev).add(documentType));
+      toast.success(`${label}: assinado recebido`);
+      await reloadChecklist();
+    } else {
+      toast.error(`Falha ao anexar ${label}: ${r.error ?? ""}`);
+    }
   }
 
   const okGenerated = (res?.generated ?? []).filter(g => g.ok);
@@ -671,25 +727,36 @@ function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
 
   return (
     <div className="cli-form-card cli-wizard">
-      <div className="cli-formsec">Cliente cadastrado{clientName ? `: ${clientName}` : ""}</div>
+      <div className="cli-formsec">✓ Cadastro concluído</div>
+      {clientName && <div className="cli-doc-hint" style={{ marginTop: -4 }}>Cliente: {clientName}</div>}
 
       {/* Uploads dos documentos do cliente (não bloqueiam — geram pendência) */}
       <div className="cli-doc-panel">
         <div className="cli-doc-title">Documentos do cliente</div>
         <div className="cli-doc-grid">
-          {CLIENT_DOC_SLOTS.map(({ slot, label, required }) => (
-            <div key={slot}>
-              <label className="cli-label">{label}{required ? " *" : ""}</label>
-              <input type="file" accept="image/*,.pdf,.xls,.xlsx" className="cli-input file"
-                onChange={e => setFiles(prev => ({ ...prev, [slot]: e.target.files?.[0] || undefined }))} />
-              {files[slot] && <span className="cli-filename">{files[slot]?.name}</span>}
-            </div>
-          ))}
+          {CLIENT_DOC_SLOTS.map(({ slot, label, required }) => {
+            const sent = sentSlots.has(slot);
+            return (
+              <div key={slot}>
+                <label className="cli-label">{label}{required ? " *" : ""}</label>
+                <input type="file" accept="image/*,.pdf,.xls,.xlsx" className="cli-input file" disabled={sent}
+                  onChange={e => setFiles(prev => ({ ...prev, [slot]: e.target.files?.[0] || undefined }))} />
+                {sent ? <span className="cli-doc-hint">✓ enviado</span>
+                  : files[slot] && <span className="cli-filename">{files[slot]?.name}</span>}
+              </div>
+            );
+          })}
         </div>
         <div className="cli-form-actions">
-          <button type="button" className="cli-btn" disabled={uploading} onClick={() => void handleUpload()}>
-            {uploading ? "Enviando…" : "Enviar documentos"}
-          </button>
+          {(() => {
+            const pending = CLIENT_DOC_SLOTS.some(({ slot }) => files[slot] && !sentSlots.has(slot));
+            const allSent = sentSlots.size >= CLIENT_DOC_SLOTS.filter(s => s.required).length && !pending;
+            return (
+              <button type="button" className="cli-btn" disabled={uploading || !pending} onClick={() => void handleUpload()}>
+                {uploading ? "Enviando…" : pending ? "Enviar documentos" : allSent ? "Enviado ✓" : "Enviado"}
+              </button>
+            );
+          })()}
           <span className="cli-doc-hint">O envio não bloqueia o cadastro — o que faltar fica como pendência.</span>
         </div>
       </div>
@@ -702,12 +769,23 @@ function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
         ) : (
           <>
             {okGenerated.length > 0 ? (
-              <div className="cli-doc-chips">
+              <div className="cli-doc-gen-list">
                 {okGenerated.map(g => (
-                  <button key={g.documentType} type="button" className="cli-doc-chip"
-                    title="Baixar para revisão" onClick={() => g.filePath && void openSignedDoc(g.filePath)}>
-                    ⬇ {g.label}{(g.missing?.length ?? 0) > 0 ? " ⚠" : ""}
-                  </button>
+                  <div key={g.documentType} className="cli-doc-gen-item">
+                    <button type="button" className="cli-doc-chip"
+                      title="Baixar para revisão" onClick={() => g.filePath && void openSignedDoc(g.filePath)}>
+                      ⬇ {g.label}{(g.missing?.length ?? 0) > 0 ? " ⚠" : ""}
+                    </button>
+                    {signedSent.has(g.documentType) ? (
+                      <span className="cli-doc-hint">✓ assinado recebido</span>
+                    ) : (
+                      <label className="cli-doc-signed">
+                        <span>Anexar assinado</span>
+                        <input type="file" accept="image/*,.pdf" disabled={signedBusy === g.documentType}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) void handleSigned(g.documentType, g.label, f); }} />
+                      </label>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (

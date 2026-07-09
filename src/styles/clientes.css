@@ -245,6 +245,17 @@
 
 /* ---------- wizard (CADASTRO-MODELO-A) ---------- */
 .cli-wizard-chat { margin: 8px 0; }
+/* Ponto 1: no chat, o card cabe no viewport da conversa — cabeçalho de passos e
+   ações fixos; só o corpo da etapa rola internamente se transbordar. */
+.cli-wizard-chat .cli-form-card { display: flex; flex-direction: column; max-height: min(72vh, 640px); }
+.cli-wizard-chat .cli-steps { flex: 0 0 auto; }
+.cli-wizard-chat .cli-formgrid { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.cli-wizard-chat .cli-form-actions { flex: 0 0 auto; }
+/* Ponto 6: lista de gerados com slot de upload do assinado por item. */
+.cli-doc-gen-list { display: flex; flex-direction: column; gap: 8px; }
+.cli-doc-gen-item { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cli-doc-signed { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--cli-ink); }
+.cli-doc-signed input[type="file"] { font-size: 11px; }
 .cli-wizard .cli-steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .cli-step { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
   border: 2.5px solid var(--cli-ink); background: #fff; color: var(--cli-muted); font-weight: 800;
