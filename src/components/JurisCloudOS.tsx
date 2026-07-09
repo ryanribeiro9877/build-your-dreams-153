@@ -1038,7 +1038,8 @@ export default function JurisCloudOS() {
       }
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      // cadastro_form é resposta síncrona final (dispara o wizard) — também encerra.
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status
