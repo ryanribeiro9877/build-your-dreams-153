@@ -151,7 +151,9 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           ? (args.documentos as unknown[]).map((d) => String(d)).filter((d) => d.trim())
           : [];
         if (docs.length === 0) return { ok: false, error: "nenhum documento informado" };
-        const reu = (args.reu as string | undefined) ?? null;
+        // Trima o réu uma vez: título e descrição ficam consistentes (réu só-espaços
+        // é ignorado em ambos, igual ao buildPendenciaTitulo).
+        const reu = ((args.reu as string | undefined) ?? "").trim() || null;
         const created: string[] = [];
         for (const doc of docs) {
           const { data, error } = await userClient.rpc("criar_pendencia", {
