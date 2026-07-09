@@ -296,3 +296,52 @@ export async function updateUserTaskStatus(
   });
   if (error) throw error;
 }
+
+// ─── Reagendar / assumir / criar tarefa de departamento ───────────────────────
+// As RPCs abaixo (reschedule_user_task, claim_user_task, create_department_task)
+// ainda não estão nos tipos gerados de `supabase/types` — cast local por nome.
+// IMPORTANTE: chamar `.rpc` SEMPRE acoplado ao `supabase` (obj.rpc(...)); extrair
+// a referência e chamá-la solta quebra em `this.rest` undefined (bug conhecido —
+// crash CLIENTES-BUSCA 2026-07-08). Por isso o wrapper reencaminha acoplado.
+type RpcCaller = (
+  fn: string,
+  args?: Record<string, unknown>,
+) => Promise<{ data: unknown; error: unknown }>;
+const rpcUntyped: RpcCaller = (fn, args) =>
+  (supabase as unknown as { rpc: RpcCaller }).rpc(fn, args);
+
+export async function rescheduleUserTask(
+  taskId: string,
+  newDeadlineISO: string,
+  justificativa: string,
+): Promise<void> {
+  const { error } = await rpcUntyped("reschedule_user_task", {
+    p_task_id: taskId,
+    p_new_deadline: newDeadlineISO,
+    p_justificativa: justificativa,
+  });
+  if (error) throw error;
+}
+
+export async function claimUserTask(taskId: string): Promise<string> {
+  const { data, error } = await rpcUntyped("claim_user_task", { p_task_id: taskId });
+  if (error) throw error;
+  return data as unknown as string;
+}
+
+export interface CreateDepartmentTaskInput {
+  task_type_id: string; title: string; description?: string;
+  client_id?: string; process_id?: string; priority?: TaskPriority;
+  deadline_at?: string; area?: LegalArea; payload?: Record<string, unknown>;
+}
+export async function createDepartmentTask(input: CreateDepartmentTaskInput): Promise<string> {
+  const { data, error } = await rpcUntyped("create_department_task", {
+    p_task_type_id: input.task_type_id, p_title: input.title,
+    p_description: input.description ?? null, p_client_id: input.client_id ?? null,
+    p_process_id: input.process_id ?? null, p_priority: input.priority ?? "medium",
+    p_deadline_at: input.deadline_at ?? null, p_area: input.area ?? null,
+    p_payload: (input.payload ?? {}) as unknown as Json,
+  });
+  if (error) throw error;
+  return data as unknown as string;
+}

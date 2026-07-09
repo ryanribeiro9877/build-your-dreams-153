@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import TaskAttachments from "@/components/TaskAttachments";
 import { useMyInbox, updateUserTaskStatus } from "@/hooks/useUserTasks";
+import { RescheduleInline } from "@/components/chat/RescheduleInline";
 import { toast } from "sonner";
 import { USER_TASK_STATUS_LABELS as STATUS_LABELS } from "@/lib/userTaskLabels";
 import type { UserTaskStatus, TaskPriority } from "@/types/jurisai";
@@ -44,6 +45,9 @@ export default function MyInbox() {
   const { tasks, loading, error, refresh } = useMyInbox(includeCompleted);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [completeNotes, setCompleteNotes] = useState("");
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
 
   const advance = async (taskId: string, current: UserTaskStatus) => {
     const next = NEXT_STATUS[current];
@@ -58,6 +62,32 @@ export default function MyInbox() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const openComplete = (taskId: string) => {
+    setReschedulingId(null);
+    setCompleteNotes("");
+    setCompletingId(taskId);
+  };
+
+  const confirmComplete = async (taskId: string) => {
+    setUpdatingId(taskId);
+    try {
+      await updateUserTaskStatus(taskId, "completed", completeNotes.trim() || undefined);
+      toast.success("Tarefa concluída.");
+      setCompletingId(null);
+      setCompleteNotes("");
+      void refresh();
+    } catch (e) {
+      toast.error(`Erro: ${(e as Error).message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const openReschedule = (taskId: string) => {
+    setCompletingId(null);
+    setReschedulingId(taskId);
   };
 
   if (loading) return <HexagonLoader variant="fullscreen" label="Carregando" />;
@@ -195,19 +225,108 @@ export default function MyInbox() {
                     )}
                   </div>
 
-                  {/* V20: botão expandir anexos + bloco */}
+                  {/* Ações: concluir / reagendar / anexos */}
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #25253a" }}>
-                    <button
-                      onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
-                      style={{
-                        padding: "6px 10px", borderRadius: 6,
-                        border: "1px solid #25253a", background: "transparent",
-                        color: "#9898b0", fontSize: 11, fontWeight: 600,
-                        cursor: "pointer", letterSpacing: "0.04em",
-                      }}
-                    >
-                      {expandedId === task.id ? "▾ Ocultar anexos" : "▸ Anexos"}
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {!isCompleted && (
+                        <button
+                          onClick={() => openComplete(task.id)}
+                          disabled={updatingId === task.id}
+                          style={{
+                            padding: "6px 10px", borderRadius: 6,
+                            border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.08)",
+                            color: "#4ade80", fontSize: 11, fontWeight: 600,
+                            cursor: "pointer", letterSpacing: "0.04em",
+                            opacity: updatingId === task.id ? 0.5 : 1,
+                          }}
+                        >
+                          ✔ Concluir
+                        </button>
+                      )}
+                      {!isCompleted && (
+                        <button
+                          onClick={() => openReschedule(task.id)}
+                          disabled={updatingId === task.id}
+                          style={{
+                            padding: "6px 10px", borderRadius: 6,
+                            border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.08)",
+                            color: "#60a5fa", fontSize: 11, fontWeight: 600,
+                            cursor: "pointer", letterSpacing: "0.04em",
+                          }}
+                        >
+                          🗓 Reagendar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+                        style={{
+                          padding: "6px 10px", borderRadius: 6,
+                          border: "1px solid #25253a", background: "transparent",
+                          color: "#9898b0", fontSize: 11, fontWeight: 600,
+                          cursor: "pointer", letterSpacing: "0.04em",
+                        }}
+                      >
+                        {expandedId === task.id ? "▾ Ocultar anexos" : "▸ Anexos"}
+                      </button>
+                    </div>
+
+                    {completingId === task.id && (
+                      <div style={{
+                        marginTop: 10, padding: 12, borderRadius: 8,
+                        background: "#16161f", border: "1px solid rgba(34,197,94,0.3)",
+                        display: "flex", flexDirection: "column", gap: 8,
+                      }}>
+                        <label style={{ fontSize: 11, color: "#9898b0" }}>Observação (opcional)</label>
+                        <textarea
+                          value={completeNotes}
+                          onChange={(e) => setCompleteNotes(e.target.value)}
+                          rows={2}
+                          placeholder="Alguma observação sobre a conclusão?"
+                          style={{
+                            padding: "6px 8px", borderRadius: 6,
+                            border: "1px solid #25253a", background: "#0d0d14",
+                            color: "#eeeef5", fontSize: 12, fontFamily: "inherit", resize: "vertical",
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            onClick={() => confirmComplete(task.id)}
+                            disabled={updatingId === task.id}
+                            style={{
+                              padding: "6px 12px", borderRadius: 6,
+                              border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)",
+                              color: "#4ade80", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                              opacity: updatingId === task.id ? 0.5 : 1,
+                            }}
+                          >
+                            {updatingId === task.id ? "..." : "Confirmar conclusão"}
+                          </button>
+                          <button
+                            onClick={() => setCompletingId(null)}
+                            style={{
+                              padding: "6px 12px", borderRadius: 6,
+                              border: "1px solid #25253a", background: "transparent",
+                              color: "#9898b0", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                            }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {reschedulingId === task.id && (
+                      <div style={{
+                        marginTop: 10, padding: 12, borderRadius: 8,
+                        background: "#16161f", border: "1px solid rgba(59,130,246,0.3)",
+                      }}>
+                        <RescheduleInline
+                          taskId={task.id}
+                          onDone={() => { setReschedulingId(null); void refresh(); }}
+                        />
+                      </div>
+                    )}
+
                     {expandedId === task.id && (
                       <TaskAttachments taskId={task.id} canUpload={!isCompleted} />
                     )}

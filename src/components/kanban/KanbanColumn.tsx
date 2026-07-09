@@ -12,10 +12,11 @@ interface KanbanColumnProps {
   onEditCard: (card: KanbanCardV2) => void;
   onDeleteCard: (card: KanbanCardV2) => void;
   onOpenClient?: (clientId: string) => void;
+  onClaimCard?: (card: KanbanCardV2) => void | Promise<void>;
 }
 
 export function KanbanColumn({
-  column, cards, canEdit, simplified, onOpenCard, onEditCard, onDeleteCard, onOpenClient,
+  column, cards, canEdit, simplified, onOpenCard, onEditCard, onDeleteCard, onOpenClient, onClaimCard,
 }: KanbanColumnProps) {
   return (
     <div style={columnStyle}>
@@ -77,6 +78,7 @@ export function KanbanColumn({
                       onEdit={onEditCard}
                       onDelete={onDeleteCard}
                       onOpenClient={onOpenClient}
+                      onClaim={onClaimCard}
                     />
                   </div>
                 )}

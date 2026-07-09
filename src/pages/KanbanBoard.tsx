@@ -7,6 +7,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { useAuth } from "@/hooks/useAuth";
 import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { claimUserTask } from "@/hooks/useUserTasks";
 import {
   useKanbanBoards,
   useKanbanBoard,
@@ -216,6 +217,17 @@ export default function KanbanBoard() {
     navigate(`/clientes/${clientId}`);
   }
 
+  // ── Assumir tarefa de departamento (awaiting_role_code) ─────────────────────
+  async function handleClaimCard(card: KanbanCardV2) {
+    try {
+      await claimUserTask(card.id);
+      toast.success("Você assumiu a tarefa.");
+      refreshBoard();
+    } catch (e) {
+      toast.error((e as { message?: string })?.message ?? "Não foi possível assumir a tarefa.");
+    }
+  }
+
   // ── Novo quadro ──────────────────────────────────────────────────────────────
   async function handleNewBoard() {
     const name = window.prompt("Nome do novo quadro:");
@@ -377,6 +389,7 @@ export default function KanbanBoard() {
                 onEditCard={(c) => setDetailTaskId(c.id)}
                 onDeleteCard={handleDeleteCard}
                 onOpenClient={handleOpenClient}
+                onClaimCard={handleClaimCard}
               />
             ))}
             {orderedColumns.length === 0 && (

@@ -10,6 +10,8 @@ interface KanbanCardProps {
   onEdit: (card: KanbanCardV2) => void;
   onDelete: (card: KanbanCardV2) => void;
   onOpenClient?: (clientId: string) => void;
+  /** Tarefa de departamento (card.awaiting_role_code preenchido): assumir vaga o papel. */
+  onClaim?: (card: KanbanCardV2) => void | Promise<void>;
 }
 
 function TagChips({ tags }: { tags: KanbanCardV2["tags"] }) {
@@ -44,9 +46,46 @@ function initials(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete, onOpenClient }: KanbanCardProps) {
+export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete, onOpenClient, onClaim }: KanbanCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const open = () => onOpen?.(card);
+
+  const handleClaim = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onClaim || claiming) return;
+    setClaiming(true);
+    try {
+      await onClaim(card);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  const claimButton = card.awaiting_role_code ? (
+    <button
+      type="button"
+      onClick={handleClaim}
+      disabled={claiming}
+      title={`Tarefa de departamento — aguardando responsável (${card.awaiting_role_code})`}
+      style={{
+        marginTop: 6,
+        alignSelf: "flex-start",
+        padding: "4px 10px",
+        borderRadius: 6,
+        border: `1px solid ${COLORS.gold}`,
+        background: "transparent",
+        color: COLORS.goldBright,
+        fontSize: 11,
+        fontWeight: 700,
+        fontFamily: FONT,
+        cursor: claiming ? "default" : "pointer",
+        opacity: claiming ? 0.6 : 1,
+      }}
+    >
+      {claiming ? "Assumindo…" : "Assumir"}
+    </button>
+  ) : null;
 
   const borderLeft = `3px solid ${PRIORITY_COLORS[card.priority]}`;
   const overdueBorder = card.is_overdue ? "rgba(239,68,68,0.4)" : COLORS.border;
@@ -85,6 +124,7 @@ export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete
           </span>
         </div>
         <TagChips tags={card.tags} />
+        {claimButton}
         {canEdit && <CardMenu open={menuOpen} setOpen={setMenuOpen} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />}
       </div>
     );
@@ -148,6 +188,7 @@ export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete
       </div>
 
       <TagChips tags={card.tags} />
+      {claimButton}
 
       {canEdit && <CardMenu open={menuOpen} setOpen={setMenuOpen} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />}
     </div>
