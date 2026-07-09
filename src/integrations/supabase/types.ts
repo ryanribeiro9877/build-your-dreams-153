@@ -3472,6 +3472,105 @@ export type Database = {
           },
         ]
       }
+      meetings: {
+        Row: {
+          id: string
+          client_id: string | null
+          client_name: string | null
+          phone: string | null
+          scheduled_date: string
+          start_time: string
+          end_time: string | null
+          type: string | null
+          lawyer_user_id: string | null
+          receptionist_user_id: string | null
+          summary: string | null
+          status: Database["public"]["Enums"]["meeting_status"]
+          notes: string | null
+          google_event_id: string | null
+          google_calendar_id: string | null
+          google_sync_status: string | null
+          last_synced_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id?: string | null
+          client_name?: string | null
+          phone?: string | null
+          scheduled_date: string
+          start_time: string
+          end_time?: string | null
+          type?: string | null
+          lawyer_user_id?: string | null
+          receptionist_user_id?: string | null
+          summary?: string | null
+          status?: Database["public"]["Enums"]["meeting_status"]
+          notes?: string | null
+          google_event_id?: string | null
+          google_calendar_id?: string | null
+          google_sync_status?: string | null
+          last_synced_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string | null
+          client_name?: string | null
+          phone?: string | null
+          scheduled_date?: string
+          start_time?: string
+          end_time?: string | null
+          type?: string | null
+          lawyer_user_id?: string | null
+          receptionist_user_id?: string | null
+          summary?: string | null
+          status?: Database["public"]["Enums"]["meeting_status"]
+          notes?: string | null
+          google_event_id?: string | null
+          google_calendar_id?: string | null
+          google_sync_status?: string | null
+          last_synced_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meeting_audit_log: {
+        Row: {
+          id: string
+          meeting_id: string
+          actor_user_id: string | null
+          field: string
+          old_value: string | null
+          new_value: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          meeting_id: string
+          actor_user_id?: string | null
+          field: string
+          old_value?: string | null
+          new_value?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          meeting_id?: string
+          actor_user_id?: string | null
+          field?: string
+          old_value?: string | null
+          new_value?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_tokens: {
@@ -3556,6 +3655,23 @@ export type Database = {
         }
         Returns: string
       }
+      create_meeting: {
+        Args: {
+          p_scheduled_date: string
+          p_start_time: string
+          p_client_id?: string | null
+          p_client_name?: string | null
+          p_phone?: string | null
+          p_end_time?: string | null
+          p_type?: string | null
+          p_lawyer_user_id?: string | null
+          p_receptionist_user_id?: string | null
+          p_summary?: string | null
+          p_notes?: string | null
+          p_status?: Database["public"]["Enums"]["meeting_status"]
+        }
+        Returns: string
+      }
       create_user_task: {
         Args: {
           p_area?: Database["public"]["Enums"]["legal_area"]
@@ -3584,6 +3700,10 @@ export type Database = {
           p_titulo: string
         }
         Returns: string
+      }
+      delete_meeting: {
+        Args: { p_id: string }
+        Returns: undefined
       }
       delete_task_attachment: {
         Args: { p_attachment_id: string }
@@ -3749,6 +3869,18 @@ export type Database = {
           color: string
           id: string
           name: string
+        }[]
+      }
+      get_meeting_audit: {
+        Args: { p_meeting_id: string }
+        Returns: {
+          id: string
+          actor_user_id: string | null
+          actor_name: string | null
+          field: string
+          old_value: string | null
+          new_value: string | null
+          created_at: string
         }[]
       }
       get_my_inbox: {
@@ -4238,6 +4370,24 @@ export type Database = {
         }
         Returns: string
       }
+      update_meeting: {
+        Args: {
+          p_id: string
+          p_scheduled_date: string
+          p_start_time: string
+          p_end_time: string | null
+          p_type: string | null
+          p_lawyer_user_id: string | null
+          p_receptionist_user_id: string | null
+          p_client_id: string | null
+          p_client_name: string | null
+          p_phone: string | null
+          p_summary: string | null
+          p_notes: string | null
+          p_status: Database["public"]["Enums"]["meeting_status"]
+        }
+        Returns: undefined
+      }
       update_user_task_status: {
         Args: {
           p_new_status: Database["public"]["Enums"]["user_task_status"]
@@ -4317,6 +4467,13 @@ export type Database = {
         | "qualificado"
         | "convertido"
         | "perdido"
+      meeting_status:
+        | "scheduled"
+        | "confirmed"
+        | "rescheduled"
+        | "canceled"
+        | "no_show"
+        | "done"
       legal_area:
         | "bancario"
         | "familia"

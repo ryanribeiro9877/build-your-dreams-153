@@ -1,0 +1,96 @@
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
+import type { Database } from "@/integrations/supabase/types";
+import type { MeetingStatus } from "@/lib/meetings";
+
+export type MeetingRow = Database["public"]["Tables"]["meetings"]["Row"];
+export type MeetingAuditRow =
+  Database["public"]["Functions"]["get_meeting_audit"]["Returns"][number];
+
+export interface MeetingFilters {
+  from: string; // "YYYY-MM-DD"
+  to: string;   // "YYYY-MM-DD"
+  lawyerId?: string;
+  status?: MeetingStatus;
+}
+
+export function useMeetings(filters: MeetingFilters) {
+  const { user } = useAuth();
+  const key = `meetings-${filters.from}-${filters.to}-${filters.lawyerId ?? "all"}-${filters.status ?? "all"}`;
+
+  const { data, loading, error, refetch } = useSupabaseQuery<MeetingRow[]>({
+    queryKey: key,
+    enabled: !!user,
+    fetcher: async () => {
+      let q = supabase
+        .from("meetings")
+        .select("*")
+        .gte("scheduled_date", filters.from)
+        .lte("scheduled_date", filters.to)
+        .order("scheduled_date", { ascending: true })
+        .order("start_time", { ascending: true });
+      if (filters.lawyerId) q = q.eq("lawyer_user_id", filters.lawyerId);
+      if (filters.status) q = q.eq("status", filters.status);
+      const { data, error: qErr } = await q;
+      if (qErr) throw qErr;
+      return (data as MeetingRow[]) ?? [];
+    },
+    realtime: { table: "meetings" },
+  });
+
+  return { meetings: data ?? [], loading, error, refresh: refetch };
+}
+
+export interface CreateMeetingArgs {
+  p_scheduled_date: string;
+  p_start_time: string;
+  p_client_id?: string | null;
+  p_client_name?: string | null;
+  p_phone?: string | null;
+  p_end_time?: string | null;
+  p_type?: string | null;
+  p_lawyer_user_id?: string | null;
+  p_receptionist_user_id?: string | null;
+  p_summary?: string | null;
+  p_notes?: string | null;
+  p_status?: MeetingStatus;
+}
+
+export async function createMeeting(args: CreateMeetingArgs): Promise<string> {
+  const { data, error } = await supabase.rpc("create_meeting", args);
+  if (error) throw error;
+  return data as string;
+}
+
+export interface UpdateMeetingArgs {
+  p_id: string;
+  p_scheduled_date: string;
+  p_start_time: string;
+  p_end_time: string | null;
+  p_type: string | null;
+  p_lawyer_user_id: string | null;
+  p_receptionist_user_id: string | null;
+  p_client_id: string | null;
+  p_client_name: string | null;
+  p_phone: string | null;
+  p_summary: string | null;
+  p_notes: string | null;
+  p_status: MeetingStatus;
+}
+
+export async function updateMeeting(args: UpdateMeetingArgs): Promise<void> {
+  const { error } = await supabase.rpc("update_meeting", args);
+  if (error) throw error;
+}
+
+export async function deleteMeeting(id: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_meeting", { p_id: id });
+  if (error) throw error;
+}
+
+export async function getMeetingAudit(id: string): Promise<MeetingAuditRow[]> {
+  const { data, error } = await supabase.rpc("get_meeting_audit", { p_meeting_id: id });
+  if (error) throw error;
+  return (data as MeetingAuditRow[]) ?? [];
+}
