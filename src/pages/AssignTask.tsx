@@ -2,9 +2,21 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useMasterAdmin } from "@/hooks/useMasterAdmin";
-import { useTaskTypes, useEligibleAssignees, createUserTask } from "@/hooks/useUserTasks";
+import { useTaskTypes, useEligibleAssignees, createUserTask, createDepartmentTask } from "@/hooks/useUserTasks";
+import {
+  loadBusinessHours, isWithinBusinessHours, nextBusinessSlot,
+  DEFAULT_BUSINESS_HOURS, type BusinessHours,
+} from "@/lib/businessHours";
 import { toast } from "sonner";
 import type { OrgStage, TaskPriority, LegalArea } from "@/types/jurisai";
+
+type AssignTarget = "user" | "dept";
+
+// Converte Date -> string pro input datetime-local (fuso local do navegador).
+function toLocalDateTimeInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 // Labels em PT-BR (V17 não depende da V16 — inline aqui pra independência)
 const STAGE_LABELS: Record<OrgStage, string> = {
@@ -58,6 +70,7 @@ export default function AssignTaskPage() {
   const { isMaster, checking } = useMasterAdmin();
   const { types, loading: typesLoading } = useTaskTypes();
 
+  const [target, setTarget] = useState<AssignTarget>("user");
   const [taskTypeId, setTaskTypeId] = useState<string>("");
   const [stageFilter, setStageFilter] = useState<OrgStage | "">("");
   const [assigneeId, setAssigneeId] = useState<string>(presetAssignee || "");
@@ -68,6 +81,32 @@ export default function AssignTaskPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const { assignees, loading: assigneesLoading } = useEligibleAssignees(taskTypeId || null);
+
+  // Config de expediente (Task 15) — carregada uma vez; fallback é o default do Rodrigo.
+  const [businessHours, setBusinessHours] = useState<BusinessHours>(DEFAULT_BUSINESS_HOURS);
+  const [deadlineHint, setDeadlineHint] = useState<string>("");
+  const [suggestedDeadline, setSuggestedDeadline] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadBusinessHours().then((cfg) => { if (active) setBusinessHours(cfg); });
+    return () => { active = false; };
+  }, []);
+
+  // Ao mudar o prazo (ou a config), reavalia se cai fora do expediente. NUNCA bloqueia o envio.
+  useEffect(() => {
+    if (!deadlineLocal) { setDeadlineHint(""); setSuggestedDeadline(null); return; }
+    const chosen = new Date(deadlineLocal);
+    if (Number.isNaN(chosen.getTime())) { setDeadlineHint(""); setSuggestedDeadline(null); return; }
+    if (isWithinBusinessHours(chosen, businessHours)) {
+      setDeadlineHint("");
+      setSuggestedDeadline(null);
+      return;
+    }
+    const next = nextBusinessSlot(chosen, businessHours);
+    setDeadlineHint(`Fora do expediente. Próximo horário útil: ${next.toLocaleString("pt-BR")}`);
+    setSuggestedDeadline(next);
+  }, [deadlineLocal, businessHours]);
 
   // Quando taskType muda, reseta o assignee se ele não estiver na lista (ou aplica preset)
   useEffect(() => {
@@ -125,21 +164,34 @@ export default function AssignTaskPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskTypeId || !assigneeId || !title.trim()) {
+    if (!taskTypeId || !title.trim()) {
+      toast.error("Preencha tipo e título");
+      return;
+    }
+    if (target === "user" && !assigneeId) {
       toast.error("Preencha tipo, destinatário e título");
       return;
     }
     setSubmitting(true);
     try {
-      const taskId = await createUserTask({
-        task_type_id: taskTypeId,
-        assignee_user_id: assigneeId,
-        title: title.trim(),
-        description: description.trim() || undefined,
-        priority,
-        deadline_at: deadlineLocal ? new Date(deadlineLocal).toISOString() : undefined,
-        area: selectedType?.area ?? undefined,
-      });
+      const taskId = target === "dept"
+        ? await createDepartmentTask({
+            task_type_id: taskTypeId,
+            title: title.trim(),
+            description: description.trim() || undefined,
+            priority,
+            deadline_at: deadlineLocal ? new Date(deadlineLocal).toISOString() : undefined,
+            area: selectedType?.area ?? undefined,
+          })
+        : await createUserTask({
+            task_type_id: taskTypeId,
+            assignee_user_id: assigneeId,
+            title: title.trim(),
+            description: description.trim() || undefined,
+            priority,
+            deadline_at: deadlineLocal ? new Date(deadlineLocal).toISOString() : undefined,
+            area: selectedType?.area ?? undefined,
+          });
       toast.success(`Tarefa criada! ID: ${taskId.slice(0, 8)}…`);
       navigate("/sistema/kanban");
     } catch (e) {
@@ -147,6 +199,11 @@ export default function AssignTaskPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const applySuggestedDeadline = () => {
+    if (!suggestedDeadline) return;
+    setDeadlineLocal(toLocalDateTimeInput(suggestedDeadline));
   };
 
   return (
@@ -218,40 +275,75 @@ export default function AssignTaskPage() {
               )}
             </div>
 
-            {/* Destinatário */}
+            {/* Atribuir a: Usuário | Departamento */}
             <div>
-              <label style={labelStyle}>Destinatário *</label>
-              {!taskTypeId ? (
-                <select className={inputClass} disabled>
-                  <option>Selecione o tipo primeiro</option>
-                </select>
-              ) : assigneesLoading ? (
-                <div style={{ fontSize: 13, color: "#7a7a92", padding: 8 }}>Buscando destinatários elegíveis...</div>
-              ) : assignees.length === 0 ? (
-                <div style={{
-                  fontSize: 13, color: "#fca5a5",
-                  padding: 12, borderRadius: 8,
-                  background: "rgba(239, 68, 68, 0.1)",
-                  border: "1px solid rgba(239, 68, 68, 0.3)",
-                }}>
-                  Nenhum funcionário com cargo elegível para esse tipo de tarefa.
-                </div>
-              ) : (
-                <select
-                  className={inputClass}
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  required
+              <label style={labelStyle}>Atribuir a</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setTarget("user")}
+                  style={toggleButtonStyle(target === "user")}
                 >
-                  <option value="">— Selecione —</option>
-                  {assignees.map(a => (
-                    <option key={a.user_id} value={a.user_id}>
-                      {a.full_name} · {a.role_label}{a.is_estagiario ? " (estagiária)" : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
+                  Usuário
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTarget("dept")}
+                  style={toggleButtonStyle(target === "dept")}
+                >
+                  Departamento
+                </button>
+              </div>
             </div>
+
+            {/* Destinatário */}
+            {target === "dept" ? (
+              <div>
+                <label style={labelStyle}>Destinatário</label>
+                <div style={{
+                  fontSize: 13, color: "#a3e635",
+                  padding: 12, borderRadius: 8,
+                  background: "rgba(163, 230, 53, 0.08)",
+                  border: "1px solid rgba(163, 230, 53, 0.25)",
+                }}>
+                  Tarefa do departamento — o primeiro elegível que assumir vira responsável.
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label style={labelStyle}>Destinatário *</label>
+                {!taskTypeId ? (
+                  <select className={inputClass} disabled>
+                    <option>Selecione o tipo primeiro</option>
+                  </select>
+                ) : assigneesLoading ? (
+                  <div style={{ fontSize: 13, color: "#7a7a92", padding: 8 }}>Buscando destinatários elegíveis...</div>
+                ) : assignees.length === 0 ? (
+                  <div style={{
+                    fontSize: 13, color: "#fca5a5",
+                    padding: 12, borderRadius: 8,
+                    background: "rgba(239, 68, 68, 0.1)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                  }}>
+                    Nenhum funcionário com cargo elegível para esse tipo de tarefa.
+                  </div>
+                ) : (
+                  <select
+                    className={inputClass}
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                    required
+                  >
+                    <option value="">— Selecione —</option>
+                    {assignees.map(a => (
+                      <option key={a.user_id} value={a.user_id}>
+                        {a.full_name} · {a.role_label}{a.is_estagiario ? " (estagiária)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Título */}
             <div>
@@ -303,10 +395,35 @@ export default function AssignTaskPage() {
               </div>
             </div>
 
+            {/* Aviso de fora do expediente (Task 15) — nunca bloqueia o envio */}
+            {deadlineHint && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                fontSize: 12, color: "#fcd34d",
+                padding: 12, borderRadius: 8,
+                background: "rgba(234, 179, 8, 0.08)",
+                border: "1px solid rgba(234, 179, 8, 0.25)",
+              }}>
+                <span style={{ flex: 1 }}>{deadlineHint}</span>
+                <button
+                  type="button"
+                  onClick={applySuggestedDeadline}
+                  style={{
+                    padding: "6px 12px", borderRadius: 6,
+                    border: "1px solid rgba(234, 179, 8, 0.4)", background: "transparent",
+                    color: "#eab308", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Usar sugestão
+                </button>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 12, paddingTop: 8 }}>
               <button
                 type="submit"
-                disabled={submitting || !taskTypeId || !assigneeId || !title.trim()}
+                disabled={submitting || !taskTypeId || (target === "user" && !assigneeId) || !title.trim()}
                 style={{
                   flex: 1, padding: "12px 16px", borderRadius: 8,
                   border: "none", cursor: "pointer",
@@ -346,3 +463,13 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
   fontWeight: 600,
 };
+
+function toggleButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1, padding: "10px 16px", borderRadius: 8, cursor: "pointer",
+    fontSize: 13, fontWeight: 600,
+    border: active ? "1px solid #eab308" : "1px solid #25253a",
+    background: active ? "rgba(234, 179, 8, 0.12)" : "#16161f",
+    color: active ? "#eab308" : "#c4c4d4",
+  };
+}
