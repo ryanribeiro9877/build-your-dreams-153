@@ -932,6 +932,7 @@ export default function JurisCloudOS() {
           agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
           content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
           proposal: r.metadata?.proposal,
+          taskAlert: r.metadata?.task_alert,
           timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
         } as JcChatMessage));
       return add.length ? [...prev, ...add] : prev;
@@ -996,6 +997,7 @@ export default function JurisCloudOS() {
       kind: r.metadata?.kind,
       stage: r.metadata?.stage,
       proposal: r.metadata?.proposal,
+      taskAlert: r.metadata?.task_alert,
       timestamp: r.created_at
         ? new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
         : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -1039,7 +1041,9 @@ export default function JurisCloudOS() {
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
       // cadastro_form é resposta síncrona final (dispara o wizard) — também encerra.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      // task_alert/tarefa_confirm são alertas fora do fluxo de uma run do usuário
+      // (chegam via trigger/backend) — também encerram o indicador, se houver um ativo.
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status

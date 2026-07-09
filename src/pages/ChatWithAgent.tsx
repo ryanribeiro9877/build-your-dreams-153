@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ChatMessageRow, ChatSessionRow } from "@/types/jurisai";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
+import { TaskAlertCard, type TaskAlertPayload } from "@/components/chat/TaskAlertCard";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
@@ -277,6 +278,10 @@ export default function ChatWithAgent() {
                       <MessageBubble message={m} />
                       <ClienteFormWizard mode="create" variant="chat" />
                     </div>
+                  ) : m.role === "assistant" && m.metadata?.kind === "task_alert" && m.metadata?.task_alert ? (
+                    // Alerta de tarefa (Task 10/11): renderiza o TaskAlertCard no lugar
+                    // do balao normal, com as acoes de Concluir/Reagendar/etc.
+                    <TaskAlertCard key={m.id} payload={m.metadata?.task_alert as TaskAlertPayload} />
                   ) : (
                     <MessageBubble key={m.id} message={m} />
                   )

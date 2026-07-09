@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ActionProposal } from "@/components/chat/ActionCard";
+import type { TaskAlertPayload } from "@/components/chat/TaskAlertCard";
 
 export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 export type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
@@ -54,11 +55,15 @@ export interface JcChatMessage {
   // 'action_proposal' = proposta de acao agentica (renderiza ActionCard).
   // 'cadastro_form' = disparo do CADASTRO-MODELO-A (renderiza o ClienteFormWizard
   // inline abaixo da bolha; ver JurisChatPanel).
-  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form";
+  // 'task_alert' = alerta de tarefa (renderiza TaskAlertCard). 'tarefa_confirm'
+  // reservado para outra task (ainda sem renderização própria).
+  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm";
   stage?: string;
   // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
   // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.
   proposal?: ActionProposal;
+  /** Presente quando kind === 'task_alert' (vem de metadata.task_alert). */
+  taskAlert?: TaskAlertPayload;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
   // Ações inline (ex.: botão "gerar mesmo assim" no gate de anexos). Só para
   // mensagens locais do sistema — não vem do banco.
