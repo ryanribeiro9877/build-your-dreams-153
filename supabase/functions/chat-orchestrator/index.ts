@@ -2921,7 +2921,10 @@ serve(async (req) => {
       const { data: cadRunRow, error: cadRunErr } = await admin.from("orchestration_runs").insert({
         session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
         original_message: body.message, status: "done", entry_agent_id: agent.id,
-        intent_category: "ACAO_COM_TOOL", route_path: "cadastro_form",
+        // route_path tem CHECK (fast|consulta|need_info|full). Usamos "fast"
+        // (resposta rápida síncrona, sem cadeia); o front reconhece o form pelo
+        // metadata.kind="cadastro_form" da mensagem, NÃO pelo route_path.
+        intent_category: "ACAO_COM_TOOL", route_path: "fast",
         chain: [{ level: 0, path: "cadastro_form", intent: "ACAO_COM_TOOL", agent: agent.name }],
       }).select("id").single();
       if (cadRunErr || !cadRunRow) return errResp(500, "db_error", `Falha ao criar run: ${cadRunErr?.message}`);
