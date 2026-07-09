@@ -216,6 +216,14 @@ const CADASTRO_NEGATIVE_RE = /\b(consult\w*|busc\w*|ver|mostr\w*|list\w*|qual|qu
 export function isCadastroClienteRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
+  // TRILHA-A: PRECEDÊNCIA do verbo de tarefa. "cria uma tarefa pra ligar pro
+  // cliente X" casaria CADASTRO_VERBO_RE ("cria") + CADASTRO_ALVO_RE ("cliente")
+  // e abriria o form indevidamente. Se a frase é um pedido de TAREFA, ela NUNCA é
+  // cadastro — mesmo com a palavra "cliente" (que ali é o ALVO da tarefa, resolvido
+  // pelo 4.1). Cadastro genuíno ("cadastra o cliente João", "novo cliente") não
+  // casa isTarefaChatRequest, então não regride. Independe de TAREFA_CHAT_ENABLED:
+  // a presença de "cliente" não deve, por si só, disparar cadastro sob verbo de tarefa.
+  if (isTarefaChatRequest(m)) return false;
   // "quero ver os dados do cliente" é consulta → nunca dispara o form.
   if (CADASTRO_NEGATIVE_RE.test(m)) return false;
   if (CADASTRO_FRASE_RE.test(m)) return true;

@@ -26,6 +26,18 @@ Deno.test("isCadastroClienteRequest: sem alvo cliente / vazio → false", () => 
   assertEquals(isCadastroClienteRequest(""), false);
   assertEquals(isCadastroClienteRequest("bom dia"), false);
 });
+// TRILHA-A defeito: "tarefa … cliente" era roteado para cadastro. Intenção de
+// tarefa TEM PRECEDÊNCIA sobre cadastro, MESMO com a palavra "cliente" na frase.
+Deno.test("isCadastroClienteRequest: intenção de tarefa vence cadastro (mesmo com 'cliente')", () => {
+  assertEquals(isCadastroClienteRequest("cria uma tarefa pra eu ligar pro cliente João amanhã 10h"), false);
+  assertEquals(isCadastroClienteRequest("me lembra de ligar pro cliente Maria amanhã"), false);
+  assertEquals(isCadastroClienteRequest("agenda uma tarefa de revisão pro cliente X na sexta"), false);
+});
+// Contraprova: cadastro genuíno (com "cliente") NÃO regride — segue disparando o form.
+Deno.test("isCadastroClienteRequest: cadastro genuíno com 'cliente' continua true", () => {
+  assertEquals(isCadastroClienteRequest("cadastra o cliente João da Silva"), true);
+  assertEquals(isCadastroClienteRequest("adiciona o cliente novo"), true);
+});
 
 // ─── TAREFA-CHAT (card 4.1): disparo do cartão de confirmação (isTarefaChatRequest) ──
 Deno.test("isTarefaChatRequest: cria tarefa explícita", () => {
