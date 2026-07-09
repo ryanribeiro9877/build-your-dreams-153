@@ -13,7 +13,9 @@ Deno.test("documento desconhecido cai em 'documentacao' e é um tipo válido", (
   assertEquals(mapDocumentoToTipo("algo aleatório"), "documentacao");
   // todo tipo retornado tem de pertencer ao enum aceito pelo criar_pendencia
   const t = mapDocumentoToTipo("xyz");
-  assertEquals(PENDENCIA_TIPOS.includes(t), true);
+  // PENDENCIA_TIPOS é `as const` (union de literais); cast p/ string[] evita o
+  // TS2345 do includes() (retorno de mapDocumentoToTipo é string).
+  assertEquals((PENDENCIA_TIPOS as readonly string[]).includes(t), true);
 });
 
 Deno.test("título inclui o réu quando informado", () => {
