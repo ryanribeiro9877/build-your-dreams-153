@@ -132,4 +132,78 @@ export function isRecordingSupported(): boolean {
   return typeof g.MediaRecorder !== "undefined" && !!g.navigator?.mediaDevices?.getUserMedia;
 }
 
-// uploadAttendanceBlock / createUploadQueue → Task 3
+export interface UploadResult { ok: boolean; error?: string }
+
+// Sobe um bloco no bucket client-documents e registra em client_documents.
+// Mesmo bucket/tabela de clientDocuments.ts (RLS is_recepcao_or_socio reusada).
+export async function uploadAttendanceBlock(
+  clientId: string, clientName: string, uploadedBy: string, block: AttendanceBlock,
+): Promise<UploadResult> {
+  const ts = block.startedAt;
+  const filePath = buildAttendancePath(clientId, block.sessionId, block.blockIndex, ts);
+  const { error: upErr } = await supabase.storage
+    .from("client-documents")
+    .upload(filePath, block.blob, { contentType: block.mimeType, upsert: false });
+  if (upErr) return { ok: false, error: upErr.message };
+
+  const notes = buildAttendanceNotes(block);
+  const name = buildAttendanceName(block.startedAt, block.blockIndex);
+  const { error: insErr } = await supabase.from("client_documents").insert(
+    buildAudioDocInsert(clientId, clientName, uploadedBy, {
+      filePath, fileSize: block.blob.size, mimeType: block.mimeType, notes, name,
+    }) as never,
+  );
+  if (insErr) return { ok: false, error: insErr.message };
+  return { ok: true };
+}
+
+export type BlockStatus = "pending" | "uploading" | "done" | "error";
+export interface QueueItem { block: AttendanceBlock; status: BlockStatus; error?: string }
+export interface UploadQueue {
+  enqueue(block: AttendanceBlock): void;
+  retry(sessionId: string, blockIndex: number): void;
+  getItems(): QueueItem[];
+}
+
+// Fila sequencial (um upload por vez → ordem + backpressure). onChange é
+// chamado a cada transição de estado para a UI refletir progresso/erro.
+export function createUploadQueue(
+  uploadFn: (b: AttendanceBlock) => Promise<UploadResult>,
+  onChange: (items: QueueItem[]) => void,
+): UploadQueue {
+  const items: QueueItem[] = [];
+  let running = false;
+
+  const emit = () => onChange([...items]);
+
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      for (;;) {
+        const next = items.find((i) => i.status === "pending");
+        if (!next) break;
+        next.status = "uploading"; emit();
+        const res = await uploadFn(next.block);
+        if (res.ok) { next.status = "done"; next.error = undefined; }
+        else { next.status = "error"; next.error = res.error; }
+        emit();
+      }
+    } finally {
+      running = false;
+    }
+  };
+
+  return {
+    enqueue(block) {
+      items.push({ block, status: "pending" });
+      emit();
+      void run();
+    },
+    retry(sessionId, blockIndex) {
+      const it = items.find((i) => i.block.sessionId === sessionId && i.block.blockIndex === blockIndex);
+      if (it && it.status === "error") { it.status = "pending"; emit(); void run(); }
+    },
+    getItems() { return [...items]; },
+  };
+}

@@ -80,3 +80,71 @@ describe("attendanceAudio — groupBySession", () => {
     expect(sessions[0].sessionId).toBe("sPATH");
   });
 });
+
+import {
+  uploadAttendanceBlock,
+  createUploadQueue,
+  type AttendanceBlock,
+  type UploadResult,
+} from "./attendanceAudio";
+
+function fakeBlock(blockIndex: number): AttendanceBlock {
+  return {
+    sessionId: "s1", blockIndex, startedAt: 1000 + blockIndex,
+    durationMs: 100, blob: new Blob(["x"], { type: "audio/webm" }), mimeType: "audio/webm",
+  };
+}
+
+describe("uploadAttendanceBlock", () => {
+  it("sobe no bucket client-documents e insere linha; ok=true", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const mod = await import("@/integrations/supabase/client");
+    (mod.supabase as unknown as Record<string, unknown>).storage = { from: () => ({ upload }) };
+    (mod.supabase as unknown as Record<string, unknown>).from = () => ({ insert });
+
+    const r = await uploadAttendanceBlock("c1", "MARIA", "u1", fakeBlock(0));
+    expect(r.ok).toBe(true);
+    expect(upload).toHaveBeenCalledOnce();
+    expect(insert).toHaveBeenCalledOnce();
+  });
+
+  it("retorna ok=false quando o upload falha (não tenta inserir)", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: { message: "storage down" } });
+    const insert = vi.fn();
+    const mod = await import("@/integrations/supabase/client");
+    (mod.supabase as unknown as Record<string, unknown>).storage = { from: () => ({ upload }) };
+    (mod.supabase as unknown as Record<string, unknown>).from = () => ({ insert });
+
+    const r = await uploadAttendanceBlock("c1", "MARIA", "u1", fakeBlock(0));
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("storage down");
+    expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("createUploadQueue", () => {
+  it("sobe blocos em ordem, sequencialmente", async () => {
+    const order: number[] = [];
+    const uploadFn = vi.fn(async (b: AttendanceBlock): Promise<UploadResult> => {
+      order.push(b.blockIndex); return { ok: true };
+    });
+    const q = createUploadQueue(uploadFn, () => {});
+    q.enqueue(fakeBlock(0)); q.enqueue(fakeBlock(1)); q.enqueue(fakeBlock(2));
+    await vi.waitFor(() => expect(order).toEqual([0, 1, 2]));
+    expect(q.getItems().every((i) => i.status === "done")).toBe(true);
+  });
+
+  it("marca error e permite retry", async () => {
+    let fail = true;
+    const uploadFn = vi.fn(async (): Promise<UploadResult> => {
+      if (fail) { fail = false; return { ok: false, error: "net" }; }
+      return { ok: true };
+    });
+    const q = createUploadQueue(uploadFn, () => {});
+    q.enqueue(fakeBlock(0));
+    await vi.waitFor(() => expect(q.getItems()[0].status).toBe("error"));
+    q.retry("s1", 0);
+    await vi.waitFor(() => expect(q.getItems()[0].status).toBe("done"));
+  });
+});
