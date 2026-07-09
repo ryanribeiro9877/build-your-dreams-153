@@ -68,6 +68,10 @@ serve(async (req) => {
     const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const admin = createClient(supabaseUrl, serviceKey);
 
+    const { data: userData } = await caller.auth.getUser();
+    const uid = userData?.user?.id;
+    if (!uid) return jsonResp(req, 401, { ok: false, reason: "not_authenticated" });
+
     // Confirma acesso do caller ao cliente (RLS clients_decrypted). 404 se não puder ver.
     const { data: cli } = await caller.from("clients_decrypted").select("id, full_name").eq("id", clientId).maybeSingle();
     if (!cli) return jsonResp(req, 404, { ok: false, reason: "client_not_found_or_forbidden" });
@@ -100,9 +104,10 @@ serve(async (req) => {
       const apiKey = await resolveKey(admin, providerFromModel(model));
       if (!apiKey) return jsonResp(req, 200, { ok: false, reason: "no_llm_key" });
       let raw: unknown = {};
+      let parseOk = true;
       try { raw = JSON.parse(await callLLM(apiKey, model, buildSummaryPrompt(), input)); }
-      catch { raw = {}; }
-      summary = normalizeSummary(raw, "chat", geradoEm);
+      catch { raw = {}; parseOk = false; }
+      summary = normalizeSummary(raw, parseOk ? "chat" : "erro_parse", geradoEm);
     }
 
     // Grava: arquivo JSON no bucket + linha em client_documents (caller → RLS).
@@ -115,7 +120,7 @@ serve(async (req) => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const nome = `Resumo do atendimento ${pad(d.getUTCDate())}/${pad(d.getUTCMonth()+1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
     const { error: insErr } = await caller.from("client_documents").insert({
-      client_id: clientId, client_name: clientName, document_type: "resumo_atendimento",
+      client_id: clientId, uploaded_by: uid, client_name: clientName, document_type: "resumo_atendimento",
       document_name: nome, file_path: filePath, file_size: blob.size, mime_type: "application/json",
       notes: JSON.stringify(summary), status: "recebido", origem: "sistema",
     });

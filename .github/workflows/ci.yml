@@ -69,3 +69,6 @@ jobs:
 
       - name: Test _shared/ocr (extrator + registry + merge)
         run: deno test supabase/functions/_shared/ocr/
+
+      - name: Test attendance-summary (deno)
+        run: deno test supabase/functions/attendance-summary/
