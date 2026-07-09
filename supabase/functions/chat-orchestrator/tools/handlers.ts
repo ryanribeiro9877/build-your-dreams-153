@@ -1,5 +1,6 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCep } from "../cep.ts";
+import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
 
 // READ — recebe o client admin (service-role) e o user_id para escopar.
 export async function runReadTool(admin: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -34,7 +35,11 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
     }
     case "consultar_documentos": {
       const { data } = await admin.from("client_documents")
-        .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id)).limit(50);
+        .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id))
+        .neq("document_type", "audio_atendimento")
+        .neq("document_type", "resumo_atendimento")
+        .order("created_at", { ascending: false })
+        .limit(50);
       return data ?? [];
     }
     case "consultar_cep": {
@@ -144,6 +149,29 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { task_id: data } };
+      }
+      case "solicitar_checklist_documental": {
+        const docs = Array.isArray(args.documentos)
+          ? (args.documentos as unknown[]).map((d) => String(d)).filter((d) => d.trim())
+          : [];
+        if (docs.length === 0) return { ok: false, error: "nenhum documento informado" };
+        // Trima o réu uma vez: título e descrição ficam consistentes (réu só-espaços
+        // é ignorado em ambos, igual ao buildPendenciaTitulo).
+        const reu = ((args.reu as string | undefined) ?? "").trim() || null;
+        const created: string[] = [];
+        for (const doc of docs) {
+          const { data, error } = await userClient.rpc("criar_pendencia", {
+            p_tipo: mapDocumentoToTipo(doc),
+            p_titulo: buildPendenciaTitulo(doc, reu),
+            p_cliente_id: args.cliente_id ?? null,
+            p_descricao: reu ? `Documento solicitado referente ao réu ${reu}.` : "Documento solicitado (checklist do atendimento).",
+            p_responsavel_user_id: args.responsavel_user_id ?? null,
+            p_prazo: args.prazo ?? null, p_data_fatal: null,
+          });
+          if (error) return { ok: false, error: `falha ao criar pendência para "${doc}": ${error.message}`, result: { pendencias: created } };
+          created.push(String(data));
+        }
+        return { ok: true, result: { pendencias: created, total: created.length } };
       }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };

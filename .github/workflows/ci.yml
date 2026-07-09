@@ -61,8 +61,14 @@ jobs:
       - name: Type-check ocr-attachment
         run: deno check supabase/functions/ocr-attachment/index.ts
 
+      - name: Type-check attendance-summary
+        run: deno check supabase/functions/attendance-summary/index.ts
+
       - name: Test chat-orchestrator (tools + intent classifier)
         run: deno test supabase/functions/chat-orchestrator/
 
       - name: Test _shared/ocr (extrator + registry + merge)
         run: deno test supabase/functions/_shared/ocr/
+
+      - name: Test attendance-summary (deno)
+        run: deno test supabase/functions/attendance-summary/

@@ -5,6 +5,10 @@ import {
   type ClientFull, InfoField, InfoGrid, EmptyState, formatDateBR, WhatsAppBadge,
   Reveal, TabLoading,
 } from "../shared";
+import {
+  generateAttendanceSummary, fetchAttendanceSummaries,
+  FIELD_LABELS, SUMMARY_FIELDS, type StoredSummary,
+} from "@/lib/attendanceSummaryClient";
 
 const GENDER_LABELS: Record<string, string> = { masculino: "Masculino", feminino: "Feminino" };
 const MARITAL_LABELS: Record<string, string> = {
@@ -65,7 +69,7 @@ export function ResumoTab({ client }: { client: ClientFull }) {
           </div>
         ))}
       </div>
-      <div className="cli-card lift">
+      <div className="cli-card lift" style={{ marginBottom: 18 }}>
         <div className="cli-sec-title">Contatos principais</div>
         <InfoGrid>
           <InfoField label="Email" value={client.email} />
@@ -74,6 +78,104 @@ export function ResumoTab({ client }: { client: ClientFull }) {
           <InfoField label="Cadastrado em" value={formatDateBR(client.created_at)} />
         </InfoGrid>
       </div>
+      <AttendanceSummarySection client={client} />
+    </div>
+  );
+}
+
+/** Seção "Resumo do atendimento": gera (via LLM, edge attendance-summary) e
+    exibe o resumo estruturado mais recente salvo em client_documents
+    (document_type='resumo_atendimento'); anteriores ficam listados abaixo. */
+function AttendanceSummarySection({ client }: { client: ClientFull }) {
+  const [summaries, setSummaries] = useState<StoredSummary[] | null>(null);
+  const [generating, setGenerating] = useState(false);
+  // ClientDetails mantém o painel da aba montado entre clientes (chave por
+  // nome da aba, não por client.id); esta ref evita que um fetch atrasado
+  // (mount-load ou reload pós-geração) de um client.id antigo sobrescreva o
+  // estado depois que o usuário já trocou de cliente.
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    (async () => {
+      const list = await fetchAttendanceSummaries(client.id);
+      if (cancelledRef.current) return;
+      setSummaries(list);
+    })();
+    return () => { cancelledRef.current = true; };
+  }, [client.id]);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await generateAttendanceSummary(client.id);
+      if (!res.ok) {
+        toast.error(res.reason ? `Não foi possível gerar o resumo: ${res.reason}` : "Não foi possível gerar o resumo.");
+        return;
+      }
+      toast.success("Resumo do atendimento gerado.");
+      const list = await fetchAttendanceSummaries(client.id);
+      if (cancelledRef.current) return;
+      setSummaries(list);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const latest = summaries && summaries.length > 0 ? summaries[0] : null;
+  const older = summaries && summaries.length > 1 ? summaries.slice(1) : [];
+
+  return (
+    <div className="cli-card lift">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <div className="cli-sec-title" style={{ marginBottom: 0 }}>Resumo do atendimento</div>
+        <span style={{ flex: 1 }} />
+        <button className="cli-btn sm" type="button" disabled={generating} onClick={() => void handleGenerate()}>
+          {generating ? "Gerando…" : "Gerar resumo do atendimento"}
+        </button>
+      </div>
+
+      {summaries === null && <TabLoading />}
+
+      {summaries !== null && !latest && (
+        <EmptyState icon="✦" title="Nenhum resumo gerado ainda"
+          hint="Clique em “Gerar resumo do atendimento” para criar um resumo estruturado a partir do histórico do cliente." />
+      )}
+
+      {latest && (
+        <>
+          <p style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginTop: 10, marginBottom: 10 }}>
+            Gerado em {formatDateBR(latest.createdAt)}
+          </p>
+          {latest.summary ? (
+            <InfoGrid>
+              {SUMMARY_FIELDS.map((field) => {
+                const value = latest.summary![field];
+                const naoInformado = value === "não informado";
+                return (
+                  <InfoField key={field} label={FIELD_LABELS[field]}
+                    value={naoInformado ? <span style={{ color: "var(--cli-muted)" }}>{value}</span> : value} />
+                );
+              })}
+            </InfoGrid>
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--cli-muted)" }}>Não foi possível ler o conteúdo deste resumo.</p>
+          )}
+        </>
+      )}
+
+      {older.length > 0 && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1.5px solid var(--cli-cream-line)" }}>
+          <div className="cli-sub-title">Resumos anteriores</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--cli-ink)" }}>
+            {older.map((s) => (
+              <li key={s.id} style={{ marginBottom: 4 }}>
+                {s.name} <span style={{ color: "var(--cli-muted)" }}>· {formatDateBR(s.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

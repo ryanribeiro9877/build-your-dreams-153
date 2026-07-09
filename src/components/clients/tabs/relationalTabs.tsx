@@ -192,7 +192,7 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
                       {doc.origem ? ` · ${DOC_ORIGEM_LABELS[doc.origem] ?? doc.origem}` : ""}
                       {doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
                       {` · ${formatDateBR(doc.created_at)}`}
-                      {doc.notes ? ` · ${doc.notes}` : ""}
+                      {doc.notes && doc.document_type !== "audio_atendimento" && doc.document_type !== "resumo_atendimento" ? ` · ${doc.notes}` : ""}
                     </div>
                   </div>
                   <span style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto", flexShrink: 0 }}>

@@ -145,6 +145,17 @@ export const TOOLS: Record<string, ToolDef> = {
       modalidade: { type: "string", enum: ["presencial","meet"], description: "modalidade" },
     }, required: ["titulo", "data_hora_iso"] },
   }},
+  solicitar_checklist_documental: { type: "function", function: {
+    name: "solicitar_checklist_documental",
+    description: "Registra como PENDENTES os documentos que faltam de um cliente para uma ação/réu (ex.: 'Para Crefisa, solicite extrato e contrato'). Resolva o cliente com consultar_cliente ANTES e passe cliente_id. Cria UMA pendência documental por documento.",
+    parameters: { type: "object", properties: {
+      cliente_id: str("id do cliente (resolvido via consultar_cliente)"),
+      documentos: { type: "array", items: { type: "string" }, description: "documentos a solicitar (ex.: extrato, contrato)" },
+      reu: str("réu/banco/credor da ação (ex.: Crefisa, Agibank) — opcional"),
+      responsavel_user_id: str("id do responsável pela cobrança (opcional; default = quem cria)"),
+      prazo: str("prazo em ISO 8601 (opcional)"),
+    }, required: ["cliente_id", "documentos"] },
+  }},
 };
 
 export function toolsFor(allowed: string[] | null | undefined): ToolDef[] {
