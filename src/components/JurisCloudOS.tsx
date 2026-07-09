@@ -933,6 +933,7 @@ export default function JurisCloudOS() {
           content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
           proposal: r.metadata?.proposal,
           taskAlert: r.metadata?.task_alert,
+          tarefaDraft: r.metadata?.tarefa_draft,
           timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
         } as JcChatMessage));
       return add.length ? [...prev, ...add] : prev;
@@ -998,6 +999,7 @@ export default function JurisCloudOS() {
       stage: r.metadata?.stage,
       proposal: r.metadata?.proposal,
       taskAlert: r.metadata?.task_alert,
+      tarefaDraft: r.metadata?.tarefa_draft,
       timestamp: r.created_at
         ? new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
         : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
