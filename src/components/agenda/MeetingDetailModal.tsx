@@ -10,6 +10,7 @@ import {
 import {
   MEETING_STATUS_OPTIONS, MEETING_TYPE_OPTIONS, statusOptionsFor, type MeetingStatus,
 } from "@/lib/meetings";
+import { GOOGLE_SYNC_ENABLED, syncMeetingToGoogle } from "@/lib/googleCalendarSync";
 
 interface Props {
   meeting: MeetingRow | null; // null = criação
@@ -150,9 +151,19 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
           <label>Observações<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></label>
         </div>
 
-        {/* Gancho Trilha D: desabilitado até OAuth existir. */}
-        <button type="button" disabled title="Requer conexão Google (em breve)"
-          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, opacity: 0.5, cursor: "not-allowed" }}>
+        {/* Gancho Trilha D: fiado porém desabilitado até OAuth/edge existirem
+            (ver src/lib/googleCalendarSync.ts — vira GOOGLE_SYNC_ENABLED=true). */}
+        <button type="button"
+          disabled={!GOOGLE_SYNC_ENABLED || !isEdit}
+          title={GOOGLE_SYNC_ENABLED ? "Sincronizar esta reunião com o Google Agenda" : "Requer conexão Google (em breve)"}
+          onClick={async () => {
+            if (!meeting) return;
+            const r = await syncMeetingToGoogle(meeting.id);
+            if (r.status === "synced") toast.success("Reunião sincronizada com o Google Agenda.");
+            else if (r.status === "error") toast.error(r.message ?? "Falha ao sincronizar com o Google Agenda.");
+            else toast.info(r.message ?? "Integração Google Agenda ainda não configurada.");
+          }}
+          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, opacity: GOOGLE_SYNC_ENABLED && isEdit ? 1 : 0.5, cursor: GOOGLE_SYNC_ENABLED && isEdit ? "pointer" : "not-allowed" }}>
           <CalendarClock size={16} /> Sincronizar com Google Agenda
         </button>
 
