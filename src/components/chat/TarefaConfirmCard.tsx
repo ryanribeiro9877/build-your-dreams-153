@@ -190,14 +190,18 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
             >
               <option value="">Sem cliente</option>
               {draft.client_candidates.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {[c.name, c.cpf_masked, c.status].filter(Boolean).join(" · ")}
+                </option>
               ))}
             </select>
           </>
         ) : draft.client_resolved ? (
           <div className="action-card__row">
             <span className="action-card__label">Cliente</span>
-            <span className="action-card__value">{draft.client_resolved.name}</span>
+            <span className="action-card__value">
+              {[draft.client_resolved.name, draft.client_resolved.cpf_masked].filter(Boolean).join(" · ")}
+            </span>
           </div>
         ) : draft.client_query ? (
           <div className="action-card__row">

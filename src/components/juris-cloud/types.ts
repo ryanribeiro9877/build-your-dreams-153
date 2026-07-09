@@ -13,8 +13,10 @@ export interface TarefaDraft {
   priority: "critical" | "high" | "medium" | "low" | null;
   assignee_hint: string | null;
   client_query: string | null;
-  client_resolved: { id: string; name: string } | null;
-  client_candidates: { id: string; name: string }[];
+  // CPF sempre MASCARADO (***.***.***-NN) — o edge mascara antes de gravar; o CPF
+  // em claro nunca chega ao cartão. Só o `id` (uuid) é usado no vínculo.
+  client_resolved: { id: string; name: string; cpf_masked?: string | null; status?: string | null } | null;
+  client_candidates: { id: string; name: string; cpf_masked?: string | null; status?: string | null }[];
 }
 
 export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";

@@ -2978,15 +2978,30 @@ serve(async (req) => {
         draft = normalizeDraft(null);
       }
 
-      // Resolve o cliente citado (se houver). Não bloqueia o cartão: 0 -> client_query
-      // fica visível/aberto; 1 -> resolvido; >1 -> candidatos p/ o usuário desambiguar.
-      let clientResolved: { id: string; name: string } | null = null;
-      let clientCandidates: { id: string; name: string }[] = [];
+      // Resolve o cliente citado (se houver) com a IDENTIDADE DO USUÁRIO (JWT):
+      // agent_consultar_cliente re-checa is_recepcao_or_socio(), que é FALSO sob
+      // service-role (por isso a resolução vinha vazia). Só a resolução usa este
+      // client; o resto do orquestrador segue com `admin`. Lógica 0/1/N: 0 ->
+      // client_query fica em aberto no cartão; 1 -> resolvido; N(≤10) -> candidatos.
+      // PII: a RPC devolve o CPF em CLARO; mascaramos AQUI imediatamente
+      // (***.***.***-NN). O CPF em claro NUNCA vai para o rascunho do LLM (a
+      // extração já ocorreu, só sobre a fala crua), para chat_messages.metadata,
+      // nem para log. Só o client_id (uuid) é persistido no vínculo.
+      let clientResolved: { id: string; name: string; cpf_masked: string | null; status: string | null } | null = null;
+      let clientCandidates: { id: string; name: string; cpf_masked: string | null; status: string | null }[] = [];
       if (draft.client_query) {
-        const { data: cli } = await admin.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
-        const rows = (cli as { id: string; full_name: string }[] | null) ?? [];
-        if (rows.length === 1) clientResolved = { id: rows[0].id, name: rows[0].full_name };
-        else if (rows.length > 1) clientCandidates = rows.slice(0, 5).map((r) => ({ id: r.id, name: r.full_name }));
+        const jwtClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+        const maskCpf = (v: unknown): string | null => {
+          const d = String(v ?? "").replace(/\D/g, "");
+          return d.length >= 2 ? `***.***.***-${d.slice(-2)}` : null;
+        };
+        const { data: cli } = await jwtClient.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
+        const rows = (cli as { id: string; full_name: string; cpf: string; status: string }[] | null) ?? [];
+        const mapped = rows.slice(0, 10).map((r) => ({
+          id: r.id, name: r.full_name, cpf_masked: maskCpf(r.cpf), status: r.status ?? null,
+        }));
+        if (mapped.length === 1) clientResolved = mapped[0];
+        else if (mapped.length > 1) clientCandidates = mapped;
       }
 
       const tarSeq = await nextSeq(admin, body.sessionId);
