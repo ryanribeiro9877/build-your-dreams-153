@@ -40,10 +40,10 @@ export function useAttendanceRecorder(
   // Monta um bloco a partir dos chunks DAQUELE recorder (buffer capturado no
   // closure, não ref compartilhada) → fronteiras corretas independentemente do
   // timeslice. Enfileira o upload incremental.
-  const flushBlock = useCallback((chunks: BlobPart[], blockIndex: number, blockStart: number) => {
+  const flushBlock = useCallback((chunks: BlobPart[], sessionId: string, blockIndex: number, blockStart: number) => {
     if (chunks.length === 0) return;
     const block: AttendanceBlock = {
-      sessionId: sessionRef.current,
+      sessionId,
       blockIndex,
       startedAt: blockStart,
       durationMs: Date.now() - blockStart,
@@ -58,11 +58,12 @@ export function useAttendanceRecorder(
   const newRecorder = useCallback(() => {
     const stream = streamRef.current!;
     const chunks: BlobPart[] = [];
+    const sessionId = sessionRef.current;
     const blockIndex = blockIndexRef.current;
     const blockStart = Date.now();
     const rec = new MediaRecorder(stream, { mimeType: mimeRef.current });
     rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-    rec.onstop = () => flushBlock(chunks, blockIndex, blockStart);
+    rec.onstop = () => flushBlock(chunks, sessionId, blockIndex, blockStart);
     rec.start(TIMESLICE_MS);
     recorderRef.current = rec;
     blockIndexRef.current = blockIndex + 1;

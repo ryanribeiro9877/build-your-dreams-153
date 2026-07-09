@@ -137,7 +137,8 @@ function AttendanceRecorder({ client, onSaved }: { client: ClientFull; onSaved: 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
         {rec.recording
           ? <button className="cli-btn" onClick={rec.stop}>⏹ Parar</button>
-          : <button className="cli-btn" onClick={() => void rec.start()}>⏺ Gravar</button>}
+          : <button className="cli-btn" onClick={() => void rec.start()} disabled={!user?.id}
+              title={!user?.id ? "Faça login para gravar" : undefined}>⏺ Gravar</button>}
         {rec.recording && (
           <span style={{ fontWeight: 800, color: "var(--cli-ink)" }}>● {mmss(rec.elapsedMs)}</span>
         )}
