@@ -69,4 +69,14 @@ describe("attendanceAudio — groupBySession", () => {
     // s2 sem notes ainda agrupa pelo file_path
     expect(sessions.find((s) => s.sessionId === "s2")!.blocks).toHaveLength(1);
   });
+
+  it("agrupa pelo file_path mesmo quando notes.session_id diverge (path é a fonte de verdade)", () => {
+    const rows: AudioDocRow[] = [
+      { id: "x", file_path: "c1/atendimento/sPATH/0_10.webm", document_name: "b0", mime_type: "audio/webm",
+        notes: JSON.stringify({ session_id: "sNOTES", block_index: 0, duration_ms: 100, started_at: 10 }), created_at: "2026-07-09T12:00:00Z" },
+    ];
+    const sessions = groupBySession(rows);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].sessionId).toBe("sPATH");
+  });
 });

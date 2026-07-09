@@ -99,7 +99,7 @@ export function groupBySession(rows: AudioDocRow[]): AttendanceSession[] {
   const map = new Map<string, AttendanceSession>();
   for (const row of rows) {
     const n = readNotes(row);
-    const sessionId = n.session_id ?? parseSessionIdFromPath(row.file_path) ?? row.id;
+    const sessionId = parseSessionIdFromPath(row.file_path) ?? n.session_id ?? row.id;
     let s = map.get(sessionId);
     if (!s) {
       s = { sessionId, startedAt: n.started_at ?? Date.parse(row.created_at), totalDurationMs: 0, blocks: [] };
@@ -132,4 +132,4 @@ export function isRecordingSupported(): boolean {
   return typeof g.MediaRecorder !== "undefined" && !!g.navigator?.mediaDevices?.getUserMedia;
 }
 
-// pickAudioMime / isRecordingSupported / uploadAttendanceBlock / createUploadQueue → Task 3
+// uploadAttendanceBlock / createUploadQueue → Task 3
