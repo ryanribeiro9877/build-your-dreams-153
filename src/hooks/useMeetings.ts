@@ -94,3 +94,10 @@ export async function getMeetingAudit(id: string): Promise<MeetingAuditRow[]> {
   if (error) throw error;
   return (data as MeetingAuditRow[]) ?? [];
 }
+
+/** Slots disponíveis (HH:MM) para a data — os cheios já vêm removidos pelo banco (5.2). */
+export async function getAvailableSlots(dateISO: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc("get_available_slots", { p_date: dateISO });
+  if (error) throw error;
+  return ((data as { slot: string }[]) ?? []).map((r) => r.slot.slice(0, 5));
+}

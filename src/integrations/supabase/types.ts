@@ -3871,6 +3871,12 @@ export type Database = {
           name: string
         }[]
       }
+      get_available_slots: {
+        Args: { p_date: string }
+        Returns: {
+          slot: string
+        }[]
+      }
       get_meeting_audit: {
         Args: { p_meeting_id: string }
         Returns: {

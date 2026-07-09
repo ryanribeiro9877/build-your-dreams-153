@@ -4,11 +4,11 @@ import { CalendarClock, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import {
-  createMeeting, updateMeeting, deleteMeeting, getMeetingAudit,
+  createMeeting, updateMeeting, deleteMeeting, getMeetingAudit, getAvailableSlots,
   type MeetingRow, type MeetingAuditRow,
 } from "@/hooks/useMeetings";
 import {
-  MEETING_STATUS_OPTIONS, MEETING_TYPE_OPTIONS, deriveEndTime, type MeetingStatus,
+  MEETING_STATUS_OPTIONS, MEETING_TYPE_OPTIONS, statusOptionsFor, type MeetingStatus,
 } from "@/lib/meetings";
 
 interface Props {
@@ -39,20 +39,35 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
   const [notes, setNotes] = useState(meeting?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [audit, setAudit] = useState<MeetingAuditRow[]>([]);
+  const [slots, setSlots] = useState<string[]>([]);
 
   useEffect(() => {
     if (meeting) getMeetingAudit(meeting.id).then(setAudit).catch(() => setAudit([]));
   }, [meeting]);
 
+  // Slots disponíveis para a data escolhida (5.2): cheios/fora do expediente somem.
+  useEffect(() => {
+    let cancelled = false;
+    getAvailableSlots(scheduledDate)
+      .then((s) => { if (!cancelled) setSlots(s); })
+      .catch(() => { if (!cancelled) setSlots([]); });
+    return () => { cancelled = true; };
+  }, [scheduledDate]);
+
+  // Inclui o horário atual (edição) mesmo que o slot já esteja cheio por conta desta reunião.
+  const slotOptions = Array.from(new Set([startTime, ...slots].filter(Boolean))).sort();
+  const statusChoices = isEdit && meeting
+    ? statusOptionsFor(meeting.status)
+    : MEETING_STATUS_OPTIONS.filter((o) => o.value === "scheduled" || o.value === "confirmed" || o.value === "rescheduled");
+
   const save = async () => {
     if (!scheduledDate || !startTime) { toast.error("Data e horário são obrigatórios."); return; }
     setSaving(true);
     try {
-      const endTime = deriveEndTime(startTime);
       if (isEdit && meeting) {
         await updateMeeting({
           p_id: meeting.id, p_scheduled_date: scheduledDate, p_start_time: startTime,
-          p_end_time: endTime, p_type: type || null, p_lawyer_user_id: lawyerId || null,
+          p_end_time: null, p_type: type || null, p_lawyer_user_id: lawyerId || null,
           p_receptionist_user_id: meeting.receptionist_user_id, p_client_id: meeting.client_id,
           p_client_name: clientName || null, p_phone: phone || null, p_summary: summary || null,
           p_notes: notes || null, p_status: status,
@@ -60,7 +75,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
         toast.success("Reunião atualizada.");
       } else {
         await createMeeting({
-          p_scheduled_date: scheduledDate, p_start_time: startTime, p_end_time: endTime,
+          p_scheduled_date: scheduledDate, p_start_time: startTime, p_end_time: null,
           p_type: type || null, p_lawyer_user_id: lawyerId || null, p_client_name: clientName || null,
           p_phone: phone || null, p_summary: summary || null, p_notes: notes || null, p_status: status,
         });
@@ -96,7 +111,12 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
 
         <div style={{ display: "grid", gap: 10 }}>
           <label>Data<input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={{ width: "100%" }} /></label>
-          <label>Horário<input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: "100%" }} /></label>
+          <label>Horário
+            <select value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: "100%" }}>
+              {slotOptions.length === 0 && <option value="">Sem horários disponíveis</option>}
+              {slotOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
           <label>Tipo
             <select value={type} onChange={(e) => setType(e.target.value)} style={{ width: "100%" }}>
               <option value="">—</option>
@@ -113,7 +133,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
           </label>
           <label>Status
             <select value={status} onChange={(e) => setStatus(e.target.value as MeetingStatus)} style={{ width: "100%" }}>
-              {MEETING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {statusChoices.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
           <label>Resumo<textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} style={{ width: "100%" }} /></label>
