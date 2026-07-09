@@ -11,6 +11,7 @@ import {
   MEETING_STATUS_OPTIONS, MEETING_TYPE_OPTIONS, statusOptionsFor, type MeetingStatus,
 } from "@/lib/meetings";
 import { GOOGLE_SYNC_ENABLED, syncMeetingToGoogle } from "@/lib/googleCalendarSync";
+import { ClientAutocomplete } from "@/components/agenda/ClientAutocomplete";
 
 interface Props {
   meeting: MeetingRow | null; // null = criação
@@ -33,6 +34,9 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
   const [startTime, setStartTime] = useState((meeting?.start_time ?? "09:00").slice(0, 5));
   const [type, setType] = useState(meeting?.type ?? "");
   const [clientName, setClientName] = useState(meeting?.client_name ?? "");
+  // client_id (uuid) só é gravado quando um cliente do cadastro é selecionado no
+  // autocomplete; segue null para prospect ainda não cadastrado (intencional).
+  const [clientId, setClientId] = useState<string | null>(meeting?.client_id ?? null);
   const [phone, setPhone] = useState(meeting?.phone ?? "");
   const [lawyerId, setLawyerId] = useState(meeting?.lawyer_user_id ?? "");
   const [status, setStatus] = useState<MeetingStatus>(meeting?.status ?? "scheduled");
@@ -69,7 +73,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
         await updateMeeting({
           p_id: meeting.id, p_scheduled_date: scheduledDate, p_start_time: startTime,
           p_end_time: null, p_type: type || null, p_lawyer_user_id: lawyerId || null,
-          p_receptionist_user_id: meeting.receptionist_user_id, p_client_id: meeting.client_id,
+          p_receptionist_user_id: meeting.receptionist_user_id, p_client_id: clientId,
           p_client_name: clientName || null, p_phone: phone || null, p_summary: summary || null,
           p_notes: notes || null, p_status: status,
         });
@@ -77,7 +81,8 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
       } else {
         await createMeeting({
           p_scheduled_date: scheduledDate, p_start_time: startTime, p_end_time: null,
-          p_type: type || null, p_lawyer_user_id: lawyerId || null, p_client_name: clientName || null,
+          p_type: type || null, p_lawyer_user_id: lawyerId || null, p_client_id: clientId,
+          p_client_name: clientName || null,
           p_phone: phone || null, p_summary: summary || null, p_notes: notes || null, p_status: status,
         });
         toast.success("Reunião criada.");
@@ -134,7 +139,13 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
               {MEETING_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label>Cliente (nome)<input value={clientName} onChange={(e) => setClientName(e.target.value)} style={{ width: "100%" }} /></label>
+          <label>Cliente
+            <ClientAutocomplete
+              clientName={clientName}
+              clientId={clientId}
+              onChange={(name, id) => { setClientName(name); setClientId(id); }}
+            />
+          </label>
           <label>Telefone<input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></label>
           <label>Advogado
             <select value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} style={{ width: "100%" }}>
