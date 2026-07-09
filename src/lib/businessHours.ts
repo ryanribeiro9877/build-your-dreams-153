@@ -1,4 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+// NB: o client do supabase é importado DINAMICAMENTE dentro de loadBusinessHours
+// (não no topo) para que as funções puras (isWithinBusinessHours/nextBusinessSlot)
+// possam ser importadas em testes sem construir o client (que exige VITE_SUPABASE_URL).
 
 export interface BusinessHours {
   timezone: string;
@@ -58,6 +60,7 @@ export function nextBusinessSlot(d: Date, cfg: BusinessHours = DEFAULT_BUSINESS_
 
 export async function loadBusinessHours(): Promise<BusinessHours> {
   try {
+    const { supabase } = await import("@/integrations/supabase/client");
     const { data, error } = await supabase.rpc("get_business_hours");
     if (error || !data) return DEFAULT_BUSINESS_HOURS;
     const j = data as Record<string, unknown>;
