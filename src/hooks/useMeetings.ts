@@ -101,3 +101,10 @@ export async function getAvailableSlots(dateISO: string): Promise<string[]> {
   if (error) throw error;
   return ((data as { slot: string }[]) ?? []).map((r) => r.slot.slice(0, 5));
 }
+
+/** Cria uma tarefa vinculada à reunião + cliente (5.3). Retorna o id da tarefa. */
+export async function createMeetingTask(meetingId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("create_meeting_task", { p_meeting_id: meetingId });
+  if (error) throw error;
+  return data as string;
+}

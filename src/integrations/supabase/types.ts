@@ -3701,6 +3701,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_meeting_task: {
+        Args: { p_meeting_id: string }
+        Returns: string
+      }
       delete_meeting: {
         Args: { p_id: string }
         Returns: undefined
