@@ -2995,7 +2995,10 @@ serve(async (req) => {
           const d = String(v ?? "").replace(/\D/g, "");
           return d.length >= 2 ? `***.***.***-${d.slice(-2)}` : null;
         };
-        const { data: cli } = await jwtClient.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
+        const { data: cli, error: cliErr } = await jwtClient.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
+        // Falha técnica (rede/JWT) cai para o lado seguro (cartão fica "em aberto");
+        // logamos SEM a query/PII para distinguir de "não encontrado" no diagnóstico.
+        if (cliErr) console.warn("tarefa_confirm: falha ao resolver cliente (segue em aberto)");
         const rows = (cli as { id: string; full_name: string; cpf: string; status: string }[] | null) ?? [];
         const mapped = rows.slice(0, 10).map((r) => ({
           id: r.id, name: r.full_name, cpf_masked: maskCpf(r.cpf), status: r.status ?? null,
