@@ -52,6 +52,42 @@ export interface ClientDocUploadResult {
   error?: string;
 }
 
+export interface DocInsertInput {
+  documentType: string;
+  documentName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  /** default 'recebido' — upload manual chega recebido (não 'pendente de assinatura'). */
+  status?: string;
+  /** default 'recepcao'. */
+  origem?: string;
+}
+
+// Payload puro do insert em client_documents (testável sem rede). O default de
+// status é 'recebido' (o upload de RG/comprovante/assinado JÁ está em mãos; o
+// 'pendente' fica reservado aos documentos GERADOS aguardando assinatura).
+export function buildDocInsert(
+  clientId: string,
+  clientName: string,
+  uploadedBy: string,
+  d: DocInsertInput,
+) {
+  return {
+    client_id: clientId,
+    client_name: clientName,
+    document_type: d.documentType,
+    document_name: d.documentName,
+    file_path: d.filePath,
+    file_size: d.fileSize,
+    mime_type: d.mimeType,
+    notes: null,
+    uploaded_by: uploadedBy,
+    status: d.status ?? "recebido",
+    origem: d.origem ?? "recepcao",
+  } as const;
+}
+
 // Faz o upload de um único documento e registra em client_documents.
 export async function uploadClientDocument(
   clientId: string,
@@ -66,19 +102,47 @@ export async function uploadClientDocument(
   const filePath = `${clientId}/${Date.now()}_${slot}_${file.name}`;
   const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
   if (upErr) return { slot, ok: false, error: upErr.message };
-  const { error: insErr } = await supabase.from("client_documents").insert({
-    client_id: clientId,
-    client_name: clientName,
-    document_type: DOC_TYPE_BY_SLOT[slot],
-    document_name: label,
-    file_path: filePath,
-    file_size: file.size,
-    mime_type: file.type,
-    notes: null,
-    uploaded_by: uploadedBy,
-  } as never);
+  const { error: insErr } = await supabase.from("client_documents").insert(
+    buildDocInsert(clientId, clientName, uploadedBy, {
+      documentType: DOC_TYPE_BY_SLOT[slot],
+      documentName: label,
+      filePath,
+      fileSize: file.size,
+      mimeType: file.type,
+      status: "recebido",
+    }) as never,
+  );
   if (insErr) return { slot, ok: false, error: insErr.message };
   return { slot, ok: true };
+}
+
+// Upload de um documento GERADO já assinado (procuração, contrato, etc.).
+// Grava com o MESMO document_type do gerado e status 'recebido' — o checklist
+// (precedência validado>recebido>pendente) move o item de "pendente de
+// assinatura" para "recebido". Ponto 6 (card [6.5]).
+export async function uploadSignedDocument(
+  clientId: string,
+  clientName: string,
+  uploadedBy: string,
+  documentType: string,
+  documentLabel: string,
+  file: File,
+): Promise<{ ok: boolean; error?: string }> {
+  const filePath = `${clientId}/${Date.now()}_assinado_${documentType}_${file.name}`;
+  const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
+  if (upErr) return { ok: false, error: upErr.message };
+  const { error: insErr } = await supabase.from("client_documents").insert(
+    buildDocInsert(clientId, clientName, uploadedBy, {
+      documentType,
+      documentName: `${documentLabel} (assinado)`,
+      filePath,
+      fileSize: file.size,
+      mimeType: file.type,
+      status: "recebido",
+    }) as never,
+  );
+  if (insErr) return { ok: false, error: insErr.message };
+  return { ok: true };
 }
 
 // Sobe todos os slots preenchidos, best-effort. Retorna o resultado por slot.

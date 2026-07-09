@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 // do módulo. Este teste só lê constantes puras, então stubamos o client.
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
-import { CLIENT_DOC_SLOTS, DOC_TYPE_BY_SLOT, type ClientDocSlot } from "./clientDocuments";
+import { CLIENT_DOC_SLOTS, DOC_TYPE_BY_SLOT, buildDocInsert, type ClientDocSlot } from "./clientDocuments";
 
 // Contrato do banco (produção), verificado via information_schema em 2026-07-09:
 // CHECK client_documents_document_type_check. O document_type gravado por qualquer
@@ -57,5 +57,28 @@ describe("clientDocuments — vocabulário de document_type", () => {
   it("não sobra slot fora do mapa (todo ClientDocSlot tem document_type)", () => {
     const mapped = Object.keys(DOC_TYPE_BY_SLOT) as ClientDocSlot[];
     for (const { slot } of CLIENT_DOC_SLOTS) expect(mapped).toContain(slot);
+  });
+});
+
+describe("buildDocInsert — payload do insert em client_documents", () => {
+  it("usa status 'recebido' e origem 'recepcao' por padrão", () => {
+    const row = buildDocInsert("c1", "MARIA", "u1", {
+      documentType: "rg", documentName: "RG — Frente",
+      filePath: "c1/rg.png", fileSize: 10, mimeType: "image/png",
+    });
+    expect(row.document_type).toBe("rg");
+    expect(row.status).toBe("recebido");
+    expect(row.origem).toBe("recepcao");
+    expect(row.client_id).toBe("c1");
+    expect(row.uploaded_by).toBe("u1");
+  });
+
+  it("respeita status explícito quando informado", () => {
+    const row = buildDocInsert("c1", "MARIA", "u1", {
+      documentType: "procuracao", documentName: "Procuração (assinada)",
+      filePath: "c1/proc.pdf", fileSize: 1, mimeType: "application/pdf", status: "recebido",
+    });
+    expect(row.status).toBe("recebido");
+    expect(row.document_type).toBe("procuracao");
   });
 });
