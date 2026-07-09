@@ -52,7 +52,9 @@ export interface JcChatMessage {
   // V23 orquestracao: 'stage' = etapa intermediaria (linha de status);
   // 'final' = resposta do agente; 'error' = falha.
   // 'action_proposal' = proposta de acao agentica (renderiza ActionCard).
-  kind?: "stage" | "final" | "error" | "action_proposal";
+  // 'cadastro_form' = disparo do CADASTRO-MODELO-A (renderiza o ClienteFormWizard
+  // inline abaixo da bolha; ver JurisChatPanel).
+  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form";
   stage?: string;
   // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
   // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.

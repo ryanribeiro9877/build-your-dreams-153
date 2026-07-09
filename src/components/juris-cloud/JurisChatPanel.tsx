@@ -10,6 +10,7 @@ import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
+import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
 import { PecaModal } from "./PecaModal";
 import { truncatePecaPreview } from "./pecaPreview";
@@ -446,7 +447,19 @@ export default function JurisChatPanel({
         </div>
       ) : (
         <div className="jc-messages">
-          {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+          {messages.map(msg =>
+            // CADASTRO-MODELO-A: quando o disparo chega (metadata.kind="cadastro_form"),
+            // além da bolha de texto, monta o ClienteFormWizard inline. O envio grava
+            // direto via save_client (cifrado) — a PII não trafega pelo chat.
+            msg.kind === "cadastro_form" ? (
+              <div key={msg.id}>
+                <MessageBubble msg={msg} />
+                <ClienteFormWizard mode="create" variant="chat" />
+              </div>
+            ) : (
+              <MessageBubble key={msg.id} msg={msg} />
+            ),
+          )}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}
           <div ref={messagesEndRef} />
         </div>
