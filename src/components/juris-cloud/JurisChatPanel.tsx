@@ -454,7 +454,12 @@ export default function JurisChatPanel({
             msg.kind === "cadastro_form" ? (
               <div key={msg.id}>
                 <MessageBubble msg={msg} />
-                <ClienteFormWizard mode="create" variant="chat" />
+                {/* Alinha o wizard SOB a bolha do agente: mesma linha centrada
+                    (.jc-msg-wrap) com um espaçador invisível no lugar do avatar. */}
+                <div className="jc-msg-wrap jc-inline-widget">
+                  <div className="jc-msg-avatar" aria-hidden="true" style={{ visibility: "hidden" }} />
+                  <ClienteFormWizard mode="create" variant="chat" />
+                </div>
               </div>
             ) : (
               <MessageBubble key={msg.id} msg={msg} />
