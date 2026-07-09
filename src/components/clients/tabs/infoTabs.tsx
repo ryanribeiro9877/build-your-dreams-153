@@ -89,24 +89,37 @@ export function ResumoTab({ client }: { client: ClientFull }) {
 function AttendanceSummarySection({ client }: { client: ClientFull }) {
   const [summaries, setSummaries] = useState<StoredSummary[] | null>(null);
   const [generating, setGenerating] = useState(false);
+  // ClientDetails mantém o painel da aba montado entre clientes (chave por
+  // nome da aba, não por client.id); esta ref evita que um fetch atrasado
+  // (mount-load ou reload pós-geração) de um client.id antigo sobrescreva o
+  // estado depois que o usuário já trocou de cliente.
+  const cancelledRef = useRef(false);
 
-  const load = useCallback(async () => {
-    const list = await fetchAttendanceSummaries(client.id);
-    setSummaries(list);
+  useEffect(() => {
+    cancelledRef.current = false;
+    (async () => {
+      const list = await fetchAttendanceSummaries(client.id);
+      if (cancelledRef.current) return;
+      setSummaries(list);
+    })();
+    return () => { cancelledRef.current = true; };
   }, [client.id]);
-
-  useEffect(() => { void load(); }, [load]);
 
   async function handleGenerate() {
     setGenerating(true);
-    const res = await generateAttendanceSummary(client.id);
-    setGenerating(false);
-    if (!res.ok) {
-      toast.error(res.reason ? `Não foi possível gerar o resumo: ${res.reason}` : "Não foi possível gerar o resumo.");
-      return;
+    try {
+      const res = await generateAttendanceSummary(client.id);
+      if (!res.ok) {
+        toast.error(res.reason ? `Não foi possível gerar o resumo: ${res.reason}` : "Não foi possível gerar o resumo.");
+        return;
+      }
+      toast.success("Resumo do atendimento gerado.");
+      const list = await fetchAttendanceSummaries(client.id);
+      if (cancelledRef.current) return;
+      setSummaries(list);
+    } finally {
+      setGenerating(false);
     }
-    toast.success("Resumo do atendimento gerado.");
-    await load();
   }
 
   const latest = summaries && summaries.length > 0 ? summaries[0] : null;
