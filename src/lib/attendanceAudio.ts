@@ -143,7 +143,9 @@ export async function uploadAttendanceBlock(
   const filePath = buildAttendancePath(clientId, block.sessionId, block.blockIndex, ts);
   const { error: upErr } = await supabase.storage
     .from("client-documents")
-    .upload(filePath, block.blob, { contentType: block.mimeType, upsert: false });
+    // upsert:true → retry do mesmo bloco (path determinístico) é idempotente,
+    // mesmo se a falha anterior foi no insert e não no upload.
+    .upload(filePath, block.blob, { contentType: block.mimeType, upsert: true });
   if (upErr) return { ok: false, error: upErr.message };
 
   const notes = buildAttendanceNotes(block);
@@ -184,7 +186,12 @@ export function createUploadQueue(
         const next = items.find((i) => i.status === "pending");
         if (!next) break;
         next.status = "uploading"; emit();
-        const res = await uploadFn(next.block);
+        let res: UploadResult;
+        try {
+          res = await uploadFn(next.block);
+        } catch (e) {
+          res = { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
         if (res.ok) { next.status = "done"; next.error = undefined; }
         else { next.status = "error"; next.error = res.error; }
         emit();

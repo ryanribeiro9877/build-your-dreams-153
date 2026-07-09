@@ -147,4 +147,20 @@ describe("createUploadQueue", () => {
     q.retry("s1", 0);
     await vi.waitFor(() => expect(q.getItems()[0].status).toBe("done"));
   });
+
+  it("nunca roda mais de um upload por vez (sequencial de verdade)", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const uploadFn = vi.fn(async (): Promise<UploadResult> => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve(); // yield: daria chance a paralelismo se existisse
+      inFlight--;
+      return { ok: true };
+    });
+    const q = createUploadQueue(uploadFn, () => {});
+    q.enqueue(fakeBlock(0)); q.enqueue(fakeBlock(1)); q.enqueue(fakeBlock(2));
+    await vi.waitFor(() => expect(q.getItems().every((i) => i.status === "done")).toBe(true));
+    expect(maxInFlight).toBe(1);
+  });
 });
