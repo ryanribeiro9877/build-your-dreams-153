@@ -29,50 +29,69 @@ export function useAttendanceRecorder(
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
   const sessionRef = useRef<string>("");
   const blockIndexRef = useRef(0);
-  const blockStartRef = useRef(0);
   const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef(0);
   const mimeRef = useRef("audio/webm");
   const queueRef = useRef<ReturnType<typeof createUploadQueue> | null>(null);
 
-  // Monta o bloco a partir dos chunks acumulados e enfileira o upload.
-  const flushBlock = useCallback(() => {
-    if (chunksRef.current.length === 0) return;
-    const blob = new Blob(chunksRef.current, { type: mimeRef.current });
-    chunksRef.current = [];
+  // Monta um bloco a partir dos chunks DAQUELE recorder (buffer capturado no
+  // closure, não ref compartilhada) → fronteiras corretas independentemente do
+  // timeslice. Enfileira o upload incremental.
+  const flushBlock = useCallback((chunks: BlobPart[], blockIndex: number, blockStart: number) => {
+    if (chunks.length === 0) return;
     const block: AttendanceBlock = {
       sessionId: sessionRef.current,
-      blockIndex: blockIndexRef.current,
-      startedAt: blockStartRef.current,
-      durationMs: Date.now() - blockStartRef.current,
-      blob,
+      blockIndex,
+      startedAt: blockStart,
+      durationMs: Date.now() - blockStart,
+      blob: new Blob(chunks, { type: mimeRef.current }),
       mimeType: mimeRef.current,
     };
-    blockIndexRef.current += 1;
-    blockStartRef.current = Date.now();
     queueRef.current?.enqueue(block);
   }, []);
 
+  // Cria um MediaRecorder novo no MESMO stream, com buffer/índice/início próprios
+  // (capturados no closure). Avança a contabilidade para o próximo bloco.
   const newRecorder = useCallback(() => {
     const stream = streamRef.current!;
+    const chunks: BlobPart[] = [];
+    const blockIndex = blockIndexRef.current;
+    const blockStart = Date.now();
     const rec = new MediaRecorder(stream, { mimeType: mimeRef.current });
-    rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    rec.onstop = () => flushBlock();
+    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = () => flushBlock(chunks, blockIndex, blockStart);
     rec.start(TIMESLICE_MS);
     recorderRef.current = rec;
+    blockIndexRef.current = blockIndex + 1;
   }, [flushBlock]);
 
-  // rotação: para o recorder (onstop faz o flush) e recomeça no MESMO stream.
+  const stop = useCallback(() => {
+    if (rotateTimerRef.current) { clearInterval(rotateTimerRef.current); rotateTimerRef.current = null; }
+    if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+    recorderRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setRecording(false);
+  }, []);
+
+  // Rotação (invisível ao usuário): para o recorder atual (o onstop faz o flush
+  // do bloco) e começa um novo no mesmo stream. Se a criação do novo recorder
+  // falhar, encerra falando alto em vez de morrer silenciosamente.
   const rotate = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
-      newRecorder();
+      try {
+        newRecorder();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Falha ao continuar a gravação");
+        stop();
+      }
     }
-  }, [newRecorder]);
+  }, [newRecorder, stop]);
 
   const start = useCallback(async () => {
     if (!supported || recording) return;
@@ -83,9 +102,7 @@ export function useAttendanceRecorder(
       mimeRef.current = pickAudioMime();
       sessionRef.current = newSessionId();
       blockIndexRef.current = 0;
-      const now = Date.now();
-      blockStartRef.current = now;
-      startedAtRef.current = now;
+      startedAtRef.current = Date.now();
       queueRef.current = createUploadQueue(
         (b) => uploadAttendanceBlock(clientId, clientName, uploadedBy, b),
         setItems,
@@ -98,16 +115,6 @@ export function useAttendanceRecorder(
       setError(e instanceof Error ? e.message : "Falha ao acessar o microfone");
     }
   }, [supported, recording, clientId, clientName, uploadedBy, newRecorder, rotate, rotateMs]);
-
-  const stop = useCallback(() => {
-    if (rotateTimerRef.current) { clearInterval(rotateTimerRef.current); rotateTimerRef.current = null; }
-    if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
-    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
-    recorderRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setRecording(false);
-  }, []);
 
   const retry = useCallback((sessionId: string, blockIndex: number) => {
     queueRef.current?.retry(sessionId, blockIndex);
