@@ -244,12 +244,22 @@
 .cli-pixrow input { accent-color: var(--cli-amber); width: 16px; height: 16px; }
 
 /* ---------- wizard (CADASTRO-MODELO-A) ---------- */
-.cli-wizard-chat { margin: 8px 0; }
-/* Ponto 1: no chat, o card cabe no viewport da conversa — cabeçalho de passos e
-   ações fixos; só o corpo da etapa rola internamente se transbordar. */
-.cli-wizard-chat .cli-form-card { display: flex; flex-direction: column; max-height: min(72vh, 640px); }
+/* Wrappers inline do wizard/documentos no chat NÃO são páginas: anula os estilos
+   de página do .cli-root (min-height:100vh, padding, fundo) para o card ser
+   autônomo e não empurrar a conversa. Escopo: só dentro do chat (.jc-messages). */
+.jc-messages .cli-root { min-height: 0; padding: 0; background: transparent; }
+
+.cli-wizard-chat { margin: 8px 0; display: flex; }
+/* Ponto 1 (corrigido): card autônomo no chat — encolhe ao conteúdo (sem creme
+   vazio), largura limitada e cantos redondos. max-height é só TETO (nunca height):
+   passo curto → card baixo; passo longo → atinge o teto e só o corpo rola. */
+.cli-wizard-chat .cli-form-card {
+  width: 100%; max-width: 600px; align-self: flex-start; height: auto;
+  display: flex; flex-direction: column; max-height: min(72vh, 640px);
+}
 .cli-wizard-chat .cli-steps { flex: 0 0 auto; }
-.cli-wizard-chat .cli-formgrid { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+/* flex: 0 1 auto → NÃO cresce (sem preencher); encolhe e rola só ao atingir o teto. */
+.cli-wizard-chat .cli-formgrid { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .cli-wizard-chat .cli-form-actions { flex: 0 0 auto; }
 /* Ponto 6: lista de gerados com slot de upload do assinado por item. */
 .cli-doc-gen-list { display: flex; flex-direction: column; gap: 8px; }

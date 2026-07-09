@@ -728,7 +728,11 @@ function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
   return (
     <div className="cli-form-card cli-wizard">
       <div className="cli-formsec">✓ Cadastro concluído</div>
-      {clientName && <div className="cli-doc-hint" style={{ marginTop: -4 }}>Cliente: {clientName}</div>}
+      {clientName && (
+        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "var(--cli-ink)" }}>
+          Cliente: {clientName}
+        </div>
+      )}
 
       {/* Uploads dos documentos do cliente (não bloqueiam — geram pendência) */}
       <div className="cli-doc-panel">
