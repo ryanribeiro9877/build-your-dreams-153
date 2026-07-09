@@ -345,3 +345,27 @@ export async function createDepartmentTask(input: CreateDepartmentTaskInput): Pr
   if (error) throw error;
   return data as unknown as string;
 }
+
+// Card 4.1 (tarefa via chat): via de autorização PRÓPRIA (create_chat_task —
+// autoriza "autenticado e papel <> tech", NÃO usa role_task_matrix). Tipo fixo
+// `tarefa_chat`; responsável default = o próprio criador (p_assignee_user_id nulo).
+export interface CreateChatTaskInput {
+  title: string;
+  description?: string;
+  client_id?: string;
+  deadline_at?: string;
+  assignee_user_id?: string;
+  priority?: TaskPriority;
+}
+export async function createChatTask(input: CreateChatTaskInput): Promise<string> {
+  const { data, error } = await rpcUntyped("create_chat_task", {
+    p_title: input.title,
+    p_description: input.description ?? null,
+    p_client_id: input.client_id ?? null,
+    p_deadline_at: input.deadline_at ?? null,
+    p_assignee_user_id: input.assignee_user_id ?? null,
+    p_priority: input.priority ?? "medium",
+  });
+  if (error) throw error;
+  return data as unknown as string;
+}

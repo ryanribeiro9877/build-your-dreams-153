@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Pencil, ClipboardList, AlertCircle } from "lucide-react";
-import { useTaskTypes, useEligibleAssignees, createUserTask } from "@/hooks/useUserTasks";
+import { createChatTask } from "@/hooks/useUserTasks";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import type { TarefaDraft } from "@/components/juris-cloud/types";
 import { toast } from "sonner";
@@ -13,11 +13,11 @@ function toLocalInput(iso: string): string {
 }
 
 // Tenta casar o assignee_hint (nome livre vindo da extração em linguagem
-// natural) com uma opção da lista de responsáveis elegíveis — comparação
-// simples por substring (case/acentos ignorados), sem libs novas.
+// natural, ex.: "cria tarefa pro Pedro ligar") com uma opção da lista de
+// usuários — comparação simples por substring (case/acentos ignorados).
 function matchAssigneeHint(hint: string | null, options: { id: string; name: string }[]): string {
   if (!hint) return "";
-  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
   const h = norm(hint);
   if (!h) return "";
   const hit = options.find((o) => norm(o.name).includes(h) || h.includes(norm(o.name)));
@@ -25,39 +25,34 @@ function matchAssigneeHint(hint: string | null, options: { id: string; name: str
 }
 
 /**
- * Cartão de confirmação de tarefa (Task 19): renderiza o `TarefaDraft`
- * extraído pelo agente (kind === 'tarefa_confirm'), pré-preenchido mas
- * totalmente editável. Só cria a tarefa (create_user_task) ao clicar
- * "Confirmar" — uma única vez (estado `created` trava re-submit). Campos
- * não resolvidos pelo draft (responsável, cliente ambíguo) ficam em aberto,
- * destacados para o usuário decidir.
+ * Cartão de confirmação de tarefa (Task 19 + via própria 4.1): renderiza o
+ * `TarefaDraft` extraído pelo agente (kind === 'tarefa_confirm'), pré-preenchido
+ * mas totalmente editável. Só cria a tarefa ao clicar "Confirmar" — uma única
+ * vez (estado `created` trava re-submit).
+ *
+ * Autorização: usa `create_chat_task` (via PRÓPRIA do 4.1 — "autenticado e papel
+ * <> tech", sem role_task_matrix). O TIPO é fixo (`tarefa_chat`, resolvido no
+ * banco), então não há seletor de tipo. O RESPONSÁVEL é o próprio criador por
+ * padrão (criação rápida/pessoal); pode ser trocado, e é pré-selecionado se o
+ * pedido citou alguém. Cliente: 0 → em aberto; 1 → resolvido; N → desambiguação
+ * (nome + CPF mascarado + status). Só o `client_id` (uuid) é vinculado.
  */
 export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
-  const { types } = useTaskTypes();
-  const [taskTypeId, setTaskTypeId] = useState<string>("");
   const [title, setTitle] = useState(draft.title ?? "");
   const [description, setDescription] = useState(draft.description ?? "");
   const [deadline, setDeadline] = useState(draft.deadline_at ? toLocalInput(draft.deadline_at) : "");
   const [priority, setPriority] = useState<TarefaDraft["priority"]>(draft.priority ?? "medium");
   const [clientId, setClientId] = useState<string | null>(draft.client_resolved?.id ?? null);
-  const [assignee, setAssignee] = useState<string>("");
+  const [assignee, setAssignee] = useState<string>(""); // "" = eu (padrão)
   const [assigneeTouched, setAssigneeTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
 
-  const { assignees } = useEligibleAssignees(taskTypeId || null);
   const { users } = useAssignableUsers();
-  const assigneeOptions = useMemo(
-    () =>
-      taskTypeId
-        ? assignees.map((a) => ({ id: a.user_id, name: a.full_name }))
-        : users.map((u) => ({ id: u.user_id, name: u.name })),
-    [taskTypeId, assignees, users],
-  );
+  const assigneeOptions = useMemo(() => users.map((u) => ({ id: u.user_id, name: u.name })), [users]);
 
-  // Pré-seleciona o responsável quando o assignee_hint do draft casar com uma
-  // opção elegível — só na primeira vez que as opções chegam (não sobrescreve
-  // uma escolha manual do usuário).
+  // Pré-seleciona SE o pedido citou um responsável; sem citação fica "" = a
+  // própria pessoa (padrão do create_chat_task). Não sobrescreve escolha manual.
   useEffect(() => {
     if (!assigneeTouched && !assignee && assigneeOptions.length > 0) {
       const match = matchAssigneeHint(draft.assignee_hint, assigneeOptions);
@@ -66,19 +61,20 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assigneeOptions]);
 
-  const canConfirm = !!taskTypeId && title.trim().length > 0 && !!assignee && !busy;
+  // Tipo fixo + autorização própria (todos menos tech); responsável default = eu.
+  // Só o título é obrigatório.
+  const canConfirm = title.trim().length > 0 && !busy;
 
   const confirm = async () => {
     if (!canConfirm || created) return;
     setBusy(true);
     try {
-      await createUserTask({
-        task_type_id: taskTypeId,
-        assignee_user_id: assignee,
+      await createChatTask({
         title: title.trim(),
         description: description.trim() || undefined,
         client_id: clientId ?? undefined,
         deadline_at: deadline ? new Date(deadline).toISOString() : undefined,
+        assignee_user_id: assignee || undefined, // undefined → o próprio criador
         priority: priority ?? "medium",
       });
       setCreated(true);
@@ -104,20 +100,6 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
         <ClipboardList size={15} aria-hidden="true" /> Confirmar tarefa
       </div>
       <div className="action-card__fields">
-        <label style={{ fontSize: 12, color: "var(--text2)" }}>
-          Tipo de tarefa {!taskTypeId && <span style={{ color: "#EAB308" }}><AlertCircle size={12} style={{ verticalAlign: "middle" }} /> em aberto</span>}
-        </label>
-        <select
-          value={taskTypeId}
-          onChange={(e) => { setTaskTypeId(e.target.value); setAssignee(""); setAssigneeTouched(false); }}
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        >
-          <option value="">Selecione…</option>
-          {types.map((t) => (
-            <option key={t.id} value={t.id}>{t.display_name}</option>
-          ))}
-        </select>
-
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Título</label>
         <input
           value={title}
@@ -160,19 +142,14 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
         </select>
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>
-          Responsável{" "}
-          {!assignee && (
-            <span style={{ color: "#EAB308" }}>
-              <AlertCircle size={12} style={{ verticalAlign: "middle" }} /> em aberto
-            </span>
-          )}
+          Responsável <span style={{ color: "var(--text3, #8a8a99)" }}>(eu, por padrão)</span>
         </label>
         <select
           value={assignee}
           onChange={(e) => { setAssignee(e.target.value); setAssigneeTouched(true); }}
           style={{ padding: "6px 8px", borderRadius: 6 }}
         >
-          <option value="">Selecione…</option>
+          <option value="">Eu (padrão)</option>
           {assigneeOptions.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
