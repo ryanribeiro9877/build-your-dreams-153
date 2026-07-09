@@ -62,6 +62,8 @@ export interface DocInsertInput {
   status?: string;
   /** default 'recepcao'. */
   origem?: string;
+  /** default null — usado por áudio de atendimento p/ metadados de sessão/bloco. */
+  notes?: string | null;
 }
 
 // Payload puro do insert em client_documents (testável sem rede). O default de
@@ -81,7 +83,7 @@ export function buildDocInsert(
     file_path: d.filePath,
     file_size: d.fileSize,
     mime_type: d.mimeType,
-    notes: null,
+    notes: d.notes ?? null,
     uploaded_by: uploadedBy,
     status: d.status ?? "recebido",
     origem: d.origem ?? "recepcao",
