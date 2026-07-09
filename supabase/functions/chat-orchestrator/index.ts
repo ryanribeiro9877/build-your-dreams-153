@@ -132,6 +132,10 @@ const CHAT_TOOLS_ENABLED = (Deno.env.get("CHAT_TOOLS_ENABLED") ?? "false") === "
 // usuário (RLS/role valem; a RPC de cliente re-checa is_recepcao_or_socio). Isto
 // NÃO liga escrita: escrita segue exclusivamente no CHAT_TOOLS_ENABLED (OFF).
 const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "true").toLowerCase() !== "false";
+// TRILHA C · 6.3: gate DEDICADO do checklist documental por chat. Independente do
+// CHAT_TOOLS_ENABLED (que segue OFF): deployar não muda nada até esta flag ligar.
+const CHAT_DOC_CHECKLIST_ENABLED = (Deno.env.get("CHAT_DOC_CHECKLIST_ENABLED") ?? "false") === "true";
+const DOC_CHECKLIST_TOOL = "solicitar_checklist_documental";
 
 // CADASTRO-CHAT-LOOP-CONCLUSAO: durante uma coleta ativa (continuacao_coleta) o
 // N3 precisa ver TODOS os campos já informados — a janela deslizante de
@@ -1618,6 +1622,11 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "transferir_pendencia": return `Transferir pendência ${args.pendencia_id}.`;
     case "resolver_pendencia": return `Resolver pendência ${args.pendencia_id}.`;
     case "agendar_reuniao": return `Agendar reunião "${args.titulo}" em ${args.data_hora_iso} (${args.modalidade ?? ""}).`;
+    case "solicitar_checklist_documental": {
+      const docs = (args.documentos as string[] ?? []).join(", ");
+      const reu = args.reu ? ` (réu: ${args.reu})` : "";
+      return `Registrar como pendentes os documentos${reu}: ${docs}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2341,7 +2350,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         // passo de CORREÇÃO (run.feedback): aí a peça já existe e segue a regeneração.
         // Quando nada é liberado, toolDefs fica vazio e o fluxo abaixo roda como antes.
         const gatedToolNames = run.feedback ? [] : (n3.allowed_tools ?? []).filter(
-          (n) => isWriteTool(n) ? CHAT_TOOLS_ENABLED : CHAT_READ_TOOLS_ENABLED);
+          (n) => n === DOC_CHECKLIST_TOOL ? CHAT_DOC_CHECKLIST_ENABLED
+               : isWriteTool(n) ? CHAT_TOOLS_ENABLED
+               : CHAT_READ_TOOLS_ENABLED);
         const toolDefs = toolsFor(gatedToolNames);
         if (toolDefs.length > 0) {
           const toolMsgs: LlmMessage[] = [];
