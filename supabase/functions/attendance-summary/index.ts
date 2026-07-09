@@ -6,7 +6,7 @@
 // alucinação) e grava em client_documents (document_type='resumo_atendimento').
 // FLAG: ATTENDANCE_SUMMARY_ENABLED (default ON; "false" desliga).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { assembleInput, buildSummaryPrompt, normalizeSummary, type AttendanceSummary } from "./attendanceSummary.ts";
 
@@ -19,7 +19,7 @@ function enabled(): boolean {
 function providerFromModel(model: string): "openai" | "openrouter" { return model.includes("/") ? "openrouter" : "openai"; }
 const ENDPOINT = { openai: "https://api.openai.com/v1/chat/completions", openrouter: "https://openrouter.ai/api/v1/chat/completions" };
 
-async function resolveKey(admin: ReturnType<typeof createClient>, provider: string): Promise<string | null> {
+async function resolveKey(admin: SupabaseClient, provider: string): Promise<string | null> {
   const { data: cfg } = await admin.from("llm_provider_configs")
     .select("user_id").eq("provider", provider).eq("is_active", true)
     .order("is_default", { ascending: false }).limit(1).maybeSingle();
