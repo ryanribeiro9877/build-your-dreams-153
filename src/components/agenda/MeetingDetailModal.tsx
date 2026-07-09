@@ -4,7 +4,7 @@ import { CalendarClock, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import {
-  createMeeting, updateMeeting, deleteMeeting, getMeetingAudit, getAvailableSlots,
+  createMeeting, updateMeeting, deleteMeeting, getMeetingAudit, getAvailableSlots, createMeetingTask,
   type MeetingRow, type MeetingAuditRow,
 } from "@/hooks/useMeetings";
 import {
@@ -101,6 +101,16 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
     }
   };
 
+  const createTask = async () => {
+    if (!meeting) return;
+    try {
+      await createMeetingTask(meeting.id);
+      toast.success("Tarefa vinculada criada.");
+    } catch (e) {
+      toast.error(`Falha ao criar tarefa: ${(e as Error).message}`);
+    }
+  };
+
   return (
     <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface, #fff)", color: "var(--text1, #111)", borderRadius: 12, padding: 20, width: "min(560px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
@@ -149,6 +159,12 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
         {isEdit && meeting?.client_id && (
           <button type="button" onClick={() => onOpenClient(meeting.client_id!)} style={{ marginTop: 8, display: "block" }}>
             Abrir cadastro do cliente
+          </button>
+        )}
+
+        {isEdit && (
+          <button type="button" onClick={createTask} style={{ marginTop: 8, display: "block" }}>
+            Criar tarefa vinculada
           </button>
         )}
 
