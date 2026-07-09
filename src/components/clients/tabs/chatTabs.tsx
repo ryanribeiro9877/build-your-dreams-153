@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { type ClientFull, EmptyState, TabLoading, formatDateBR } from "../shared";
@@ -104,13 +104,15 @@ function useAttendanceAudios(clientId: string, reloadKey: number) {
 function AttendanceRecorder({ client, onSaved }: { client: ClientFull; onSaved: () => void }) {
   const { user } = useAuth();
   const rec = useAttendanceRecorder(client.id, client.full_name, user?.id ?? "");
-  const prevRecording = useRef(false);
-
-  // quando a gravação termina e não há mais uploads pendentes, recarrega a lista.
+  // Recarrega a lista quando, fora de gravação, todos os blocos enfileirados
+  // terminaram o upload. Sem guarda de "estava gravando": rec.items só muda
+  // quando a fila emite, e onSaved (bump de reloadKey) não altera rec.items,
+  // logo não há loop. Um reload prematuro (blocos anteriores já "done" no
+  // instante do stop, antes do último ser enfileirado) é inofensivo — o reload
+  // final, após o último bloco, mostra tudo.
   useEffect(() => {
-    const pending = rec.items.some((i) => i.status === "pending" || i.status === "uploading");
-    if (prevRecording.current && !rec.recording && !pending) onSaved();
-    prevRecording.current = rec.recording;
+    if (rec.recording || rec.items.length === 0) return;
+    if (rec.items.every((i) => i.status === "done")) onSaved();
   }, [rec.recording, rec.items, onSaved]);
 
   const mmss = (ms: number) => {
