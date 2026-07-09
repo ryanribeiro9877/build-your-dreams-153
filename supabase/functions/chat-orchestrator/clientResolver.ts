@@ -11,11 +11,14 @@
 // `agent_consultar_cliente`). Ainda sem consumidor — o disparo por edição/anexos
 // no chat é o "último passo" do ponto 7, num ciclo seguinte.
 
+// Contrato REAL de agent_consultar_cliente(p_busca) → (id, full_name, cpf, status).
+// NÃO há `city`; o `cpf` vem em claro da RPC e é mascarado no edge antes de virar
+// `cpf_masked` (o CPF em claro nunca chega aqui nem ao cartão).
 export type ClientHit = {
   id: string;
   full_name: string;
-  cpf_masked?: string;
-  city?: string;
+  cpf_masked?: string | null;
+  status?: string | null;
 };
 
 export type ClientResolution =

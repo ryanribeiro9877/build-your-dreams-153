@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { initSentry } from "./lib/sentry";
 import App from "./App.tsx";
 import "./index.css";
+import "./styles/action-card.css";
 
 // Initialize Sentry error monitoring before anything else.
 initSentry();

@@ -10,6 +10,8 @@ import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
+import { TaskAlertCard } from "@/components/chat/TaskAlertCard";
+import { TarefaConfirmCard } from "@/components/chat/TarefaConfirmCard";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
 import { PecaModal } from "./PecaModal";
@@ -71,6 +73,17 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   // a atualizacao da timeline volta via realtime/refetch.
   if (msg.kind === "action_proposal" && msg.proposal) {
     return <ActionCard key={msg.id} proposal={msg.proposal} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
+  }
+  // Alerta de tarefa (kind === 'task_alert'): renderiza o TaskAlertCard no lugar
+  // do balao normal, com as acoes de Concluir/Reagendar/Abrir cliente/Ver detalhes.
+  if (msg.kind === "task_alert" && msg.taskAlert) {
+    return <TaskAlertCard key={msg.id} payload={msg.taskAlert} />;
+  }
+  // Rascunho de tarefa extraido em linguagem natural (kind === 'tarefa_confirm'):
+  // renderiza o TarefaConfirmCard (editavel) no lugar do balao normal. So cria a
+  // tarefa quando o usuario confirmar (Task 19).
+  if (msg.kind === "tarefa_confirm" && msg.tarefaDraft) {
+    return <TarefaConfirmCard key={msg.id} draft={msg.tarefaDraft} />;
   }
   // Etapas intermediarias da orquestracao nao sao exibidas.
   if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {

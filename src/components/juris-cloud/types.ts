@@ -1,5 +1,23 @@
 import type { LucideIcon } from "lucide-react";
 import type { ActionProposal } from "@/components/chat/ActionCard";
+import type { TaskAlertPayload } from "@/components/chat/TaskAlertCard";
+
+/** Rascunho de tarefa extraído em linguagem natural (Task 18), vindo de
+ * metadata.tarefa_draft na linha de chat_messages com kind === 'tarefa_confirm'.
+ * Renderizado (editável) pelo TarefaConfirmCard (Task 19). */
+export interface TarefaDraft {
+  title: string | null;
+  description: string | null;
+  deadline_at: string | null;
+  deadline_display: string | null;
+  priority: "critical" | "high" | "medium" | "low" | null;
+  assignee_hint: string | null;
+  client_query: string | null;
+  // CPF sempre MASCARADO (***.***.***-NN) — o edge mascara antes de gravar; o CPF
+  // em claro nunca chega ao cartão. Só o `id` (uuid) é usado no vínculo.
+  client_resolved: { id: string; name: string; cpf_masked?: string | null; status?: string | null } | null;
+  client_candidates: { id: string; name: string; cpf_masked?: string | null; status?: string | null }[];
+}
 
 export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 export type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
@@ -54,11 +72,17 @@ export interface JcChatMessage {
   // 'action_proposal' = proposta de acao agentica (renderiza ActionCard).
   // 'cadastro_form' = disparo do CADASTRO-MODELO-A (renderiza o ClienteFormWizard
   // inline abaixo da bolha; ver JurisChatPanel).
-  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form";
+  // 'task_alert' = alerta de tarefa (renderiza TaskAlertCard). 'tarefa_confirm'
+  // reservado para outra task (ainda sem renderização própria).
+  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm";
   stage?: string;
   // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
   // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.
   proposal?: ActionProposal;
+  /** Presente quando kind === 'task_alert' (vem de metadata.task_alert). */
+  taskAlert?: TaskAlertPayload;
+  /** Presente quando kind === 'tarefa_confirm' (vem de metadata.tarefa_draft). */
+  tarefaDraft?: TarefaDraft;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
   // Ações inline (ex.: botão "gerar mesmo assim" no gate de anexos). Só para
   // mensagens locais do sistema — não vem do banco.

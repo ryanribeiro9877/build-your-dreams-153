@@ -18,7 +18,7 @@ import { useUiPreferences } from "@/hooks/useUiPreferences";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings, Upload, UserPlus, Coins,
+  Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -932,6 +932,8 @@ export default function JurisCloudOS() {
           agent: r.metadata?.agent_name || (r.role === "assistant" ? "Assistente" : undefined),
           content: r.content, kind: r.metadata?.kind, stage: r.metadata?.stage,
           proposal: r.metadata?.proposal,
+          taskAlert: r.metadata?.task_alert,
+          tarefaDraft: r.metadata?.tarefa_draft,
           timestamp: new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
         } as JcChatMessage));
       return add.length ? [...prev, ...add] : prev;
@@ -996,6 +998,8 @@ export default function JurisCloudOS() {
       kind: r.metadata?.kind,
       stage: r.metadata?.stage,
       proposal: r.metadata?.proposal,
+      taskAlert: r.metadata?.task_alert,
+      tarefaDraft: r.metadata?.tarefa_draft,
       timestamp: r.created_at
         ? new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
         : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -1039,7 +1043,9 @@ export default function JurisCloudOS() {
       // action_proposal pausa o run (awaiting_confirmation) e action_done encerra a
       // ação: ambos devem parar o indicador "pensando", igual a final/error.
       // cadastro_form é resposta síncrona final (dispara o wizard) — também encerra.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      // task_alert/tarefa_confirm são alertas fora do fluxo de uma run do usuário
+      // (chegam via trigger/backend) — também encerram o indicador, se houver um ativo.
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status
@@ -1645,6 +1651,7 @@ export default function JurisCloudOS() {
   // Menu items
   const MENU_ITEMS: MenuItem[] = [
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
+    { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenuItem("agenda") },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },

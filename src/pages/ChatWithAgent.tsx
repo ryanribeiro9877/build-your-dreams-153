@@ -7,6 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ChatMessageRow, ChatSessionRow } from "@/types/jurisai";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
+import { TaskAlertCard, type TaskAlertPayload } from "@/components/chat/TaskAlertCard";
+import { TarefaConfirmCard } from "@/components/chat/TarefaConfirmCard";
+import type { TarefaDraft } from "@/components/juris-cloud/types";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
@@ -277,6 +280,14 @@ export default function ChatWithAgent() {
                       <MessageBubble message={m} />
                       <ClienteFormWizard mode="create" variant="chat" />
                     </div>
+                  ) : m.role === "assistant" && m.metadata?.kind === "task_alert" && m.metadata?.task_alert ? (
+                    // Alerta de tarefa (Task 10/11): renderiza o TaskAlertCard no lugar
+                    // do balao normal, com as acoes de Concluir/Reagendar/etc.
+                    <TaskAlertCard key={m.id} payload={m.metadata?.task_alert as TaskAlertPayload} />
+                  ) : m.role === "assistant" && m.metadata?.kind === "tarefa_confirm" && m.metadata?.tarefa_draft ? (
+                    // Rascunho de tarefa extraido em linguagem natural (Task 18/19):
+                    // renderiza o TarefaConfirmCard editavel no lugar do balao normal.
+                    <TarefaConfirmCard key={m.id} draft={m.metadata?.tarefa_draft as TarefaDraft} />
                   ) : (
                     <MessageBubble key={m.id} message={m} />
                   )

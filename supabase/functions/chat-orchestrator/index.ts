@@ -28,6 +28,7 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
+import { normalizeDraft, buildTaskDraftPrompt } from "./taskDraft.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -37,7 +38,7 @@ import {
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
-  isCollectionContinuation, isCadastroClienteRequest,
+  isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
 } from "./intentClassifier.ts";
 
 // ─── Sentry (observabilidade) ────────────────────────────────────────────────
@@ -136,6 +137,9 @@ const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "tru
 // CHAT_TOOLS_ENABLED (que segue OFF): deployar não muda nada até esta flag ligar.
 const CHAT_DOC_CHECKLIST_ENABLED = (Deno.env.get("CHAT_DOC_CHECKLIST_ENABLED") ?? "false") === "true";
 const DOC_CHECKLIST_TOOL = "solicitar_checklist_documental";
+// Card 4.1 — escrita de tarefa pelo chat é DESACOPLADA do tool-calling (CHAT_TOOLS OFF).
+// Flag dedicada, reversível. Default ON.
+const TAREFA_CHAT_ENABLED = (Deno.env.get("TAREFA_CHAT_ENABLED") ?? "true") === "true";
 
 // CADASTRO-CHAT-LOOP-CONCLUSAO: durante uma coleta ativa (continuacao_coleta) o
 // N3 precisa ver TODOS os campos já informados — a janela deslizante de
@@ -2949,6 +2953,89 @@ serve(async (req) => {
       });
       await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
       return json(202, { runId: cadRunId, sessionId: body.sessionId, status: "done", path: "cadastro_form", intent: "ACAO_COM_TOOL" });
+    }
+
+    // ─── TAREFA-CHAT (4.1): cartão de confirmação editável, sem tool-calling ──────
+    // Mesma ideia do cadastro-form: detecção determinística (isTarefaChatRequest),
+    // independe de CHAT_TOOLS_ENABLED, não gasta o classificador. O agente NÃO cria a
+    // tarefa aqui — só extrai um RASCUNHO (1 chamada LLM, sem tools) e tenta resolver o
+    // cliente citado. O front monta um cartão editável (metadata.kind="tarefa_confirm");
+    // só no CONFIRMAR o FE chama create_user_task. Zero alucinação: falha no LLM/parse
+    // -> normalizeDraft(null) (rascunho vazio, tudo em aberto para o usuário revisar).
+    if (TAREFA_CHAT_ENABLED && isTarefaChatRequest(body.message)) {
+      const { data: tarRunRow, error: tarRunErr } = await admin.from("orchestration_runs").insert({
+        session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+        original_message: body.message, status: "done", entry_agent_id: agent.id,
+        // route_path tem CHECK (fast|consulta|need_info|full); o front reconhece o
+        // cartão pelo metadata.kind="tarefa_confirm" da mensagem, NÃO pelo route_path.
+        intent_category: "ACAO_COM_TOOL", route_path: "fast",
+        chain: [{ level: 0, path: "tarefa_confirm", intent: "ACAO_COM_TOOL", agent: agent.name }],
+      }).select("id").single();
+      if (tarRunErr || !tarRunRow) return errResp(500, "db_error", `Falha ao criar run: ${tarRunErr?.message}`);
+      const tarRunId = (tarRunRow as { id: string }).id;
+
+      // Extração do rascunho: 1 chamada LLM não-streaming, sem tools, jsonMode. Parse
+      // DEFENSIVO — resposta vazia/JSON inválido/erro do provedor -> rascunho vazio
+      // (nunca chuta um campo; tudo fica null/aberto no cartão).
+      let draft = normalizeDraft(null);
+      try {
+        const llm = await callLLM(admin, {
+          model: agent.model, systemPrompt: null, history: [],
+          userMessage: buildTaskDraftPrompt(body.message, new Date().toISOString(), "America/Bahia"),
+          temperature: 0, top_p: null, maxTokens: 500, jsonMode: true,
+        });
+        draft = normalizeDraft(JSON.parse(llm.content));
+      } catch (_e) {
+        draft = normalizeDraft(null);
+      }
+
+      // Resolve o cliente citado (se houver) com a IDENTIDADE DO USUÁRIO (JWT):
+      // agent_consultar_cliente re-checa is_recepcao_or_socio(), que é FALSO sob
+      // service-role (por isso a resolução vinha vazia). Só a resolução usa este
+      // client; o resto do orquestrador segue com `admin`. Lógica 0/1/N: 0 ->
+      // client_query fica em aberto no cartão; 1 -> resolvido; N(≤10) -> candidatos.
+      // PII: a RPC devolve o CPF em CLARO; mascaramos AQUI imediatamente
+      // (***.***.***-NN). O CPF em claro NUNCA vai para o rascunho do LLM (a
+      // extração já ocorreu, só sobre a fala crua), para chat_messages.metadata,
+      // nem para log. Só o client_id (uuid) é persistido no vínculo.
+      let clientResolved: { id: string; name: string; cpf_masked: string | null; status: string | null } | null = null;
+      let clientCandidates: { id: string; name: string; cpf_masked: string | null; status: string | null }[] = [];
+      if (draft.client_query) {
+        const jwtClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+        const maskCpf = (v: unknown): string | null => {
+          const d = String(v ?? "").replace(/\D/g, "");
+          return d.length >= 2 ? `***.***.***-${d.slice(-2)}` : null;
+        };
+        const { data: cli, error: cliErr } = await jwtClient.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
+        // Falha técnica (rede/JWT) cai para o lado seguro (cartão fica "em aberto");
+        // logamos SEM a query/PII para distinguir de "não encontrado" no diagnóstico.
+        if (cliErr) console.warn("tarefa_confirm: falha ao resolver cliente (segue em aberto)");
+        const rows = (cli as { id: string; full_name: string; cpf: string; status: string }[] | null) ?? [];
+        const mapped = rows.slice(0, 10).map((r) => ({
+          id: r.id, name: r.full_name, cpf_masked: maskCpf(r.cpf), status: r.status ?? null,
+        }));
+        if (mapped.length === 1) clientResolved = mapped[0];
+        else if (mapped.length > 1) clientCandidates = mapped;
+      }
+
+      const tarSeq = await nextSeq(admin, body.sessionId);
+      await admin.from("chat_messages").insert({
+        session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+        content: "Preparei um rascunho da tarefa. Revise, ajuste o que precisar e confirme:",
+        sequence_number: tarSeq,
+        metadata: {
+          kind: "tarefa_confirm", intent: "ACAO_COM_TOOL", agent_name: agent.name,
+          tarefa_draft: {
+            title: draft.title, description: draft.description,
+            deadline_at: draft.deadline_at, deadline_display: draft.deadline_display,
+            priority: draft.priority, assignee_hint: draft.assignee_hint,
+            client_query: draft.client_query,
+            client_resolved: clientResolved, client_candidates: clientCandidates,
+          },
+        },
+      });
+      await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+      return json(202, { runId: tarRunId, sessionId: body.sessionId, status: "done", path: "tarefa_confirm", intent: "ACAO_COM_TOOL" });
     }
 
     // ─── CHAT-COLETA-CONTINUIDADE: continuar coleta ativa em vez de reclassificar ──
