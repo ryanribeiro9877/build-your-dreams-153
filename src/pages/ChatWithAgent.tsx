@@ -9,7 +9,9 @@ import { SafeMarkdown } from "@/components/SafeMarkdown";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { TaskAlertCard, type TaskAlertPayload } from "@/components/chat/TaskAlertCard";
 import { TarefaConfirmCard } from "@/components/chat/TarefaConfirmCard";
-import type { TarefaDraft } from "@/components/juris-cloud/types";
+import { ReuniaoConfirmCard } from "@/components/chat/ReuniaoConfirmCard";
+import { ReuniaoAcaoCard } from "@/components/chat/ReuniaoAcaoCard";
+import type { TarefaDraft, ReuniaoDraft, ReuniaoAcaoPayload } from "@/components/juris-cloud/types";
 import { ArrowLeft, Send, Bot, User as UserIcon, AlertTriangle, Sparkles, Plus, RotateCcw } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
 
@@ -288,6 +290,12 @@ export default function ChatWithAgent() {
                     // Rascunho de tarefa extraido em linguagem natural (Task 18/19):
                     // renderiza o TarefaConfirmCard editavel no lugar do balao normal.
                     <TarefaConfirmCard key={m.id} draft={m.metadata?.tarefa_draft as TarefaDraft} />
+                  ) : m.role === "assistant" && m.metadata?.kind === "reuniao_confirm" && m.metadata?.reuniao_draft ? (
+                    // Ciclo da Agenda pelo chat: cartão de agendar (editável).
+                    <ReuniaoConfirmCard key={m.id} draft={m.metadata?.reuniao_draft as ReuniaoDraft} />
+                  ) : m.role === "assistant" && m.metadata?.kind === "reuniao_acao" && m.metadata?.reuniao_acao ? (
+                    // Ciclo da Agenda pelo chat: cartão de ciclo/reagendar.
+                    <ReuniaoAcaoCard key={m.id} payload={m.metadata?.reuniao_acao as ReuniaoAcaoPayload} />
                   ) : (
                     <MessageBubble key={m.id} message={m} />
                   )
