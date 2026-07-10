@@ -22,9 +22,23 @@ Deno.test("acao: reconhece ciclo/reagendar", () => {
     "confirma a reunião das 10h do João amanhã",
     "marca como realizada a reunião da Maria",
     "cancela a reunião de amanhã",
-    "o cliente não compareceu",
+    "o cliente não compareceu à reunião",
     "reagenda pra 14h",
   ]) assertEquals(isReuniaoAcaoRequest(m), true, m);
+});
+
+// Falso-positivo: verbos genéricos SEM objeto de reunião não são capturados
+// (o detector é sempre-ligado; capturar isso sequestraria tarefas/pagamentos).
+Deno.test("agenda/acao: NÃO captura pedidos genéricos sem contexto de reunião", () => {
+  for (const m of [
+    "ver a agenda de hoje",
+    "realizar tarefa de ligar pro cliente amanhã",
+    "o pagamento já foi realizado",
+    "confirma o pagamento amanhã",
+  ]) {
+    assertEquals(isReuniaoAcaoRequest(m), false, `acao: ${m}`);
+    assertEquals(isAgendarAtendimentoRequest(m), false, `agendar: ${m}`);
+  }
 });
 
 Deno.test("guarda de peça", () => {
