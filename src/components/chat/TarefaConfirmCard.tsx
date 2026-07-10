@@ -58,6 +58,9 @@ export function TarefaConfirmCard({
   const [assigneeTouched, setAssigneeTouched] = useState(!!draft.assignee_user_id);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
+  // [FIX-EXPEDIENTE] Vira true quando o banco recusa o prazo (hint business_hours) —
+  // ex.: o usuário editou o datetime para fora do expediente. Limpo ao reeditar o prazo.
+  const [horarioErro, setHorarioErro] = useState(false);
 
   const { users } = useAssignableUsers();
   const assigneeOptions = useMemo(() => users.map((u) => ({ id: u.user_id, name: u.name })), [users]);
@@ -80,10 +83,18 @@ export function TarefaConfirmCard({
     !clientId && !draft.client_resolved && draft.client_candidates.length === 0 && !!draft.client_query?.trim();
   const showCadastrarBtn = clientNotFound && !!onCadastrarCliente;
 
+  // [FIX-EXPEDIENTE] Prazo dentro do expediente. Defesa em profundidade (a autoridade
+  // é o banco): usamos o carimbo `deadline_ok` do edge, sem reimplementar a regra.
+  // `!== false` (não `=== true`): draft antigo / edge ainda não deployado (undefined)
+  // NÃO bloqueia — não regride tarefa válida. `horarioErro` cobre a edição para um
+  // horário inválido, detectada só na recusa do banco.
+  const horarioOk = draft.deadline_ok !== false && !horarioErro;
+
   // Tipo fixo + autorização própria (todos menos tech); responsável default = eu.
   // Só o título é obrigatório — E, quando um cliente foi citado, ele precisa estar
-  // cadastrado (decisão do dono: tarefa pelo chat não nasce com cliente fantasma).
-  const canConfirm = title.trim().length > 0 && !busy && !clientNotFound;
+  // cadastrado (decisão do dono: tarefa pelo chat não nasce com cliente fantasma) —
+  // E o prazo precisa estar dentro do expediente.
+  const canConfirm = title.trim().length > 0 && !busy && !clientNotFound && horarioOk;
 
   // Snapshot AO VIVO do rascunho — para a criação pós-cadastro reaproveitar tudo.
   const buildSnapshot = (): PendingTask => ({
@@ -91,6 +102,7 @@ export function TarefaConfirmCard({
     title: title.trim() || null,
     description: description.trim() || null,
     deadline_at: deadline ? new Date(deadline).toISOString() : null,
+    deadline_ok: draft.deadline_ok, // [FIX-EXPEDIENTE] carimbo do edge; DB é a autoridade
     priority: priority ?? "medium",
     assignee_user_id: assignee || null,
   });
@@ -110,7 +122,15 @@ export function TarefaConfirmCard({
       setCreated(true);
       toast.success("Tarefa criada.");
     } catch (e) {
-      toast.error((e as { message?: string })?.message ?? "Falha ao criar tarefa.");
+      // [FIX-EXPEDIENTE] Backstop do banco: prazo fora do expediente → mantém o cartão
+      // aberto, sinaliza inline e NÃO cria. Distingue pela hint/mensagem do PostgrestError.
+      const err = e as { hint?: string; message?: string };
+      if (err?.hint === "business_hours" || /fora do expediente/i.test(err?.message ?? "")) {
+        setHorarioErro(true);
+        toast.error("Horário fora do expediente (dias úteis, 08h–17h). Ajuste o prazo e confirme.");
+      } else {
+        toast.error(err?.message ?? "Falha ao criar tarefa.");
+      }
     } finally {
       setBusy(false);
     }
@@ -151,7 +171,7 @@ export function TarefaConfirmCard({
         <input
           type="datetime-local"
           value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}        />
+          onChange={(e) => { setDeadline(e.target.value); setHorarioErro(false); }}        />
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Prioridade</label>
         <select
@@ -221,6 +241,11 @@ export function TarefaConfirmCard({
           {clientNotFound && (
             <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 8px" }}>
               Cliente "{draft.client_query}" não encontrado. Vincule um cliente cadastrado antes de criar.
+            </div>
+          )}
+          {!horarioOk && (
+            <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 8px" }}>
+              Horário fora do expediente (dias úteis, 08h–17h). Peça no chat um horário válido.
             </div>
           )}
           <div className="action-card__actions">

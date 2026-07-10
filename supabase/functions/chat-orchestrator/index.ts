@@ -3279,6 +3279,26 @@ serve(async (req) => {
       // Resolve o prazo em UTC deterministicamente (única conversão local→UTC).
       draft.deadline_at = localWallTimeToUtcISO(draft.deadline_local, TZ_ESCRITORIO);
 
+      // [FIX-EXPEDIENTE] Se pediram prazo fora do expediente, não rascunha: pede horário
+      // válido. Usa o service client (admin) — não o JWT — p/ chamar is_business_datetime
+      // (sem EXECUTE p/ authenticated, R-1). O banco (create_chat_task) é a autoridade;
+      // aqui é a UX que evita montar um cartão inválido.
+      if (draft.deadline_at) {
+        const { data: okBiz } = await admin.rpc("is_business_datetime", { p_ts: draft.deadline_at });
+        if (okBiz === false) {
+          const seqInv = await nextSeq(admin, body.sessionId);
+          await admin.from("chat_messages").insert({
+            session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+            content: "Só consigo agendar tarefas em dias úteis, das 08h às 17h. " +
+                     "Me diga um horário válido (ex.: \"amanhã às 9h\") que eu preparo o rascunho.",
+            sequence_number: seqInv,
+            metadata: { kind: "text", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, { runId: tarRunId, sessionId: body.sessionId, status: "done", path: "tarefa_horario_invalido", intent: "ACAO_COM_TOOL" });
+        }
+      }
+
       // Resolve o cliente citado (se houver) com a IDENTIDADE DO USUÁRIO (JWT):
       // agent_consultar_cliente re-checa is_recepcao_or_socio(), que é FALSO sob
       // service-role (por isso a resolução vinha vazia). Só a resolução usa este
@@ -3318,6 +3338,7 @@ serve(async (req) => {
           tarefa_draft: {
             title: draft.title, description: draft.description,
             deadline_at: draft.deadline_at, deadline_display: draft.deadline_display,
+            deadline_ok: true,                                   // [FIX-EXPEDIENTE] cartão só sai com prazo válido
             priority: draft.priority, assignee_hint: draft.assignee_hint,
             client_query: draft.client_query,
             client_resolved: clientResolved, client_candidates: clientCandidates,

@@ -10,6 +10,10 @@ export interface TarefaDraft {
   description: string | null;
   deadline_at: string | null;
   deadline_display: string | null;
+  /** [FIX-EXPEDIENTE] Carimbo do edge: prazo dentro do expediente (dias úteis, 08h–17h).
+   *  O edge só emite o cartão com prazo válido, então vem true; ausente em drafts
+   *  antigos / pré-deploy do edge → o front trata `!== false` (não bloqueia). */
+  deadline_ok?: boolean;
   priority: "critical" | "high" | "medium" | "low" | null;
   assignee_hint: string | null;
   client_query: string | null;
@@ -56,6 +60,9 @@ export interface PendingTask {
   title: string | null;
   description: string | null;
   deadline_at: string | null; // ISO
+  /** [FIX-EXPEDIENTE] Propagado do rascunho ao guardar (o cartão só existiu porque o
+   *  edge validou o prazo); ao reabrir pós-cadastro herda como válido. */
+  deadline_ok?: boolean;
   priority: TarefaDraft["priority"];
   assignee_user_id: string | null; // "" / null = o próprio criador
 }

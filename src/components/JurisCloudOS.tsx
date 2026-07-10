@@ -1458,6 +1458,8 @@ export default function JurisCloudOS() {
         const draft: TarefaDraft = {
           title: tsnap.title, description: tsnap.description,
           deadline_at: tsnap.deadline_at, deadline_display: null,
+          // [FIX-EXPEDIENTE] o snapshot só existiu porque o edge validou o prazo → herda válido.
+          deadline_ok: tsnap.deadline_ok ?? true,
           priority: tsnap.priority, assignee_hint: null,
           assignee_user_id: tsnap.assignee_user_id,
           client_query: clientName,
@@ -1489,8 +1491,15 @@ export default function JurisCloudOS() {
           content: `Cliente ${clientName} cadastrado e tarefa "${tsnap.title.trim()}" criada e vinculada.`,
           timestamp: nowLabel(),
         } as JcChatMessage]);
-      } catch {
-        reopenTaskCard(`Cliente ${clientName} cadastrado, mas não consegui criar a tarefa agora. Revise e confirme abaixo.`);
+      } catch (e) {
+        // [FIX-EXPEDIENTE] Backstop do banco no auto-create pós-cadastro: se o prazo
+        // está fora do expediente, o cliente FICA cadastrado; só a tarefa espera um
+        // horário válido — reabre o cartão com a mensagem específica.
+        const err = e as { hint?: string; message?: string };
+        const foraExpediente = err?.hint === "business_hours" || /fora do expediente/i.test(err?.message ?? "");
+        reopenTaskCard(foraExpediente
+          ? `Cliente ${clientName} cadastrado, mas o horário está fora do expediente (08h–17h, dias úteis). Ajuste abaixo.`
+          : `Cliente ${clientName} cadastrado, mas não consegui criar a tarefa agora. Revise e confirme abaixo.`);
       }
       return;
     }
