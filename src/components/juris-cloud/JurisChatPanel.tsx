@@ -12,6 +12,8 @@ import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
 import { ActionCard } from "@/components/chat/ActionCard";
 import { TaskAlertCard } from "@/components/chat/TaskAlertCard";
 import { TarefaConfirmCard } from "@/components/chat/TarefaConfirmCard";
+import { ReuniaoConfirmCard } from "@/components/chat/ReuniaoConfirmCard";
+import { ReuniaoAcaoCard } from "@/components/chat/ReuniaoAcaoCard";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
 import { PecaModal } from "./PecaModal";
@@ -84,6 +86,14 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   // tarefa quando o usuario confirmar (Task 19).
   if (msg.kind === "tarefa_confirm" && msg.tarefaDraft) {
     return <TarefaConfirmCard key={msg.id} draft={msg.tarefaDraft} />;
+  }
+  // Ciclo da Agenda pelo chat: cartão de agendar (editável) e cartão de
+  // ciclo/reagendar. Só gravam em meetings ao confirmar.
+  if (msg.kind === "reuniao_confirm" && msg.reuniaoDraft) {
+    return <ReuniaoConfirmCard key={msg.id} draft={msg.reuniaoDraft} />;
+  }
+  if (msg.kind === "reuniao_acao" && msg.reuniaoAcao) {
+    return <ReuniaoAcaoCard key={msg.id} payload={msg.reuniaoAcao} />;
   }
   // Etapas intermediarias da orquestracao nao sao exibidas.
   if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {

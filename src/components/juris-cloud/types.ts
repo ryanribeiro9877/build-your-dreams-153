@@ -19,6 +19,22 @@ export interface TarefaDraft {
   client_candidates: { id: string; name: string; cpf_masked?: string | null; status?: string | null }[];
 }
 
+/** Ciclo da Agenda pelo chat. CPF sempre MASCARADO (mascarado no edge). */
+export interface ReuniaoClienteRef { id: string; name: string; cpf_masked: string | null; status: string | null; }
+/** Rascunho de agendamento (metadata.reuniao_draft, kind === 'reuniao_confirm'). */
+export interface ReuniaoDraft {
+  scheduled_date: string | null; start_time: string | null; type: string | null; display: string | null;
+  lawyer_hint: string | null; phone: string | null; client_query: string | null;
+  client_resolved: ReuniaoClienteRef | null; client_candidates: ReuniaoClienteRef[];
+}
+export interface ReuniaoAcaoCandidate { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string; type: string | null; }
+/** Ação de ciclo/reagendar (metadata.reuniao_acao, kind === 'reuniao_acao'). */
+export interface ReuniaoAcaoPayload {
+  action: "confirmed" | "done" | "canceled" | "no_show" | "reschedule";
+  candidates: ReuniaoAcaoCandidate[]; // 1 = direto; >1 = escolher
+  new_date_local: string | null; new_time_local: string | null; // só reschedule
+}
+
 export type AgentRole = "ceo" | "assistant_root" | "director" | "orchestrator" | "manager" | "specialist" | "reviewer" | "executor" | "monitor";
 export type AgentPermission = "read" | "write" | "approve" | "execute" | "admin" | "monitor" | "schedule" | "contact_client" | "protocol" | "calculate" | "review_calculation" | "petition" | "market_study";
 
@@ -74,7 +90,7 @@ export interface JcChatMessage {
   // inline abaixo da bolha; ver JurisChatPanel).
   // 'task_alert' = alerta de tarefa (renderiza TaskAlertCard). 'tarefa_confirm'
   // reservado para outra task (ainda sem renderização própria).
-  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm";
+  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm" | "reuniao_confirm" | "reuniao_acao";
   stage?: string;
   // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
   // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.
@@ -83,6 +99,10 @@ export interface JcChatMessage {
   taskAlert?: TaskAlertPayload;
   /** Presente quando kind === 'tarefa_confirm' (vem de metadata.tarefa_draft). */
   tarefaDraft?: TarefaDraft;
+  /** Presente quando kind === 'reuniao_confirm' (vem de metadata.reuniao_draft). */
+  reuniaoDraft?: ReuniaoDraft;
+  /** Presente quando kind === 'reuniao_acao' (vem de metadata.reuniao_acao). */
+  reuniaoAcao?: ReuniaoAcaoPayload;
   meta?: { requestId?: string; tokensCost?: number; orchestration?: unknown };
   // Ações inline (ex.: botão "gerar mesmo assim" no gate de anexos). Só para
   // mensagens locais do sistema — não vem do banco.
