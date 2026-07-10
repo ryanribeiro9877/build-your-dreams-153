@@ -28,7 +28,7 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
-import { normalizeDraft, buildTaskDraftPrompt } from "./taskDraft.ts";
+import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall } from "./taskDraft.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -2977,17 +2977,24 @@ serve(async (req) => {
       // Extração do rascunho: 1 chamada LLM não-streaming, sem tools, jsonMode. Parse
       // DEFENSIVO — resposta vazia/JSON inválido/erro do provedor -> rascunho vazio
       // (nunca chuta um campo; tudo fica null/aberto no cartão).
+      // Fuso do escritório. O LLM devolve só a hora LOCAL de parede
+      // (deadline_local); a conversão local→UTC é feita AQUI, uma única vez
+      // (localWallTimeToUtcISO), fora das mãos do modelo — fix do bug +3h
+      // (dupla conversão de fuso pelo LLM). `nowLocalWall` ancora "hoje/amanhã".
+      const TZ_ESCRITORIO = "America/Bahia";
       let draft = normalizeDraft(null);
       try {
         const llm = await callLLM(admin, {
           model: agent.model, systemPrompt: null, history: [],
-          userMessage: buildTaskDraftPrompt(body.message, new Date().toISOString(), "America/Bahia"),
+          userMessage: buildTaskDraftPrompt(body.message, nowLocalWall(new Date(), TZ_ESCRITORIO), TZ_ESCRITORIO),
           temperature: 0, top_p: null, maxTokens: 500, jsonMode: true,
         });
         draft = normalizeDraft(JSON.parse(llm.content));
       } catch (_e) {
         draft = normalizeDraft(null);
       }
+      // Resolve o prazo em UTC deterministicamente (única conversão local→UTC).
+      draft.deadline_at = localWallTimeToUtcISO(draft.deadline_local, TZ_ESCRITORIO);
 
       // Resolve o cliente citado (se houver) com a IDENTIDADE DO USUÁRIO (JWT):
       // agent_consultar_cliente re-checa is_recepcao_or_socio(), que é FALSO sob
