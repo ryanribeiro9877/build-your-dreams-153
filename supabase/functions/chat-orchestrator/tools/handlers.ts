@@ -141,15 +141,6 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { task_id: data } };
       }
-      case "agendar_reuniao": {
-        const { data, error } = await userClient.rpc("criar_pendencia", {
-          p_tipo: "reuniao", p_titulo: args.titulo, p_cliente_id: args.cliente_id ?? null,
-          p_descricao: `Reunião ${args.modalidade ?? ""} em ${args.data_hora_iso}`,
-          p_responsavel_user_id: null, p_prazo: args.data_hora_iso ?? null, p_data_fatal: null,
-        });
-        if (error) return { ok: false, error: error.message };
-        return { ok: true, result: { task_id: data } };
-      }
       case "solicitar_checklist_documental": {
         const docs = Array.isArray(args.documentos)
           ? (args.documentos as unknown[]).map((d) => String(d)).filter((d) => d.trim())

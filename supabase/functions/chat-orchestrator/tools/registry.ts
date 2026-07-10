@@ -135,16 +135,6 @@ export const TOOLS: Record<string, ToolDef> = {
       resolucao: str("descrição da resolução (opcional)"),
     }, required: ["pendencia_id"] },
   }},
-  agendar_reuniao: { type: "function", function: {
-    name: "agendar_reuniao",
-    description: "Agenda uma reunião com o cliente (presencial ou no Meet). Registrada como pendência do tipo reunião.",
-    parameters: { type: "object", properties: {
-      cliente_id: str("id do cliente (opcional)"),
-      titulo: str("título da reunião"),
-      data_hora_iso: str("data/hora em ISO 8601 (ex.: 2026-07-03T14:00:00-03:00)"),
-      modalidade: { type: "string", enum: ["presencial","meet"], description: "modalidade" },
-    }, required: ["titulo", "data_hora_iso"] },
-  }},
   solicitar_checklist_documental: { type: "function", function: {
     name: "solicitar_checklist_documental",
     description: "Registra como PENDENTES os documentos que faltam de um cliente para uma ação/réu (ex.: 'Para Crefisa, solicite extrato e contrato'). Resolva o cliente com consultar_cliente ANTES e passe cliente_id. Cria UMA pendência documental por documento.",

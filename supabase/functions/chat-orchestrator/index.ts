@@ -1642,7 +1642,6 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "criar_pendencia": return `Criar pendência "${args.titulo}" (${args.tipo}).`;
     case "transferir_pendencia": return `Transferir pendência ${args.pendencia_id}.`;
     case "resolver_pendencia": return `Resolver pendência ${args.pendencia_id}.`;
-    case "agendar_reuniao": return `Agendar reunião "${args.titulo}" em ${args.data_hora_iso} (${args.modalidade ?? ""}).`;
     case "solicitar_checklist_documental": {
       const docs = (args.documentos as string[] ?? []).join(", ");
       const reu = args.reu ? ` (réu: ${args.reu})` : "";
