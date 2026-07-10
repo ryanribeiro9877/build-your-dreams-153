@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.integration-api]
 verify_jwt = false
+
+[functions.attendance-summary]
+verify_jwt = true
+
+[functions.transcribe-attendance-audio]
+verify_jwt = true
