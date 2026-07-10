@@ -14,7 +14,7 @@ export interface MeetingDraft {
   display: string | null;
 }
 
-function validDate(v: string | null): string | null {
+export function validDate(v: string | null): string | null {
   if (!v) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
   if (!m) return null;
@@ -23,7 +23,7 @@ function validDate(v: string | null): string | null {
   if (dt.getUTCFullYear() !== Y || dt.getUTCMonth() !== Mo - 1 || dt.getUTCDate() !== D) return null;
   return `${y}-${mo}-${d}`;
 }
-function validTime(v: string | null): string | null {
+export function validTime(v: string | null): string | null {
   if (!v) return null;
   const m = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(v.trim());
   if (!m) return null;

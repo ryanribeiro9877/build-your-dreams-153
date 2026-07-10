@@ -34,7 +34,7 @@ import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
-import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt } from "./meetingDraft.ts";
+import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
 import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
@@ -3063,17 +3063,22 @@ serve(async (req) => {
           });
           const p = JSON.parse(llm.content) as Record<string, unknown>;
           const sOrNull = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-          ref = { client_query: sOrNull(p.client_query), date_local: sOrNull(p.date_local), time_local: sOrNull(p.time_local),
-                  new_date_local: sOrNull(p.new_date_local), new_time_local: sOrNull(p.new_time_local) };
+          // Valida formato (date "AAAA-MM-DD" / time "HH:MM") igual ao rascunho de
+          // agendar — valor malformado do LLM vira null (não vaza p/ a query nem p/ o cartão).
+          ref = { client_query: sOrNull(p.client_query), date_local: validDate(sOrNull(p.date_local)), time_local: validTime(sOrNull(p.time_local)),
+                  new_date_local: validDate(sOrNull(p.new_date_local)), new_time_local: validTime(sOrNull(p.new_time_local)) };
         } catch (_e) { /* ref vazio -> resolve mais amplo */ }
 
-        let q = jwtClient.from("meetings").select("id, scheduled_date, start_time, client_name, status, type").limit(11);
+        // Só reuniões NÃO-terminais são candidatas a qualquer ação (não dá p/
+        // transicionar de canceled/no_show/done). start_time já normalizado p/ HH:MM.
+        let q = jwtClient.from("meetings").select("id, scheduled_date, start_time, client_name, status, type")
+          .in("status", ["scheduled", "confirmed", "rescheduled"]).limit(11);
         if (ref.date_local) q = q.eq("scheduled_date", ref.date_local);
-        if (ref.time_local) q = q.eq("start_time", ref.time_local.length === 5 ? `${ref.time_local}:00` : ref.time_local);
+        if (ref.time_local) q = q.eq("start_time", `${ref.time_local}:00`);
         if (ref.client_query) q = q.ilike("client_name", `%${ref.client_query}%`);
-        if (action && action !== "done") q = q.in("status", ["scheduled", "confirmed", "rescheduled"]);
-        const { data: acaoRows } = await q;
-        const cands = ((acaoRows as { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string; type: string | null }[] | null) ?? [])
+        const { data: acaoRows, error: acaoErr } = await q;
+        if (acaoErr) console.warn("reuniao_acao: falha ao resolver reunião (segue como não-encontrada)");
+        const cands = ((acaoRows as { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string | null; type: string | null }[] | null) ?? [])
           .slice(0, 10).map((r) => ({ id: r.id, scheduled_date: r.scheduled_date, start_time: (r.start_time || "").slice(0, 5), client_name: r.client_name, status: r.status, type: r.type }));
 
         const acaoSeq = await nextSeq(admin, body.sessionId);

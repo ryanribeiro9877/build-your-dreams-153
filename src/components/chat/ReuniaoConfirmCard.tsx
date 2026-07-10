@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Pencil, CalendarPlus, AlertCircle } from "lucide-react";
 import { createMeeting, getAvailableSlots } from "@/hooks/useMeetings";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { MEETING_TYPE_OPTIONS } from "@/lib/meetings";
 import type { ReuniaoDraft } from "@/components/juris-cloud/types";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
   const [suggest, setSuggest] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
-  const { users } = useAssignableUsers();
+  const { lawyers } = useMeetingLawyers();
 
   useEffect(() => {
     if (!date) { setSlots([]); return; }
@@ -101,7 +101,7 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Advogado <span style={{ color: "var(--text3, #8a8a99)" }}>(opcional)</span></label>
         <select value={lawyer} onChange={(e) => setLawyer(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
           <option value="">(nenhum)</option>
-          {users.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
+          {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
         </select>
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Telefone <span style={{ color: "var(--text3, #8a8a99)" }}>(opcional)</span></label>

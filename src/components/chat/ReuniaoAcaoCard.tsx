@@ -32,6 +32,7 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
   const [date, setDate] = useState(payload.new_date_local ?? sel?.scheduled_date ?? "");
   const [slots, setSlots] = useState<string[]>([]);
   const [time, setTime] = useState(payload.new_time_local ?? "");
+  const [suggest, setSuggest] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -42,7 +43,7 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
   const confirm = async () => {
     if (busy || done || !sel) return;
     if (isReschedule && (!date || !time)) { toast.message("Escolha a nova data e horário."); return; }
-    setBusy(true);
+    setBusy(true); setSuggest(null);
     try {
       const { data: row, error } = await supabase.from("meetings").select("*").eq("id", sel.id).maybeSingle();
       if (error || !row) throw new Error("Reunião não encontrada.");
@@ -63,8 +64,13 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
         p_status: isReschedule ? "rescheduled" : payload.action,
       });
       setDone(true); toast.success("Reunião atualizada.");
-    } catch (e) { toast.error(friendlyError((e as { message?: string })?.message ?? "")); }
-    finally { setBusy(false); }
+    } catch (e) {
+      const raw = (e as { message?: string })?.message ?? "";
+      toast.error(friendlyError(raw));
+      if (isReschedule && /slot cheio \(capacidade/i.test(raw) && date) {
+        try { setSuggest(await getAvailableSlots(date)); } catch { /* ignore */ }
+      }
+    } finally { setBusy(false); }
   };
 
   if (done) return (<div className="action-card--done"><Check size={15} style={{ color: "#FACC15" }} /> Reunião atualizada.</div>);
@@ -94,6 +100,7 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
               <option value="">Selecione…</option>
               {slots.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            {suggest && (<div style={{ fontSize: 12, color: "#EAB308" }}>Horários livres em {date}: {suggest.length ? suggest.join(", ") : "nenhum"}.</div>)}
           </>
         )}
       </div>

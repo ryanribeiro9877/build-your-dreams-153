@@ -8,7 +8,7 @@ vi.mock("@/hooks/useMeetings", () => ({
   createMeeting: (...a: unknown[]) => createMeeting(...a),
   getAvailableSlots: (...a: unknown[]) => getAvailableSlots(...a),
 }));
-vi.mock("@/hooks/useAssignableUsers", () => ({ useAssignableUsers: () => ({ users: [] }) }));
+vi.mock("@/hooks/useMeetingLawyers", () => ({ useMeetingLawyers: () => ({ lawyers: [] }) }));
 
 const baseDraft = {
   scheduled_date: "2026-07-11", start_time: "10:00", type: null, display: "11/07 10:00",
