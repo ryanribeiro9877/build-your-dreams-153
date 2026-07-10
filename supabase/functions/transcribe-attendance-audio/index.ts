@@ -157,9 +157,14 @@ serve(async (req) => {
     const fullText = parts.join("\n\n").trim();
     if (!fullText) return jsonResp(req, 200, { ok: false, reason: "empty_transcription", engine });
 
-    // ── Grava: .txt no bucket + linha client_documents (caller → RLS) ──────────
+    // ── Grava: .txt no bucket + linha client_documents (ADMIN) ─────────────────
+    // Artefato de sistema (origem='sistema'). A autorização já foi validada acima
+    // (caller vê o cliente em clients_decrypted → senão 404). As escritas usam
+    // service-role (mesmo padrão do ocr-attachment): o upsert do storage exige
+    // UPDATE quando o objeto já existe (path determinístico por sessão / retry /
+    // force) e o RLS do bucket só tem policy de INSERT — service-role bypassa.
     const blobOut = new Blob([fullText], { type: "text/plain" });
-    const { error: upErr } = await caller.storage.from(BUCKET)
+    const { error: upErr } = await admin.storage.from(BUCKET)
       .upload(filePath, blobOut, { contentType: "text/plain; charset=utf-8", upsert: true });
     if (upErr) return jsonResp(req, 500, { ok: false, reason: "upload_failed", message: upErr.message });
 
@@ -170,12 +175,12 @@ serve(async (req) => {
 
     if (existingRow) {
       // force → sobrescreve a linha existente (upsert do storage já foi feito acima).
-      const { error: updErr } = await caller.from("client_documents")
+      const { error: updErr } = await admin.from("client_documents")
         .update({ notes: fullText, file_size: blobOut.size, document_name: nome })
         .eq("id", existingRow.id);
       if (updErr) return jsonResp(req, 500, { ok: false, reason: "update_failed", message: updErr.message });
     } else {
-      const { error: insErr } = await caller.from("client_documents").insert({
+      const { error: insErr } = await admin.from("client_documents").insert({
         client_id: clientId, uploaded_by: uid, client_name: clientName, document_type: TRANSCRICAO_TYPE,
         document_name: nome, file_path: filePath, file_size: blobOut.size, mime_type: "text/plain",
         notes: fullText, status: "recebido", origem: "sistema",
