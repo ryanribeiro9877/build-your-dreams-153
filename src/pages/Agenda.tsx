@@ -60,23 +60,24 @@ const CSS = `
   background:var(--agx-grad);color:#0a0a12;font:inherit;font-weight:700;font-size:14px;cursor:pointer;
   box-shadow:0 6px 18px -6px rgba(232,201,106,.5);transition:.16s}
 .agx-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -6px rgba(232,201,106,.6)}
-.agx-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:hsl(var(--card));
-  border:1px solid hsl(var(--border));border-radius:14px;padding:12px 14px;margin-bottom:18px}
-.agx-weeknav{display:flex;align-items:center;gap:2px;background:hsl(var(--muted));border:1px solid hsl(var(--border));border-radius:11px;padding:3px}
-.agx-weeknav button{width:34px;height:34px;border-radius:8px;border:none;background:transparent;color:hsl(var(--muted-foreground));
-  cursor:pointer;display:grid;place-items:center;transition:.14s;font:inherit}
+.agx-controls{display:flex;align-items:flex-end;gap:16px 20px;flex-wrap:wrap;background:hsl(var(--card));
+  border:1px solid hsl(var(--border));border-radius:14px;padding:14px 18px;margin-bottom:18px}
+.agx-navgroup{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.agx-weeknav{display:flex;align-items:center;gap:4px;background:hsl(var(--muted));border:1px solid hsl(var(--border));border-radius:12px;padding:4px}
+.agx-weeknav button{width:38px;height:38px;border-radius:9px;border:none;background:transparent;color:hsl(var(--muted-foreground));
+  cursor:pointer;display:grid;place-items:center;line-height:0;transition:.14s;font:inherit;flex-shrink:0}
 .agx-weeknav button:hover{background:hsl(var(--card));color:var(--agx-g2)}
-.agx-range{padding:0 14px;font-size:13.5px;font-weight:600;color:hsl(var(--foreground));white-space:nowrap;font-variant-numeric:tabular-nums}
-.agx-today{padding:9px 15px;border-radius:10px;border:1px solid var(--agx-g1);background:var(--agx-gsoft);
-  color:var(--agx-g2);font:inherit;font-weight:600;font-size:13px;cursor:pointer;transition:.14s}
+.agx-range{padding:0 14px;min-width:160px;text-align:center;font-size:14px;font-weight:600;color:hsl(var(--foreground));white-space:nowrap;font-variant-numeric:tabular-nums}
+.agx-today{height:40px;padding:0 20px;border-radius:10px;border:1px solid var(--agx-g1);background:var(--agx-gsoft);
+  color:var(--agx-g2);font:inherit;font-weight:600;font-size:13px;cursor:pointer;transition:.14s;flex-shrink:0}
 .agx-today:hover{background:rgba(232,201,106,.18)}
-.agx-spacer{flex:1}
-.agx-field{display:flex;flex-direction:column;gap:5px}
+.agx-spacer{flex:1;min-width:16px}
+.agx-field{display:flex;flex-direction:column;gap:6px}
 .agx-field label{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:hsl(var(--muted-foreground))}
-.agx-select{position:relative;display:flex;align-items:center}
+.agx-select{position:relative;display:flex;align-items:center;width:100%}
 .agx-select select{appearance:none;-webkit-appearance:none;font:inherit;font-size:13px;font-weight:500;
-  padding:9px 34px 9px 13px;border-radius:10px;border:1px solid hsl(var(--border));background:hsl(var(--secondary));
-  color:hsl(var(--foreground));cursor:pointer;min-width:172px;outline:none;transition:.14s}
+  height:40px;padding:0 34px 0 14px;border-radius:10px;border:1px solid hsl(var(--border));background:hsl(var(--secondary));
+  color:hsl(var(--foreground));cursor:pointer;min-width:176px;width:100%;outline:none;transition:.14s}
 .agx-select select:hover{border-color:var(--agx-g1)}
 .agx-select select:focus{border-color:var(--agx-g1);box-shadow:0 0 0 3px rgba(232,201,106,.15)}
 .agx-select .agx-chev{position:absolute;right:11px;pointer-events:none;color:hsl(var(--muted-foreground))}
@@ -115,7 +116,10 @@ const CSS = `
   border-radius:9px;padding:7px 12px;cursor:pointer;font:inherit;transition:.14s;display:inline-flex;align-items:center;gap:6px}
 .agx-add:hover{border-color:var(--agx-g1);color:var(--agx-g2)}
 .agx-err{color:hsl(var(--destructive));margin-bottom:12px;font-size:13px}
-@media(max-width:960px){.agx-week{grid-template-columns:1fr;gap:10px}.agx-day{min-height:auto}.agx-spacer{flex-basis:100%;height:0}}
+@media(max-width:960px){.agx-week{grid-template-columns:1fr;gap:10px}.agx-day{min-height:auto}
+  .agx-controls{align-items:stretch}.agx-spacer{display:none}
+  .agx-navgroup{width:100%;justify-content:space-between}.agx-field{flex:1 1 220px}.agx-select select{min-width:0}}
+@media(max-width:560px){.agx-navgroup{gap:10px}.agx-range{flex:1;min-width:0;padding:0 8px}.agx-field{flex:1 1 100%}}
 @media(prefers-reduced-motion:reduce){.agx-root *{transition:none!important}}
 `;
 
@@ -173,12 +177,14 @@ export default function Agenda() {
 
       {/* CONTROLS */}
       <div className="agx-controls">
-        <div className="agx-weeknav">
-          <button type="button" aria-label="Semana anterior" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d); }}><ChevronLeft size={18} /></button>
-          <span className="agx-range">{weekRangeLabel(days[0], days[days.length - 1])}</span>
-          <button type="button" aria-label="Próxima semana" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d); }}><ChevronRight size={18} /></button>
+        <div className="agx-navgroup">
+          <div className="agx-weeknav">
+            <button type="button" aria-label="Semana anterior" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d); }}><ChevronLeft size={18} /></button>
+            <span className="agx-range">{weekRangeLabel(days[0], days[days.length - 1])}</span>
+            <button type="button" aria-label="Próxima semana" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d); }}><ChevronRight size={18} /></button>
+          </div>
+          <button type="button" className="agx-today" onClick={() => setAnchor(new Date())}>Hoje</button>
         </div>
-        <button type="button" className="agx-today" onClick={() => setAnchor(new Date())}>Hoje</button>
         <div className="agx-spacer" />
         <div className="agx-field">
           <label htmlFor="agx-adv">Advogado</label>
