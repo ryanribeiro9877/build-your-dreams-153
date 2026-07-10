@@ -34,6 +34,7 @@ import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
+import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt } from "./meetingDraft.ts";
 import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
@@ -2993,20 +2994,107 @@ serve(async (req) => {
         const agRunId = (agRun as { id: string }).id;
 
         const canCreate = await userCanCreateMeetings(supabaseUrl, anonKey, token);
-        const seq = await nextSeq(admin, body.sessionId);
-        // Cartões chegam nas fases D/E; até lá, com permissão orientamos a Agenda.
-        const content = !canCreate
-          ? "Agendamentos e alterações de reunião são feitos pela recepção — você não tem permissão para isso. Posso registrar uma solicitação para a recepção, se quiser."
-          : AGENDA_CHAT_ENABLED
-            ? "Para marcar ou alterar uma reunião, use a Agenda de Reuniões. (O fluxo pelo chat está sendo finalizado.)"
+
+        // Sem permissão -> mensagem de permissão; com permissão + flag OFF -> orienta a Agenda.
+        if (!canCreate || !AGENDA_CHAT_ENABLED) {
+          const seq = await nextSeq(admin, body.sessionId);
+          const content = !canCreate
+            ? "Agendamentos e alterações de reunião são feitos pela recepção — você não tem permissão para isso. Posso registrar uma solicitação para a recepção, se quiser."
             : "Para marcar ou alterar uma reunião, abra a Agenda de Reuniões.";
+          await admin.from("chat_messages").insert({
+            session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+            content, sequence_number: seq,
+            metadata: { kind: "final", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: kindPath, intent: "ACAO_COM_TOOL" });
+        }
+
+        // ── Flag ON + recepção: monta o cartão editável. Resolução de cliente/reunião
+        // sob o JWT do usuário (RLS/regra-4 valem); CPF em claro -> mascarado já aqui.
+        const TZ_ESCRITORIO = "America/Bahia";
+        const jwtClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+        const maskCpf = (v: unknown): string | null => { const d = String(v ?? "").replace(/\D/g, ""); return d.length >= 2 ? `***.***.***-${d.slice(-2)}` : null; };
+
+        if (isAgendar) {
+          let draft = normalizeMeetingDraft(null);
+          try {
+            const llm = await callLLM(admin, {
+              model: agent.model, systemPrompt: null, history: [],
+              userMessage: buildMeetingDraftPrompt(body.message, nowLocalWall(new Date(), TZ_ESCRITORIO), TZ_ESCRITORIO),
+              temperature: 0, top_p: null, maxTokens: 400, jsonMode: true,
+            });
+            draft = normalizeMeetingDraft(JSON.parse(llm.content));
+          } catch (_e) { draft = normalizeMeetingDraft(null); }
+
+          let clientResolved: { id: string; name: string; cpf_masked: string | null; status: string | null } | null = null;
+          let clientCandidates: { id: string; name: string; cpf_masked: string | null; status: string | null }[] = [];
+          if (draft.client_query) {
+            const { data: cli } = await jwtClient.rpc("agent_consultar_cliente", { p_busca: draft.client_query });
+            const rows = (cli as { id: string; full_name: string; cpf: string; status: string }[] | null) ?? [];
+            const mapped = rows.slice(0, 10).map((r) => ({ id: r.id, name: r.full_name, cpf_masked: maskCpf(r.cpf), status: r.status ?? null }));
+            if (mapped.length === 1) clientResolved = mapped[0];
+            else if (mapped.length > 1) clientCandidates = mapped;
+          }
+
+          const seq = await nextSeq(admin, body.sessionId);
+          await admin.from("chat_messages").insert({
+            session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+            content: "Preparei o agendamento. Revise, ajuste o que precisar e confirme:", sequence_number: seq,
+            metadata: { kind: "reuniao_confirm", intent: "ACAO_COM_TOOL", agent_name: agent.name,
+              reuniao_draft: {
+                scheduled_date: draft.scheduled_date, start_time: draft.start_time, type: draft.type,
+                display: draft.display, lawyer_hint: draft.lawyer_hint, phone: draft.phone,
+                client_query: draft.client_query, client_resolved: clientResolved, client_candidates: clientCandidates,
+              } },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: "reuniao_confirm", intent: "ACAO_COM_TOOL" });
+        }
+
+        // isAcao: ciclo/reagendar — extrai referência (LLM) e resolve a reunião (0/1/N).
+        const action = parseReuniaoAcao(body.message);
+        let ref: { client_query: string | null; date_local: string | null; time_local: string | null; new_date_local: string | null; new_time_local: string | null } =
+          { client_query: null, date_local: null, time_local: null, new_date_local: null, new_time_local: null };
+        try {
+          const llm = await callLLM(admin, {
+            model: agent.model, systemPrompt: null, history: [],
+            userMessage: buildAcaoPrompt(body.message, nowLocalWall(new Date(), TZ_ESCRITORIO), TZ_ESCRITORIO),
+            temperature: 0, top_p: null, maxTokens: 300, jsonMode: true,
+          });
+          const p = JSON.parse(llm.content) as Record<string, unknown>;
+          const sOrNull = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+          ref = { client_query: sOrNull(p.client_query), date_local: sOrNull(p.date_local), time_local: sOrNull(p.time_local),
+                  new_date_local: sOrNull(p.new_date_local), new_time_local: sOrNull(p.new_time_local) };
+        } catch (_e) { /* ref vazio -> resolve mais amplo */ }
+
+        let q = jwtClient.from("meetings").select("id, scheduled_date, start_time, client_name, status, type").limit(11);
+        if (ref.date_local) q = q.eq("scheduled_date", ref.date_local);
+        if (ref.time_local) q = q.eq("start_time", ref.time_local.length === 5 ? `${ref.time_local}:00` : ref.time_local);
+        if (ref.client_query) q = q.ilike("client_name", `%${ref.client_query}%`);
+        if (action && action !== "done") q = q.in("status", ["scheduled", "confirmed", "rescheduled"]);
+        const { data: acaoRows } = await q;
+        const cands = ((acaoRows as { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string; type: string | null }[] | null) ?? [])
+          .slice(0, 10).map((r) => ({ id: r.id, scheduled_date: r.scheduled_date, start_time: (r.start_time || "").slice(0, 5), client_name: r.client_name, status: r.status, type: r.type }));
+
+        const acaoSeq = await nextSeq(admin, body.sessionId);
+        if (!action || cands.length === 0) {
+          await admin.from("chat_messages").insert({
+            session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+            content: cands.length === 0 ? "Não achei uma reunião com esses dados. Confira o cliente/dia/horário e tente de novo." : "Não entendi qual ação fazer com a reunião.",
+            sequence_number: acaoSeq, metadata: { kind: "final", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: "reuniao_acao", intent: "ACAO_COM_TOOL" });
+        }
         await admin.from("chat_messages").insert({
           session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
-          content, sequence_number: seq,
-          metadata: { kind: "final", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          content: cands.length === 1 ? "Confirme a ação na reunião abaixo:" : "Achei mais de uma reunião. Escolha qual:",
+          sequence_number: acaoSeq, metadata: { kind: "reuniao_acao", intent: "ACAO_COM_TOOL", agent_name: agent.name,
+            reuniao_acao: { action, candidates: cands, new_date_local: ref.new_date_local, new_time_local: ref.new_time_local } },
         });
         await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
-        return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: kindPath, intent: "ACAO_COM_TOOL" });
+        return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: "reuniao_acao", intent: "ACAO_COM_TOOL" });
       }
     }
 
