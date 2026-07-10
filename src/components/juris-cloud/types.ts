@@ -90,7 +90,9 @@ export interface JcChatMessage {
   // inline abaixo da bolha; ver JurisChatPanel).
   // 'task_alert' = alerta de tarefa (renderiza TaskAlertCard). 'tarefa_confirm'
   // reservado para outra task (ainda sem renderização própria).
-  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm" | "reuniao_confirm" | "reuniao_acao";
+  // meeting_created/meeting_reminder/meeting_rescheduled (TRILHA B): reusam o
+  // payload 'task_alert'/TaskAlertCard, só com rótulo/ícone próprios.
+  kind?: "stage" | "final" | "error" | "action_proposal" | "cadastro_form" | "task_alert" | "tarefa_confirm" | "reuniao_confirm" | "reuniao_acao" | "meeting_created" | "meeting_reminder" | "meeting_rescheduled";
   stage?: string;
   // Proposta de acao agentica (chat-orchestrator mode=confirm). Presente quando
   // kind === 'action_proposal'. Vem de metadata.proposal da linha chat_messages.

@@ -76,10 +76,11 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   if (msg.kind === "action_proposal" && msg.proposal) {
     return <ActionCard key={msg.id} proposal={msg.proposal} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
   }
-  // Alerta de tarefa (kind === 'task_alert'): renderiza o TaskAlertCard no lugar
-  // do balao normal, com as acoes de Concluir/Reagendar/Abrir cliente/Ver detalhes.
-  if (msg.kind === "task_alert" && msg.taskAlert) {
-    return <TaskAlertCard key={msg.id} payload={msg.taskAlert} />;
+  // Alerta de tarefa (kind === 'task_alert') e avisos de reuniao da TRILHA B
+  // (meeting_created/meeting_reminder/meeting_rescheduled): renderiza o
+  // TaskAlertCard no lugar do balao normal (rotulo/icone por kind).
+  if ((msg.kind === "task_alert" || msg.kind === "meeting_created" || msg.kind === "meeting_reminder" || msg.kind === "meeting_rescheduled") && msg.taskAlert) {
+    return <TaskAlertCard key={msg.id} payload={msg.taskAlert} kind={msg.kind} />;
   }
   // Rascunho de tarefa extraido em linguagem natural (kind === 'tarefa_confirm'):
   // renderiza o TarefaConfirmCard (editavel) no lugar do balao normal. So cria a

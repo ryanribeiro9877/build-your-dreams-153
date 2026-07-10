@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlarmClock, Check, CalendarClock, User2, Eye } from "lucide-react";
+import { AlarmClock, Check, CalendarClock, CalendarPlus, User2, Eye } from "lucide-react";
 import { updateUserTaskStatus } from "@/hooks/useUserTasks";
 import { RescheduleInline } from "./RescheduleInline";
 import { toast } from "sonner";
@@ -16,8 +16,18 @@ function fmt(dt: string | null): string {
   return new Date(dt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function TaskAlertCard({ payload }: { payload: TaskAlertPayload }) {
+// Cabeçalho por tipo de cartão. Reusa o mesmo payload 'task_alert' vindo do
+// enqueue_task_chat_alert; só o rótulo/ícone muda conforme metadata.kind.
+// TRILHA B: os kinds meeting_* chegam via triggers/cron da tabela meetings.
+const HEAD: Record<string, { label: string; icon: ReactNode }> = {
+  meeting_created:     { label: "Novo atendimento",        icon: <CalendarPlus size={15} /> },
+  meeting_reminder:    { label: "Lembrete de atendimento", icon: <AlarmClock size={15} /> },
+  meeting_rescheduled: { label: "Atendimento reagendado",  icon: <CalendarClock size={15} /> },
+};
+
+export function TaskAlertCard({ payload, kind }: { payload: TaskAlertPayload; kind?: string }) {
   const nav = useNavigate();
+  const head = (kind && HEAD[kind]) || { label: "Alerta de tarefa", icon: <AlarmClock size={15} /> };
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"idle" | "reschedule">("idle");
   const [done, setDone] = useState<string | null>(null);
@@ -51,7 +61,7 @@ export function TaskAlertCard({ payload }: { payload: TaskAlertPayload }) {
 
   return (
     <div className="action-card">
-      <div className="action-card__head"><AlarmClock size={15} /> Alerta de tarefa</div>
+      <div className="action-card__head">{head.icon} {head.label}</div>
       <div className="action-card__fields">
         <div className="action-card__row"><span className="action-card__label">Tarefa</span><span className="action-card__value">{payload.title}</span></div>
         <div className="action-card__row"><span className="action-card__label">Tipo</span><span className="action-card__value">{payload.type_label}</span></div>

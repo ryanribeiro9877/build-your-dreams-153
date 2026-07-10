@@ -1049,7 +1049,7 @@ export default function JurisCloudOS() {
       // cadastro_form é resposta síncrona final (dispara o wizard) — também encerra.
       // task_alert/tarefa_confirm são alertas fora do fluxo de uma run do usuário
       // (chegam via trigger/backend) — também encerram o indicador, se houver um ativo.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm" || k === "reuniao_confirm" || k === "reuniao_acao") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm" || k === "reuniao_confirm" || k === "reuniao_acao" || k === "meeting_created" || k === "meeting_reminder" || k === "meeting_rescheduled") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status

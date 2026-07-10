@@ -282,10 +282,11 @@ export default function ChatWithAgent() {
                       <MessageBubble message={m} />
                       <ClienteFormWizard mode="create" variant="chat" />
                     </div>
-                  ) : m.role === "assistant" && m.metadata?.kind === "task_alert" && m.metadata?.task_alert ? (
-                    // Alerta de tarefa (Task 10/11): renderiza o TaskAlertCard no lugar
-                    // do balao normal, com as acoes de Concluir/Reagendar/etc.
-                    <TaskAlertCard key={m.id} payload={m.metadata?.task_alert as TaskAlertPayload} />
+                  ) : m.role === "assistant" && (m.metadata?.kind === "task_alert" || m.metadata?.kind === "meeting_created" || m.metadata?.kind === "meeting_reminder" || m.metadata?.kind === "meeting_rescheduled") && m.metadata?.task_alert ? (
+                    // Alerta de tarefa (Task 10/11) e avisos de reuniao da TRILHA B
+                    // (meeting_created/meeting_reminder/meeting_rescheduled): renderiza
+                    // o TaskAlertCard no lugar do balao normal (rotulo/icone por kind).
+                    <TaskAlertCard key={m.id} payload={m.metadata?.task_alert as TaskAlertPayload} kind={m.metadata?.kind as string} />
                   ) : m.role === "assistant" && m.metadata?.kind === "tarefa_confirm" && m.metadata?.tarefa_draft ? (
                     // Rascunho de tarefa extraido em linguagem natural (Task 18/19):
                     // renderiza o TarefaConfirmCard editavel no lugar do balao normal.
