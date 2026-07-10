@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import {
   createMeeting, updateMeeting, deleteMeeting, getMeetingAudit, getAvailableSlots, createMeetingTask,
   type MeetingRow, type MeetingAuditRow,
@@ -24,10 +24,9 @@ interface Props {
 export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onOpenClient }: Props) {
   const isEdit = !!meeting;
   const { hasRole } = useAuth();
-  // useAssignableUsers retorna { users, loading, error, refetch } com itens
-  // { user_id, name, role_label } (ver src/hooks/useAssignableUsers.ts) —
-  // não { assignableUsers } com full_name/display_name como no brief original.
-  const { users: assignableUsers } = useAssignableUsers();
+  // Só sócio + advogadas (role_templates.code) podem ser o advogado da reunião —
+  // via list_meeting_lawyers, mesmo modelo de papel do RLS. Ver useMeetingLawyers.
+  const { lawyers } = useMeetingLawyers();
   const canDelete = hasRole("admin"); // sócio/admin — o gate real é no banco
 
   const [scheduledDate, setScheduledDate] = useState(meeting?.scheduled_date ?? defaultDate);
@@ -150,7 +149,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
           <label>Advogado
             <select value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} style={{ width: "100%" }}>
               <option value="">—</option>
-              {assignableUsers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
+              {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
             </select>
           </label>
           <label>Status
