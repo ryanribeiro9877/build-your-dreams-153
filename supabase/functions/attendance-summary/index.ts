@@ -8,7 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { assembleInput, buildSummaryPrompt, normalizeSummary, type AttendanceSummary } from "./attendanceSummary.ts";
+import { assembleTranscriptionInput, buildSummaryPrompt, normalizeSummary, type AttendanceSummary } from "./attendanceSummary.ts";
 
 function jsonResp(req: Request, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
@@ -77,27 +77,21 @@ serve(async (req) => {
     if (!cli) return jsonResp(req, 404, { ok: false, reason: "client_not_found_or_forbidden" });
     const clientName = (cli as { full_name?: string }).full_name ?? "";
 
-    // Reúne o insumo (service-role): sessões do cliente → mensagens; + resumos de anexos.
-    const { data: sessions } = await admin.from("chat_sessions").select("id").eq("client_id", clientId);
-    const sessionIds = ((sessions as { id: string }[] | null) ?? []).map((s) => s.id);
-    let messages: { role: string; content: string }[] = [];
-    let attachmentSummaries: string[] = [];
-    if (sessionIds.length) {
-      const { data: msgs } = await admin.from("chat_messages")
-        .select("role, content, created_at").in("session_id", sessionIds)
-        .order("created_at", { ascending: true }).limit(400);
-      messages = ((msgs as { role: string; content: string }[] | null) ?? [])
-        .filter((m) => m.role === "user" || m.role === "assistant");
-      const { data: atts } = await admin.from("chat_attachments")
-        .select("summary").in("session_id", sessionIds).not("summary", "is", null);
-      attachmentSummaries = ((atts as { summary: string }[] | null) ?? []).map((a) => a.summary);
-    }
-    const input = assembleInput(messages, attachmentSummaries);
+    // Reúne o insumo real (service-role): transcrições do atendimento do cliente
+    // (6.1 → Whisper, document_type='transcricao_atendimento'). client_documents.client_id
+    // é direto/preenchido — diferente de chat_sessions.client_id (chat é global, sempre vazio).
+    const { data: transRows } = await admin.from("client_documents")
+      .select("notes, created_at").eq("client_id", clientId)
+      .eq("document_type", "transcricao_atendimento")
+      .order("created_at", { ascending: true });
+    const transcricoes = ((transRows as { notes: string | null }[] | null) ?? [])
+      .map((r) => r.notes ?? "").filter((t) => t.trim().length > 0);
+    const input = assembleTranscriptionInput(transcricoes);
     const geradoEm = new Date().toISOString();
 
     let summary: AttendanceSummary;
     if (!input.trim()) {
-      // Sem conteúdo textual (ex.: atendimento só-áudio sem transcrição) → tudo "não informado".
+      // Sem transcrição (atendimento não transcrito ainda) → tudo "não informado".
       summary = normalizeSummary({}, "sem_conteudo", geradoEm);
     } else {
       const model = "gpt-4o-mini";
@@ -107,7 +101,7 @@ serve(async (req) => {
       let parseOk = true;
       try { raw = JSON.parse(await callLLM(apiKey, model, buildSummaryPrompt(), input)); }
       catch { raw = {}; parseOk = false; }
-      summary = normalizeSummary(raw, parseOk ? "chat" : "erro_parse", geradoEm);
+      summary = normalizeSummary(raw, parseOk ? "transcricao" : "erro_parse", geradoEm);
     }
 
     // Grava: arquivo JSON no bucket + linha em client_documents (caller → RLS).

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { type ClientFull, EmptyState, TabLoading, formatDateBR } from "../shared";
@@ -6,6 +7,9 @@ import { useAttendanceRecorder } from "@/hooks/useAttendanceRecorder";
 import {
   groupBySession, AUDIO_ATENDIMENTO_TYPE, type AudioDocRow,
 } from "@/lib/attendanceAudio";
+import {
+  transcribeAttendance, fetchAttendanceTranscriptions, type StoredTranscription,
+} from "@/lib/attendanceTranscriptionClient";
 import { useAuth } from "@/hooks/useAuth";
 
 // Busca os ids das sessões de chat do cliente. `null` enquanto carrega.
@@ -75,12 +79,7 @@ export function PecasTab({ client }: { client: ClientFull }) {
   );
 }
 
-/* ---------- Áudios / Transcrições (chat_attachments de áudio) ---------- */
-
-interface AudioRow {
-  id: string; file_name: string; mime_type: string | null;
-  extracted_text: string | null; summary: string | null; created_at: string;
-}
+/* ---------- Áudios / Transcrições do atendimento (client_documents) ---------- */
 
 // Lê as linhas `audio_atendimento` (blocos de gravação) do cliente.
 function useAttendanceAudios(clientId: string, reloadKey: number) {
@@ -99,6 +98,24 @@ function useAttendanceAudios(clientId: string, reloadKey: number) {
     return () => { cancelled = true; };
   }, [clientId, reloadKey]);
   return rows;
+}
+
+// Lê as transcrições do cliente (document_type='transcricao_atendimento') e
+// indexa por sessionId (derivado do file_path). `null` enquanto carrega.
+function useAttendanceTranscriptions(clientId: string, reloadKey: number) {
+  const [map, setMap] = useState<Map<string, StoredTranscription> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await fetchAttendanceTranscriptions(clientId);
+      if (cancelled) return;
+      const m = new Map<string, StoredTranscription>();
+      for (const t of list) if (t.sessionId) m.set(t.sessionId, t);
+      setMap(m);
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, reloadKey]);
+  return map;
 }
 
 function AttendanceRecorder({ client, onSaved }: { client: ClientFull; onSaved: () => void }) {
@@ -185,7 +202,33 @@ function AttendanceBlockPlayer({ row }: { row: AudioDocRow }) {
 }
 
 function AttendanceSessions({ clientId, reloadKey }: { clientId: string; reloadKey: number }) {
+  const { user } = useAuth();
   const rows = useAttendanceAudios(clientId, reloadKey);
+  const [transKey, setTransKey] = useState(0);
+  const transcriptions = useAttendanceTranscriptions(clientId, transKey);
+  const [busy, setBusy] = useState<string | null>(null); // sessionId em transcrição
+
+  const handleTranscribe = useCallback(async (sessionId: string, force: boolean) => {
+    setBusy(sessionId);
+    try {
+      const res = await transcribeAttendance(clientId, sessionId, force);
+      if (!res.ok) {
+        const reasons: Record<string, string> = {
+          transcription_disabled: "Transcrição desligada no servidor.",
+          no_audio_blocks: "Nenhum bloco de áudio encontrado para esta sessão.",
+          empty_transcription: "A transcrição saiu vazia.",
+          client_not_found_or_forbidden: "Você não tem acesso a este cliente.",
+        };
+        toast.error(reasons[res.reason ?? ""] ?? `Não foi possível transcrever${res.reason ? `: ${res.reason}` : "."}`);
+        return;
+      }
+      toast.success(res.cached ? "Transcrição já existente carregada." : "Atendimento transcrito.");
+      setTransKey((k) => k + 1);
+    } finally {
+      setBusy(null);
+    }
+  }, [clientId]);
+
   if (rows === null) return <TabLoading />;
   if (rows.length === 0) {
     return <EmptyState icon="⏺" title="Nenhum atendimento gravado" hint="Grave um atendimento acima; os blocos aparecem aqui agrupados por sessão." />;
@@ -198,21 +241,46 @@ function AttendanceSessions({ clientId, reloadKey }: { clientId: string; reloadK
   return (
     <div className="cli-card lift" style={{ marginBottom: 14 }}>
       <div className="cli-sec-title">Atendimentos gravados · {sessions.length}</div>
-      {sessions.map((s) => (
-        <div key={s.sessionId} style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: "var(--cli-ink)", marginBottom: 6 }}>
-            {formatDateBR(new Date(s.startedAt).toISOString())} · {s.blocks.length} bloco(s)
-            {s.totalDurationMs > 0 ? ` · ${mmss(s.totalDurationMs)}` : ""}
-          </div>
-          {s.blocks.map((b) => (
-            <div key={b.id} style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginBottom: 2 }}>{b.document_name}</div>
-              <AttendanceBlockPlayer row={b} />
-              <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 500 }}>Transcrição ainda não disponível.</div>
+      {sessions.map((s) => {
+        const trans = transcriptions?.get(s.sessionId) ?? null;
+        return (
+          <div key={s.sessionId} style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 800, fontSize: 14, color: "var(--cli-ink)" }}>
+                {formatDateBR(new Date(s.startedAt).toISOString())} · {s.blocks.length} bloco(s)
+                {s.totalDurationMs > 0 ? ` · ${mmss(s.totalDurationMs)}` : ""}
+              </span>
+              <span style={{ flex: 1 }} />
+              <button className="cli-btn sm" type="button"
+                disabled={busy === s.sessionId || !user?.id}
+                title={!user?.id ? "Faça login para transcrever" : undefined}
+                onClick={() => void handleTranscribe(s.sessionId, !!trans)}>
+                {busy === s.sessionId ? "Transcrevendo…" : trans ? "Retranscrever" : "Transcrever atendimento"}
+              </button>
             </div>
-          ))}
-        </div>
-      ))}
+            {s.blocks.map((b) => (
+              <div key={b.id} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginBottom: 2 }}>{b.document_name}</div>
+                <AttendanceBlockPlayer row={b} />
+              </div>
+            ))}
+            {transcriptions === null ? (
+              <div style={{ fontSize: 12, color: "var(--cli-muted)" }}>carregando transcrição…</div>
+            ) : trans && trans.text ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginBottom: 4 }}>
+                  Transcrição · {formatDateBR(trans.createdAt)}
+                </div>
+                <div className="cli-notes" style={{ whiteSpace: "pre-wrap" }}>{trans.text}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 500, marginTop: 4 }}>
+                Transcrição ainda não disponível.
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -220,49 +288,10 @@ function AttendanceSessions({ clientId, reloadKey }: { clientId: string; reloadK
 export function AudiosTab({ client }: { client: ClientFull }) {
   const [reloadKey, setReloadKey] = useState(0);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
-  const sessionIds = useClientSessionIds(client.id);
-  const [rows, setRows] = useState<AudioRow[] | null>(null);
-
-  useEffect(() => {
-    if (sessionIds === null) return;
-    if (sessionIds.length === 0) { setRows([]); return; }
-    let cancelled = false;
-    (async () => {
-      // Só há transcrição persistida como anexo de áudio (mime audio/*).
-      // Sem fonte específica de ditado → sem dado fabricado.
-      const { data, error } = await supabase.from("chat_attachments")
-        .select("id, file_name, mime_type, extracted_text, summary, created_at")
-        .in("session_id", sessionIds)
-        .like("mime_type", "audio/%")
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      setRows(error ? [] : ((data as AudioRow[]) ?? []));
-    })();
-    return () => { cancelled = true; };
-  }, [sessionIds]);
-
   return (
     <div>
       <AttendanceRecorder client={client} onSaved={reload} />
       <AttendanceSessions clientId={client.id} reloadKey={reloadKey} />
-      {rows && rows.length > 0 && (
-        <div className="cli-card lift">
-          <div className="cli-sec-title">Áudios de chat / Transcrições · {rows.length}</div>
-          {rows.map(a => (
-            <div key={a.id} style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ fontWeight: 800, fontSize: 15, color: "var(--cli-ink)" }}>♪ {a.file_name}</span>
-                <span style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>{formatDateBR(a.created_at)}</span>
-              </div>
-              {a.extracted_text
-                ? <div className="cli-notes">{a.extracted_text}</div>
-                : a.summary
-                  ? <div className="cli-notes">{a.summary}</div>
-                  : <div style={{ fontSize: 13, color: "var(--cli-muted)", fontWeight: 500 }}>Transcrição ainda não disponível.</div>}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

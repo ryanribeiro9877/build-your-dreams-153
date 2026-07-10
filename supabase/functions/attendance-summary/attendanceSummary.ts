@@ -32,6 +32,21 @@ export function assembleInput(
   return out.slice(0, maxChars);
 }
 
+// Monta o texto-insumo a partir das transcrições do atendimento (6.1 → Whisper),
+// na ordem em que vêm, com teto de chars (mantém o INÍCIO). Fonte real do 6.2:
+// substitui o antigo insumo (chat da sessão do cliente, sempre vazio — chat é global).
+export function assembleTranscriptionInput(
+  transcricoes: string[],
+  maxChars = 12000,
+): string {
+  const joined = transcricoes
+    .filter((t) => (t ?? "").trim().length > 0)
+    .map((t) => t.trim())
+    .join("\n\n");
+  if (!joined) return "";
+  return `TRANSCRIÇÃO DO ATENDIMENTO:\n${joined}\n`.slice(0, maxChars);
+}
+
 export function buildSummaryPrompt(): string {
   const campos = SUMMARY_FIELDS.map((f) => `- "${f}" (${FIELD_LABELS[f]})`).join("\n");
   return [
