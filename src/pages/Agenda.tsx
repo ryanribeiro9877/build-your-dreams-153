@@ -7,10 +7,11 @@ import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { useAuth } from "@/hooks/useAuth";
 import { MeetingDetailModal } from "@/components/agenda/MeetingDetailModal";
 
-// Papéis que enxergam a agenda de todos (o gate real é o RLS de `meetings`).
-// Para os demais (ex.: advogado), o seletor "Todos os advogados" seria
-// enganoso — só veriam a si mesmos — então escondemos o filtro por advogado.
-const ROLES_VE_TODAS_AGENDAS = ["admin", "director", "socio", "manager", "receptionist", "tech"];
+// Papéis que enxergam a agenda de todos (o gate real é o RLS de `meetings`):
+// recepção, sócio e admin. Para os demais (advogado, gerente, tech etc.) o
+// seletor "Todos os advogados" seria enganoso — só veriam a si mesmos —,
+// então escondemos o filtro por advogado.
+const ROLES_VE_TODAS_AGENDAS = ["admin", "director", "socio", "receptionist"];
 
 // Cor de acento por status (semântica; independe do tema claro/escuro).
 const STATUS_COLOR: Record<MeetingStatus, string> = {
