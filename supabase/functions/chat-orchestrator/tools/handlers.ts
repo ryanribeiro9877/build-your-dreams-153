@@ -2,8 +2,13 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCep } from "../cep.ts";
 import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
 
-// READ — recebe o client admin (service-role) e o user_id para escopar.
-export async function runReadTool(admin: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+// READ — recebe um SupabaseClient (client) e o user_id para escopar.
+// IMPORTANTE (Correção A): para consultar_cliente o `client` DEVE carregar a
+// IDENTIDADE do usuário (JWT), pois a RPC agent_consultar_cliente re-checa
+// is_recepcao_or_socio() via auth.uid(); sob service-role auth.uid() é nulo e a
+// RPC devolve SEMPRE vazio. Os call-sites (runEntryConsulta e o loop agêntico do
+// N3) passam o client JWT; service-role só como fallback fail-safe.
+export async function runReadTool(client: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "consultar_cliente": {
       // R-2 Fase 2B: caminho cifrado. A RPC agent_consultar_cliente detecta
@@ -11,17 +16,17 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
       // exata); texto -> full_name. Devolve o CPF já decifrado. Não lê mais a
       // coluna de texto sensível diretamente.
       const q = String(args.busca ?? "").trim();
-      const { data } = await admin.rpc("agent_consultar_cliente", { p_busca: q });
+      const { data } = await client.rpc("agent_consultar_cliente", { p_busca: q });
       return data ?? [];
     }
     case "consultar_usuario": {
       const q = String(args.busca ?? "").trim();
-      const { data } = await admin.from("profiles")
+      const { data } = await client.from("profiles")
         .select("user_id, display_name, role_template_id").ilike("display_name", `%${q}%`).limit(10);
       return data ?? [];
     }
     case "consultar_tarefas": {
-      let qb = admin.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
+      let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));
       if (args.assignee_user_id) qb = qb.eq("assignee_user_id", String(args.assignee_user_id));
       if (args.status) qb = qb.eq("status", String(args.status));
@@ -30,11 +35,11 @@ export async function runReadTool(admin: SupabaseClient, _userId: string, name: 
     }
     case "consultar_processo": {
       const q = String(args.busca ?? "").trim();
-      const { data } = await admin.from("processes").select("*").or(`numero.ilike.%${q}%`).limit(10);
+      const { data } = await client.from("processes").select("*").or(`numero.ilike.%${q}%`).limit(10);
       return data ?? [];
     }
     case "consultar_documentos": {
-      const { data } = await admin.from("client_documents")
+      const { data } = await client.from("client_documents")
         .select("id, document_type, document_name, created_at").eq("client_id", String(args.client_id))
         .neq("document_type", "audio_atendimento")
         .neq("document_type", "resumo_atendimento")

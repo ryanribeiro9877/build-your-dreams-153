@@ -6,6 +6,13 @@ Deno.test("agendar: reconhece pedidos de agendamento", () => {
     "agenda um atendimento pro cliente João amanhã 10h",
     "agendar reunião com a Maria sexta 14h",
     "marca uma reunião pra terça de manhã",
+    // "agendamento" (substantivo) é sinal FORTE — dispensa o objeto reunião/atendimento.
+    "marque um agendamento para ana cristina com o cliente ryan ribeiro de oliveira hoje às 11:00",
+    "quero um agendamento com o dr. joão amanhã",
+    "preciso marcar um agendamento pro cliente",
+    // "horario" só no caminho de agendar, COM verbo.
+    "marca um horário pra terça de manhã com a Maria",
+    "agende um horário com o cliente sexta 14h",
   ]) assertEquals(isAgendarAtendimentoRequest(m), true, m);
 });
 
@@ -35,6 +42,10 @@ Deno.test("agenda/acao: NÃO captura pedidos genéricos sem contexto de reunião
     "realizar tarefa de ligar pro cliente amanhã",
     "o pagamento já foi realizado",
     "confirma o pagamento amanhã",
+    // "horario" NÃO está no objeto de ação — não pode sequestrar confirmação de pagamento.
+    "confirma o horário do pagamento",
+    // "agenda" (calendário) sem objeto de reunião nem "agendamento" continua fora.
+    "abre a agenda da semana",
   ]) {
     assertEquals(isReuniaoAcaoRequest(m), false, `acao: ${m}`);
     assertEquals(isAgendarAtendimentoRequest(m), false, `agendar: ${m}`);

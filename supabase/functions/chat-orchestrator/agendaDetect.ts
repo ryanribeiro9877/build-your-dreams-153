@@ -18,15 +18,28 @@ export function looksLikePecaRequest(msg: string): boolean {
 }
 
 // Objeto EXPLÍCITO de reunião. NÃO inclui "agenda" (o substantivo calendário
-// gera falso-positivo em "ver a agenda de hoje").
-const MEETING_OBJ = /\b(reuniao|reunioes|atendimento|consulta)\b/;
+// gera falso-positivo em "ver a agenda de hoje"). Usado pelo caminho de AÇÃO
+// (isReuniaoAcaoRequest) — mantém a lista enxuta p/ não sequestrar tarefas/pagamentos
+// (ex.: "confirma o horário do pagamento" NÃO pode virar ação de reunião).
+const MEETING_OBJ = /\b(reuniao|reunioes|atendimento|atendimentos|consulta|consultas)\b/;
+
+// Objeto de reunião do caminho de AGENDAR. Inclui "horario(s)" porque "marcar/agendar
+// um horário" é inequivocamente um agendamento — mas SÓ com verbo (fica FORA do
+// MEETING_OBJ de ação, senão "confirma o horário do pagamento" viraria falso-positivo).
+const AGENDAR_OBJ = /\b(reuniao|reunioes|atendimento|atendimentos|consulta|consultas|horario|horarios)\b/;
+
+// Sinal FORTE e inequívoco de agendamento: "agendamento(s)" como SUBSTANTIVO já é um
+// pedido de compromisso por si só (diferente de "agenda", o calendário). Dispensa o
+// verbo — "quero um agendamento com o dr." / "marque um agendamento" são agendamento.
+const AGENDA_STRONG = /\b(agendamento|agendamentos)\b/;
 
 // AGENDAR: verbo de marcar + objeto de reunião.
 const AGENDA_VERB = /\b(agenda|agendar|agende|marca|marcar|marque)\b/;
 export function isAgendarAtendimentoRequest(msg: string): boolean {
   const n = norm(msg);
   if (looksLikePecaRequest(msg)) return false;
-  return AGENDA_VERB.test(n) && MEETING_OBJ.test(n);
+  if (AGENDA_STRONG.test(n)) return true;
+  return AGENDA_VERB.test(n) && AGENDAR_OBJ.test(n);
 }
 
 // AÇÃO/CICLO. Reagendar/remarcar é específico de compromisso → basta sozinho.
