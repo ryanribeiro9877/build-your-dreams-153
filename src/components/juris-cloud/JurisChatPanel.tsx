@@ -5,7 +5,7 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import {
   AlertTriangle, Lock,
 } from "lucide-react";
-import type { JcChatMessage, PendingMeeting, ProcessListRow, Agent } from "./types";
+import type { JcChatMessage, PendingMeeting, PendingTask, ProcessListRow, Agent } from "./types";
 import type { ClientFormValues } from "@/components/clients/shared";
 import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
@@ -66,9 +66,10 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-function MessageBubble({ msg, onCadastrarCliente }: {
+function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
   msg: JcChatMessage;
   onCadastrarCliente?: (snapshot: PendingMeeting) => void;
+  onCadastrarClienteTask?: (snapshot: PendingTask) => void;
 }) {
   const { user } = useAuth();
   // "Ver peça completa" abre a peça inteira num painel separado (fora do chat).
@@ -90,7 +91,7 @@ function MessageBubble({ msg, onCadastrarCliente }: {
   // renderiza o TarefaConfirmCard (editavel) no lugar do balao normal. So cria a
   // tarefa quando o usuario confirmar (Task 19).
   if (msg.kind === "tarefa_confirm" && msg.tarefaDraft) {
-    return <TarefaConfirmCard key={msg.id} draft={msg.tarefaDraft} />;
+    return <TarefaConfirmCard key={msg.id} draft={msg.tarefaDraft} onCadastrarCliente={onCadastrarClienteTask} />;
   }
   // Ciclo da Agenda pelo chat: cartão de agendar (editável) e cartão de
   // ciclo/reagendar. Só gravam em meetings ao confirmar.
@@ -390,6 +391,8 @@ export interface JurisChatPanelProps {
   activeDeptLabel: string;
   /** Cliente não encontrado no cartão de agendar → leva ao cadastro (Modelo A). */
   onCadastrarClienteFromMeeting?: (snapshot: PendingMeeting) => void;
+  /** Cliente não encontrado no cartão de TAREFA → leva ao cadastro (Modelo A). */
+  onCadastrarClienteFromTask?: (snapshot: PendingTask) => void;
   /** Chamado quando o wizard de cadastro inline grava (agenda automática pós-cadastro). */
   onClienteCadastrado?: (clientId: string, clientName: string) => void;
   /** Pré-preenche o wizard inline (ex.: Nome vindo do cartão de agendar). */
@@ -417,6 +420,7 @@ export default function JurisChatPanel({
   roleLabel,
   activeDeptLabel,
   onCadastrarClienteFromMeeting,
+  onCadastrarClienteFromTask,
   onClienteCadastrado,
   cadastroInitialValues,
 }: JurisChatPanelProps) {
@@ -490,7 +494,7 @@ export default function JurisChatPanel({
             // direto via save_client (cifrado) — a PII não trafega pelo chat.
             msg.kind === "cadastro_form" ? (
               <div key={msg.id}>
-                <MessageBubble msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} />
+                <MessageBubble msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
                 {/* Alinha o wizard SOB a bolha do agente: mesma linha centrada
                     (.jc-msg-wrap) com um espaçador invisível no lugar do avatar.
                     onSaved/initialValues: quando o cadastro veio de um agendamento,
@@ -501,7 +505,7 @@ export default function JurisChatPanel({
                 </div>
               </div>
             ) : (
-              <MessageBubble key={msg.id} msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} />
+              <MessageBubble key={msg.id} msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
             ),
           )}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}

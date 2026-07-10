@@ -17,6 +17,9 @@ export interface TarefaDraft {
   // em claro nunca chega ao cartão. Só o `id` (uuid) é usado no vínculo.
   client_resolved: { id: string; name: string; cpf_masked?: string | null; status?: string | null } | null;
   client_candidates: { id: string; name: string; cpf_masked?: string | null; status?: string | null }[];
+  /** Só nos cartões REABERTOS após cadastro em linha: pré-seleciona o responsável que
+   *  o usuário já havia escolhido (preserva o trabalho). Drafts do edge não trazem. */
+  assignee_user_id?: string | null;
 }
 
 /** Ciclo da Agenda pelo chat. CPF sempre MASCARADO (mascarado no edge). */
@@ -44,6 +47,19 @@ export interface PendingMeeting {
   phone: string | null;
   display: string | null;
 }
+/** Rascunho de TAREFA em espera, capturado quando o usuário clica em "Cadastrar
+ *  cliente" no cartão (cliente não encontrado). Guardado em estado client-side no
+ *  container; consumido ao concluir o cadastro (Modelo A) → cria a tarefa com o
+ *  novo client_id. Espelha o PendingMeeting para o fluxo de tarefa. */
+export interface PendingTask {
+  client_name_hint: string | null;
+  title: string | null;
+  description: string | null;
+  deadline_at: string | null; // ISO
+  priority: TarefaDraft["priority"];
+  assignee_user_id: string | null; // "" / null = o próprio criador
+}
+
 export interface ReuniaoAcaoCandidate { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string; type: string | null; }
 /** Ação de ciclo/reagendar (metadata.reuniao_acao, kind === 'reuniao_acao'). */
 export interface ReuniaoAcaoPayload {

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Pencil, ClipboardList, AlertCircle } from "lucide-react";
+import { Check, Pencil, ClipboardList, AlertCircle, UserPlus } from "lucide-react";
 import { createChatTask } from "@/hooks/useUserTasks";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
-import type { TarefaDraft } from "@/components/juris-cloud/types";
+import type { TarefaDraft, PendingTask } from "@/components/juris-cloud/types";
 import { toast } from "sonner";
 
 /** Converte um ISO para o formato aceito por <input type="datetime-local"> (fuso local). */
@@ -36,15 +36,26 @@ function matchAssigneeHint(hint: string | null, options: { id: string; name: str
  * padrão (criação rápida/pessoal); pode ser trocado, e é pré-selecionado se o
  * pedido citou alguém. Cliente: 0 → em aberto; 1 → resolvido; N → desambiguação
  * (nome + CPF mascarado + status). Só o `client_id` (uuid) é vinculado.
+ *
+ * `onCadastrarCliente`: quando o pedido cita um cliente que NÃO existe no cadastro
+ * (client_query preenchido, 0 resolvido, 0 candidatos), em vez de criar a tarefa
+ * com client_id null silenciosamente, o cartão BLOQUEIA o Confirmar e oferece
+ * "Cadastrar cliente", devolvendo um snapshot ao vivo do rascunho — o container
+ * leva ao cadastro (Modelo A) e cria a tarefa automaticamente ao concluir (paridade
+ * com o cartão de reunião). Ausente → só bloqueia. Tarefa SEM cliente citado
+ * (client_query vazio) segue livre (client_id null é válido nesse caso).
  */
-export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
+export function TarefaConfirmCard({
+  draft, onCadastrarCliente,
+}: { draft: TarefaDraft; onCadastrarCliente?: (snapshot: PendingTask) => void }) {
   const [title, setTitle] = useState(draft.title ?? "");
   const [description, setDescription] = useState(draft.description ?? "");
   const [deadline, setDeadline] = useState(draft.deadline_at ? toLocalInput(draft.deadline_at) : "");
   const [priority, setPriority] = useState<TarefaDraft["priority"]>(draft.priority ?? "medium");
   const [clientId, setClientId] = useState<string | null>(draft.client_resolved?.id ?? null);
-  const [assignee, setAssignee] = useState<string>(""); // "" = eu (padrão)
-  const [assigneeTouched, setAssigneeTouched] = useState(false);
+  // Cartão REABERTO após cadastro pode trazer o responsável já escolhido (preserva o trabalho).
+  const [assignee, setAssignee] = useState<string>(draft.assignee_user_id ?? ""); // "" = eu (padrão)
+  const [assigneeTouched, setAssigneeTouched] = useState(!!draft.assignee_user_id);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
 
@@ -61,9 +72,28 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assigneeOptions]);
 
+  // Cliente CITADO mas NÃO encontrado (client_query preenchido, sem resolvido, sem
+  // candidatos): em vez de criar com client_id null silenciosamente, bloqueia e
+  // oferece o cadastro em linha — mas só quando o container fornece o handler.
+  // Tarefa sem cliente citado (client_query vazio) NÃO cai aqui — segue livre.
+  const clientNotFound =
+    !clientId && !draft.client_resolved && draft.client_candidates.length === 0 && !!draft.client_query?.trim();
+  const showCadastrarBtn = clientNotFound && !!onCadastrarCliente;
+
   // Tipo fixo + autorização própria (todos menos tech); responsável default = eu.
-  // Só o título é obrigatório.
-  const canConfirm = title.trim().length > 0 && !busy;
+  // Só o título é obrigatório — E, quando um cliente foi citado, ele precisa estar
+  // cadastrado (decisão do dono: tarefa pelo chat não nasce com cliente fantasma).
+  const canConfirm = title.trim().length > 0 && !busy && !clientNotFound;
+
+  // Snapshot AO VIVO do rascunho — para a criação pós-cadastro reaproveitar tudo.
+  const buildSnapshot = (): PendingTask => ({
+    client_name_hint: draft.client_query,
+    title: title.trim() || null,
+    description: description.trim() || null,
+    deadline_at: deadline ? new Date(deadline).toISOString() : null,
+    priority: priority ?? "medium",
+    assignee_user_id: assignee || null,
+  });
 
   const confirm = async () => {
     if (!canConfirm || created) return;
@@ -173,29 +203,46 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
           <div className="action-card__row">
             <span className="action-card__label">Cliente</span>
             <span className="action-card__value" style={{ color: "#EAB308" }}>
-              "{draft.client_query}" — em aberto
+              "{draft.client_query}" — {clientNotFound ? "não encontrado" : "em aberto"}
             </span>
           </div>
         ) : null}
       </div>
-      <div className="action-card__actions">
-        <button
-          type="button"
-          className="action-card__btn action-card__btn--primary"
-          disabled={!canConfirm}
-          onClick={confirm}
-        >
-          <Check size={15} aria-hidden="true" /> Confirmar
-        </button>
-        <button
-          type="button"
-          className="action-card__btn action-card__btn--ghost"
-          disabled={busy}
-          onClick={() => toast.message("Ajuste os campos e confirme quando estiver certo.")}
-        >
-          <Pencil size={14} aria-hidden="true" /> Corrigir
-        </button>
-      </div>
+      {showCadastrarBtn ? (
+        <div style={{ padding: "0 16px 8px" }}>
+          <div style={{ fontSize: 12, color: "#EAB308", marginBottom: 8 }}>Cliente não encontrado. Cadastrar agora?</div>
+          <button type="button" className="action-card__btn action-card__btn--primary"
+            onClick={() => onCadastrarCliente!(buildSnapshot())}>
+            <UserPlus size={15} aria-hidden="true" /> Cadastrar cliente
+          </button>
+        </div>
+      ) : (
+        <>
+          {clientNotFound && (
+            <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 8px" }}>
+              Cliente "{draft.client_query}" não encontrado. Vincule um cliente cadastrado antes de criar.
+            </div>
+          )}
+          <div className="action-card__actions">
+            <button
+              type="button"
+              className="action-card__btn action-card__btn--primary"
+              disabled={!canConfirm}
+              onClick={confirm}
+            >
+              <Check size={15} aria-hidden="true" /> Confirmar
+            </button>
+            <button
+              type="button"
+              className="action-card__btn action-card__btn--ghost"
+              disabled={busy}
+              onClick={() => toast.message("Ajuste os campos e confirme quando estiver certo.")}
+            >
+              <Pencil size={14} aria-hidden="true" /> Corrigir
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

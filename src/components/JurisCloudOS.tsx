@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
-import { useInboxCount } from "@/hooks/useUserTasks";
+import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
@@ -28,7 +28,7 @@ import JurisTopBar from "./juris-cloud/JurisTopBar";
 import JurisChatPanel from "./juris-cloud/JurisChatPanel";
 
 // Shared constants & types
-import type { Agent, JcChatMessage, SidebarItem, MenuItem, PendingMeeting, ReuniaoDraft } from "./juris-cloud/types";
+import type { Agent, JcChatMessage, SidebarItem, MenuItem, PendingMeeting, ReuniaoDraft, PendingTask, TarefaDraft } from "./juris-cloud/types";
 import { parseAgentPermissions } from "./juris-cloud/types";
 import { createMeeting } from "@/hooks/useMeetings";
 import { EMPTY_FORM, type ClientFormValues } from "@/components/clients/shared";
@@ -850,6 +850,9 @@ export default function JurisCloudOS() {
   // cadastrar em linha (Modelo A). Consumido ao concluir o cadastro. Só estado
   // client-side — não persiste em banco (reload perde, simétrico ao próprio wizard).
   const [pendingMeeting, setPendingMeeting] = useState<PendingMeeting | null>(null);
+  // Simétrico ao pendingMeeting, mas para o fluxo de TAREFA pelo chat: rascunho em
+  // espera quando o cliente citado não existe. Mutuamente exclusivo c/ pendingMeeting.
+  const [pendingTask, setPendingTask] = useState<PendingTask | null>(null);
   const [cadastroInitialValues, setCadastroInitialValues] = useState<ClientFormValues | undefined>(undefined);
   const [inputVal, setInputVal]           = useState("");
   // ── Estado de "processando" POR conversa (session_id) ─────────────────────
@@ -1412,7 +1415,23 @@ export default function JurisCloudOS() {
   //    estado, pré-preenche o Nome e INJETA localmente o disparo do wizard (mesmo
   //    cartão que o edge produziria) — sem round-trip no edge, sem balão de usuário.
   const handleCadastrarClienteFromMeeting = useCallback((snapshot: PendingMeeting) => {
+    setPendingTask(null); // fluxos mutuamente exclusivos
     setPendingMeeting(snapshot);
+    const hint = (snapshot.client_name_hint ?? "").trim();
+    setCadastroInitialValues(hint ? { ...EMPTY_FORM, full_name: hint.toUpperCase() } : undefined);
+    setMessages(prev => [...prev, {
+      id: `local_cadastro_${Date.now()}`, role: "assistant", agent: "Meu Assistente",
+      kind: "cadastro_form",
+      content: "Claro!\nPreencha o formulário de cadastro do cliente abaixo:",
+      timestamp: nowLabel(),
+    } as JcChatMessage]);
+  }, []);
+
+  // Simétrico ao de reunião, para o cartão de TAREFA: guarda o snapshot do rascunho
+  // e injeta o disparo do wizard (Modelo A) com o Nome pré-preenchido.
+  const handleCadastrarClienteFromTask = useCallback((snapshot: PendingTask) => {
+    setPendingMeeting(null); // fluxos mutuamente exclusivos
+    setPendingTask(snapshot);
     const hint = (snapshot.client_name_hint ?? "").trim();
     setCadastroInitialValues(hint ? { ...EMPTY_FORM, full_name: hint.toUpperCase() } : undefined);
     setMessages(prev => [...prev, {
@@ -1429,6 +1448,53 @@ export default function JurisCloudOS() {
   //    e reabre um cartão pré-preenchido p/ escolher novo horário. Consome e limpa
   //    o rascunho em todos os casos (não reaparece em cadastros futuros).
   const handleClienteCadastrado = useCallback(async (clientId: string, clientName: string) => {
+    // Fluxo de TAREFA: cria a tarefa automaticamente com o novo client_id.
+    if (pendingTask) {
+      const tsnap = pendingTask;
+      setPendingTask(null);
+      setCadastroInitialValues(undefined);
+
+      const reopenTaskCard = (leadMsg: string) => {
+        const draft: TarefaDraft = {
+          title: tsnap.title, description: tsnap.description,
+          deadline_at: tsnap.deadline_at, deadline_display: null,
+          priority: tsnap.priority, assignee_hint: null,
+          assignee_user_id: tsnap.assignee_user_id,
+          client_query: clientName,
+          client_resolved: { id: clientId, name: clientName, cpf_masked: null, status: null },
+          client_candidates: [],
+        };
+        setMessages(prev => [...prev,
+          { id: `local_tarefa_msg_${Date.now()}`, role: "assistant", agent: "Meu Assistente", content: leadMsg, timestamp: nowLabel() } as JcChatMessage,
+          { id: `local_tarefa_${Date.now()}`, role: "assistant", agent: "Meu Assistente", kind: "tarefa_confirm", tarefaDraft: draft, timestamp: nowLabel() } as JcChatMessage,
+        ]);
+      };
+
+      // Título é o único obrigatório; veio do rascunho. Sem título (raro) → reabre p/ preencher.
+      if (!tsnap.title?.trim()) {
+        reopenTaskCard(`Cliente ${clientName} cadastrado. Confirme os dados da tarefa abaixo.`);
+        return;
+      }
+      try {
+        await createChatTask({
+          title: tsnap.title.trim(),
+          description: tsnap.description?.trim() || undefined,
+          client_id: clientId,
+          deadline_at: tsnap.deadline_at ?? undefined,
+          assignee_user_id: tsnap.assignee_user_id || undefined,
+          priority: tsnap.priority ?? "medium",
+        });
+        setMessages(prev => [...prev, {
+          id: `local_tarefa_ok_${Date.now()}`, role: "assistant", agent: "Meu Assistente",
+          content: `Cliente ${clientName} cadastrado e tarefa "${tsnap.title.trim()}" criada e vinculada.`,
+          timestamp: nowLabel(),
+        } as JcChatMessage]);
+      } catch {
+        reopenTaskCard(`Cliente ${clientName} cadastrado, mas não consegui criar a tarefa agora. Revise e confirme abaixo.`);
+      }
+      return;
+    }
+
     const snap = pendingMeeting;
     if (!snap) return; // cadastro normal (não veio de um agendamento)
     setPendingMeeting(null);
@@ -1468,7 +1534,7 @@ export default function JurisCloudOS() {
     } catch {
       reopenCard(`Cliente ${clientName} cadastrado com sucesso, mas o horário ${whenLabel} não está mais disponível. Escolha um novo horário abaixo.`);
     }
-  }, [pendingMeeting]);
+  }, [pendingMeeting, pendingTask]);
 
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
@@ -1850,6 +1916,7 @@ export default function JurisCloudOS() {
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}
             onCadastrarClienteFromMeeting={handleCadastrarClienteFromMeeting}
+            onCadastrarClienteFromTask={handleCadastrarClienteFromTask}
             onClienteCadastrado={handleClienteCadastrado}
             cadastroInitialValues={cadastroInitialValues}
           />
