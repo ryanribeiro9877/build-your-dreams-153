@@ -12,20 +12,17 @@ vi.mock("@/hooks/useMeetings", () => ({
 // Estado mutável dos mocks (vi.hoisted p/ estar disponível quando a factory roda).
 const h = vi.hoisted(() => ({
   lawyers: [] as { user_id: string; name: string; role_label: string | null }[],
-  meetingsCount: 0,
-  clientPhones: null as Record<string, unknown> | null,
+  hasHistory: false,
+  priorityPhone: null as string | null,
 }));
 vi.mock("@/hooks/useMeetingLawyers", () => ({ useMeetingLawyers: () => ({ lawyers: h.lawyers }) }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          neq: () => Promise.resolve({ count: h.meetingsCount, error: null }),      // meetings (histórico)
-          maybeSingle: () => Promise.resolve({ data: h.clientPhones, error: null }), // clients (telefone)
-        }),
-      }),
-    }),
+    rpc: (fn: string) => Promise.resolve(
+      fn === "client_has_meeting_history" ? { data: h.hasHistory, error: null }
+      : fn === "get_client_priority_phone" ? { data: h.priorityPhone, error: null }
+      : { data: null, error: null },
+    ),
   },
 }));
 
@@ -40,8 +37,8 @@ beforeEach(() => {
   createMeeting.mockReset();
   getAvailableSlots.mockReset().mockResolvedValue(["10:00", "10:15", "14:00"]);
   h.lawyers = [{ user_id: "l1", name: "Ana Cristina", role_label: null }]; // casa com hint "Ana"
-  h.meetingsCount = 0; // cliente novo por padrão
-  h.clientPhones = null;
+  h.hasHistory = false; // cliente novo por padrão
+  h.priorityPhone = null;
 });
 
 describe("ReuniaoConfirmCard", () => {
@@ -57,7 +54,7 @@ describe("ReuniaoConfirmCard", () => {
   });
 
   it("cliente com histórico -> Tipo abre sem seleção (confirmar bloqueado com motivo)", async () => {
-    h.meetingsCount = 3;
+    h.hasHistory = true;
     render(<ReuniaoConfirmCard draft={baseDraft as never} />);
     await waitFor(() => expect(screen.getByText(/selecione o tipo/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
@@ -90,12 +87,8 @@ describe("ReuniaoConfirmCard", () => {
     expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
   });
 
-  it("preenche telefone com o número marcado como WhatsApp (prioridade pessoal>residencial>comercial)", async () => {
-    h.clientPhones = {
-      phone: "(71) 90000-0001", phone_is_whatsapp: false,
-      phone_home: "(71) 3000-0002", phone_home_is_whatsapp: true,
-      phone_commercial: null, phone_commercial_is_whatsapp: false,
-    };
+  it("preenche telefone com o número WhatsApp retornado pela RPC canônica", async () => {
+    h.priorityPhone = "(71) 3000-0002";
     render(<ReuniaoConfirmCard draft={baseDraft as never} />);
     await waitFor(() => expect(screen.getByPlaceholderText(/00000-0000/)).toHaveValue("(71) 3000-0002"));
   });

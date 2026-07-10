@@ -12,14 +12,6 @@ import { toast } from "sonner";
 const DEFAULT_MEETING_TYPE =
   MEETING_TYPE_OPTIONS.find((t) => /consulta inicial/i.test(t)) ?? MEETING_TYPE_OPTIONS[0];
 
-// Campos de telefone/WhatsApp de `clients` (fora dos tipos gerados — desync repo↔banco;
-// colunas confirmadas no banco). Leitura direta (não são _enc/criptografados).
-type ClientPhones = {
-  phone: string | null; phone_is_whatsapp: boolean | null;
-  phone_home: string | null; phone_home_is_whatsapp: boolean | null;
-  phone_commercial: string | null; phone_commercial_is_whatsapp: boolean | null;
-};
-
 function friendlyError(msg: string): string {
   if (/slot cheio \(capacidade/i.test(msg)) return "Esse horário está cheio.";
   if (/fora do expediente/i.test(msg)) return "Fora do expediente (dia útil, janela ou feriado). Escolha outro horário.";
@@ -70,35 +62,30 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
   }, [date]);
 
   // Correção 3+5: ao resolver/trocar o cliente, pré-seleciona o Tipo pelo histórico
-  // e preenche o Telefone com o número marcado como WhatsApp. Ambos sob o JWT da
-  // recepção (RLS de meetings/clients já libera SELECT direto — sem RPC nova). Só age
-  // se o campo não veio do rascunho nem foi editado à mão; mantém tudo editável.
+  // e preenche o Telefone. Reusa as RPCs CANÔNICAS do sistema (client_has_meeting_history
+  // e get_client_priority_phone — mesma regra usada nas demais telas; não recriar no
+  // front), ambas recepção-only. Fora dos tipos gerados → cast; supabase.rpc chamado
+  // ACOPLADO (desacoplar quebra o this.rest). Só age se o campo não veio do rascunho
+  // nem foi editado à mão; mantém tudo editável.
   useEffect(() => {
     if (typeTouched && phoneTouched) return;
     if (!clientId) { if (!typeTouched) setType(DEFAULT_MEETING_TYPE); return; } // prospect/não-resolvido → Consulta inicial
     let cancelled = false;
+    const sb = supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+    };
     (async () => {
       if (!typeTouched) {
-        // Histórico = reuniões não-canceladas do cliente. count>0 → sem seleção
-        // (lista completa); count===0 → default. Erro de leitura → trata como count>0.
-        const { count, error } = await supabase
-          .from("meetings").select("id", { count: "exact", head: true })
-          .eq("client_id", clientId).neq("status", "canceled");
-        if (!cancelled) setType(error || (count ?? 0) > 0 ? "" : DEFAULT_MEETING_TYPE);
+        // Com histórico → abre sem seleção (lista completa); sem histórico → default.
+        // Erro de leitura → trata como "tem histórico" (não decide default por falha).
+        const { data, error } = await sb.rpc("client_has_meeting_history", { p_client_id: clientId });
+        if (!cancelled) setType(error || data === true ? "" : DEFAULT_MEETING_TYPE);
       }
       if (!phoneTouched) {
-        // Telefone WhatsApp (prioridade pessoal > residencial > comercial). Nenhum
-        // marcado → vazio (não inventa). Colunas fora dos tipos gerados → cast.
-        const { data } = await (supabase as unknown as {
-          from: (t: string) => { select: (c: string) => { eq: (col: string, v: string) => { maybeSingle: () => Promise<{ data: ClientPhones | null }> } } };
-        }).from("clients")
-          .select("phone, phone_is_whatsapp, phone_home, phone_home_is_whatsapp, phone_commercial, phone_commercial_is_whatsapp")
-          .eq("id", clientId).maybeSingle();
-        const auto =
-          (data?.phone_is_whatsapp ? data.phone : null) ??
-          (data?.phone_home_is_whatsapp ? data.phone_home : null) ??
-          (data?.phone_commercial_is_whatsapp ? data.phone_commercial : null) ?? "";
-        if (!cancelled) setPhone(auto);
+        // Telefone marcado como WhatsApp pela prioridade canônica do sistema; sem
+        // WhatsApp → null → campo vazio (não inventa).
+        const { data } = await sb.rpc("get_client_priority_phone", { p_client_id: clientId });
+        if (!cancelled) setPhone(typeof data === "string" ? data : "");
       }
     })();
     return () => { cancelled = true; };
