@@ -49,12 +49,16 @@ export function buildMeetingDraftPrompt(message: string, nowLocal: string, tz: s
   return [
     `Você extrai um RASCUNHO de agendamento de reunião a partir de um pedido em linguagem natural.`,
     `Agora é ${nowLocal} no fuso ${tz} (horário LOCAL de parede). Responda SOMENTE um JSON com as chaves:`,
-    `scheduled_date ("AAAA-MM-DD", resolvendo "hoje"/"amanhã"/dia da semana contra o "agora" acima; null se não houver),`,
+    `scheduled_date ("AAAA-MM-DD", resolvendo "hoje"/"amanhã"/dia da semana contra o "agora" acima; null se não houver data explícita),`,
     `start_time ("HH:MM" LOCAL de parede, ex.: "10:00"; SEM fuso, SEM "Z"; null se não houver),`,
-    `type (tipo do atendimento, ou null), client_query (nome/termo do cliente citado, ou null),`,
-    `lawyer_hint (nome do advogado citado, ou null), phone (telefone citado, ou null),`,
+    `type (tipo do atendimento, ou null),`,
+    `client_query (nome do CLIENTE — normalmente após "com o cliente", "para o cliente", "cliente", "atender"; ou null),`,
+    `lawyer_hint (nome do ADVOGADO/advogada — normalmente após "para", "pra", "com a Dra.", "com o Dr.", "com a advogada", "com o advogado"; ou null),`,
+    `phone (telefone citado, ou null),`,
     `display (texto curto já resolvido, ex.: "11/07 10:00").`,
-    `IMPORTANTE: NÃO converta fusos e NÃO use "Z"/offset. NUNCA invente; campo não claro = null. Só o JSON.`,
+    `REGRA DE DATA: só marque scheduled_date quando houver PALAVRA de data explícita ("hoje", "amanhã", dia da semana, "dia DD", data DD/MM). Se o pedido citar SÓ a hora (ex.: "às 13:30") sem palavra de data, scheduled_date = null (o sistema assume HOJE).`,
+    `IMPORTANTE: "para <nome>" indica o ADVOGADO; "com o cliente <nome>" indica o CLIENTE — não troque um pelo outro.`,
+    `NÃO converta fusos e NÃO use "Z"/offset. NUNCA invente; campo não claro = null. Só o JSON.`,
     `Pedido: """${message}"""`,
   ].join("\n");
 }

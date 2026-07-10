@@ -31,14 +31,26 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
   const isReschedule = payload.action === "reschedule";
   const [date, setDate] = useState(payload.new_date_local ?? sel?.scheduled_date ?? "");
   const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [time, setTime] = useState(payload.new_time_local ?? "");
   const [suggest, setSuggest] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (isReschedule && date) getAvailableSlots(date).then(setSlots).catch(() => setSlots([]));
+    if (!isReschedule || !date) { setSlots([]); return; }
+    setSlotsLoading(true);
+    getAvailableSlots(date).then(setSlots).catch(() => setSlots([])).finally(() => setSlotsLoading(false));
   }, [date, isReschedule]);
+
+  // Correção 4 (reagendar): só confirma um horário ofertado (válido + livre) para a
+  // data — mesma fonte da Agenda (get_available_slots). Não promete slot que o banco recusa.
+  const timeOffered = !!time && slots.includes(time);
+  const rescheduleBlocked = isReschedule && !!date && !!time && !timeOffered && !slotsLoading;
+  const slotBlockReason = !rescheduleBlocked ? null
+    : slots.length === 0
+      ? "Sem horários nesse dia (fim de semana, feriado ou fora do expediente). Escolha outra data."
+      : "Esse horário não está disponível (fora da janela ou já ocupado). Escolha um dos horários livres.";
 
   const confirm = async () => {
     if (busy || done || !sel) return;
@@ -82,7 +94,7 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
         {multi ? (
           <>
             <label style={{ fontSize: 12, color: "#EAB308" }}>Qual reunião?</label>
-            <select value={selId} onChange={(e) => setSelId(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+            <select value={selId} onChange={(e) => setSelId(e.target.value)}>
               {payload.candidates.map((c) => <option key={c.id} value={c.id}>{[c.scheduled_date, c.start_time, c.client_name, MEETING_STATUS_LABELS[c.status as keyof typeof MEETING_STATUS_LABELS] ?? c.status].filter(Boolean).join(" · ")}</option>)}
             </select>
           </>
@@ -94,18 +106,20 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
         {isReschedule && (
           <>
             <label style={{ fontSize: 12, color: "var(--text2)" }}>Nova data</label>
-            <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setTime(""); }} style={{ padding: "6px 8px", borderRadius: 6 }} />
+            <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
             <label style={{ fontSize: 12, color: "var(--text2)" }}>Novo horário</label>
-            <select value={time} onChange={(e) => setTime(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+            <select value={time} onChange={(e) => setTime(e.target.value)}>
               <option value="">Selecione…</option>
               {slots.map((s) => <option key={s} value={s}>{s}</option>)}
+              {time && !slots.includes(time) && <option value={time}>{time}</option>}
             </select>
-            {suggest && (<div style={{ fontSize: 12, color: "#EAB308" }}>Horários livres em {date}: {suggest.length ? suggest.join(", ") : "nenhum"}.</div>)}
+            {slotBlockReason && <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 4px" }}>{slotBlockReason}</div>}
+            {suggest && (<div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 4px" }}>Horários livres em {date}: {suggest.length ? suggest.join(", ") : "nenhum"}.</div>)}
           </>
         )}
       </div>
       <div className="action-card__actions">
-        <button type="button" className="action-card__btn action-card__btn--primary" disabled={busy || !sel} onClick={confirm}><Check size={15} aria-hidden="true" /> Confirmar</button>
+        <button type="button" className="action-card__btn action-card__btn--primary" disabled={busy || !sel || (isReschedule && !timeOffered)} onClick={confirm}><Check size={15} aria-hidden="true" /> Confirmar</button>
         <button type="button" className="action-card__btn action-card__btn--ghost" disabled={busy} onClick={() => toast.message("Sem alterações.")}><X size={14} aria-hidden="true" /> Fechar</button>
       </div>
     </div>

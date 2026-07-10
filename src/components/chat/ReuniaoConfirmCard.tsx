@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Pencil, CalendarPlus, AlertCircle } from "lucide-react";
 import { createMeeting, getAvailableSlots } from "@/hooks/useMeetings";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
@@ -14,6 +14,18 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
+// Casa o lawyer_hint ("para <nome>" extraído pelo edge) com o roster de advogados
+// (useMeetingLawyers = sócio + adv_*). Substring nos dois sentidos, sem acentos/caixa
+// (mesmo critério do matchAssigneeHint da tarefa). Devolve os user_ids que casam:
+// 1 → pré-seleção; N → seletor destacado p/ escolher; 0 → (nenhum).
+function matchLawyerHint(hint: string | null, options: { user_id: string; name: string }[]): string[] {
+  if (!hint) return [];
+  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const h = norm(hint);
+  if (!h) return [];
+  return options.filter((o) => { const n = norm(o.name); return !!n && (n.includes(h) || h.includes(n)); }).map((o) => o.user_id);
+}
+
 /**
  * Cartão de agendamento (kind === 'reuniao_confirm'): renderiza o rascunho
  * extraído pelo agente, pré-preenchido e editável. Só cria a reunião ao
@@ -22,10 +34,12 @@ function friendlyError(msg: string): string {
 export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
   const [date, setDate] = useState(draft.scheduled_date ?? "");
   const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [time, setTime] = useState(draft.start_time ?? "");
   const [type, setType] = useState(draft.type ?? "");
   const [clientId, setClientId] = useState<string | null>(draft.client_resolved?.id ?? null);
   const [lawyer, setLawyer] = useState("");
+  const [lawyerTouched, setLawyerTouched] = useState(false);
   const [phone, setPhone] = useState(draft.phone ?? "");
   const [suggest, setSuggest] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,10 +48,27 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
 
   useEffect(() => {
     if (!date) { setSlots([]); return; }
-    getAvailableSlots(date).then(setSlots).catch(() => setSlots([]));
+    setSlotsLoading(true);
+    getAvailableSlots(date).then(setSlots).catch(() => setSlots([])).finally(() => setSlotsLoading(false));
   }, [date]);
 
-  const canConfirm = !!date && !!time && !busy;
+  // Advogado a partir do "para <nome>": 1 correspondência pré-seleciona; N deixa
+  // o seletor destacado para escolha; 0 fica em (nenhum). Não sobrescreve escolha manual.
+  const lawyerMatches = useMemo(() => matchLawyerHint(draft.lawyer_hint, lawyers), [draft.lawyer_hint, lawyers]);
+  useEffect(() => {
+    if (!lawyerTouched && !lawyer && lawyerMatches.length === 1) setLawyer(lawyerMatches[0]);
+  }, [lawyerMatches, lawyerTouched, lawyer]);
+
+  // Correção 4: só permite confirmar um horário realmente OFERTADO (válido + livre)
+  // para a data — a lista vem de get_available_slots (mesma fonte da Agenda, que já
+  // aplica business_hours_config + holidays + capacidade). Espelha o que create_meeting
+  // recusa no servidor, evitando prometer sábado/feriado/fora de janela/ocupado.
+  const timeOffered = !!time && slots.includes(time);
+  const canConfirm = !!date && timeOffered && !busy;
+  const slotBlockReason = (!date || !time || timeOffered || slotsLoading) ? null
+    : slots.length === 0
+      ? "Sem horários nesse dia (fim de semana, feriado ou fora do expediente). Escolha outra data."
+      : "Esse horário não está disponível (fora da janela ou já ocupado). Escolha um dos horários livres.";
 
   const confirm = async () => {
     if (!canConfirm || created) return;
@@ -67,17 +98,18 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
       <div className="action-card__head"><CalendarPlus size={15} aria-hidden="true" /> Confirmar atendimento</div>
       <div className="action-card__fields">
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Data {draft.display && <span>(sugerido: {draft.display})</span>}</label>
-        <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setTime(""); }} style={{ padding: "6px 8px", borderRadius: 6 }} />
+        <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Horário</label>
-        <select value={time} onChange={(e) => setTime(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+        <select value={time} onChange={(e) => setTime(e.target.value)}>
           <option value="">Selecione…</option>
           {slots.map((s) => <option key={s} value={s}>{s}</option>)}
           {time && !slots.includes(time) && <option value={time}>{time}</option>}
         </select>
+        {slotBlockReason && <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 4px" }}>{slotBlockReason}</div>}
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Tipo</label>
-        <select value={type} onChange={(e) => setType(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+        <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="">(sem tipo)</option>
           {MEETING_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -85,7 +117,7 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
         {draft.client_candidates.length > 1 ? (
           <>
             <label style={{ fontSize: 12, color: "#EAB308" }}><AlertCircle size={12} style={{ verticalAlign: "middle" }} /> Cliente ambíguo — escolha</label>
-            <select value={clientId ?? ""} onChange={(e) => setClientId(e.target.value || null)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+            <select value={clientId ?? ""} onChange={(e) => setClientId(e.target.value || null)}>
               <option value="">Sem cliente</option>
               {draft.client_candidates.map((c) => <option key={c.id} value={c.id}>{[c.name, c.cpf_masked, c.status].filter(Boolean).join(" · ")}</option>)}
             </select>
@@ -98,14 +130,21 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
             <span className="action-card__value" style={{ color: "#EAB308" }}>"{draft.client_query}" — em aberto</span></div>
         ) : null}
 
-        <label style={{ fontSize: 12, color: "var(--text2)" }}>Advogado <span style={{ color: "var(--text3, #8a8a99)" }}>(opcional)</span></label>
-        <select value={lawyer} onChange={(e) => setLawyer(e.target.value)} style={{ padding: "6px 8px", borderRadius: 6 }}>
+        {draft.lawyer_hint && lawyerMatches.length > 1 ? (
+          <label style={{ fontSize: 12, color: "#EAB308" }}><AlertCircle size={12} style={{ verticalAlign: "middle" }} /> Advogado ambíguo ("{draft.lawyer_hint}") — escolha</label>
+        ) : (
+          <label style={{ fontSize: 12, color: "var(--text2)" }}>
+            Advogado <span style={{ color: "var(--text3, #8a8a99)" }}>(opcional)</span>
+            {draft.lawyer_hint && lawyerMatches.length === 0 && <span style={{ color: "#EAB308" }}> — não achei "{draft.lawyer_hint}"</span>}
+          </label>
+        )}
+        <select value={lawyer} onChange={(e) => { setLawyer(e.target.value); setLawyerTouched(true); }}>
           <option value="">(nenhum)</option>
           {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
         </select>
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Telefone <span style={{ color: "var(--text3, #8a8a99)" }}>(opcional)</span></label>
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" style={{ padding: "6px 8px", borderRadius: 6 }} />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
 
         {suggest && (<div style={{ fontSize: 12, color: "#EAB308" }}>Horários livres em {date}: {suggest.length ? suggest.join(", ") : "nenhum"}.</div>)}
       </div>

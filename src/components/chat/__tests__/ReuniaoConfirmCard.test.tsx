@@ -23,20 +23,31 @@ beforeEach(() => {
   getAvailableSlots.mockResolvedValue(["10:00", "10:15", "14:00"]);
 });
 
+// Confirmar só habilita quando o horário está entre os slots ofertados (válidos +
+// livres) da data — por isso os testes esperam o botão habilitar antes de clicar.
 describe("ReuniaoConfirmCard", () => {
   it("confirma e chama createMeeting com o cliente resolvido", async () => {
     createMeeting.mockResolvedValue("m1");
     render(<ReuniaoConfirmCard draft={baseDraft as never} />);
     await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledWith("2026-07-11"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /confirmar/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /confirmar/i }));
     await waitFor(() => expect(createMeeting).toHaveBeenCalledWith(expect.objectContaining({
       p_scheduled_date: "2026-07-11", p_start_time: "10:00", p_client_id: "c1", p_status: "scheduled",
     })));
   });
 
+  it("bloqueia confirmar quando não há horário livre no dia", async () => {
+    getAvailableSlots.mockResolvedValue([]); // fim de semana/feriado/fora de janela
+    render(<ReuniaoConfirmCard draft={baseDraft as never} />);
+    await waitFor(() => expect(screen.getByText(/sem horários nesse dia/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
+  });
+
   it("slot cheio -> mostra sugestão de horários livres", async () => {
     createMeeting.mockRejectedValue({ message: "create_meeting: slot cheio (capacidade 1 atingida)" });
     render(<ReuniaoConfirmCard draft={baseDraft as never} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /confirmar/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /confirmar/i }));
     await waitFor(() => expect(screen.getByText(/horários livres/i)).toBeInTheDocument());
   });

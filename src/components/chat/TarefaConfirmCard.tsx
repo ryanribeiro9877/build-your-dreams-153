@@ -104,17 +104,13 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="O que fazer"
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        />
+          placeholder="O que fazer"        />
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Descrição</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={2}
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        />
+          rows={2}        />
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>
           Prazo{" "}
@@ -125,16 +121,12 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
         <input
           type="datetime-local"
           value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        />
+          onChange={(e) => setDeadline(e.target.value)}        />
 
         <label style={{ fontSize: 12, color: "var(--text2)" }}>Prioridade</label>
         <select
           value={priority ?? "medium"}
-          onChange={(e) => setPriority(e.target.value as TarefaDraft["priority"])}
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        >
+          onChange={(e) => setPriority(e.target.value as TarefaDraft["priority"])}        >
           <option value="critical">Crítica</option>
           <option value="high">Alta</option>
           <option value="medium">Média</option>
@@ -146,9 +138,7 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
         </label>
         <select
           value={assignee}
-          onChange={(e) => { setAssignee(e.target.value); setAssigneeTouched(true); }}
-          style={{ padding: "6px 8px", borderRadius: 6 }}
-        >
+          onChange={(e) => { setAssignee(e.target.value); setAssigneeTouched(true); }}        >
           <option value="">Eu (padrão)</option>
           {assigneeOptions.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
@@ -163,7 +153,6 @@ export function TarefaConfirmCard({ draft }: { draft: TarefaDraft }) {
             <select
               value={clientId ?? ""}
               onChange={(e) => setClientId(e.target.value || null)}
-              style={{ padding: "6px 8px", borderRadius: 6 }}
             >
               <option value="">Sem cliente</option>
               {draft.client_candidates.map((c) => (

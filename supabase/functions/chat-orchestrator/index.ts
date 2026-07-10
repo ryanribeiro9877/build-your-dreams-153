@@ -1405,6 +1405,71 @@ function buildNowAnchor(tz: string = OFFICE_TZ): string {
     "═══ FIM ═══\n";
 }
 
+// Correção: soma dias a uma data "AAAA-MM-DD" (aritmética em UTC, sem fuso — a
+// data local já vem resolvida pelo nowLocalWall). Devolve "AAAA-MM-DD".
+function addDaysISO(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
+}
+
+// Correção 3: resolução DETERMINÍSTICA do slot sugerido no cartão de agendamento.
+// Regra do dono: sem data → HOJE (America/Bahia, mesma âncora do buildNowAnchor),
+// nunca amanhã; e a sugestão (data+hora) SEMPRE tem de passar em meeting_slot_is_valid
+// — nunca sábado/domingo/feriado nem fora das janelas (08–11/13–16). NÃO recriamos a
+// regra de horário: consultamos a fonte — meeting_slot_is_valid p/ a hora pedida e
+// get_available_slots p/ escolher o 1º slot livre quando não há hora. Roda sob o JWT
+// da recepção (get_available_slots exige meetings_can_access). Se hoje já passou da
+// hora pedida, tenta o próximo slot livre de hoje; sem slot hoje, rola p/ o próximo
+// dia útil mantendo a hora pedida.
+async function resolveMeetingSuggestion(
+  client: SupabaseClient, tz: string, scheduledDate: string | null, startTime: string | null,
+): Promise<{ date: string; time: string } | null> {
+  const wall = nowLocalWall(new Date(), tz);        // "AAAA-MM-DDTHH:mm:ss" (hora local)
+  const today = wall.slice(0, 10);
+  const nowTime = wall.slice(11, 16);
+  // Âncora: data pedida só se for hoje/futura; data ausente ou passada cai p/ hoje.
+  const anchor = scheduledDate && scheduledDate >= today ? scheduledDate : today;
+  const HORIZON = 21;                               // ~3 semanas cobre feriados/pontes.
+
+  const slotIsValid = async (date: string, t: string): Promise<boolean> => {
+    try {
+      const { data, error } = await client.rpc("meeting_slot_is_valid", { p_date: date, p_start: t });
+      return !error && data === true;
+    } catch { return false; }
+  };
+  const freeSlots = async (date: string): Promise<string[]> => {
+    try {
+      const { data, error } = await client.rpc("get_available_slots", { p_date: date });
+      if (error) return [];
+      return ((data as { slot: string }[] | null) ?? []).map((r) => String(r.slot).slice(0, 5));
+    } catch { return []; }
+  };
+
+  for (let i = 0; i < HORIZON; i++) {
+    const date = addDaysISO(anchor, i);
+    const isToday = date === today;
+    if (startTime) {
+      if (isToday) {
+        if (startTime > nowTime && await slotIsValid(date, startTime)) return { date, time: startTime };
+        // hora pedida já passou ou é inválida hoje → próximo slot livre de hoje
+        const later = (await freeSlots(date)).find((t) => t > nowTime);
+        if (later) return { date, time: later };
+        // sem slot restante hoje → dias seguintes mantêm a hora pedida
+      } else if (await slotIsValid(date, startTime)) {
+        return { date, time: startTime };
+      }
+    } else {
+      // Sem hora: 1º slot livre do dia (já válido), pulando os que já passaram hoje.
+      const pick = (await freeSlots(date)).find((t) => !(isToday && t <= nowTime));
+      if (pick) return { date, time: pick };
+    }
+  }
+  return null;
+}
+
 // AGT-CONSULTA: loop curto de LEITURA no ponto de ENTRADA (o próprio "Meu
 // Assistente"). Executa as tools de leitura com a IDENTIDADE do usuário (JWT):
 // RLS/role valem em tudo, e agent_consultar_cliente re-checa is_recepcao_or_socio.
@@ -3085,6 +3150,17 @@ serve(async (req) => {
             });
             draft = normalizeMeetingDraft(JSON.parse(llm.content));
           } catch (_e) { draft = normalizeMeetingDraft(null); }
+
+          // Correção 3: data padrão = HOJE e slot sempre válido (dias úteis/janelas),
+          // sob o JWT da recepção. Sobrescreve o que o LLM extraiu p/ nunca sugerir
+          // sábado/feriado/passado. Se a resolução falhar, mantém o rascunho extraído.
+          try {
+            const sugg = await resolveMeetingSuggestion(jwtClient, TZ_ESCRITORIO, draft.scheduled_date, draft.start_time);
+            if (sugg) {
+              const [, mm, dd] = sugg.date.split("-");
+              draft = { ...draft, scheduled_date: sugg.date, start_time: sugg.time, display: `${dd}/${mm} ${sugg.time}` };
+            }
+          } catch (_e) { /* mantém o rascunho */ }
 
           let clientResolved: { id: string; name: string; cpf_masked: string | null; status: string | null } | null = null;
           let clientCandidates: { id: string; name: string; cpf_masked: string | null; status: string | null }[] = [];
