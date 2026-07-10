@@ -1,11 +1,32 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, Plus, ChevronLeft, ChevronRight, ArrowLeft, CalendarPlus, ChevronDown } from "lucide-react";
 import { useMeetings, type MeetingRow } from "@/hooks/useMeetings";
 import { MEETING_STATUS_OPTIONS, statusLabel, type MeetingStatus } from "@/lib/meetings";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { MeetingDetailModal } from "@/components/agenda/MeetingDetailModal";
+
+// Ícones em SVG inline (sem a classe .lucide). Este app esconde TODOS os ícones
+// do lucide-react globalmente (ver src/index.css) e, em botões só-de-ícone,
+// exibe o texto do aria-label no lugar — foi o que fazia o chevron da navegação
+// virar o texto "Próxima semana" e estourar o container. SVG próprio não é
+// atingido por essa regra global, então renderiza normalmente e enquadrado.
+type IconProps = { size?: number; className?: string };
+function Svg({ size = 18, className, children }: IconProps & { children: ReactNode }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      {children}
+    </svg>
+  );
+}
+const IcCalendar = (p: IconProps) => <Svg {...p}><path d="M8 2v4M16 2v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></Svg>;
+const IcCalendarPlus = (p: IconProps) => <Svg {...p}><path d="M8 2v4M16 2v4M3 10h18M10 16h4M12 14v4" /><rect x="3" y="4" width="18" height="18" rx="2" /></Svg>;
+const IcPlus = (p: IconProps) => <Svg {...p}><path d="M5 12h14M12 5v14" /></Svg>;
+const IcArrowLeft = (p: IconProps) => <Svg {...p}><path d="M19 12H5M12 19l-7-7 7-7" /></Svg>;
+const IcChevronLeft = (p: IconProps) => <Svg {...p}><path d="m15 18-6-6 6-6" /></Svg>;
+const IcChevronRight = (p: IconProps) => <Svg {...p}><path d="m9 18 6-6-6-6" /></Svg>;
+const IcChevronDown = (p: IconProps) => <Svg {...p}><path d="m6 9 6 6 6-6" /></Svg>;
 
 // Papéis que enxergam a agenda de todos (o gate real é o RLS de `meetings`):
 // recepção, sócio e admin. Para os demais (advogado, gerente, tech etc.) o
@@ -182,14 +203,14 @@ export default function Agenda() {
       {/* TOP BAR */}
       <div className="agx-topbar">
         <button type="button" className="agx-back" onClick={() => navigate("/sistema")}>
-          <ArrowLeft size={16} /> Voltar ao painel
+          <IcArrowLeft size={16} /> Voltar ao painel
         </button>
         <div className="agx-title">
-          <span className="agx-title-ico"><CalendarDays size={19} /></span>
+          <span className="agx-title-ico"><IcCalendar size={19} /></span>
           <h1>{canFilterByLawyer ? "Agenda de Reuniões" : "Minha agenda"}</h1>
         </div>
         <button type="button" className="agx-primary" onClick={() => openCreate()}>
-          <Plus size={16} /> Nova reunião
+          <IcPlus size={16} /> Nova reunião
         </button>
       </div>
 
@@ -197,9 +218,9 @@ export default function Agenda() {
       <div className="agx-controls">
         <div className="agx-navgroup">
           <div className="agx-weeknav">
-            <button type="button" aria-label="Semana anterior" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d); }}><ChevronLeft size={18} /></button>
+            <button type="button" aria-label="Semana anterior" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d); }}><IcChevronLeft size={18} /></button>
             <span className="agx-range">{weekRangeLabel(days[0], days[days.length - 1])}</span>
-            <button type="button" aria-label="Próxima semana" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d); }}><ChevronRight size={18} /></button>
+            <button type="button" aria-label="Próxima semana" onClick={() => { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d); }}><IcChevronRight size={18} /></button>
           </div>
           <button type="button" className="agx-today" onClick={() => setAnchor(new Date())}>Hoje</button>
         </div>
@@ -212,7 +233,7 @@ export default function Agenda() {
                 <option value="">Todos os advogados</option>
                 {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
               </select>
-              <ChevronDown className="agx-chev" size={14} />
+              <IcChevronDown className="agx-chev" size={14} />
             </div>
           </div>
         )}
@@ -223,7 +244,7 @@ export default function Agenda() {
               <option value="">Todos os status</option>
               {MEETING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <ChevronDown className="agx-chev" size={14} />
+            <IcChevronDown className="agx-chev" size={14} />
           </div>
         </div>
       </div>
@@ -259,9 +280,9 @@ export default function Agenda() {
                   <div className="agx-empty"><span>Carregando…</span></div>
                 ) : items.length === 0 ? (
                   <div className="agx-empty">
-                    <CalendarDays size={26} />
+                    <IcCalendar size={26} />
                     <span>Sem reuniões</span>
-                    <button type="button" className="agx-add" onClick={() => openCreate(iso)}><CalendarPlus size={13} /> Agendar</button>
+                    <button type="button" className="agx-add" onClick={() => openCreate(iso)}><IcCalendarPlus size={13} /> Agendar</button>
                   </div>
                 ) : (
                   items.map((m) => (

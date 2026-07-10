@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import {
@@ -12,6 +11,23 @@ import {
 } from "@/lib/meetings";
 import { GOOGLE_SYNC_ENABLED, syncMeetingToGoogle } from "@/lib/googleCalendarSync";
 import { ClientAutocomplete } from "@/components/agenda/ClientAutocomplete";
+
+// Ícones em SVG inline (sem a classe .lucide) — este app esconde os ícones do
+// lucide-react globalmente (ver src/index.css) e mostra o texto do aria-label em
+// botões só-de-ícone (ex.: o "X" de fechar virava o texto "Fechar"). SVG próprio
+// não é atingido pela regra global.
+type IconProps = { size?: number };
+function Svg({ size = 16, children }: IconProps & { children: ReactNode }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+const IcX = (p: IconProps) => <Svg {...p}><path d="M18 6 6 18M6 6l12 12" /></Svg>;
+const IcTrash = (p: IconProps) => <Svg {...p}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></Svg>;
+const IcCalendarClock = (p: IconProps) => <Svg {...p}><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5M16 2v4M8 2v4M3 10h7M16 14v2l1.5 1.5" /><circle cx="16" cy="16" r="6" /></Svg>;
 
 interface Props {
   meeting: MeetingRow | null; // null = criação
@@ -121,7 +137,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface, #fff)", color: "var(--text1, #111)", borderRadius: 12, padding: 20, width: "min(560px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{isEdit ? "Editar reunião" : "Nova reunião"}</h2>
-          <button type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Fechar"><IcX size={18} /></button>
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
@@ -174,7 +190,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
             else toast.info(r.message ?? "Integração Google Agenda ainda não configurada.");
           }}
           style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, opacity: GOOGLE_SYNC_ENABLED && isEdit ? 1 : 0.5, cursor: GOOGLE_SYNC_ENABLED && isEdit ? "pointer" : "not-allowed" }}>
-          <CalendarClock size={16} /> Sincronizar com Google Agenda
+          <IcCalendarClock size={16} /> Sincronizar com Google Agenda
         </button>
 
         {isEdit && meeting?.client_id && (
@@ -211,7 +227,7 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
           <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8 }}>Cancelar</button>
           {isEdit && canDelete && (
             <button type="button" onClick={remove} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, color: "#DC2626" }}>
-              <Trash2 size={16} /> Excluir
+              <IcTrash size={16} /> Excluir
             </button>
           )}
         </div>
