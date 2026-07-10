@@ -33,6 +33,7 @@ import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
+import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import {
   type IntentCategory, INTENT_CLASSIFIER_RULES, FAST_REPLY_SYSTEM,
   NEED_INFO_SYSTEM, NEED_INFO_OCR_NOTE,
@@ -137,6 +138,21 @@ const CHAT_READ_TOOLS_ENABLED = (Deno.env.get("CHAT_READ_TOOLS_ENABLED") ?? "tru
 // CHAT_TOOLS_ENABLED (que segue OFF): deployar não muda nada até esta flag ligar.
 const CHAT_DOC_CHECKLIST_ENABLED = (Deno.env.get("CHAT_DOC_CHECKLIST_ENABLED") ?? "false") === "true";
 const DOC_CHECKLIST_TOOL = "solicitar_checklist_documental";
+// AGENDA-CHAT: ciclo da Agenda pelo chat. O DETECTOR é SEMPRE-ligado (curto-circuita
+// o roteamento p/ agendamento/ciclo nunca virar peça/.docx). Esta flag controla só
+// cartão interativo vs. mensagem estática — os cartões chegam nas fases D/E.
+const AGENDA_CHAT_ENABLED = (Deno.env.get("AGENDA_CHAT_ENABLED") ?? "false") === "true";
+// Pode o usuário criar/alterar reunião? Chama meetings_can_create() sob o JWT do
+// usuário (predicado recepção-only de prod). Erro/ausência -> false (fail-closed;
+// a RPC segue como barreira final). NÃO usa service-role: meetings_can_create usa
+// auth.uid(), que é NULL sob service-role.
+async function userCanCreateMeetings(supabaseUrl: string, anonKey: string, token: string): Promise<boolean> {
+  try {
+    const jwt = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data, error } = await jwt.rpc("meetings_can_create");
+    return !error && data === true;
+  } catch (_e) { return false; }
+}
 // Card 4.1 — escrita de tarefa pelo chat é DESACOPLADA do tool-calling (CHAT_TOOLS OFF).
 // Flag dedicada, reversível. Default ON.
 const TAREFA_CHAT_ENABLED = (Deno.env.get("TAREFA_CHAT_ENABLED") ?? "true") === "true";
@@ -2953,6 +2969,45 @@ serve(async (req) => {
       });
       await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
       return json(202, { runId: cadRunId, sessionId: body.sessionId, status: "done", path: "cadastro_form", intent: "ACAO_COM_TOOL" });
+    }
+
+    // ─── AGENDA-CHAT (Fase 0): detector SEMPRE-ligado, curto-circuita o roteamento ─
+    // Impede que "agendar/confirmar/cancelar/reagendar reunião" caia no classificador
+    // e vire peça/.docx (bug do misroute). A flag AGENDA_CHAT_ENABLED controla só
+    // cartão vs. mensagem estática; os cartões (reuniao_confirm/reuniao_acao) chegam
+    // nas fases D/E. Precedência: AÇÃO antes de AGENDAR ("marca como realizada" é flip
+    // de status, não novo agendamento). Permissão (recepção-only) barrada de cara; a
+    // RPC segue como barreira final.
+    {
+      const isAcao = isReuniaoAcaoRequest(body.message);
+      const isAgendar = !isAcao && isAgendarAtendimentoRequest(body.message);
+      if (isAgendar || isAcao) {
+        const kindPath = isAgendar ? "reuniao_confirm" : "reuniao_acao";
+        const { data: agRun, error: agErr } = await admin.from("orchestration_runs").insert({
+          session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+          original_message: body.message, status: "done", entry_agent_id: agent.id,
+          intent_category: "ACAO_COM_TOOL", route_path: "fast",
+          chain: [{ level: 0, path: kindPath, intent: "ACAO_COM_TOOL", agent: agent.name }],
+        }).select("id").single();
+        if (agErr || !agRun) return errResp(500, "db_error", `Falha ao criar run: ${agErr?.message}`);
+        const agRunId = (agRun as { id: string }).id;
+
+        const canCreate = await userCanCreateMeetings(supabaseUrl, anonKey, token);
+        const seq = await nextSeq(admin, body.sessionId);
+        // Cartões chegam nas fases D/E; até lá, com permissão orientamos a Agenda.
+        const content = !canCreate
+          ? "Agendamentos e alterações de reunião são feitos pela recepção — você não tem permissão para isso. Posso registrar uma solicitação para a recepção, se quiser."
+          : AGENDA_CHAT_ENABLED
+            ? "Para marcar ou alterar uma reunião, use a Agenda de Reuniões. (O fluxo pelo chat está sendo finalizado.)"
+            : "Para marcar ou alterar uma reunião, abra a Agenda de Reuniões.";
+        await admin.from("chat_messages").insert({
+          session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+          content, sequence_number: seq,
+          metadata: { kind: "final", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+        });
+        await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+        return json(202, { runId: agRunId, sessionId: body.sessionId, status: "done", path: kindPath, intent: "ACAO_COM_TOOL" });
+      }
     }
 
     // ─── TAREFA-CHAT (4.1): cartão de confirmação editável, sem tool-calling ──────
