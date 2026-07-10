@@ -224,6 +224,13 @@ export function isCadastroClienteRequest(message: string): boolean {
   // casa isTarefaChatRequest, então não regride. Independe de TAREFA_CHAT_ENABLED:
   // a presença de "cliente" não deve, por si só, disparar cadastro sob verbo de tarefa.
   if (isTarefaChatRequest(m)) return false;
+  // DOC-CHECKLIST (6.3): pedido de checklist/pendência documental NUNCA é cadastro,
+  // mesmo com "cliente" + verbo (ex.: "registre a pendência dos documentos do cliente
+  // X" casava CADASTRO_ALVO+VERBO e abria o form). Espelha o guard de TAREFA e vem
+  // ANTES do CADASTRO_NEGATIVE/FRASE/ALVO+VERBO. Independe de CHAT_DOC_CHECKLIST_ENABLED:
+  // mesmo com a escrita do checklist desligada, a frase não deve abrir o cadastro —
+  // deve seguir para a cadeia completa (onde o agente descreve/lê).
+  if (isDocChecklistRequest(m)) return false;
   // "quero ver os dados do cliente" é consulta → nunca dispara o form.
   if (CADASTRO_NEGATIVE_RE.test(m)) return false;
   if (CADASTRO_FRASE_RE.test(m)) return true;
@@ -246,6 +253,24 @@ export function isTarefaChatRequest(message: string): boolean {
   if (TAREFA_CONSULTA_RE.test(m)) return false;
   if (TAREFA_ALVO_RE.test(m) && TAREFA_VERBO_RE.test(m)) return true;
   return TAREFA_ACAO_PRAZO_RE.test(m);
+}
+
+// ─── DOC-CHECKLIST (card 6.3): precedência sobre CADASTRO ─────────────────────
+// Um pedido de "checklist / pendência documental" NUNCA é cadastro de cliente,
+// mesmo contendo "cliente" + verbo (ex.: "registre a pendência dos documentos
+// do cliente X" casava CADASTRO_ALVO+VERBO e abria o form). Espelha o guard de
+// TAREFA. INDEPENDE de CHAT_DOC_CHECKLIST_ENABLED — a frase não deve abrir o
+// cadastro nem quando a escrita do checklist está desligada.
+const DOCCHK_ALVO_RE     = /\b(checklist|documenta[çc][ãa]o|documentos?|comprovant\w*|extrato)\b/i;
+const DOCCHK_INTENT_RE   = /\b(pend[êe]ncia\w*|checklist|solicit\w*|ped\w*|mont\w*|junt\w*|exig\w*|falt\w*|registr\w*)\b/i;
+// consulta de documentos ("quais documentos do cliente?") NÃO é checklist
+const DOCCHK_NEGATIVE_RE = /\b(qual|quais|status|ver (os )?documentos?|mostr\w* (os )?documentos?|dados do)\b/i;
+
+export function isDocChecklistRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  if (DOCCHK_NEGATIVE_RE.test(m)) return false;
+  return DOCCHK_ALVO_RE.test(m) && DOCCHK_INTENT_RE.test(m);
 }
 
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451

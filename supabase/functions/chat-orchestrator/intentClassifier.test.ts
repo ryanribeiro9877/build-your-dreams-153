@@ -3,6 +3,7 @@ import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
+  isDocChecklistRequest,
 } from "./intentClassifier.ts";
 
 // ─── CADASTRO-MODELO-A: disparo do formulário (isCadastroClienteRequest) ──────
@@ -53,6 +54,33 @@ Deno.test("isTarefaChatRequest: NÃO confunde com cadastro de cliente", () => {
 Deno.test("isTarefaChatRequest: NÃO confunde com consulta", () => {
   assertEquals(isTarefaChatRequest("quais as tarefas do time hoje?"), false);
   assertEquals(isTarefaChatRequest("mostra as tarefas atrasadas"), false);
+});
+
+// ─── DOC-CHECKLIST (card 6.3): precedência sobre CADASTRO (isDocChecklistRequest) ──
+const BUG_FRASE = "Para o cliente Joao Teste da Silva, registre a pendência dos documentos: RG, comprovante de residência e extrato do empréstimo.";
+Deno.test("DOC-CHECKLIST: a frase que abriu o cadastro indevidamente NÃO é mais cadastro", () => {
+  // Regressão do bug reproduzido em produção: "cliente" + "registre" casava
+  // CADASTRO_ALVO+VERBO e abria o form; agora o guard de checklist barra.
+  assertEquals(isCadastroClienteRequest(BUG_FRASE), false);
+  assertEquals(isDocChecklistRequest(BUG_FRASE), true);
+});
+Deno.test("DOC-CHECKLIST: cadastro genuíno segue funcionando (não regride)", () => {
+  assertEquals(isCadastroClienteRequest("cadastra o cliente João Silva"), true);
+  assertEquals(isCadastroClienteRequest("quero cadastrar um cliente"), true);
+  assertEquals(isCadastroClienteRequest("novo cliente pessoa física"), true);
+  assertEquals(isDocChecklistRequest("cadastra o cliente João Silva"), false);
+});
+Deno.test("DOC-CHECKLIST: consulta de documentos NÃO é checklist", () => {
+  assertEquals(isDocChecklistRequest("quais os documentos do cliente X?"), false);
+});
+Deno.test("DOC-CHECKLIST: tarefa segue intacta (precedência de tarefa preservada)", () => {
+  assertEquals(isCadastroClienteRequest("cria uma tarefa pra ligar pro cliente amanhã às 9h"), false);
+  assertEquals(isTarefaChatRequest("cria uma tarefa pra ligar pro cliente amanhã às 9h"), true);
+  assertEquals(isDocChecklistRequest("cria uma tarefa pra ligar pro cliente amanhã às 9h"), false);
+});
+Deno.test("DOC-CHECKLIST: variações de checklist escapam do cadastro", () => {
+  assertEquals(isCadastroClienteRequest("Monte a checklist de documentos do atendimento do cliente Y"), false);
+  assertEquals(isCadastroClienteRequest("solicite os documentos RG e comprovante do cliente Z"), false);
 });
 
 // ─── normalizeIntent: assimetria dupla (default seguro = NEGOCIO_COM_INSUMO) ──
