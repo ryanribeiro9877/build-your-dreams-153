@@ -4,7 +4,13 @@ import { CalendarDays, Plus, ChevronLeft, ChevronRight, ArrowLeft, CalendarPlus,
 import { useMeetings, type MeetingRow } from "@/hooks/useMeetings";
 import { MEETING_STATUS_OPTIONS, statusLabel, type MeetingStatus } from "@/lib/meetings";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useAuth } from "@/hooks/useAuth";
 import { MeetingDetailModal } from "@/components/agenda/MeetingDetailModal";
+
+// Papéis que enxergam a agenda de todos (o gate real é o RLS de `meetings`).
+// Para os demais (ex.: advogado), o seletor "Todos os advogados" seria
+// enganoso — só veriam a si mesmos — então escondemos o filtro por advogado.
+const ROLES_VE_TODAS_AGENDAS = ["admin", "director", "socio", "manager", "receptionist", "tech"];
 
 // Cor de acento por status (semântica; independe do tema claro/escuro).
 const STATUS_COLOR: Record<MeetingStatus, string> = {
@@ -125,6 +131,9 @@ const CSS = `
 
 export default function Agenda() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  // Advogado (e afins) vê só a própria agenda → sem seletor por advogado.
+  const canFilterByLawyer = ROLES_VE_TODAS_AGENDAS.some((r) => hasRole(r));
   const [anchor, setAnchor] = useState(() => new Date());
   const [lawyerId, setLawyerId] = useState<string>("");
   const [status, setStatus] = useState<MeetingStatus | "">("");
@@ -168,7 +177,7 @@ export default function Agenda() {
         </button>
         <div className="agx-title">
           <span className="agx-title-ico"><CalendarDays size={19} /></span>
-          <h1>Agenda de Reuniões</h1>
+          <h1>{canFilterByLawyer ? "Agenda de Reuniões" : "Minha agenda"}</h1>
         </div>
         <button type="button" className="agx-primary" onClick={() => openCreate()}>
           <Plus size={16} /> Nova reunião
@@ -186,16 +195,18 @@ export default function Agenda() {
           <button type="button" className="agx-today" onClick={() => setAnchor(new Date())}>Hoje</button>
         </div>
         <div className="agx-spacer" />
-        <div className="agx-field">
-          <label htmlFor="agx-adv">Advogado</label>
-          <div className="agx-select">
-            <select id="agx-adv" value={lawyerId} onChange={(e) => setLawyerId(e.target.value)}>
-              <option value="">Todos os advogados</option>
-              {assignableUsers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
-            </select>
-            <ChevronDown className="agx-chev" size={14} />
+        {canFilterByLawyer && (
+          <div className="agx-field">
+            <label htmlFor="agx-adv">Advogado</label>
+            <div className="agx-select">
+              <select id="agx-adv" value={lawyerId} onChange={(e) => setLawyerId(e.target.value)}>
+                <option value="">Todos os advogados</option>
+                {assignableUsers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
+              </select>
+              <ChevronDown className="agx-chev" size={14} />
+            </div>
           </div>
-        </div>
+        )}
         <div className="agx-field">
           <label htmlFor="agx-status">Status</label>
           <div className="agx-select">

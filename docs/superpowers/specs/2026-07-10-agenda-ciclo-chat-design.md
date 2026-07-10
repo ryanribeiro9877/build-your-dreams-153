@@ -28,19 +28,33 @@ introspecção (não pela migration do repo — ver "Divergência repo↔prod"):
   - `create_meeting: horário fora do expediente (dia útil/janela/feriado)`
   - `create_meeting: sem permissão (apenas recepção)` (idem `update_meeting:`)
   - `update_meeting: "<status>" é estado final e não pode ser alterado`
-- **Capacidade real em prod é 2** (`business_hours_config.max_parallel` default 2), não 1 como dizia o briefing.
-  O valor efetivo vem sempre da config; nunca cravar no código.
+- **Capacidade efetiva em prod = 1** (`business_hours_config`, linha `id=true`, `max_parallel=1`). O *default da
+  coluna* é 2, mas não é o valor vigente. O valor efetivo vem sempre da config; nunca cravar no código.
 
-### Divergência repo↔prod (registrada, fora de escopo)
+### Divergência repo↔prod (load-bearing — decisão do dono pendente)
 
-As migrations do repo (`20260709120100_meetings_rpcs_5_1.sql`, `..._5_2.sql`) definem
-`create_meeting`/`update_meeting` usando `meetings_can_access()` — que **inclui advogado** (`rt.code LIKE 'adv_%'`) —
-e **não** existe `meetings_can_create` no repo. Só **produção** tem `meetings_can_create` (recepção-only), porque a
-Agenda em prod foi criada por outra sessão (ver memória "TRILHA B Agenda duplicidade produção").
+Estado **verificado em produção** (introspecção em 2026-07-10):
 
-Consequência: **o aceite #5 depende do estado de produção.** Se um dia reconciliarem o schema aplicando as
-migrations do repo, `create_meeting`/`update_meeting` passariam a aceitar advogado e o #5 afrouxaria. Este spec
-**não** corrige isso (sem DDL, não mexer no schema alheio). Fica como risco anotado.
+| Objeto | Repo (migrations 5.1/5.2) | Produção |
+|---|---|---|
+| `create_meeting` / `update_meeting` (gate) | `meetings_can_access()` (inclui `adv_%`) | `meetings_can_create()` (recepção/sócio/admin — **exclui advogado**) |
+| `meetings_can_create` | **não existe** | existe |
+| Policy de leitura de `meetings` | `USING (meetings_can_access())` | `USING (meetings_can_create() OR lawyer_user_id = auth.uid())` (R3: advogado vê só a própria agenda) |
+
+**Consequência (por que é load-bearing):** o aceite #5 (advogado bloqueado), a regra 4 e a R3 dependem de objetos
+que **só existem em produção** e **não têm representação no repo**. Se alguém reconciliar o schema aplicando as
+migrations do repo, reverte recepção-only e a visão-própria do advogado → **regressão de segurança**.
+
+**Fato que corrige o review:** os "espelhos" dessas mudanças de prod **não existem como arquivo** em lugar nenhum
+(conferido: nenhum worktree, `git log --all` vazio para `recepcao_only`/`adv_own_only`). Só
+`20260709210000_trilha_b_fix_assignee_realtime.sql` existe (e já está commitado). A outra sessão aplicou direto em
+prod via MCP `apply_migration`, sem gerar arquivo. Logo, reconciliar **não** é `git add` — é **autorar** migrations
+`CREATE OR REPLACE` fiéis ao def exato de prod (`meetings_can_create`, os dois gates recepção-only, a policy de
+leitura R3).
+
+**Status:** decisão do dono (marcada como "dedup escalada" na memória). Fora do escopo deste spec por padrão
+(chat feature). Se autorizado, vira um **passo separado** no plano: gerar as migrations a partir do def real de
+produção (nunca à mão), commitar sem `db push` (já aplicadas). Ver "Correção 0" no review de 2026-07-10.
 
 ## Decisões (do dono)
 
@@ -67,10 +81,36 @@ mensagem do usuário
      (a RPC de prod aplica recepção-only + capacidade + janela + máquina de estados)
 ```
 
-**Gate:** flag nova **`AGENDA_CHAT_ENABLED`** (default **OFF**), lida em `index.ts` como
-`(Deno.env.get("AGENDA_CHAT_ENABLED") ?? "false") === "true"`. Espelha `TAREFA_CHAT_ENABLED`. Nada muda em
-produção até o dono ligar. A escrita real acontece client-side (JWT/RLS), então **não** depende de
-`CHAT_TOOLS_ENABLED`.
+### Fase 0 — detector SEMPRE-ligado (desacoplado do flag) [corrige bug atual]
+
+O detector determinístico + curto-circuito de roteamento roda **SEMPRE**, independente de qualquer flag. O flag
+`AGENDA_CHAT_ENABLED` controla **apenas** se a recepção recebe o **cartão interativo** ou uma **mensagem estática**.
+Isso incorpora o `FIX-CHAT-AGENDAMENTO-MISROUTE-PERMISSAO.md` como fase 0: entrega valor (mata o misroute) **sem**
+ligar a feature.
+
+Motivo: se o detector ficasse atrás do flag (como o `tarefa_confirm` fica atrás de `TAREFA_CHAT_ENABLED`), com o
+flag OFF "agendar reunião" cairia no classificador → Especialista de Confecção → **gera peça/.docx** (o bug
+reportado em 2026-07-10). O detector sempre-ligado garante que agendamento **nunca** chegue à trilha de peça.
+
+Comportamento do detector (nesta ordem, antes do classificador):
+
+1. Não reconheceu intenção de agendamento/ciclo → segue o fluxo normal (classificador). Detector **conservador**
+   (ver testes de falso-positivo) para não sequestrar pedido real de peça.
+2. Reconheceu, mas usuário **não é recepção/sócio/admin** (checagem de papel **no detector**, espelhando o
+   predicado de `meetings_can_create`: `role_templates.code ∈ {socio, lider_recepcao, recepcionista,
+   estagiaria_recepcao}` OU `is_master_admin` OU `has_role('admin')`) → **mensagem de permissão de cara**
+   ("Agendamentos são feitos pela recepção — você não tem permissão. Posso avisar a recepção ou registrar uma
+   solicitação."). **Sem cartão, sem peça, sem anunciar delegação fantasma** ("vou acionar o Especialista…").
+3. Reconheceu, usuário autorizado, **`AGENDA_CHAT_ENABLED` OFF** → mensagem estática ("Abra a Agenda de Reuniões
+   para marcar/alterar."). Sem cartão, sem peça.
+4. Reconheceu, usuário autorizado, **`AGENDA_CHAT_ENABLED` ON** → cartão `reuniao_confirm` / `reuniao_acao`.
+
+A checagem de papel no edge usa o `admin` client filtrando por `userId` (`profiles ⋈ role_templates`), computando
+o predicado em código (a confirmar os codes exatos na implementação).
+
+**Gate:** flag **`AGENDA_CHAT_ENABLED`** (default **OFF**), lida como
+`(Deno.env.get("AGENDA_CHAT_ENABLED") ?? "false") === "true"`. Controla **só** o passo 4 (card vs. estático). A
+escrita real acontece client-side (JWT/RLS), então **não** depende de `CHAT_TOOLS_ENABLED`.
 
 ### Fluxo A — Agendar (`kind: "reuniao_confirm"`)
 
@@ -136,8 +176,10 @@ No `catch` do confirm de ambos os cards, traduzir a mensagem crua da RPC para li
 **Edge (`supabase/functions/chat-orchestrator/`):**
 - `meetingDraft.ts` — **novo**. `buildMeetingDraftPrompt`, `normalizeMeetingDraft`, `parseReuniaoAcao` (verbo→status),
   `buildAcaoPrompt`. Reusa `nowLocalWall` de `taskDraft.ts` (exportar/compartilhar). **Sem** conversão de fuso.
-- `index.ts` — 2 detectores determinísticos (`isAgendarAtendimentoRequest`, `isReuniaoAcaoRequest`) e 2 blocos
-  fast-path ao lado do `tarefa_confirm`, atrás de `AGENDA_CHAT_ENABLED`; resolver de reunião (read, JWT); declarar a flag.
+- `index.ts` — 2 detectores determinísticos (`isAgendarAtendimentoRequest`, `isReuniaoAcaoRequest`) **sempre-ligados**
+  (Fase 0) + curto-circuito de roteamento; checagem de papel no edge (recepção/sócio/admin); 2 blocos fast-path
+  (cartão) atrás de `AGENDA_CHAT_ENABLED`; resolver de reunião (read, JWT); declarar a flag. Remover qualquer texto
+  de "delegação fantasma" no caminho de agendamento.
 - `tools/registry.ts` + `tools/handlers.ts` — **remover** `agendar_reuniao` (tool + case). Ajustar
   `toolSchemas.test.ts` se referenciar a tool.
 
@@ -157,11 +199,23 @@ No `catch` do confirm de ambos os cards, traduzir a mensagem crua da RPC para li
 - **Unit (Deno)** `meetingDraft.test.ts`: `normalizeMeetingDraft` (campos ausentes → null; formatos date/time;
   overflow rejeitado); `parseReuniaoAcao` (cada verbo → status certo; ruído → null); âncora "amanhã/hoje" via
   `nowLocalWall` (sem fuso, sem "Z").
+- **Unit (Deno)** detector (Fase 0): reconhece intenções de agendamento/ciclo; **falso-positivo** — pedidos de peça
+  ("petição inicial", "contestação", "recurso") e outras ações **não** são capturados (não sequestra a Confecção).
 - **Componente** (Vitest/RTL): `ReuniaoConfirmCard` (0/1/N cliente; slot cheio → sugestão; só cria uma vez);
   `ReuniaoAcaoCard` (status vs reschedule; N candidatos; estado final travado mostra msg amigável).
 - **Aceite manual** com `AGENDA_CHAT_ENABLED=on` (todos os 7 critérios abaixo).
 
-## Critérios de aceite (com `AGENDA_CHAT_ENABLED=on`)
+## Critérios de aceite
+
+**Fase 0 (com `AGENDA_CHAT_ENABLED` OFF — o estado atual de prod):**
+
+0a. Advogado pede "agendar reunião" → **mensagem de permissão** no detector; **nenhum .docx/peça**;
+   `orchestration_runs.intent` = agendamento (não peça). Não renderiza cartão.
+0b. Recepção pede "agendar reunião" → mensagem estática "abra a Agenda"; **nenhuma peça**, nenhum cartão.
+0c. Pedido real de peça (ex.: "faz uma petição inicial de…") continua indo à Confecção — **sem regressão**
+   (detector conservador; testes de falso-positivo).
+
+**Feature completa (com `AGENDA_CHAT_ENABLED=on`):**
 
 1. "agenda um atendimento pro cliente João amanhã 10h" → card → confirmar → linha em `meetings` com `client_id`
    resolvido, `start_time=10:00`, `status=scheduled`; aparece na Agenda.
@@ -169,12 +223,23 @@ No `catch` do confirm de ambos os cards, traduzir a mensagem crua da RPC para li
 3. "marca como realizada" / "cancela" / "não compareceu" → status correto; terminais bloqueiam nova transição
    (mensagem amigável).
 4. "reagenda pra 14h" → `start_time=14:00`, slot revalidado.
-5. Advogado logado tentando qualquer uma → bloqueado (recepção-only, via RPC de prod), mensagem amigável.
+5. Advogado logado tentando qualquer uma → **não vê o cartão**: recebe a mensagem de permissão **no detector**
+   (não erro no Confirmar). A RPC de prod (recepção-only) permanece como segunda barreira.
 6. Slot cheio → chat sugere próximo horário livre (não repassa erro cru).
 7. Nenhum CPF em claro em logs / `chat_messages` (mascarado no edge antes de persistir).
 
+## Ordem sugerida (implementação)
+
+1. **Correção 0** (se autorizada pelo dono) — autorar as migrations-espelho a partir do def real de prod e commitar
+   (sem `db push`). Fecha a divergência e blinda regra 4 / R3.
+2. **Fase 0** — detector sempre-ligado + permissão de cara. Mata o misroute de hoje **sem** ligar a feature.
+3. **Correção de texto** (capacidade = 1; sem delegação fantasma).
+4. **Feature completa** (cartões `reuniao_confirm` / `reuniao_acao`) atrás de `AGENDA_CHAT_ENABLED`, ligada quando o
+   dono quiser.
+
 ## Fora de escopo (YAGNI)
 
-- Reconciliar a divergência repo↔prod das RPCs (sem DDL).
+- Reconciliar a divergência repo↔prod (Correção 0): **pendente de decisão do dono** — só entra se autorizado
+  (marcada como "dedup escalada" na memória). Se não, permanece como risco documentado.
 - Write-tools agênticas de reunião no registry (substituídas pelo fast-path).
 - Seletor visual rico de calendário no chat (a tela continua sendo o controle fino; o chat é atalho).
