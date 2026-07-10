@@ -83,6 +83,13 @@ describe("ReuniaoConfirmCard", () => {
     expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
   });
 
+  it("cliente não cadastrado (prospect) -> bloqueia com motivo (exige cadastrado)", async () => {
+    const d = { ...baseDraft, client_resolved: null, client_candidates: [], client_query: "Fulano" };
+    render(<ReuniaoConfirmCard draft={d as never} />);
+    await waitFor(() => expect(screen.getByText(/vincule um cliente cadastrado/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
+  });
+
   it("preenche telefone com o número marcado como WhatsApp (prioridade pessoal>residencial>comercial)", async () => {
     h.clientPhones = {
       phone: "(71) 90000-0001", phone_is_whatsapp: false,

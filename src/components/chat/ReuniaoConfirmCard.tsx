@@ -24,6 +24,7 @@ function friendlyError(msg: string): string {
   if (/slot cheio \(capacidade/i.test(msg)) return "Esse horário está cheio.";
   if (/fora do expediente/i.test(msg)) return "Fora do expediente (dia útil, janela ou feriado). Escolha outro horário.";
   if (/apenas recep/i.test(msg)) return "Só a recepção pode agendar reuniões.";
+  if (/advogado.*obrigat/i.test(msg)) return "Selecione o advogado responsável.";
   if (/estado final/i.test(msg)) return "Essa reunião já foi finalizada e não pode mudar.";
   return msg;
 }
@@ -121,19 +122,22 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
       ? "Sem horários nesse dia (fim de semana, feriado ou fora do expediente). Escolha outra data."
       : "Esse horário não está disponível (fora da janela ou já ocupado). Escolha um dos horários livres.";
 
-  // Correção 4+6: só confirma com campos em estado REAL (sem placeholder). Advogado
-  // e Tipo obrigatórios; se houve ambiguidade de cliente (candidatos > 0), precisa
-  // escolher um (não pode "Sem cliente"). Prospect (0 candidatos + nome livre) segue
-  // permitido sem client_id (decisão da PR #92) — a confirmar com o dono.
-  const clientRequired = draft.client_candidates.length > 0;
+  // Correção 4+6: só confirma com campos em estado REAL (sem placeholder). Advogado,
+  // Tipo e Cliente CADASTRADO obrigatórios (decisão do dono: agendamento pelo chat
+  // exige client_id — sem nome livre/prospect aqui; o modal manual da Agenda segue
+  // permitindo prospect). Havendo ambiguidade (candidatos > 0), escolher um; sem
+  // candidatos (não cadastrado), precisa cadastrar/vincular antes.
   const lawyerOk = !!lawyer;
   const typeOk = !!type;
-  const clientOk = !clientRequired || !!clientId;
+  const clientOk = !!clientId;
   const canConfirm = !!date && timeOffered && lawyerOk && typeOk && clientOk && !busy;
   const confirmBlockReason =
     !lawyerOk ? "Selecione o advogado responsável."
     : !typeOk ? "Selecione o tipo de atendimento."
-    : !clientOk ? "Escolha o cliente entre os candidatos listados."
+    : !clientOk
+      ? (draft.client_candidates.length > 0
+          ? "Escolha o cliente entre os candidatos listados."
+          : "Vincule um cliente cadastrado antes de agendar.")
     : null;
 
   const confirm = async () => {
@@ -142,8 +146,7 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
     try {
       await createMeeting({
         p_scheduled_date: date, p_start_time: time,
-        p_client_id: clientId ?? undefined,
-        p_client_name: !clientId && draft.client_query ? draft.client_query : undefined,
+        p_client_id: clientId ?? undefined, // cliente cadastrado obrigatório (canConfirm garante)
         p_type: type || undefined, p_lawyer_user_id: lawyer || undefined,
         p_phone: phone || undefined, p_status: "scheduled",
       });

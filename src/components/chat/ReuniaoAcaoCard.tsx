@@ -14,6 +14,7 @@ function friendlyError(msg: string): string {
   if (/slot cheio \(capacidade/i.test(msg)) return "Esse horário está cheio.";
   if (/fora do expediente/i.test(msg)) return "Fora do expediente (dia útil, janela ou feriado).";
   if (/apenas recep/i.test(msg)) return "Só a recepção pode alterar reuniões.";
+  if (/advogado.*obrigat/i.test(msg)) return "Essa reunião não tem advogado. Defina o advogado responsável na Agenda antes de confirmar/reagendar.";
   if (/estado final/i.test(msg)) return "Essa reunião já foi finalizada e não pode mudar.";
   return msg;
 }

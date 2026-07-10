@@ -82,6 +82,12 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
 
   const save = async () => {
     if (!scheduledDate || !startTime) { toast.error("Data e horário são obrigatórios."); return; }
+    // Advogado responsável obrigatório para reuniões ativas (espelha create_meeting/
+    // update_meeting no banco). Estados terminais (cancelar/realizada/não-compareceu)
+    // não exigem — permite fechar o ciclo de reuniões antigas sem advogado.
+    if (["scheduled", "confirmed", "rescheduled"].includes(status) && !lawyerId) {
+      toast.error("Selecione o advogado responsável."); return;
+    }
     setSaving(true);
     try {
       if (isEdit && meeting) {
