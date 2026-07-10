@@ -3,15 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { CalendarDays, Plus, ChevronLeft, ChevronRight, ArrowLeft, CalendarPlus, ChevronDown } from "lucide-react";
 import { useMeetings, type MeetingRow } from "@/hooks/useMeetings";
 import { MEETING_STATUS_OPTIONS, statusLabel, type MeetingStatus } from "@/lib/meetings";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
-import { useAuth } from "@/hooks/useAuth";
+import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { MeetingDetailModal } from "@/components/agenda/MeetingDetailModal";
 
 // Papéis que enxergam a agenda de todos (o gate real é o RLS de `meetings`):
 // recepção, sócio e admin. Para os demais (advogado, gerente, tech etc.) o
 // seletor "Todos os advogados" seria enganoso — só veriam a si mesmos —,
 // então escondemos o filtro por advogado.
-const ROLES_VE_TODAS_AGENDAS = ["admin", "director", "socio", "receptionist"];
+// Papéis (role_templates.code) que enxergam TODAS as agendas — os que agendam:
+// sócio + recepção. Critério por role_template.code para bater 1:1 com o RLS
+// (meetings_can_access / is_recepcao_or_socio), não pelo enum app_role.
+const ROLE_CODES_VE_TODAS_AGENDAS = ["socio", "lider_recepcao", "recepcionista"];
 
 // Cor de acento por status (semântica; independe do tema claro/escuro).
 const STATUS_COLOR: Record<MeetingStatus, string> = {
@@ -132,9 +135,14 @@ const CSS = `
 
 export default function Agenda() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { workspace } = useMyWorkspace();
   // Advogado (e afins) vê só a própria agenda → sem seletor por advogado.
-  const canFilterByLawyer = ROLES_VE_TODAS_AGENDAS.some((r) => hasRole(r));
+  // Decisão pelo role_templates.code (mesmo modelo do RLS), incluindo admin/master.
+  const roleCode = workspace?.role_template?.code ?? null;
+  const canFilterByLawyer =
+    (roleCode !== null && ROLE_CODES_VE_TODAS_AGENDAS.includes(roleCode)) ||
+    workspace?.is_master === true ||
+    workspace?.role_template?.is_admin === true;
   const [anchor, setAnchor] = useState(() => new Date());
   const [lawyerId, setLawyerId] = useState<string>("");
   const [status, setStatus] = useState<MeetingStatus | "">("");
@@ -151,7 +159,7 @@ export default function Agenda() {
   const from = toISO(days[0]);
   const to = toISO(days[days.length - 1]);
 
-  const { users: assignableUsers } = useAssignableUsers();
+  const { lawyers } = useMeetingLawyers();
   const { meetings, loading, error, refresh } = useMeetings({
     from, to,
     lawyerId: lawyerId || undefined,
@@ -202,7 +210,7 @@ export default function Agenda() {
             <div className="agx-select">
               <select id="agx-adv" value={lawyerId} onChange={(e) => setLawyerId(e.target.value)}>
                 <option value="">Todos os advogados</option>
-                {assignableUsers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
+                {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
               </select>
               <ChevronDown className="agx-chev" size={14} />
             </div>
