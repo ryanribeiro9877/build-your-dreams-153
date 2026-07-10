@@ -16,10 +16,10 @@ import {
 } from "@/components/clients/tabs/relationalTabs";
 import { PecasTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
 import { HistoricoTab } from "@/components/clients/tabs/historicoTab";
+import { AudienciasTab } from "@/components/clients/tabs/audienciasTab";
 
 // Empty-states honestos — abas sem fonte de dado própria hoje (§3).
 const ReunioesTab = () => <EmptyState icon="👥" title="Nenhuma reunião registrada" hint="Quando houver uma fonte de reuniões no sistema, elas aparecem aqui." />;
-const AudienciasTab = () => <EmptyState icon="⚖" title="Nenhuma audiência registrada" hint="Quando houver uma fonte de audiências no sistema, elas aparecem aqui." />;
 const ProtocolosTab = () => <EmptyState icon="🗎" title="Nenhum protocolo registrado" hint="Quando houver uma fonte de protocolos no sistema, eles aparecem aqui." />;
 
 // Shell das 16 abas, na ordem do card. Cada aba renderiza sob demanda

@@ -87,6 +87,7 @@ const MyInbox = lazyWithRetry(() => import("./pages/MyInbox.tsx"));
 const TeamDashboard = lazyWithRetry(() => import("./pages/TeamDashboard.tsx"));
 const KanbanBoard = lazyWithRetry(() => import("./pages/KanbanBoard.tsx"));
 const Agenda = lazyWithRetry(() => import("./pages/Agenda.tsx"));
+const Audiencias = lazyWithRetry(() => import("./pages/Audiencias.tsx"));
 const AssignTask = lazyWithRetry(() => import("./pages/AssignTask.tsx"));
 const ValidationQueue = lazyWithRetry(() => import("./pages/ValidationQueue.tsx"));
 const CronJobs = lazyWithRetry(() => import("./pages/CronJobs.tsx"));
@@ -215,6 +216,7 @@ const App = () => (
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />
               <Route path="/sistema/kanban" element={<ProtectedRoute><KanbanBoard /></ProtectedRoute>} />
               <Route path="/sistema/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
+              <Route path="/sistema/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
               <Route path="/sistema/equipe/atribuir" element={<ProtectedRoute><AssignTask /></ProtectedRoute>} />
               <Route path="/sistema/validar" element={<ProtectedRoute><ValidationQueue /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
