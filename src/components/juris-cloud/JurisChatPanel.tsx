@@ -5,7 +5,8 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import {
   AlertTriangle, Lock,
 } from "lucide-react";
-import type { JcChatMessage, ProcessListRow, Agent } from "./types";
+import type { JcChatMessage, PendingMeeting, ProcessListRow, Agent } from "./types";
+import type { ClientFormValues } from "@/components/clients/shared";
 import { getInitials, getCaseAreaChip } from "./constants";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
@@ -65,7 +66,10 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: JcChatMessage }) {
+function MessageBubble({ msg, onCadastrarCliente }: {
+  msg: JcChatMessage;
+  onCadastrarCliente?: (snapshot: PendingMeeting) => void;
+}) {
   const { user } = useAuth();
   // "Ver peça completa" abre a peça inteira num painel separado (fora do chat).
   // A expansão vive no painel, não no balão — ao fechar, o chat volta ao trecho.
@@ -91,7 +95,7 @@ function MessageBubble({ msg }: { msg: JcChatMessage }) {
   // Ciclo da Agenda pelo chat: cartão de agendar (editável) e cartão de
   // ciclo/reagendar. Só gravam em meetings ao confirmar.
   if (msg.kind === "reuniao_confirm" && msg.reuniaoDraft) {
-    return <ReuniaoConfirmCard key={msg.id} draft={msg.reuniaoDraft} />;
+    return <ReuniaoConfirmCard key={msg.id} draft={msg.reuniaoDraft} onCadastrarCliente={onCadastrarCliente} />;
   }
   if (msg.kind === "reuniao_acao" && msg.reuniaoAcao) {
     return <ReuniaoAcaoCard key={msg.id} payload={msg.reuniaoAcao} />;
@@ -384,6 +388,12 @@ export interface JurisChatPanelProps {
   isReadOnly: boolean;
   roleLabel: string;
   activeDeptLabel: string;
+  /** Cliente não encontrado no cartão de agendar → leva ao cadastro (Modelo A). */
+  onCadastrarClienteFromMeeting?: (snapshot: PendingMeeting) => void;
+  /** Chamado quando o wizard de cadastro inline grava (agenda automática pós-cadastro). */
+  onClienteCadastrado?: (clientId: string, clientName: string) => void;
+  /** Pré-preenche o wizard inline (ex.: Nome vindo do cartão de agendar). */
+  cadastroInitialValues?: ClientFormValues;
 }
 
 export default function JurisChatPanel({
@@ -406,6 +416,9 @@ export default function JurisChatPanel({
   isReadOnly,
   roleLabel,
   activeDeptLabel,
+  onCadastrarClienteFromMeeting,
+  onClienteCadastrado,
+  cadastroInitialValues,
 }: JurisChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -477,16 +490,18 @@ export default function JurisChatPanel({
             // direto via save_client (cifrado) — a PII não trafega pelo chat.
             msg.kind === "cadastro_form" ? (
               <div key={msg.id}>
-                <MessageBubble msg={msg} />
+                <MessageBubble msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} />
                 {/* Alinha o wizard SOB a bolha do agente: mesma linha centrada
-                    (.jc-msg-wrap) com um espaçador invisível no lugar do avatar. */}
+                    (.jc-msg-wrap) com um espaçador invisível no lugar do avatar.
+                    onSaved/initialValues: quando o cadastro veio de um agendamento,
+                    o container agenda automaticamente ao concluir e pré-preenche o Nome. */}
                 <div className="jc-msg-wrap jc-inline-widget">
                   <div className="jc-msg-avatar" aria-hidden="true" style={{ visibility: "hidden" }} />
-                  <ClienteFormWizard mode="create" variant="chat" />
+                  <ClienteFormWizard mode="create" variant="chat" onSaved={onClienteCadastrado} initialValues={cadastroInitialValues} />
                 </div>
               </div>
             ) : (
-              <MessageBubble key={msg.id} msg={msg} />
+              <MessageBubble key={msg.id} msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} />
             ),
           )}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}

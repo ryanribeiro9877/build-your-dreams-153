@@ -107,4 +107,30 @@ describe("ReuniaoConfirmCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirmar/i }));
     await waitFor(() => expect(screen.getByText(/horários livres/i)).toBeInTheDocument());
   });
+
+  it("cliente não encontrado + handler -> oferece 'Cadastrar cliente' com snapshot ao vivo", async () => {
+    const onCadastrar = vi.fn();
+    const d = { ...baseDraft, client_resolved: null, client_candidates: [], client_query: "Fulano" };
+    render(<ReuniaoConfirmCard draft={d as never} onCadastrarCliente={onCadastrar} />);
+    // Não mostra mais só o texto de bloqueio: mostra a CTA de cadastro.
+    expect(screen.getByText(/cliente não encontrado\. cadastrar agora\?/i)).toBeInTheDocument();
+    const btn = await screen.findByRole("button", { name: /cadastrar cliente/i });
+    // Advogado (por hint "Ana") e tipo default (cliente novo) já se assentam no
+    // act() do render (efeitos síncronos). O snapshot deve refleti-los.
+    fireEvent.click(btn);
+    expect(onCadastrar).toHaveBeenCalledWith(expect.objectContaining({
+      client_name_hint: "Fulano",
+      scheduled_date: "2026-07-11",
+      start_time: "10:00",
+      type: "Consulta inicial",
+      lawyer_user_id: "l1",
+    }));
+  });
+
+  it("cliente não encontrado SEM handler -> mantém bloqueio antigo (sem botão)", async () => {
+    const d = { ...baseDraft, client_resolved: null, client_candidates: [], client_query: "Fulano" };
+    render(<ReuniaoConfirmCard draft={d as never} />);
+    await waitFor(() => expect(screen.getByText(/vincule um cliente cadastrado/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /cadastrar cliente/i })).not.toBeInTheDocument();
+  });
 });

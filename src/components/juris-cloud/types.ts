@@ -26,6 +26,23 @@ export interface ReuniaoDraft {
   scheduled_date: string | null; start_time: string | null; type: string | null; display: string | null;
   lawyer_hint: string | null; phone: string | null; client_query: string | null;
   client_resolved: ReuniaoClienteRef | null; client_candidates: ReuniaoClienteRef[];
+  /** Só nos cartões REABERTOS após cadastro em linha: pré-seleciona o advogado que
+   *  o usuário já havia escolhido (preserva o trabalho). Drafts do edge não trazem. */
+  lawyer_user_id?: string | null;
+}
+
+/** Rascunho de agendamento em espera, capturado quando o usuário clica em
+ *  "Cadastrar cliente" no cartão (cliente não encontrado). Guardado em estado
+ *  client-side no container; consumido ao concluir o cadastro (Modelo A). */
+export interface PendingMeeting {
+  client_name_hint: string | null;
+  scheduled_date: string | null;
+  start_time: string | null;
+  type: string | null;
+  lawyer_user_id: string | null; // pode ser "" se o advogado ainda não foi escolhido
+  lawyer_hint: string | null;
+  phone: string | null;
+  display: string | null;
 }
 export interface ReuniaoAcaoCandidate { id: string; scheduled_date: string; start_time: string; client_name: string | null; status: string; type: string | null; }
 /** Ação de ciclo/reagendar (metadata.reuniao_acao, kind === 'reuniao_acao'). */

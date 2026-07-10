@@ -9,7 +9,13 @@ import type { JcChatMessage } from "../types";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { email: "u@x.com" } }) }));
 vi.mock("@/components/clients/ClienteFormWizard", () => ({
-  default: () => <div data-testid="cliente-form-wizard" />,
+  default: (props: { onSaved?: unknown; initialValues?: { full_name?: string } }) => (
+    <div
+      data-testid="cliente-form-wizard"
+      data-has-onsaved={props.onSaved ? "yes" : "no"}
+      data-fullname={props.initialValues?.full_name ?? ""}
+    />
+  ),
 }));
 
 import JurisChatPanel from "../JurisChatPanel";
@@ -43,5 +49,22 @@ describe("JurisChatPanel — disparo do formulário de cadastro (CADASTRO-MODELO
     ];
     render(<JurisChatPanel {...baseProps} messages={messages} />);
     expect(screen.queryByTestId("cliente-form-wizard")).not.toBeInTheDocument();
+  });
+
+  it("repassa onSaved e initialValues (Nome pré-preenchido) ao wizard inline", () => {
+    const messages: JcChatMessage[] = [
+      { id: "m3", role: "assistant", kind: "cadastro_form", content: "Preencha o formulário abaixo.", timestamp: "10:00" },
+    ];
+    render(
+      <JurisChatPanel
+        {...baseProps}
+        messages={messages}
+        onClienteCadastrado={() => {}}
+        cadastroInitialValues={{ full_name: "FULANO" } as never}
+      />,
+    );
+    const w = screen.getByTestId("cliente-form-wizard");
+    expect(w).toHaveAttribute("data-has-onsaved", "yes");
+    expect(w).toHaveAttribute("data-fullname", "FULANO");
   });
 });

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Pencil, CalendarPlus, AlertCircle } from "lucide-react";
+import { Check, Pencil, CalendarPlus, AlertCircle, UserPlus } from "lucide-react";
 import { createMeeting, getAvailableSlots } from "@/hooks/useMeetings";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { supabase } from "@/integrations/supabase/client";
 import { MEETING_TYPE_OPTIONS } from "@/lib/meetings";
-import type { ReuniaoDraft } from "@/components/juris-cloud/types";
+import type { PendingMeeting, ReuniaoDraft } from "@/components/juris-cloud/types";
 import { toast } from "sonner";
 
 // Tipo pré-selecionado para cliente NOVO / prospect (sem histórico) — string EXATA
@@ -37,8 +37,15 @@ function matchLawyerHint(hint: string | null, options: { user_id: string; name: 
  * Cartão de agendamento (kind === 'reuniao_confirm'): renderiza o rascunho
  * extraído pelo agente, pré-preenchido e editável. Só cria a reunião ao
  * confirmar (trava re-submit). Horário via get_available_slots (só slots livres).
+ *
+ * `onCadastrarCliente`: quando o cliente não é encontrado (0 candidatos), em vez
+ * de só bloquear, o cartão oferece "Cadastrar cliente" e devolve um snapshot ao
+ * vivo do que já foi preenchido — o container leva ao cadastro (Modelo A) e agenda
+ * automaticamente ao concluir. Ausente → comportamento antigo (só bloqueia).
  */
-export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
+export function ReuniaoConfirmCard({
+  draft, onCadastrarCliente,
+}: { draft: ReuniaoDraft; onCadastrarCliente?: (snapshot: PendingMeeting) => void }) {
   const [date, setDate] = useState(draft.scheduled_date ?? "");
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -46,7 +53,8 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
   const [type, setType] = useState(draft.type ?? "");
   const [typeTouched, setTypeTouched] = useState(!!draft.type); // rascunho c/ tipo = respeitar
   const [clientId, setClientId] = useState<string | null>(draft.client_resolved?.id ?? null);
-  const [lawyer, setLawyer] = useState("");
+  // Cartão REABERTO após cadastro pode trazer o advogado já escolhido (preserva o trabalho).
+  const [lawyer, setLawyer] = useState(draft.lawyer_user_id ?? "");
   const [lawyerTouched, setLawyerTouched] = useState(false);
   const [phone, setPhone] = useState(draft.phone ?? "");
   const [phoneTouched, setPhoneTouched] = useState(!!draft.phone); // rascunho c/ telefone = respeitar
@@ -127,6 +135,24 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
           : "Vincule um cliente cadastrado antes de agendar.")
     : null;
 
+  // Cliente NÃO ENCONTRADO (sem resolvido, sem candidatos): em vez de só bloquear,
+  // oferece o cadastro em linha — mas só quando o container fornece o handler.
+  const clientNotFound = !clientId && draft.client_candidates.length === 0 && !draft.client_resolved;
+  const showCadastrarBtn = clientNotFound && !!onCadastrarCliente;
+
+  // Snapshot AO VIVO do que o usuário já preencheu — para o agendamento pós-cadastro
+  // reaproveitar tudo (não perder o trabalho). Vazios viram null.
+  const buildSnapshot = (): PendingMeeting => ({
+    client_name_hint: draft.client_query,
+    scheduled_date: date || null,
+    start_time: time || null,
+    type: type || null,
+    lawyer_user_id: lawyer || null,
+    lawyer_hint: draft.lawyer_hint,
+    phone: phone || null,
+    display: draft.display,
+  });
+
   const confirm = async () => {
     if (!canConfirm || created) return;
     setBusy(true); setSuggest(null);
@@ -204,11 +230,23 @@ export function ReuniaoConfirmCard({ draft }: { draft: ReuniaoDraft }) {
 
         {suggest && (<div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 4px" }}>Horários livres em {date}: {suggest.length ? suggest.join(", ") : "nenhum"}.</div>)}
       </div>
-      {confirmBlockReason && <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 8px" }}>{confirmBlockReason}</div>}
-      <div className="action-card__actions">
-        <button type="button" className="action-card__btn action-card__btn--primary" disabled={!canConfirm} onClick={confirm}><Check size={15} aria-hidden="true" /> Confirmar</button>
-        <button type="button" className="action-card__btn action-card__btn--ghost" disabled={busy} onClick={() => toast.message("Ajuste os campos e confirme quando estiver certo.")}><Pencil size={14} aria-hidden="true" /> Corrigir</button>
-      </div>
+      {showCadastrarBtn ? (
+        <div style={{ padding: "0 16px 8px" }}>
+          <div style={{ fontSize: 12, color: "#EAB308", marginBottom: 8 }}>Cliente não encontrado. Cadastrar agora?</div>
+          <button type="button" className="action-card__btn action-card__btn--primary"
+            onClick={() => onCadastrarCliente!(buildSnapshot())}>
+            <UserPlus size={15} aria-hidden="true" /> Cadastrar cliente
+          </button>
+        </div>
+      ) : (
+        <>
+          {confirmBlockReason && <div style={{ fontSize: 12, color: "#EAB308", padding: "0 16px 8px" }}>{confirmBlockReason}</div>}
+          <div className="action-card__actions">
+            <button type="button" className="action-card__btn action-card__btn--primary" disabled={!canConfirm} onClick={confirm}><Check size={15} aria-hidden="true" /> Confirmar</button>
+            <button type="button" className="action-card__btn action-card__btn--ghost" disabled={busy} onClick={() => toast.message("Ajuste os campos e confirme quando estiver certo.")}><Pencil size={14} aria-hidden="true" /> Corrigir</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

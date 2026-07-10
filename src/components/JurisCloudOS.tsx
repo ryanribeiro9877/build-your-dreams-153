@@ -28,8 +28,10 @@ import JurisTopBar from "./juris-cloud/JurisTopBar";
 import JurisChatPanel from "./juris-cloud/JurisChatPanel";
 
 // Shared constants & types
-import type { Agent, JcChatMessage, SidebarItem, MenuItem } from "./juris-cloud/types";
+import type { Agent, JcChatMessage, SidebarItem, MenuItem, PendingMeeting, ReuniaoDraft } from "./juris-cloud/types";
 import { parseAgentPermissions } from "./juris-cloud/types";
+import { createMeeting } from "@/hooks/useMeetings";
+import { EMPTY_FORM, type ClientFormValues } from "@/components/clients/shared";
 import { deriveLiveStage } from "./juris-cloud/liveStatus";
 import { applyRunPatch, type RunState } from "./juris-cloud/runStates";
 import { deriveConversationStatus } from "./juris-cloud/sessionStatus";
@@ -39,6 +41,9 @@ import {
   getTokenCost, formatTokenRefundMessage, formatInsufficientBalanceMessage,
   getAgentsForDepartment, toLegacyAgent,
 } from "./juris-cloud/constants";
+
+// Rótulo de hora (HH:MM pt-BR) para mensagens locais injetadas no chat.
+const nowLabel = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
 /* ─────────────────────────────────────────────────────────────
    JURISAI  –  Sua força de trabalho de IA jurídica
@@ -841,6 +846,11 @@ export default function JurisCloudOS() {
   const [showWelcome, setShowWelcome]     = useState(true);
   const [activeDept, setActiveDept]       = useState("assistente");
   const [messages, setMessages]           = useState<JcChatMessage[]>([]);
+  // Agenda no chat: rascunho em espera quando o cliente não existe e o usuário vai
+  // cadastrar em linha (Modelo A). Consumido ao concluir o cadastro. Só estado
+  // client-side — não persiste em banco (reload perde, simétrico ao próprio wizard).
+  const [pendingMeeting, setPendingMeeting] = useState<PendingMeeting | null>(null);
+  const [cadastroInitialValues, setCadastroInitialValues] = useState<ClientFormValues | undefined>(undefined);
   const [inputVal, setInputVal]           = useState("");
   // ── Estado de "processando" POR conversa (session_id) ─────────────────────
   // MAPA session_id → RunState. Substitui o slot ÚNICO (currentRunId do #18) que
@@ -1397,6 +1407,69 @@ export default function JurisCloudOS() {
     }
   }, [assistantSessionId, patchRunState]);
 
+  // ── Agenda no chat: cliente não encontrado → cadastro em linha → agenda auto ──
+  // 1) Clique em "Cadastrar cliente" no cartão: guarda o snapshot do agendamento em
+  //    estado, pré-preenche o Nome e INJETA localmente o disparo do wizard (mesmo
+  //    cartão que o edge produziria) — sem round-trip no edge, sem balão de usuário.
+  const handleCadastrarClienteFromMeeting = useCallback((snapshot: PendingMeeting) => {
+    setPendingMeeting(snapshot);
+    const hint = (snapshot.client_name_hint ?? "").trim();
+    setCadastroInitialValues(hint ? { ...EMPTY_FORM, full_name: hint.toUpperCase() } : undefined);
+    setMessages(prev => [...prev, {
+      id: `local_cadastro_${Date.now()}`, role: "assistant", agent: "Meu Assistente",
+      kind: "cadastro_form",
+      content: "Claro!\nPreencha o formulário de cadastro do cliente abaixo:",
+      timestamp: nowLabel(),
+    } as JcChatMessage]);
+  }, []);
+
+  // 2) Wizard gravou (novo client_id): se havia rascunho pendente, agenda automático.
+  //    Snapshot completo → create_meeting direto (advogado notificado pelo trigger).
+  //    Incompleto ou falha (slot inválido/ocupado/passou) → cliente FICA cadastrado
+  //    e reabre um cartão pré-preenchido p/ escolher novo horário. Consome e limpa
+  //    o rascunho em todos os casos (não reaparece em cadastros futuros).
+  const handleClienteCadastrado = useCallback(async (clientId: string, clientName: string) => {
+    const snap = pendingMeeting;
+    if (!snap) return; // cadastro normal (não veio de um agendamento)
+    setPendingMeeting(null);
+    setCadastroInitialValues(undefined);
+
+    const reopenCard = (leadMsg: string) => {
+      const draft: ReuniaoDraft = {
+        scheduled_date: snap.scheduled_date, start_time: snap.start_time, type: snap.type,
+        display: snap.display, lawyer_hint: snap.lawyer_hint, lawyer_user_id: snap.lawyer_user_id || null,
+        phone: snap.phone, client_query: clientName,
+        client_resolved: { id: clientId, name: clientName, cpf_masked: null, status: null },
+        client_candidates: [],
+      };
+      setMessages(prev => [...prev,
+        { id: `local_agenda_msg_${Date.now()}`, role: "assistant", agent: "Meu Assistente", content: leadMsg, timestamp: nowLabel() } as JcChatMessage,
+        { id: `local_reuniao_${Date.now()}`, role: "assistant", agent: "Meu Assistente", kind: "reuniao_confirm", reuniaoDraft: draft, timestamp: nowLabel() } as JcChatMessage,
+      ]);
+    };
+
+    const whenLabel = snap.display ?? [snap.scheduled_date, snap.start_time].filter(Boolean).join(" ");
+    const complete = !!(snap.scheduled_date && snap.start_time && snap.type && snap.lawyer_user_id);
+    if (!complete) {
+      reopenCard(`Cliente ${clientName} cadastrado. Confirme os dados do atendimento abaixo.`);
+      return;
+    }
+    try {
+      await createMeeting({
+        p_scheduled_date: snap.scheduled_date!, p_start_time: snap.start_time!,
+        p_client_id: clientId, p_type: snap.type!, p_lawyer_user_id: snap.lawyer_user_id!,
+        p_phone: snap.phone || undefined, p_status: "scheduled",
+      });
+      setMessages(prev => [...prev, {
+        id: `local_agenda_ok_${Date.now()}`, role: "assistant", agent: "Meu Assistente",
+        content: `Cliente ${clientName} cadastrado e atendimento agendado para ${whenLabel}. O advogado foi notificado.`,
+        timestamp: nowLabel(),
+      } as JcChatMessage]);
+    } catch {
+      reopenCard(`Cliente ${clientName} cadastrado com sucesso, mas o horário ${whenLabel} não está mais disponível. Escolha um novo horário abaixo.`);
+    }
+  }, [pendingMeeting]);
+
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
     if (!val) return;
@@ -1776,6 +1849,9 @@ export default function JurisCloudOS() {
             isReadOnly={isReadOnly}
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}
+            onCadastrarClienteFromMeeting={handleCadastrarClienteFromMeeting}
+            onClienteCadastrado={handleClienteCadastrado}
+            cadastroInitialValues={cadastroInitialValues}
           />
         </main>
 
