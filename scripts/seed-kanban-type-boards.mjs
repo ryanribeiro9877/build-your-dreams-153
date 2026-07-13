@@ -35,7 +35,8 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-for (const name of [".env.local", ".env"]) {
+// .env.local/.env têm prioridade; .env.development é fallback (já traz URL + service role).
+for (const name of [".env.local", ".env", ".env.development"]) {
   const p = join(root, name);
   if (!existsSync(p)) continue;
   let text = readFileSync(p, "utf8");
