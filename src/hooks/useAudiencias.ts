@@ -159,12 +159,16 @@ export interface ClientProcessOption {
 }
 
 /**
- * Processos de um cliente casando por **client_id OU client_name**. A base tem
- * processos com `client_id` preenchido E processos só com `client_name` (texto),
- * e o vínculo por nome pode falhar por formatação — então buscamos pelos dois e
- * unimos por id. O `client_id` (quando existe) é o casamento confiável; o nome
- * cobre os processos legados sem FK. Espelha o vínculo textual do ProcessosTab,
- * agora reforçado pelo id.
+ * Processos de um cliente casando por **client_id OU client_name**, via a RPC
+ * `list_client_processes` (SECURITY DEFINER, gated por `audiencias_can_manage()`).
+ *
+ * A RPC é necessária porque `processes` tem RLS **owner-only**
+ * (`auth.uid() = user_id`): uma leitura direta da tabela só devolveria os
+ * processos criados pelo próprio usuário, escondendo o processo do cliente para
+ * recepção/advogado que não é o dono — o que, com processo obrigatório na
+ * audiência, impediria de registrá-la. A RPC fura essa RLS de forma controlada
+ * (mesmo papel que gerencia audiências) e casa por id OU nome (a base tem os dois
+ * tipos de vínculo). 42501 (papel sem acesso) → lista vazia, sem erro visível.
  */
 export async function fetchClientProcesses(
   clientId: string | null,
@@ -173,21 +177,12 @@ export async function fetchClientProcesses(
   const name = clientName.trim();
   if (!clientId && !name) return [];
 
-  const runs = await Promise.all([
-    clientId
-      ? supabase.from("processes").select("id, process_number, description").eq("client_id", clientId)
-      : null,
-    name
-      ? supabase.from("processes").select("id, process_number, description").eq("client_name", name)
-      : null,
-  ].filter((q): q is NonNullable<typeof q> => q !== null));
-
-  const byId = new Map<string, ClientProcessOption>();
-  for (const r of runs) {
-    if (r.error || !r.data) continue;
-    for (const row of r.data as ClientProcessOption[]) byId.set(row.id, row);
-  }
-  return Array.from(byId.values()).sort((a, b) => a.process_number.localeCompare(b.process_number, "pt-BR"));
+  const { data, error } = await (supabase as unknown as UntypedRpc).rpc("list_client_processes", {
+    p_client_id: clientId,
+    p_client_name: name || null,
+  });
+  if (error) return [];
+  return (data as ClientProcessOption[]) ?? [];
 }
 
 /**
