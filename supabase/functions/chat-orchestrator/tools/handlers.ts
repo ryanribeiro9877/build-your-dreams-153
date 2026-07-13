@@ -146,6 +146,16 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { task_id: data } };
       }
+      case "distribuir_caso": {
+        const { data, error } = await userClient.rpc("distribuir_caso", {
+          p_process_id: args.process_id,
+          p_tipo_acao_id: args.tipo_acao_id ?? null,
+          p_task_type_id: args.task_type_id ?? null,
+          p_title: args.title ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { task_id: data } };
+      }
       case "solicitar_checklist_documental": {
         const docs = Array.isArray(args.documentos)
           ? (args.documentos as unknown[]).map((d) => String(d)).filter((d) => d.trim())

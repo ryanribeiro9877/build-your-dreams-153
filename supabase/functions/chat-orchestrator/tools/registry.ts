@@ -135,6 +135,16 @@ export const TOOLS: Record<string, ToolDef> = {
       resolucao: str("descrição da resolução (opcional)"),
     }, required: ["pendencia_id"] },
   }},
+  distribuir_caso: { type: "function", function: {
+    name: "distribuir_caso",
+    description: "Distribui um caso ao Kanban do seu tipo de ação: cria e placa o card na coluna inicial do board correspondente. Resolva o processo com consultar_processo ANTES e passe process_id. Informe tipo_acao_id quando o processo ainda não tem tipo definido. Bloqueado se o caso tiver pendência aberta.",
+    parameters: { type: "object", properties: {
+      process_id: str("id do processo/caso (de consultar_processo)"),
+      tipo_acao_id: str("id do tipo de ação (opcional se o processo já tem tipo_acao_id definido)"),
+      task_type_id: str("id do tipo de tarefa do card (opcional; default = configurado no tipo de ação)"),
+      title: str("título do card (opcional; default = 'Caso: <número/cliente>')"),
+    }, required: ["process_id"] },
+  }},
   solicitar_checklist_documental: { type: "function", function: {
     name: "solicitar_checklist_documental",
     description: "Registra como PENDENTES os documentos que faltam de um cliente para uma ação/réu (ex.: 'Para Crefisa, solicite extrato e contrato'). Resolva o cliente com consultar_cliente ANTES e passe cliente_id. Cria UMA pendência documental por documento.",

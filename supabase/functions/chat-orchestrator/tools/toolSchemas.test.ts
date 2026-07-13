@@ -24,9 +24,14 @@ Deno.test("consultar_cep é READ (gated por CHAT_READ_TOOLS_ENABLED, não por es
 });
 
 Deno.test("todo write tool tem schema de parâmetros", () => {
-  for (const name of ["cadastrar_cliente","criar_card_tarefa","solicitar_documentos","pedir_acesso_arquivos"]) {
+  for (const name of ["cadastrar_cliente","criar_card_tarefa","solicitar_documentos","pedir_acesso_arquivos","distribuir_caso"]) {
     const def = TOOLS[name];
     assert(def, `faltou ${name}`);
     assert(def.function.parameters, `faltou parameters em ${name}`);
   }
+});
+
+Deno.test("distribuir_caso é WRITE e exige process_id", () => {
+  assertEquals(isWriteTool("distribuir_caso"), true);
+  assertEquals((TOOLS["distribuir_caso"].function.parameters as { required: string[] }).required, ["process_id"]);
 });
