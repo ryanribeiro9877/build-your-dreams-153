@@ -1,20 +1,33 @@
 /**
- * Card 7.1 — Seed idempotente de boards de Kanban por tipo de ação.
+ * Card 7.1 — Seed idempotente de boards de Kanban por tipo de ação (modelo tipos_acao).
  *
- * Provisiona UMA board por tipo de ação (jurídica), cada uma com o template de
- * 5 colunas verificado em produção, e grava `kanban_boards.tipo_acao`.
+ * Para cada linha ATIVA de public.tipos_acao (12 hoje), cria UMA board de Kanban
+ * (nome = tipos_acao.nome) via a RPC kanban_create_board — que JÁ cria o template
+ * de 5 colunas — e liga a board ao tipo gravando kanban_boards.tipo_acao_id.
  *
- * PRÉ-REQUISITOS (ver docs/superpowers/specs/2026-07-13-card-7.1-kanban-tipado-design.md):
- *   1. Lista validada por Ryan + Rodrigo (constante TIPOS abaixo).
- *   2. Migration aplicada: `kanban_boards.tipo_acao text` + índice único parcial.
- *   3. .env(.local) com VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.
+ * ── Descobertas que moldam este script (verificadas em produção 2026-07-13) ──
+ *  • kanban_create_board / kanban_set_columns são SECURITY DEFINER mas EXIGEM
+ *    auth.uid() != NULL + kanban_can_admin(uid). Service role puro (auth.uid()=NULL)
+ *    dispara "não autenticado". Por isso o script AUTENTICA como usuário admin
+ *    (SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD) para chamar as RPCs, e usa a service role
+ *    só para ler tipos_acao e gravar o vínculo tipo_acao_id (bypass RLS, confiável).
+ *  • kanban_create_board JÁ insere as 5 colunas do template
+ *    (Pendente/pendente, Em execução/em_execucao, Concluída sucesso/concluida_sucesso,
+ *     Concluída sem sucesso/concluida_sem_sucesso, Cancelada/cancelado — enum task_situacao).
+ *    Logo NÃO chamamos kanban_set_columns (seria redundante e faria churn).
+ *  • A board "Ações Bancárias" existente tem tipo_acao_id NULL e nome que não colide
+ *    com nenhum tipos_acao.nome → o seed nunca a duplica nem a altera (decisão do Ryan).
  *
- * Faz inserts DIRETOS por service role (bypass RLS) porque as RPCs
- * kanban_create_board/kanban_set_columns exigem kanban_can_admin(auth.uid()),
- * que é NULL sob service role. Os inserts replicam fielmente o template.
+ * IDEMPOTÊNCIA: pula tipo cujo id já apareça em kanban_boards.tipo_acao_id; se existir
+ * board com o mesmo nome porém sem vínculo (rerun após falha parcial), apenas religa.
  *
- * SEGURANÇA: por padrão roda em DRY-RUN (só imprime o plano). Para gravar de
- * verdade: SEED_CONFIRM=apply node scripts/seed-kanban-type-boards.mjs
+ * SEGURANÇA: DRY-RUN por padrão (só imprime o plano). Grava só com:
+ *   SEED_CONFIRM=apply node scripts/seed-kanban-type-boards.mjs
+ *
+ * ENV (.env / .env.local):
+ *   VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+ *   VITE_SUPABASE_PUBLISHABLE_KEY (ou SUPABASE_ANON_KEY),
+ *   SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD  (usuário com role admin)
  */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
@@ -41,114 +54,134 @@ for (const name of [".env.local", ".env"]) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// LISTA VALIDADA (Ryan + Rodrigo). `existing` = board que só recebe o tipo.
-// Trabalhista está comentado até a decisão (não existe em legal_area).
-// ---------------------------------------------------------------------------
-const TIPOS = [
-  { tipo_acao: "bancario", name: "Ações Bancárias", existing: "Ações Bancárias", sort_order: 100 },
-  { tipo_acao: "previdenciario", name: "Ações Previdenciárias", sort_order: 110 },
-  { tipo_acao: "civil", name: "Ações Cíveis", sort_order: 120 },
-  { tipo_acao: "consumidor", name: "Ações do Consumidor", sort_order: 130 },
-  { tipo_acao: "familia", name: "Ações de Família", sort_order: 140 },
-  { tipo_acao: "plano_saude", name: "Ações de Plano de Saúde", sort_order: 150 },
-  { tipo_acao: "tributario", name: "Ações Tributárias", sort_order: 160 },
-  // { tipo_acao: "trabalhista", name: "Ações Trabalhistas", sort_order: 170 },
-];
-
-// Template de 5 colunas (verificado em produção na board "Ações Bancárias").
-const COLUNAS = [
-  { name: "Pendente", situacao: "pendente", position: 0 },
-  { name: "Em execução", situacao: "em_execucao", position: 1 },
-  { name: "Concluída (sucesso)", situacao: "concluida_sucesso", position: 2 },
-  { name: "Concluída (sem sucesso)", situacao: "concluida_sem_sucesso", position: 3 },
-  { name: "Cancelada", situacao: "cancelado", position: 4 },
-];
-
 const APPLY = (process.env.SEED_CONFIRM || "").trim() === "apply";
-const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const BOARDS_PRIVATE = (process.env.SEED_BOARDS_PRIVATE || "").trim() === "true"; // default: compartilhadas
 
-function log(...a) { console.log(...a); }
+const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const anonKey = (
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  ""
+).trim();
+const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim();
+const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+function log(...a) {
+  console.log(...a);
+}
 
 async function main() {
-  if (!url || !key) throw new Error("Defina VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env(.local).");
-  if (!TIPOS.length) throw new Error("Lista TIPOS vazia — preencha com a lista validada antes de rodar.");
-
-  const admin = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "X-Client-Info": "seed-kanban-type-boards" } },
-  });
-
-  // Pré-requisito 2: a coluna tipo_acao precisa existir (senão a migration não foi aplicada).
-  const probe = await admin.from("kanban_boards").select("id,tipo_acao").limit(1);
-  if (probe.error) {
-    throw new Error(
-      `Não consegui ler kanban_boards.tipo_acao — a migration 7.1 foi aplicada? Detalhe: ${probe.error.message}`
-    );
+  if (!url || !serviceRole) {
+    throw new Error("Defina VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env(.local).");
   }
 
-  // Owner das novas boards = dono de uma board existente (sócio).
-  const ownerRes = await admin
-    .from("kanban_boards")
-    .select("owner_user_id")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const ownerUserId = ownerRes.data?.owner_user_id;
-  if (!ownerUserId) throw new Error("Não encontrei owner_user_id de referência (nenhuma board existente).");
+  // Cliente service role: leituras + gravação do vínculo tipo_acao_id (bypass RLS).
+  const svc = createClient(url, serviceRole, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { "X-Client-Info": "seed-kanban-type-boards(svc)" } },
+  });
+
+  // 1) tipos de ação ativos
+  const tiposRes = await svc
+    .from("tipos_acao")
+    .select("id,code,nome,ativo,sort_order")
+    .eq("ativo", true)
+    .order("sort_order", { ascending: true });
+  if (tiposRes.error) throw new Error(`Falha ao ler tipos_acao: ${tiposRes.error.message}`);
+  const tipos = tiposRes.data || [];
+  if (!tipos.length) throw new Error("Nenhum tipo_acao ativo encontrado — nada a semear.");
+  log(`tipos_acao ativos: ${tipos.length}`);
+
+  // 2) estado atual das boards (idempotência)
+  const boardsRes = await svc.from("kanban_boards").select("id,name,tipo_acao_id");
+  if (boardsRes.error) {
+    throw new Error(
+      `Falha ao ler kanban_boards (a migration tipo_acao_id foi aplicada?): ${boardsRes.error.message}`
+    );
+  }
+  const boards = boardsRes.data || [];
+  const linkedTipoIds = new Set(boards.filter((b) => b.tipo_acao_id).map((b) => b.tipo_acao_id));
+  const byName = new Map(boards.map((b) => [b.name, b]));
+
+  // 3) cliente autenticado como admin (necessário para as RPCs kanban_*)
+  //    Só criamos/logamos quando for realmente gravar E houver tipo novo a criar.
+  let userClient = null;
+  async function ensureAdminClient() {
+    if (userClient) return userClient;
+    if (!anonKey) throw new Error("Defina VITE_SUPABASE_PUBLISHABLE_KEY (ou SUPABASE_ANON_KEY) para autenticar o admin.");
+    if (!adminEmail || !adminPassword) {
+      throw new Error(
+        "kanban_create_board exige usuário admin: defina SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD (usuário com role admin)."
+      );
+    }
+    const c = createClient(url, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { "X-Client-Info": "seed-kanban-type-boards(admin)" } },
+    });
+    const { error } = await c.auth.signInWithPassword({ email: adminEmail, password: adminPassword });
+    if (error) throw new Error(`Falha ao autenticar SEED_ADMIN_EMAIL: ${error.message}`);
+    userClient = c;
+    return c;
+  }
 
   log(`Modo: ${APPLY ? "APPLY (grava)" : "DRY-RUN (só plano; use SEED_CONFIRM=apply para gravar)"}`);
-  log(`Owner das novas boards: ${ownerUserId}\n`);
+  log(`Boards: ${BOARDS_PRIVATE ? "privadas" : "compartilhadas (is_private=false)"}\n`);
 
-  for (const t of TIPOS) {
-    // idempotência: já existe board com este tipo_acao?
-    const byType = await admin.from("kanban_boards").select("id,name").eq("tipo_acao", t.tipo_acao).maybeSingle();
-    if (byType.data) {
-      log(`= ${t.tipo_acao}: já tipada (board "${byType.data.name}") — skip`);
+  let created = 0;
+  let linked = 0;
+  let skipped = 0;
+
+  for (const t of tipos) {
+    // (a) já ligada a este tipo → skip
+    if (linkedTipoIds.has(t.id)) {
+      log(`= ${t.code}: já tem board (tipo_acao_id ${t.id}) — skip`);
+      skipped++;
       continue;
     }
 
-    // caso "existing": board já existe por nome, só gravar o tipo
-    if (t.existing) {
-      const ex = await admin.from("kanban_boards").select("id,name,tipo_acao").eq("name", t.existing).maybeSingle();
-      if (ex.data) {
-        log(`~ ${t.tipo_acao}: gravar tipo_acao na board existente "${ex.data.name}" (${ex.data.id})`);
-        if (APPLY) {
-          const upd = await admin.from("kanban_boards").update({ tipo_acao: t.tipo_acao }).eq("id", ex.data.id);
-          if (upd.error) throw new Error(`Falha ao tipar "${ex.data.name}": ${upd.error.message}`);
-        }
-        continue;
+    // (b) board com o mesmo nome porém sem vínculo (rerun após falha parcial) → só religa
+    const existing = byName.get(t.nome);
+    if (existing && !existing.tipo_acao_id) {
+      log(`~ ${t.code}: board "${t.nome}" existe sem vínculo → religar tipo_acao_id`);
+      if (APPLY) {
+        const upd = await svc.from("kanban_boards").update({ tipo_acao_id: t.id }).eq("id", existing.id);
+        if (upd.error) throw new Error(`Falha ao religar "${t.nome}": ${upd.error.message}`);
+        linkedTipoIds.add(t.id);
       }
+      linked++;
+      continue;
     }
 
-    // criar board nova + 5 colunas
-    log(`+ ${t.tipo_acao}: criar board "${t.name}" + ${COLUNAS.length} colunas`);
-    if (!APPLY) continue;
-
-    const ins = await admin
-      .from("kanban_boards")
-      .insert({
-        name: t.name,
-        owner_user_id: ownerUserId,
-        is_private: false, // board compartilhada (D-3)
-        tipo_acao: t.tipo_acao,
-        sort_order: t.sort_order ?? 100,
-      })
-      .select("id")
-      .single();
-    if (ins.error) throw new Error(`Falha ao criar board "${t.name}": ${ins.error.message}`);
-
-    const cols = COLUNAS.map((c) => ({ ...c, board_id: ins.data.id }));
-    const insCols = await admin.from("kanban_columns").insert(cols);
-    if (insCols.error) {
-      // rollback best-effort da board órfã
-      await admin.from("kanban_boards").delete().eq("id", ins.data.id);
-      throw new Error(`Falha ao criar colunas de "${t.name}" (board removida): ${insCols.error.message}`);
+    // (c) criar board via RPC (cria board + 5 colunas do template) e ligar ao tipo
+    log(`+ ${t.code}: criar board "${t.nome}" (via kanban_create_board) + vincular`);
+    if (!APPLY) {
+      created++;
+      continue;
     }
+
+    const admin = await ensureAdminClient();
+    const rpc = await admin.rpc("kanban_create_board", {
+      p_name: t.nome,
+      p_is_private: BOARDS_PRIVATE,
+    });
+    if (rpc.error) throw new Error(`kanban_create_board falhou para "${t.nome}": ${rpc.error.message}`);
+    const boardId = rpc.data; // retorna uuid da board
+
+    const link = await svc.from("kanban_boards").update({ tipo_acao_id: t.id }).eq("id", boardId);
+    if (link.error) {
+      throw new Error(
+        `Board "${t.nome}" criada (${boardId}) mas FALHOU ao vincular tipo_acao_id: ${link.error.message}. ` +
+          `Rode de novo: o script religa pelo nome.`
+      );
+    }
+    linkedTipoIds.add(t.id);
+    created++;
   }
 
-  log(`\n${APPLY ? "Seed aplicado." : "Dry-run concluído — nada gravado."}`);
+  log(`\nResumo: criar=${created} religar=${linked} skip=${skipped}`);
+  log(APPLY ? "Seed aplicado." : "Dry-run concluído — nada gravado.");
 }
 
 main().catch((e) => {
