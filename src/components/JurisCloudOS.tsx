@@ -8,6 +8,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
 import { isDashboardRole } from "@/components/DashboardRoute";
+import { isPecaAuthor } from "@/lib/pecaAccess";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
 import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
@@ -652,6 +653,10 @@ export default function JurisCloudOS() {
   }, []);
 
   const { workspace } = useMyWorkspace();
+  // Autoria de peça (role_templates.code = 'socio'|'adv_%'): reusa o workspace
+  // já carregado aqui e passa por prop ao chat — evita um segundo useMyWorkspace
+  // dentro do painel/bolha (canal realtime duplicado → crash).
+  const canAuthorPeca = isPecaAuthor(workspace?.role_template?.code);
   const { startSession, startOrchestration } = useChatOrchestrator();
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
@@ -1928,6 +1933,7 @@ export default function JurisCloudOS() {
             isReadOnly={isReadOnly}
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}
+            canAuthorPeca={canAuthorPeca}
             onCadastrarClienteFromMeeting={handleCadastrarClienteFromMeeting}
             onCadastrarClienteFromTask={handleCadastrarClienteFromTask}
             onClienteCadastrado={handleClienteCadastrado}

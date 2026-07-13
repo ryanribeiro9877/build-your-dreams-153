@@ -1,7 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useMyWorkspace } from "@/hooks/useMyWorkspace";
-import { isPecaAuthor } from "@/lib/pecaAccess";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import {
@@ -68,17 +66,18 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
+function MessageBubble({ msg, canAuthorPeca, onCadastrarCliente, onCadastrarClienteTask }: {
   msg: JcChatMessage;
+  // Só advogado/sócio "geram" peça: abrir a peça completa (PecaModal) e o fluxo
+  // de salvar/anexar são de autoria. Recepção só visualiza — vê a peça inteira
+  // inline e os downloads, mas sem "Ver peça completa" nem PecaModal. Vem por
+  // prop (calculado uma vez no painel) — NÃO chamar useMyWorkspace aqui, pois
+  // MessageBubble é montado uma vez por mensagem (N assinaturas realtime).
+  canAuthorPeca: boolean;
   onCadastrarCliente?: (snapshot: PendingMeeting) => void;
   onCadastrarClienteTask?: (snapshot: PendingTask) => void;
 }) {
   const { user } = useAuth();
-  const { workspace } = useMyWorkspace();
-  // Só advogado/sócio "geram" peça: abrir a peça completa (PecaModal) e o fluxo
-  // de salvar/anexar são de autoria. Recepção só visualiza — vê a peça inteira
-  // inline e os downloads, mas sem "Ver peça completa" nem PecaModal.
-  const canAuthorPeca = isPecaAuthor(workspace?.role_template?.code);
   // "Ver peça completa" abre a peça inteira num painel separado (fora do chat).
   // A expansão vive no painel, não no balão — ao fechar, o chat volta ao trecho.
   const [showFullPeca, setShowFullPeca] = useState(false);
@@ -266,6 +265,7 @@ function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
                         <PecaModal
                           content={cleanContent}
                           agentName={msg.agent}
+                          canSave={canAuthorPeca}
                           onClose={() => setShowFullPeca(false)}
                         />
                       )}
@@ -400,6 +400,11 @@ export interface JurisChatPanelProps {
   isReadOnly: boolean;
   roleLabel: string;
   activeDeptLabel: string;
+  /** Autoria de peça: só advogado/sócio (role_templates.code = 'socio'|'adv_%').
+   *  Calculado UMA vez no JurisCloudOS (reusa o workspace já carregado lá) e
+   *  passado por prop — MessageBubble é montado por mensagem, então não pode
+   *  chamar useMyWorkspace (assinaturas realtime duplicadas → crash). */
+  canAuthorPeca: boolean;
   /** Cliente não encontrado no cartão de agendar → leva ao cadastro (Modelo A). */
   onCadastrarClienteFromMeeting?: (snapshot: PendingMeeting) => void;
   /** Cliente não encontrado no cartão de TAREFA → leva ao cadastro (Modelo A). */
@@ -430,6 +435,7 @@ export default function JurisChatPanel({
   isReadOnly,
   roleLabel,
   activeDeptLabel,
+  canAuthorPeca,
   onCadastrarClienteFromMeeting,
   onCadastrarClienteFromTask,
   onClienteCadastrado,
@@ -505,7 +511,7 @@ export default function JurisChatPanel({
             // direto via save_client (cifrado) — a PII não trafega pelo chat.
             msg.kind === "cadastro_form" ? (
               <div key={msg.id}>
-                <MessageBubble msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
+                <MessageBubble msg={msg} canAuthorPeca={canAuthorPeca} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
                 {/* Alinha o wizard SOB a bolha do agente: mesma linha centrada
                     (.jc-msg-wrap) com um espaçador invisível no lugar do avatar.
                     onSaved/initialValues: quando o cadastro veio de um agendamento,
@@ -516,7 +522,7 @@ export default function JurisChatPanel({
                 </div>
               </div>
             ) : (
-              <MessageBubble key={msg.id} msg={msg} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
+              <MessageBubble key={msg.id} msg={msg} canAuthorPeca={canAuthorPeca} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
             ),
           )}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}

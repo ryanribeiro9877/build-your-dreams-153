@@ -4,8 +4,6 @@ import { X } from "lucide-react";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
-import { useMyWorkspace } from "@/hooks/useMyWorkspace";
-import { isPecaAuthor } from "@/lib/pecaAccess";
 import { SalvarMinutaModal } from "./SalvarMinutaModal";
 
 // Painel/modal que exibe a PEÇA COMPLETA fora do fluxo do chat.
@@ -23,17 +21,15 @@ export interface PecaModalProps {
   content: string;
   /** Nome do agente que gerou a peça (usado no PDF e no cabeçalho). */
   agentName?: string;
+  /** Só advogado/sócio criam/anexam peça → mostra "Salvar no cliente". Vem por
+   *  prop (calculado no JurisCloudOS) — não chamar useMyWorkspace aqui: já há
+   *  uma assinatura do canal workspace no pai e duplicá-la derruba a tela. */
+  canSave: boolean;
   onClose: () => void;
 }
 
-export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
+export function PecaModal({ content, agentName, canSave, onClose }: PecaModalProps) {
   const [showSave, setShowSave] = useState(false);
-  // Só advogado/sócio criam/anexam peça. Recepção só visualiza (a peça já
-  // anexada abre na aba Documentos do cliente) — não vê "Salvar no cliente".
-  // O backend bloqueia o INSERT de qualquer forma; aqui é para não mostrar um
-  // botão que iria falhar.
-  const { workspace } = useMyWorkspace();
-  const canSave = isPecaAuthor(workspace?.role_template?.code);
 
   // Fecha com ESC e trava o scroll do fundo enquanto o painel está aberto.
   useEffect(() => {
