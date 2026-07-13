@@ -288,20 +288,31 @@ function fileSlug(title: string | undefined): string {
   return `${slug || "peca"}_${stamp}.docx`;
 }
 
-// Ponto de entrada (browser): busca o template, injeta o corpo e baixa o .docx.
-export async function downloadMessageAsDocx(content: string, opts?: { title?: string }): Promise<void> {
+export const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// Gera o .docx (browser): busca o template, injeta o corpo e devolve o Blob +
+// nome de arquivo. Reusado tanto pelo download quanto pelo "salvar minuta no
+// cliente" (upload em client-documents), evitando reemitir a peça pelo LLM.
+export async function buildDocxBlob(
+  content: string, opts?: { title?: string },
+): Promise<{ blob: Blob; filename: string }> {
   const resp = await fetch(TEMPLATE_URL);
   if (!resp.ok) throw new Error(`não foi possível carregar o template (${resp.status})`);
   const buf = await resp.arrayBuffer();
   const corpo = buildCorpoXml(content);
   const bytes = await injectBodyIntoTemplate(buf, corpo);
-  const blob = new Blob([bytes as BlobPart], {
-    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  });
+  const blob = new Blob([bytes as BlobPart], { type: DOCX_MIME });
+  return { blob, filename: fileSlug(opts?.title) };
+}
+
+// Ponto de entrada (browser): gera o .docx e baixa.
+export async function downloadMessageAsDocx(content: string, opts?: { title?: string }): Promise<void> {
+  const { blob, filename } = await buildDocxBlob(content, opts);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = fileSlug(opts?.title);
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();

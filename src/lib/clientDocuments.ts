@@ -11,6 +11,7 @@
 // uma falha num arquivo não derruba os demais nem o cadastro.
 
 import { supabase } from "@/integrations/supabase/client";
+import { buildDocxBlob, DOCX_MIME } from "@/lib/bacellarDocx";
 
 // Slot = identidade do campo de upload na UI (frente/verso são dois slots
 // distintos, por decisão do Rodrigo). NÃO é o document_type gravado.
@@ -64,6 +65,8 @@ export interface DocInsertInput {
   origem?: string;
   /** default null — usado por áudio de atendimento p/ metadados de sessão/bloco. */
   notes?: string | null;
+  /** default null — vincula o documento a um card/tarefa (ONDA2/8.1: minuta↔card). */
+  taskId?: string | null;
 }
 
 // Payload puro do insert em client_documents (testável sem rede). O default de
@@ -84,6 +87,7 @@ export function buildDocInsert(
     file_size: d.fileSize,
     mime_type: d.mimeType,
     notes: d.notes ?? null,
+    task_id: d.taskId ?? null,
     uploaded_by: uploadedBy,
     status: d.status ?? "recebido",
     origem: d.origem ?? "recepcao",
@@ -145,6 +149,43 @@ export async function uploadSignedDocument(
   );
   if (insErr) return { ok: false, error: insErr.message };
   return { ok: true };
+}
+
+// ONDA2/8.1 — salva uma MINUTA gerada por IA no cadastro do cliente.
+// Gera o .docx no navegador (padrão Bacellar, mesmo motor do download), sobe no
+// bucket client-documents e registra em client_documents com document_type
+// 'minuta', origem 'sistema' e o vínculo ao card (task_id) quando houver.
+// Nunca reemite a peça pelo LLM: usa o texto COMPLETO já em mãos no chat.
+export async function saveGeneratedMinuta(
+  clientId: string,
+  clientName: string,
+  uploadedBy: string,
+  opts: { content: string; taskId?: string | null; title?: string; documentName?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { blob, filename } = await buildDocxBlob(opts.content, { title: opts.title ?? "minuta" });
+    const filePath = `${clientId}/${Date.now()}_minuta_${filename}`;
+    const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, blob, {
+      contentType: DOCX_MIME,
+    });
+    if (upErr) return { ok: false, error: upErr.message };
+    const { error: insErr } = await supabase.from("client_documents").insert(
+      buildDocInsert(clientId, clientName, uploadedBy, {
+        documentType: "minuta",
+        documentName: opts.documentName ?? "Minuta (gerada por IA)",
+        filePath,
+        fileSize: blob.size,
+        mimeType: DOCX_MIME,
+        status: "recebido",
+        origem: "sistema",
+        taskId: opts.taskId ?? null,
+      }) as never,
+    );
+    if (insErr) return { ok: false, error: insErr.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error)?.message ?? "erro ao salvar minuta" };
+  }
 }
 
 // Sobe todos os slots preenchidos, best-effort. Retorna o resultado por slot.

@@ -1,9 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
+import { SalvarMinutaModal } from "./SalvarMinutaModal";
 
 // Painel/modal que exibe a PEÇA COMPLETA fora do fluxo do chat.
 //
@@ -24,6 +25,8 @@ export interface PecaModalProps {
 }
 
 export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
+  const [showSave, setShowSave] = useState(false);
+
   // Fecha com ESC e trava o scroll do fundo enquanto o painel está aberto.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,6 +91,14 @@ export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
           </div>
           <button
             type="button"
+            onClick={() => setShowSave(true)}
+            title="Salvar como minuta no cadastro de um cliente"
+            style={{ ...btnBase, background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.35)", color: "#34D399" }}
+          >
+            💾 Salvar no cliente
+          </button>
+          <button
+            type="button"
             onClick={() => downloadMessageAsPdf(content, { agentName, title: "peca" })}
             title="Baixar esta peça em PDF"
             style={{ ...btnBase, background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)", color: "#EAB308" }}
@@ -129,6 +140,10 @@ export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
           <SafeMarkdown className="jc-msg-text">{content}</SafeMarkdown>
         </div>
       </div>
+
+      {showSave && (
+        <SalvarMinutaModal content={content} onClose={() => setShowSave(false)} />
+      )}
     </div>,
     document.body,
   );

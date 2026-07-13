@@ -81,4 +81,17 @@ describe("buildDocInsert — payload do insert em client_documents", () => {
     expect(row.status).toBe("recebido");
     expect(row.document_type).toBe("procuracao");
   });
+
+  it("task_id é null por padrão e reflete o vínculo quando informado (ONDA2/8.1)", () => {
+    const semTask = buildDocInsert("c1", "MARIA", "u1", {
+      documentType: "minuta", documentName: "Minuta", filePath: "c1/m.docx", fileSize: 1, mimeType: "x",
+    });
+    expect(semTask.task_id).toBeNull();
+    const comTask = buildDocInsert("c1", "MARIA", "u1", {
+      documentType: "minuta", documentName: "Minuta", filePath: "c1/m.docx", fileSize: 1, mimeType: "x",
+      origem: "sistema", taskId: "t1",
+    });
+    expect(comTask.task_id).toBe("t1");
+    expect(comTask.origem).toBe("sistema");
+  });
 });
