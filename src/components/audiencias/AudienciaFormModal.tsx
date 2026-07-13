@@ -3,12 +3,12 @@ import { toast } from "sonner";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { ClientAutocomplete } from "@/components/agenda/ClientAutocomplete";
 import {
-  createAudiencia, updateAudiencia, fetchProcessesByClientName,
+  createAudiencia, updateAudiencia, fetchClientProcesses, fetchAudienciaDatetimeAviso,
   type AudienciaRow, type ClientProcessOption,
 } from "@/hooks/useAudiencias";
 import {
   AUDIENCIA_STATUS_OPTIONS, audienciaStatusOptionsFor,
-  isoToLocalInput, localInputToISO, type AudienciaStatus,
+  isoToLocalInput, localInputToISO, mapAudienciaError, type AudienciaStatus,
 } from "@/lib/audiencias";
 
 // Ícones SVG inline — o app esconde os ícones do lucide-react globalmente e
@@ -53,27 +53,56 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
   const [status, setStatus] = useState<AudienciaStatus>(audiencia?.status ?? "marcada");
   const [observacoes, setObservacoes] = useState(audiencia?.observacoes ?? "");
   const [saving, setSaving] = useState(false);
+  // Só mostramos os erros inline depois que o usuário interage (evita abrir o
+  // formulário todo vermelho). Vira true no primeiro blur de qualquer campo.
+  const [showErrors, setShowErrors] = useState(false);
+  // Aviso não-bloqueante sobre a data/hora (fora do padrão de audiências).
+  const [dateAviso, setDateAviso] = useState("");
 
-  // Picker de processo: lista por client_name (processes não tem FK confiável p/
-  // clients — mesmo vínculo textual do ProcessosTab). Recarrega ao trocar cliente.
+  // Picker de processo: casa por client_id OU client_name (processes tem FK
+  // parcial — mesmo vínculo do ProcessosTab). Recarrega ao trocar cliente.
   useEffect(() => {
     let cancelled = false;
     const name = clientName.trim();
-    if (!name) { setProcesses([]); return; }
-    fetchProcessesByClientName(name)
+    if (!clientId && !name) { setProcesses([]); return; }
+    fetchClientProcesses(clientId, name)
       .then((rows) => { if (!cancelled) setProcesses(rows); })
       .catch(() => { if (!cancelled) setProcesses([]); });
     return () => { cancelled = true; };
-  }, [clientName]);
+  }, [clientId, clientName]);
+
+  // Aviso de data/hora: consulta a RPC quando muda (débito leve; degrada p/ '').
+  useEffect(() => {
+    let cancelled = false;
+    const iso = localInputToISO(dataHora);
+    if (!iso) { setDateAviso(""); return; }
+    fetchAudienciaDatetimeAviso(iso)
+      .then((motivo) => { if (!cancelled) setDateAviso(motivo); })
+      .catch(() => { if (!cancelled) setDateAviso(""); });
+    return () => { cancelled = true; };
+  }, [dataHora]);
 
   // Na criação, status arranca em "marcada"; na edição, respeita a máquina de estados.
   const statusChoices = isEdit && audiencia
     ? audienciaStatusOptionsFor(audiencia.status)
     : AUDIENCIA_STATUS_OPTIONS.filter((o) => o.value === "marcada" || o.value === "confirmada");
 
+  // Obrigatórios (casam com o backstop da RPC create_audiencia). Cliente e
+  // processo só valem na criação — o update não persiste esses vínculos. Data/
+  // hora e advogado valem sempre. Link/Local e o resto seguem opcionais.
+  const errClient = !isEdit && !clientId ? "Selecione o cliente." : null;
+  const errProcess = !isEdit && !processId ? "Selecione o processo / ação." : null;
+  const errAdvogado = !advogadoId ? "Selecione o advogado responsável." : null;
+  const errDataHora = !localInputToISO(dataHora) ? "Informe a data e hora da audiência." : null;
+  const invalid = !!(errClient || errProcess || errAdvogado || errDataHora);
+
   const save = async () => {
     const iso = localInputToISO(dataHora);
-    if (!iso) { toast.error("Data e hora da audiência são obrigatórias."); return; }
+    if (invalid || !iso) {
+      setShowErrors(true);
+      toast.error(errClient || errProcess || errAdvogado || errDataHora || "Preencha os campos obrigatórios.");
+      return;
+    }
     setSaving(true);
     try {
       if (isEdit && audiencia) {
@@ -103,7 +132,7 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
       }
       onSaved();
     } catch (e) {
-      toast.error(`Falha ao salvar: ${(e as Error).message}`);
+      toast.error(mapAudienciaError((e as Error).message));
     } finally {
       setSaving(false);
     }
@@ -111,6 +140,11 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
 
   const labelStyle = { display: "grid", gap: 4, fontSize: 13, fontWeight: 600 } as const;
   const inputStyle = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border, #ddd)", background: "var(--surface, #fff)", color: "var(--text1, #111)", font: "inherit", fontWeight: 400 } as const;
+  const errStyle = { color: "#dc2626", fontSize: 12, fontWeight: 500 } as const;
+  const warnStyle = { color: "#a16207", background: "rgba(234,179,8,0.15)", border: "1px solid rgba(234,179,8,0.55)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 500 } as const;
+  // Borda vermelha em campo obrigatório vazio, mas só depois de o usuário interagir.
+  const invalidBorder = (err: string | null) =>
+    showErrors && err ? { ...inputStyle, border: "1px solid #dc2626" } : inputStyle;
 
   return (
     <div role="dialog" aria-modal="true"
@@ -123,7 +157,7 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
           <button type="button" onClick={onClose} aria-label="Fechar"><IcX size={18} /></button>
         </div>
 
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gap: 12 }} onBlur={() => setShowErrors(true)}>
           {/* Cliente */}
           <label style={labelStyle}>Cliente
             {fixedClient ? (
@@ -135,17 +169,19 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
                 onChange={(name, id) => { setClientName(name); setClientId(id); if (id !== clientId) setProcessId(null); }}
               />
             )}
+            {showErrors && errClient && <span style={errStyle}>{errClient}</span>}
           </label>
 
-          {/* Processo — picker por client_name */}
+          {/* Processo — picker por cliente (id ou nome) */}
           <label style={labelStyle}>Processo / Ação
-            <select value={processId ?? ""} onChange={(e) => setProcessId(e.target.value || null)} style={inputStyle}
-              disabled={!clientName.trim()}>
+            <select value={processId ?? ""} onChange={(e) => setProcessId(e.target.value || null)} style={invalidBorder(errProcess)}
+              disabled={!clientName.trim()} aria-invalid={showErrors && !!errProcess}>
               <option value="">{clientName.trim() ? (processes.length ? "— Selecionar processo —" : "Nenhum processo vinculado a este cliente") : "Selecione o cliente primeiro"}</option>
               {processes.map((p) => (
                 <option key={p.id} value={p.id}>{p.process_number}{p.description ? ` · ${p.description}` : ""}</option>
               ))}
             </select>
+            {showErrors && errProcess && <span style={errStyle}>{errProcess}</span>}
           </label>
 
           <label style={labelStyle}>Tipo de ação
@@ -157,7 +193,14 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
           </label>
 
           <label style={labelStyle}>Data e hora
-            <input type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)} style={inputStyle} />
+            <input type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)}
+              style={invalidBorder(errDataHora)} aria-invalid={showErrors && !!errDataHora} />
+            {showErrors && errDataHora && <span style={errStyle}>{errDataHora}</span>}
+            {dateAviso && (
+              <span style={warnStyle} role="alert">
+                Atenção: horário fora do padrão de audiências ({dateAviso}). Você ainda pode salvar.
+              </span>
+            )}
           </label>
 
           <label style={labelStyle}>Link / Local
@@ -165,10 +208,12 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
           </label>
 
           <label style={labelStyle}>Advogado responsável
-            <select value={advogadoId} onChange={(e) => setAdvogadoId(e.target.value)} style={inputStyle}>
+            <select value={advogadoId} onChange={(e) => setAdvogadoId(e.target.value)} style={invalidBorder(errAdvogado)}
+              aria-invalid={showErrors && !!errAdvogado}>
               <option value="">—</option>
               {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
             </select>
+            {showErrors && errAdvogado && <span style={errStyle}>{errAdvogado}</span>}
           </label>
 
           <label style={labelStyle}>Status
@@ -183,8 +228,9 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-          <button type="button" onClick={save} disabled={saving}
-            style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EAB308", color: "#111", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
+          <button type="button" onClick={save} disabled={saving || invalid}
+            title={invalid ? (errClient || errProcess || errAdvogado || errDataHora || "") : undefined}
+            style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EAB308", color: "#111", fontWeight: 700, opacity: saving || invalid ? 0.6 : 1, cursor: saving || invalid ? "not-allowed" : "pointer" }}>
             {saving ? "Salvando…" : "Salvar"}
           </button>
           <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8 }}>Cancelar</button>

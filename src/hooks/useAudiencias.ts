@@ -151,20 +151,54 @@ export async function updateAudiencia(args: UpdateAudienciaArgs): Promise<void> 
   if (error) throw new Error(error.message ?? "Falha ao atualizar audiência");
 }
 
-/** Processos de um cliente (vínculo por `client_name`, como ProcessosTab). Para o picker de processo. */
+/** Processos de um cliente. Para o picker de processo. */
 export interface ClientProcessOption {
   id: string;
   process_number: string;
   description: string | null;
 }
-export async function fetchProcessesByClientName(clientName: string): Promise<ClientProcessOption[]> {
-  const term = clientName.trim();
-  if (!term) return [];
-  const { data, error } = await supabase
-    .from("processes")
-    .select("id, process_number, description")
-    .eq("client_name", term)
-    .order("created_at", { ascending: false });
-  if (error) return [];
-  return (data as ClientProcessOption[]) ?? [];
+
+/**
+ * Processos de um cliente casando por **client_id OU client_name**. A base tem
+ * processos com `client_id` preenchido E processos só com `client_name` (texto),
+ * e o vínculo por nome pode falhar por formatação — então buscamos pelos dois e
+ * unimos por id. O `client_id` (quando existe) é o casamento confiável; o nome
+ * cobre os processos legados sem FK. Espelha o vínculo textual do ProcessosTab,
+ * agora reforçado pelo id.
+ */
+export async function fetchClientProcesses(
+  clientId: string | null,
+  clientName: string,
+): Promise<ClientProcessOption[]> {
+  const name = clientName.trim();
+  if (!clientId && !name) return [];
+
+  const runs = await Promise.all([
+    clientId
+      ? supabase.from("processes").select("id, process_number, description").eq("client_id", clientId)
+      : null,
+    name
+      ? supabase.from("processes").select("id, process_number, description").eq("client_name", name)
+      : null,
+  ].filter((q): q is NonNullable<typeof q> => q !== null));
+
+  const byId = new Map<string, ClientProcessOption>();
+  for (const r of runs) {
+    if (r.error || !r.data) continue;
+    for (const row of r.data as ClientProcessOption[]) byId.set(row.id, row);
+  }
+  return Array.from(byId.values()).sort((a, b) => a.process_number.localeCompare(b.process_number, "pt-BR"));
+}
+
+/**
+ * Aviso não-bloqueante sobre a data/hora escolhida (RPC audiencia_datetime_aviso).
+ * Retorna '' quando o horário está dentro do padrão; senão o motivo ('após as
+ * 19:00', 'fim de semana / dia não útil', 'feriado', 'antes do horário de
+ * expediente (08:00)'). Em erro/indisponibilidade, degrada para '' (sem aviso).
+ */
+export async function fetchAudienciaDatetimeAviso(iso: string): Promise<string> {
+  if (!iso) return "";
+  const { data, error } = await (supabase as unknown as UntypedRpc).rpc("audiencia_datetime_aviso", { p_ts: iso });
+  if (error) return "";
+  return (data as string) ?? "";
 }

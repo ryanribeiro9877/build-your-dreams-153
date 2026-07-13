@@ -83,6 +83,22 @@ export function localInputToISO(local: string): string | null {
   return d.toISOString();
 }
 
+/**
+ * Traduz o erro cru das RPCs de audiência (create/update) para uma mensagem
+ * amigável. O backstop no servidor (create_audiencia) rejeita processo/advogado/
+ * data-hora nulos com textos fixos; casamos por trecho para não depender de
+ * pontuação/acentuação exata do Postgres.
+ */
+export function mapAudienciaError(msg: string | null | undefined): string {
+  const m = (msg ?? "").toLowerCase();
+  if (m.includes("processo")) return "Selecione o processo / ação — é obrigatório.";
+  if (m.includes("advogado")) return "Selecione o advogado responsável — é obrigatório.";
+  if (m.includes("data/hora")) return "Informe a data e hora da audiência.";
+  if (m.includes("sem permiss") || m.includes("42501")) return "Você não tem permissão para registrar audiências.";
+  if (m.includes("autenticado")) return "Sessão expirada. Entre novamente para continuar.";
+  return msg ?? "Falha ao salvar a audiência.";
+}
+
 /** "qua, 15/07/2026 · 14:30" — rótulo humano de um instante da audiência. */
 export function formatAudienciaDateTime(iso: string): string {
   const d = new Date(iso);
