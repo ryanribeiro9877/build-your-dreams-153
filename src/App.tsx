@@ -69,6 +69,7 @@ const ClientDetails = lazyWithRetry(() => import("./pages/ClientDetails.tsx"));
 const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
+const DashboardIA = lazyWithRetry(() => import("./pages/DashboardIA.tsx"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword.tsx"));
 const DefinePassword = lazyWithRetry(() => import("./pages/DefinePassword.tsx"));
 const AdminEmployees = lazyWithRetry(() => import("./pages/AdminEmployees.tsx"));
@@ -189,6 +190,7 @@ const App = () => (
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
+              <Route path="/dashboard-ia" element={<DashboardRoute><DashboardIA /></DashboardRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
 
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
