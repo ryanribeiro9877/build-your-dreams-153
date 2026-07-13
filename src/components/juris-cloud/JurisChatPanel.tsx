@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { isPecaAuthor } from "@/lib/pecaAccess";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import {
@@ -72,6 +74,11 @@ function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
   onCadastrarClienteTask?: (snapshot: PendingTask) => void;
 }) {
   const { user } = useAuth();
+  const { workspace } = useMyWorkspace();
+  // Só advogado/sócio "geram" peça: abrir a peça completa (PecaModal) e o fluxo
+  // de salvar/anexar são de autoria. Recepção só visualiza — vê a peça inteira
+  // inline e os downloads, mas sem "Ver peça completa" nem PecaModal.
+  const canAuthorPeca = isPecaAuthor(workspace?.role_template?.code);
   // "Ver peça completa" abre a peça inteira num painel separado (fora do chat).
   // A expansão vive no painel, não no balão — ao fechar, o chat volta ao trecho.
   const [showFullPeca, setShowFullPeca] = useState(false);
@@ -185,14 +192,18 @@ function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
                     // Mensagem curta/normal: exibida inteira, sem "Ver mais".
                     return <SafeMarkdown className="jc-msg-text">{cleanContent}</SafeMarkdown>;
                   }
-                  // Peça: mostra só o trecho (primeiras linhas) no balão. O download
-                  // e o "Ver peça completa" sempre usam a peça COMPLETA (cleanContent).
+                  // Peça: para o AUTOR (advogado/sócio) mostra só o trecho e
+                  // oferece "Ver peça completa" (PecaModal). Para a recepção
+                  // (só visualiza) mostra a peça inteira inline, sem expandir/
+                  // painel — mas mantém os downloads. O download e o "Ver peça
+                  // completa" sempre usam a peça COMPLETA (cleanContent).
                   const { preview, truncated } = truncatePecaPreview(cleanContent);
+                  const showExpand = truncated && canAuthorPeca;
                   return (
                     <>
                       <div style={{ position: "relative" }}>
-                        <SafeMarkdown className="jc-msg-text">{preview}</SafeMarkdown>
-                        {truncated && (
+                        <SafeMarkdown className="jc-msg-text">{canAuthorPeca ? preview : cleanContent}</SafeMarkdown>
+                        {showExpand && (
                           // Fade indicando que há mais conteúdo além do trecho.
                           <div
                             aria-hidden="true"
@@ -204,7 +215,7 @@ function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
                           />
                         )}
                       </div>
-                      {truncated && (
+                      {showExpand && (
                         <button
                           type="button"
                           onClick={() => setShowFullPeca(true)}
@@ -251,7 +262,7 @@ function MessageBubble({ msg, onCadastrarCliente, onCadastrarClienteTask }: {
                           ⬇ Baixar em DOCX (padrão Bacellar)
                         </button>
                       </div>
-                      {showFullPeca && (
+                      {showFullPeca && canAuthorPeca && (
                         <PecaModal
                           content={cleanContent}
                           agentName={msg.agent}

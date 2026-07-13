@@ -4,6 +4,8 @@ import { X } from "lucide-react";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import { downloadMessageAsPdf } from "@/lib/messageToPdf";
 import { downloadMessageAsDocx } from "@/lib/bacellarDocx";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { isPecaAuthor } from "@/lib/pecaAccess";
 import { SalvarMinutaModal } from "./SalvarMinutaModal";
 
 // Painel/modal que exibe a PEÇA COMPLETA fora do fluxo do chat.
@@ -26,6 +28,12 @@ export interface PecaModalProps {
 
 export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
   const [showSave, setShowSave] = useState(false);
+  // Só advogado/sócio criam/anexam peça. Recepção só visualiza (a peça já
+  // anexada abre na aba Documentos do cliente) — não vê "Salvar no cliente".
+  // O backend bloqueia o INSERT de qualquer forma; aqui é para não mostrar um
+  // botão que iria falhar.
+  const { workspace } = useMyWorkspace();
+  const canSave = isPecaAuthor(workspace?.role_template?.code);
 
   // Fecha com ESC e trava o scroll do fundo enquanto o painel está aberto.
   useEffect(() => {
@@ -89,14 +97,16 @@ export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowSave(true)}
-            title="Salvar como minuta no cadastro de um cliente"
-            style={{ ...btnBase, background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.35)", color: "#34D399" }}
-          >
-            💾 Salvar no cliente
-          </button>
+          {canSave && (
+            <button
+              type="button"
+              onClick={() => setShowSave(true)}
+              title="Salvar como minuta no cadastro de um cliente"
+              style={{ ...btnBase, background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.35)", color: "#34D399" }}
+            >
+              💾 Salvar no cliente
+            </button>
+          )}
           <button
             type="button"
             onClick={() => downloadMessageAsPdf(content, { agentName, title: "peca" })}
@@ -141,7 +151,7 @@ export function PecaModal({ content, agentName, onClose }: PecaModalProps) {
         </div>
       </div>
 
-      {showSave && (
+      {showSave && canSave && (
         <SalvarMinutaModal content={content} onClose={() => setShowSave(false)} />
       )}
     </div>,
