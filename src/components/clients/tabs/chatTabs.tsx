@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { Json } from "@/integrations/supabase/types";
-import { type ClientFull, EmptyState, TabLoading, formatDateBR } from "../shared";
+import { type ClientFull, EmptyState, TabLoading, formatDateBR, DOC_ORIGEM_LABELS } from "../shared";
 import { useAttendanceRecorder } from "@/hooks/useAttendanceRecorder";
 import {
   groupBySession, AUDIO_ATENDIMENTO_TYPE, type AudioDocRow,
@@ -12,69 +11,90 @@ import {
 } from "@/lib/attendanceTranscriptionClient";
 import { useAuth } from "@/hooks/useAuth";
 
-// Busca os ids das sessões de chat do cliente. `null` enquanto carrega.
-function useClientSessionIds(clientId: string) {
-  const [ids, setIds] = useState<string[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase.from("chat_sessions")
-        .select("id").eq("client_id", clientId);
-      if (cancelled) return;
-      setIds(error ? [] : ((data as { id: string }[] | null) ?? []).map(r => r.id));
-    })();
-    return () => { cancelled = true; };
-  }, [clientId]);
-  return ids;
+/* ---------- Peças (client_documents: minutas e petições iniciais) ----------
+   Peças ficam em public.client_documents (NÃO existe tabela `pecas`). A aba lista
+   as minutas/petições geradas ou anexadas ao cliente, com ou SEM vínculo a card:
+   minuta salva "sem card" tem task_id = null e também deve aparecer. Filtro por
+   document_type; sem filtro por task_id. */
+
+const PECA_DOC_TYPES = ["minuta", "peticao_inicial"] as const;
+
+const PECA_TYPE_LABELS: Record<string, string> = {
+  minuta: "Minuta",
+  peticao_inicial: "Petição Inicial",
+};
+
+interface PecaRow {
+  id: string;
+  document_name: string;
+  document_type: string;
+  file_path: string;
+  origem: string | null;
+  task_id: string | null;
+  created_at: string;
 }
 
-/* ---------- Peças (orchestration_runs das sessões do cliente) ---------- */
-
-interface RunRow {
-  id: string; acao_tipo: string | null; status: string; created_at: string;
-  original_message: string; draft: string | null; blocks: Json;
+// Baixa a peça (.docx) via URL assinada do bucket client-documents. O
+// Content-Disposition (opção `download`) força o download com nome amigável.
+async function downloadPeca(filePath: string, name: string) {
+  const { data, error } = await supabase.storage.from("client-documents")
+    .createSignedUrl(filePath, 60, { download: `${name}.docx` });
+  if (error || !data?.signedUrl) { toast.error("Não foi possível baixar a peça"); return; }
+  const a = document.createElement("a");
+  a.href = data.signedUrl;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export function PecasTab({ client }: { client: ClientFull }) {
-  const sessionIds = useClientSessionIds(client.id);
-  const [runs, setRuns] = useState<RunRow[] | null>(null);
+  const [pecas, setPecas] = useState<PecaRow[] | null>(null);
 
   useEffect(() => {
-    if (sessionIds === null) return;
-    if (sessionIds.length === 0) { setRuns([]); return; }
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.from("orchestration_runs")
-        .select("id, acao_tipo, status, created_at, original_message, draft, blocks")
-        .in("session_id", sessionIds)
+      const { data, error } = await supabase.from("client_documents")
+        .select("id, document_name, document_type, file_path, origem, task_id, created_at")
+        .eq("client_id", client.id)
+        .in("document_type", [...PECA_DOC_TYPES])
         .order("created_at", { ascending: false });
       if (cancelled) return;
-      setRuns(error ? [] : ((data as RunRow[]) ?? []));
+      setPecas(error ? [] : ((data as PecaRow[]) ?? []));
     })();
     return () => { cancelled = true; };
-  }, [sessionIds]);
+  }, [client.id]);
 
-  if (sessionIds === null || runs === null) return <TabLoading />;
-  // Peça "gerada" = orquestração que produziu conteúdo (draft ou blocks).
-  const pecas = runs.filter(r => !!r.draft || (Array.isArray(r.blocks) && r.blocks.length > 0));
+  if (pecas === null) return <TabLoading />;
   if (pecas.length === 0) {
-    return <EmptyState icon="✦" title="Nenhuma peça gerada" hint="Peças produzidas pela orquestração da IA nas sessões do cliente aparecem aqui." />;
+    return <EmptyState icon="✦" title="Nenhuma peça gerada" hint="Minutas e petições geradas pela IA ou anexadas ao cliente aparecem aqui." />;
   }
   return (
     <div className="cli-card lift">
       <div className="cli-sec-title">Peças · {pecas.length}</div>
-      {pecas.map(run => (
-        <div key={run.id} className="cli-row">
-          <div className="dot">✦</div>
-          <div className="body">
-            <div className="t">{run.acao_tipo || "Peça gerada"}</div>
-            <div className="s" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {run.original_message} · {formatDateBR(run.created_at)}
+      {pecas.map(peca => {
+        const vinculada = peca.task_id != null;
+        return (
+          <div key={peca.id} className="cli-row">
+            <div className="dot">✦</div>
+            <div className="body">
+              <div className="t">{peca.document_name}</div>
+              <div className="s">
+                {PECA_TYPE_LABELS[peca.document_type] ?? peca.document_type}
+                {peca.origem ? ` · ${DOC_ORIGEM_LABELS[peca.origem] ?? peca.origem}` : ""}
+                {` · ${formatDateBR(peca.created_at)}`}
+              </div>
             </div>
+            <span style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto", flexShrink: 0 }}>
+              <span className={`cli-chip ${vinculada ? "ok" : "n"}`}>
+                {vinculada ? "vinculada ao card" : "sem vínculo a card"}
+              </span>
+              <button className="go" onClick={() => void downloadPeca(peca.file_path, peca.document_name)}
+                title="Baixar peça (.docx)">↓</button>
+            </span>
           </div>
-          <span className="cli-chip n" style={{ marginLeft: "auto" }}>{run.status}</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
