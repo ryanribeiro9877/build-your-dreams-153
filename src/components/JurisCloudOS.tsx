@@ -7,6 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
+import { isDashboardRole } from "@/components/DashboardRoute";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
 import { ingestChatAttachments } from "@/lib/ingestChatAttachments";
@@ -1806,7 +1807,9 @@ export default function JurisCloudOS() {
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenuItem("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenuItem("agenda") },
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
-    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenuItem("dashboard") },
+    // Dashboard restrito a tech + sócio (role_templates.code). Mesmo critério do
+    // guard de rota (DashboardRoute), para link e rota ficarem 1:1.
+    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: isDashboardRole(workspace?.role_template?.code) },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: canSeeMenuItem("organograma") && hasRole("tech") },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/tech/agentes"), show: hasRole("tech") },

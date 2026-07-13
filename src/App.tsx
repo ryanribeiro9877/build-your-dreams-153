@@ -9,6 +9,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
+import { DashboardRoute } from "@/components/DashboardRoute";
 
 // E5: chunk lazy obsoleto após um redeploy (hash mudou na Vercel) faz o import()
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
@@ -187,7 +188,7 @@ const App = () => (
               <Route path="/clientes/:id/editar" element={<ProtectedRoute><ClientEdit /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
 
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
