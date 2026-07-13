@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { ClientAutocomplete } from "@/components/agenda/ClientAutocomplete";
@@ -149,7 +150,11 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
   const invalidBorder = (err: string | null) =>
     showErrors && err ? { ...inputStyle, border: "1px solid #dc2626" } : inputStyle;
 
-  return (
+  // Portal para document.body: tira o overlay de qualquer ancestral com
+  // transform/filter (shell/página), que faria o `position: fixed` ancorar no
+  // topo do ancestral em vez de centralizar na viewport. Vale para os dois
+  // caminhos de render (módulo e aba via fixedClient) — é o único return.
+  return createPortal(
     <div role="dialog" aria-modal="true"
       style={{
         // Cor de backdrop do token; alinhamento FORÇADO aqui (não depende do
@@ -245,6 +250,7 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
           <button type="button" onClick={onClose} style={btnGhost}>Cancelar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
