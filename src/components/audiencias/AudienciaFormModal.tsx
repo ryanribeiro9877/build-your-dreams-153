@@ -150,8 +150,17 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
     showErrors && err ? { ...inputStyle, border: "1px solid #dc2626" } : inputStyle;
 
   return (
-    <div role="dialog" aria-modal="true" style={overlay} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ ...modal, color: COLORS.text1 }}>
+    <div role="dialog" aria-modal="true"
+      style={{
+        // Cor de backdrop do token; alinhamento FORÇADO aqui (não depende do
+        // kanbanStyles.overlay — evita regredir a ancoragem no topo se o token mudar).
+        ...overlay,
+        position: "fixed", inset: 0, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: 0,
+      }}
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ ...modal, color: COLORS.text1, maxHeight: "88vh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1, color: COLORS.text1, fontFamily: FONT }}>{isEdit ? "Editar audiência" : "Nova audiência"}</h2>
           <button type="button" onClick={onClose} aria-label="Fechar" style={{ background: "transparent", border: "none", color: COLORS.text2, cursor: "pointer" }}><IcX size={18} /></button>
