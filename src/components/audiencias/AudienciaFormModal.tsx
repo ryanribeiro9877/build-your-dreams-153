@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type CSSProperties } from "react";
 import { toast } from "sonner";
 import { useMeetingLawyers } from "@/hooks/useMeetingLawyers";
 import { ClientAutocomplete } from "@/components/agenda/ClientAutocomplete";
@@ -10,6 +10,9 @@ import {
   AUDIENCIA_STATUS_OPTIONS, audienciaStatusOptionsFor,
   isoToLocalInput, localInputToISO, mapAudienciaError, type AudienciaStatus,
 } from "@/lib/audiencias";
+// Reutiliza os MESMOS tokens/estilos dos modais do /sistema (dark surface, âmbar,
+// overlay centralizado, caixa com rolagem interna) — não inventar hex.
+import { overlay, modal, input, btnPrimary, btnGhost, COLORS, FONT } from "@/components/kanban/kanbanStyles";
 
 // Ícones SVG inline — o app esconde os ícones do lucide-react globalmente e
 // mostra o texto do aria-label em botões só-de-ícone (ver src/index.css); SVG
@@ -138,8 +141,8 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
     }
   };
 
-  const labelStyle = { display: "grid", gap: 4, fontSize: 13, fontWeight: 600 } as const;
-  const inputStyle = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border, #ddd)", background: "var(--surface, #fff)", color: "var(--text1, #111)", font: "inherit", fontWeight: 400 } as const;
+  const labelStyle: CSSProperties = { display: "grid", gap: 4, fontSize: 12, fontWeight: 600, color: COLORS.goldBright, fontFamily: FONT };
+  const inputStyle: CSSProperties = { ...input, width: "100%", colorScheme: "dark" };
   const errStyle = { color: "#dc2626", fontSize: 12, fontWeight: 500 } as const;
   const warnStyle = { color: "#a16207", background: "rgba(234,179,8,0.15)", border: "1px solid rgba(234,179,8,0.55)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 500 } as const;
   // Borda vermelha em campo obrigatório vazio, mas só depois de o usuário interagir.
@@ -147,14 +150,11 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
     showErrors && err ? { ...inputStyle, border: "1px solid #dc2626" } : inputStyle;
 
   return (
-    <div role="dialog" aria-modal="true"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
-      onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{ background: "var(--surface, #fff)", color: "var(--text1, #111)", borderRadius: 12, padding: 20, width: "min(560px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
+    <div role="dialog" aria-modal="true" style={overlay} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...modal, color: COLORS.text1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{isEdit ? "Editar audiência" : "Nova audiência"}</h2>
-          <button type="button" onClick={onClose} aria-label="Fechar"><IcX size={18} /></button>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1, color: COLORS.text1, fontFamily: FONT }}>{isEdit ? "Editar audiência" : "Nova audiência"}</h2>
+          <button type="button" onClick={onClose} aria-label="Fechar" style={{ background: "transparent", border: "none", color: COLORS.text2, cursor: "pointer" }}><IcX size={18} /></button>
         </div>
 
         <div style={{ display: "grid", gap: 12 }} onBlur={() => setShowErrors(true)}>
@@ -230,10 +230,10 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
           <button type="button" onClick={save} disabled={saving || invalid}
             title={invalid ? (errClient || errProcess || errAdvogado || errDataHora || "") : undefined}
-            style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EAB308", color: "#111", fontWeight: 700, opacity: saving || invalid ? 0.6 : 1, cursor: saving || invalid ? "not-allowed" : "pointer" }}>
+            style={{ ...btnPrimary, opacity: saving || invalid ? 0.6 : 1, cursor: saving || invalid ? "not-allowed" : "pointer" }}>
             {saving ? "Salvando…" : "Salvar"}
           </button>
-          <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8 }}>Cancelar</button>
+          <button type="button" onClick={onClose} style={btnGhost}>Cancelar</button>
         </div>
       </div>
     </div>
