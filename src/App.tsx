@@ -9,7 +9,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
-import { DashboardRoute } from "@/components/DashboardRoute";
+import { DashboardRoute, SocioRoute, RecepcaoRoute } from "@/components/DashboardRoute";
 
 // E5: chunk lazy obsoleto após um redeploy (hash mudou na Vercel) faz o import()
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
@@ -194,8 +194,8 @@ const App = () => (
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
               <Route path="/dashboard-ia" element={<DashboardRoute><DashboardIA /></DashboardRoute>} />
-              <Route path="/dashboard-operacional" element={<DashboardRoute><DashboardOperacional /></DashboardRoute>} />
-              <Route path="/dashboard-prazos" element={<DashboardRoute><DashboardPrazos /></DashboardRoute>} />
+              <Route path="/dashboard-operacional" element={<SocioRoute><DashboardOperacional /></SocioRoute>} />
+              <Route path="/dashboard-prazos" element={<SocioRoute><DashboardPrazos /></SocioRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
 
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
@@ -212,7 +212,7 @@ const App = () => (
               <Route path="/tech/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
               <Route path="/tech/crons" element={<TechRoute><CronJobs /></TechRoute>} />
               <Route path="/tech/testes" element={<TechRoute><TechTestes /></TechRoute>} />
-              <Route path="/tech/importar" element={<TechRoute><ImportarDados /></TechRoute>} />
+              <Route path="/tech/importar" element={<RecepcaoRoute><ImportarDados /></RecepcaoRoute>} />
 
               {/* Compat: caminhos antigos redirecionam para o novo prefixo /tech/* (bookmarks/links legados). */}
               <Route path="/admin/agentes" element={<Navigate to="/tech/agentes" replace />} />

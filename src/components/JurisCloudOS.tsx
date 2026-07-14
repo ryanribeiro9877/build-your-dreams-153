@@ -7,7 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
-import { isDashboardRole } from "@/components/DashboardRoute";
+import { isDashboardRole, isSocioRole, isRecepcaoRole } from "@/components/DashboardRoute";
 import { isPecaAuthor } from "@/lib/pecaAccess";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
@@ -136,7 +136,7 @@ const GlobalStyles = () => (
        à esquerda p/ o botão de recolher não sobrepor o rótulo — nos dois estados
        (expandido o toggle invade ~36px do main; recolhido ~44px). No mobile o
        toggle some (display:none) e o recuo volta ao normal (ver @media 768px). */
-    .jc-acting-as-bar { padding: 8px 16px 8px 56px; }
+    .jc-acting-as-bar { padding: 8px 16px 8px 64px; }
     .jc-sidebar-toggle::before {
       content: ""; position: absolute; inset: 0; border-radius: inherit;
       background: radial-gradient(ellipse at center, rgba(234,179,8,0.18) 0%, rgba(234,179,8,0) 70%);
@@ -1895,15 +1895,15 @@ export default function JurisCloudOS() {
     // Dashboard IA (9.2) — mesmo gate tech+sócio (role_templates.code) e rota
     // guardada por DashboardRoute, para link e rota ficarem 1:1.
     { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: isDashboardRole(workspace?.role_template?.code) },
-    { id: "dashboard_operacional", label: "Recepção & Jurídico", icon: Users, color: ACCENT, action: () => navigate("/dashboard-operacional"), show: isDashboardRole(workspace?.role_template?.code) },
-    { id: "dashboard_prazos", label: "Prazos & Audiências", icon: Clock, color: ACCENT, action: () => navigate("/dashboard-prazos"), show: isDashboardRole(workspace?.role_template?.code) },
+    { id: "dashboard_operacional", label: "Recepção & Jurídico", icon: Users, color: ACCENT, action: () => navigate("/dashboard-operacional"), show: isSocioRole(workspace?.role_template?.code) },
+    { id: "dashboard_prazos", label: "Prazos & Audiências", icon: Clock, color: ACCENT, action: () => navigate("/dashboard-prazos"), show: isSocioRole(workspace?.role_template?.code) },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: false /* removido do menu do tech */ },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") && !hasRole("tech") },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/tech/agentes"), show: hasRole("tech") },
     { id: "testes", label: "Testes", icon: FlaskConical, color: ACCENT, action: () => navigate("/tech/testes"), show: hasRole("tech") },
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/tech/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/tech/providers"), show: hasRole("tech") },
-    { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: hasRole("tech") },
+    { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: isRecepcaoRole(workspace?.role_template?.code) },
     { id: "configuracoes", label: "Configurações", icon: Settings, color: ACCENT, action: () => {}, show: CONFIG_MENU_CHILDREN.some(c => c.show), children: CONFIG_MENU_CHILDREN },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
