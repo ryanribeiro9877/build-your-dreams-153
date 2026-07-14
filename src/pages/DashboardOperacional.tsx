@@ -119,7 +119,7 @@ export default function DashboardOperacional() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} interval="preserveStartEnd" minTickGap={20} />
             <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c9a84c" }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} />
             <Area type="monotone" dataKey="n" name="Novos clientes" stroke="#c9a84c" fillOpacity={1} fill="url(#opGold)" strokeWidth={2} dot={false} />
           </AreaChart>
         </ResponsiveContainer>
@@ -135,7 +135,7 @@ export default function DashboardOperacional() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={110} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Tarefas" radius={[0, 4, 4, 0]}>
                 {tasksStatus.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Bar>
@@ -149,7 +149,7 @@ export default function DashboardOperacional() {
               <Pie data={tasksPriority} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
                 {tasksPriority.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -164,7 +164,7 @@ export default function DashboardOperacional() {
               <Pie data={clientsOrigin} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
                 {clientsOrigin.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -176,7 +176,7 @@ export default function DashboardOperacional() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={110} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Documentos" radius={[0, 4, 4, 0]}>
                 {docsType.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Bar>
@@ -192,7 +192,7 @@ export default function DashboardOperacional() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} />
             <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
             <Bar dataKey="count" name="Processos" radius={[4, 4, 0, 0]}>
               {procStatus.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
             </Bar>

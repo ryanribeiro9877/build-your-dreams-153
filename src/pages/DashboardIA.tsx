@@ -51,7 +51,7 @@ const cardStyle: React.CSSProperties = {
 const titleStyle: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, color: "var(--gold, #c9a84c)", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.08em",
 };
-const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11 };
+const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11, color: "#e5e7eb" };
 
 export default function DashboardIA() {
   const navigate = useNavigate();
@@ -177,7 +177,7 @@ export default function DashboardIA() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} interval="preserveStartEnd" minTickGap={20} />
             <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c9a84c" }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
             <Area type="monotone" dataKey="runs" name="Runs" stroke="#c9a84c" fillOpacity={1} fill="url(#iaGoldGrad)" strokeWidth={2} dot={false} />
             <Area type="monotone" dataKey="human" name="Turnos humanos" stroke="#22c55e" fillOpacity={1} fill="url(#iaGreenGrad)" strokeWidth={1.5} dot={false} />
@@ -194,7 +194,7 @@ export default function DashboardIA() {
               <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} label={({ name, value }) => `${name}: ${value}`}>
                 {statusData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -207,7 +207,7 @@ export default function DashboardIA() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} />
               <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c9a84c" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Runs" radius={[4, 4, 0, 0]} fill="#f59e0b" />
             </BarChart>
           </ResponsiveContainer>
@@ -223,7 +223,7 @@ export default function DashboardIA() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={110} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Runs" radius={[0, 4, 4, 0]}>
                 {intentData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
@@ -238,7 +238,7 @@ export default function DashboardIA() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--text3, #888)" }} />
               <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Mensagens" radius={[4, 4, 0, 0]}>
                 {turnData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
@@ -256,7 +256,7 @@ export default function DashboardIA() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={130} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="messages" name="Mensagens" radius={[0, 4, 4, 0]}>
                 {modelData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
@@ -271,7 +271,7 @@ export default function DashboardIA() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} tickFormatter={(v) => fmtTokens(Number(v))} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={130} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => fmtTokens(Number(v))} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} formatter={(v) => fmtTokens(Number(v))} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               <Bar dataKey="tokIn" name="Entrada" stackId="tok" fill="#6366f1" radius={[0, 0, 0, 0]} />
               <Bar dataKey="tokOut" name="Saída" stackId="tok" fill="#c9a84c" radius={[0, 4, 4, 0]} />

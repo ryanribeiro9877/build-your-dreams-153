@@ -16,7 +16,7 @@ export const cardStyle: React.CSSProperties = {
 export const titleStyle: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, color: "var(--gold, #c9a84c)", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.08em",
 };
-export const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11 };
+export const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11, color: "#e5e7eb" };
 export const PALETTE = ["#c9a84c", "#8b5cf6", "#06b6d4", "#f59e0b", "#14b8a6", "#ef4444", "#6366f1", "#22c55e"];
 
 export const fmtInt = (n: number) => (n ?? 0).toLocaleString("pt-BR");

@@ -94,7 +94,7 @@ export default function DashboardPrazos() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--text3, #888)" }} />
             <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
             <Bar dataKey="count" name="Tarefas" radius={[4, 4, 0, 0]}>
               {deadlineData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
             </Bar>
@@ -112,7 +112,7 @@ export default function DashboardPrazos() {
               <Pie data={audienciaStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
                 {audienciaStatus.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -124,7 +124,7 @@ export default function DashboardPrazos() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={100} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Cards" radius={[0, 4, 4, 0]}>
                 {criticidade.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Bar>

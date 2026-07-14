@@ -98,7 +98,7 @@ export default function Dashboard() {
   const titleStyle: React.CSSProperties = {
     fontSize: 13, fontWeight: 600, color: "var(--gold, #c9a84c)", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.08em",
   };
-  const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11 };
+  const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11, color: "#e5e7eb" };
 
   if (loading) {
     return <HexagonLoader variant="fullscreen" label="Carregando dashboard..." />;
@@ -152,7 +152,7 @@ export default function Dashboard() {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} />
             <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c9a84c" }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} />
             <Area type="monotone" dataKey="count" name="Tarefas" stroke="#c9a84c" fillOpacity={1} fill="url(#goldGrad)" strokeWidth={2} dot={{ r: 3, fill: "#c9a84c" }} />
           </AreaChart>
         </ResponsiveContainer>
@@ -167,7 +167,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} angle={-20} textAnchor="end" height={60} />
               <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#c9a84c" }} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} />
               <Bar dataKey="count" name="Tarefas" radius={[4, 4, 0, 0]}>
                 {byCategory.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
               </Bar>
@@ -182,7 +182,7 @@ export default function Dashboard() {
               <Pie data={byPriority} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, count }) => count > 0 ? `${name}: ${count}` : ""}>
                 {byPriority.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -195,7 +195,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} width={100} />
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
               <Bar dataKey="count" name="Tarefas" radius={[0, 4, 4, 0]}>
                 {byStatus.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
