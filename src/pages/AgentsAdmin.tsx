@@ -65,6 +65,29 @@ async function fetchTemplateCatalog(): Promise<TemplateCatalogEntry[]> {
     });
   }
 
+  // Agentes globais do sistema (sem template): orquestrados diretamente, não
+  // provisionados por papel — ex.: "Especialista Distribuição". Sem isto, um
+  // agente ativo e válido fica invisível nesta aba só por não ter template.
+  const { data: globalAgents } = await supabase
+    .from("agents")
+    .select("id, name, role, color")
+    .is("source_template_id", null)
+    .eq("is_active", true)
+    .eq("is_personal", false);
+  for (const g of (globalAgents || []) as any[]) {
+    entries.push({
+      templateId: g.id,
+      code: g.id,
+      displayName: g.name,
+      role: g.role,
+      stage: null,
+      area: null,
+      defaultColor: g.color || "#0F766E",
+      roleName: "Global (sistema)",
+      roleCode: "global",
+    });
+  }
+
   entries.sort((a, b) => {
     const ra = roleMap[Object.keys(roleMap).find(k => roleMap[k].code === a.roleCode)!]?.sortOrder ?? 99;
     const rb = roleMap[Object.keys(roleMap).find(k => roleMap[k].code === b.roleCode)!]?.sortOrder ?? 99;
