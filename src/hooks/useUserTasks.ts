@@ -369,3 +369,46 @@ export async function createChatTask(input: CreateChatTaskInput): Promise<string
   if (error) throw error;
   return data as unknown as string;
 }
+
+// ─── Card 8.2 — Revisão humana + log de aprovação ─────────────────────────────
+// Único caminho para decidir uma tarefa `revisar_peca`. Aprovar exige aceite=true
+// (responsabilidade assumida); devolver reabre a confecção original. A criação
+// da tarefa de protocolo é automática no banco (trigger), condicionada à decisão
+// aqui registrada — nunca chamar update_user_task_status para revisar_peca.
+export interface RevisaoPecaContext {
+  task: { id: string; title: string; status: UserTaskStatus; deadline_at: string | null; created_at: string };
+  process: { id: string; process_number: string | null; client_name: string | null } | null;
+  client_document: {
+    id: string; document_name: string | null; document_type: string;
+    file_path: string; mime_type: string | null; created_at: string;
+  } | null;
+  redator_name: string | null;
+  fallback: boolean | null;
+  fallback_reason: string | null;
+  approval_history: {
+    decisao: "aprovar" | "devolver"; aceite: boolean; observacoes: string | null;
+    created_at: string; decided_by_name: string | null;
+  }[];
+}
+
+export async function getRevisaoPecaContext(taskId: string): Promise<RevisaoPecaContext> {
+  const { data, error } = await rpcUntyped("get_revisao_peca_context", { p_task_id: taskId });
+  if (error) throw error;
+  return data as unknown as RevisaoPecaContext;
+}
+
+export async function decidirRevisaoPeca(
+  taskId: string,
+  decisao: "aprovar" | "devolver",
+  observacoes: string | undefined,
+  aceite: boolean,
+): Promise<UserTaskStatus> {
+  const { data, error } = await rpcUntyped("decidir_revisao_peca", {
+    p_task_id: taskId,
+    p_decisao: decisao,
+    p_observacoes: observacoes ?? null,
+    p_aceite: aceite,
+  });
+  if (error) throw error;
+  return data as unknown as UserTaskStatus;
+}

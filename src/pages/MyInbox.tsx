@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import TaskAttachments from "@/components/TaskAttachments";
+import RevisaoPecaPanel from "@/components/RevisaoPecaPanel";
 import { useMyInbox, updateUserTaskStatus } from "@/hooks/useUserTasks";
 import { RescheduleInline } from "@/components/chat/RescheduleInline";
 import { toast } from "sonner";
@@ -154,6 +155,7 @@ export default function MyInbox() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {tasks.map((task) => {
               const isCompleted = task.status === "completed" || task.status === "cancelled";
+              const isRevisao = task.task_type_code === "revisar_peca";
               const next = NEXT_STATUS[task.status];
               return (
                 <div
@@ -203,7 +205,7 @@ export default function MyInbox() {
                         </span>
                       </div>
                     </div>
-                    {next && !isCompleted && (
+                    {next && !isCompleted && !isRevisao && (
                       <button
                         onClick={() => advance(task.id, task.status)}
                         disabled={updatingId === task.id}
@@ -228,7 +230,7 @@ export default function MyInbox() {
                   {/* Ações: concluir / reagendar / anexos */}
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #25253a" }}>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {!isCompleted && (
+                      {!isCompleted && !isRevisao && (
                         <button
                           onClick={() => openComplete(task.id)}
                           disabled={updatingId === task.id}
@@ -325,6 +327,10 @@ export default function MyInbox() {
                           onDone={() => { setReschedulingId(null); void refresh(); }}
                         />
                       </div>
+                    )}
+
+                    {isRevisao && !isCompleted && (
+                      <RevisaoPecaPanel taskId={task.id} onDecided={() => void refresh()} />
                     )}
 
                     {expandedId === task.id && (
