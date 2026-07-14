@@ -28,6 +28,18 @@ function broadcastOnline() {
   onlineListeners.forEach((fn) => fn(ids));
 }
 
+/**
+ * Grava o heartbeat de presença no banco (RPC heartbeat_ping).
+ * A Realtime Presence acima é 100% client-side/efêmera — nenhuma função de
+ * banco a alcança. Este heartbeat é o sinal persistente que o backend
+ * (is_user_online) consulta para o fallback de e-mail do Agente Supervisor.
+ * `as never`: a RPC foi criada direto no banco e ainda não consta em types.ts.
+ * Chamada acoplada a `supabase` de propósito (rpc desacoplado quebra em this.rest).
+ */
+function pingHeartbeat() {
+  void supabase.rpc("heartbeat_ping" as never);
+}
+
 /** Canal único: handlers de presence sempre antes do subscribe. */
 function ensureChannel(trackKey: string | null) {
   if (channel) {
@@ -56,6 +68,7 @@ function ensureChannel(trackKey: string | null) {
             user_id: trackKey,
             at: new Date().toISOString(),
           });
+          pingHeartbeat();
         }
         broadcastOnline();
       }
@@ -73,6 +86,7 @@ export function startPlatformPresence(userId: string) {
       user_id: userId,
       at: new Date().toISOString(),
     });
+    pingHeartbeat();
   }, 30_000);
 }
 
