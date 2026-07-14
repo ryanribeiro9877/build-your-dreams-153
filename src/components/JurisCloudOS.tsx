@@ -131,6 +131,12 @@ const GlobalStyles = () => (
       backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     }
     .jc-sidebar-toggle.is-collapsed { left: 12px; }
+    /* Barra "Atuar como" (tech): é o 1º elemento do main e cai na mesma faixa
+       vertical do jc-sidebar-toggle (position:fixed, top:78px). Recuo o conteúdo
+       à esquerda p/ o botão de recolher não sobrepor o rótulo — nos dois estados
+       (expandido o toggle invade ~36px do main; recolhido ~44px). No mobile o
+       toggle some (display:none) e o recuo volta ao normal (ver @media 768px). */
+    .jc-acting-as-bar { padding: 8px 16px 8px 56px; }
     .jc-sidebar-toggle::before {
       content: ""; position: absolute; inset: 0; border-radius: inherit;
       background: radial-gradient(ellipse at center, rgba(234,179,8,0.18) 0%, rgba(234,179,8,0) 70%);
@@ -601,6 +607,8 @@ const GlobalStyles = () => (
       .jc-sidebar.collapsed .jc-section-label, .jc-sidebar.collapsed .jc-nav-label,
       .jc-sidebar.collapsed .jc-nav-badge, .jc-sidebar.collapsed .jc-agent-name { display: revert; }
       .jc-sidebar-toggle { display: none; }
+      /* Toggle escondido no mobile → sem sobreposição, recuo volta ao normal. */
+      .jc-acting-as-bar { padding-left: 16px; }
       .jc-sidebar-overlay.visible { display: block; }
       .jc-hamburger { display: block; }
       .jc-topbar { padding: 8px 10px 10px; gap: 8px; }

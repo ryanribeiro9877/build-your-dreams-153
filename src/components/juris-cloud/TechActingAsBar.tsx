@@ -35,7 +35,8 @@ export default function TechActingAsBar({ sectors, activeTarget, onSelect, disab
       className="jc-acting-as-bar"
       style={{
         display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-        padding: "8px 16px",
+        // padding vem de .jc-acting-as-bar (GlobalStyles) p/ ser responsivo e
+        // deixar espaço à esquerda ao botão de recolher a barra lateral.
         borderBottom: "1px solid var(--border, #1e1e2e)",
         background: isTest ? "rgba(234,179,8,0.06)" : "transparent",
       }}
