@@ -2884,10 +2884,14 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
     }
     return jsonResp({ ok: true, cancelled: true });
   }
+  const { data: sessRow } = await admin.from("chat_sessions").select("is_tech_test").eq("id", action.session_id).maybeSingle();
+  const isDryRun = !!(sessRow as { is_tech_test?: boolean } | null)?.is_tech_test;
   const perms = await loadActionPerms(admin, user.id);
   const route = decideActionRoute(perms, action.tool);
   let exec;
-  if (route === "pendencia") {
+  if (isDryRun) {
+    exec = { ok: true, result: { dry_run: true, tool: action.tool, would: humanSummary(action.tool, action.args) } };
+  } else if (route === "pendencia") {
     const adminUserId = await firstAdminUserId(admin);
     exec = adminUserId ? await routeAsPendencia(userClient, adminUserId, action.tool, action.args) : { ok: false, error: "nenhum admin encontrado" };
   } else {
@@ -2900,8 +2904,8 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
   const seq = await nextSeq(admin, action.session_id);
   await admin.from("chat_messages").insert({
     session_id: action.session_id, user_id: user.id, role: "assistant", sequence_number: seq,
-    content: exec.ok ? (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso.") : `Não consegui executar: ${exec.error}`,
-    metadata: { kind: "action_done", action_id: action.id, ok: exec.ok },
+    content: exec.ok ? (isDryRun ? `🧪 Teste (dry-run): não gravei nada em produção. Em uso real eu faria — ${humanSummary(action.tool, action.args)}` : (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso.")) : `Não consegui executar: ${exec.error}`,
+    metadata: { kind: isDryRun ? "action_dry_run" : "action_done", action_id: action.id, ok: exec.ok },
   });
   const { data: remaining } = await admin.from("agent_actions")
     .select("id").eq("run_id", body.runId).eq("status", "proposed");
