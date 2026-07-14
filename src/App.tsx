@@ -70,6 +70,8 @@ const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
 const DashboardIA = lazyWithRetry(() => import("./pages/DashboardIA.tsx"));
+const DashboardOperacional = lazyWithRetry(() => import("./pages/DashboardOperacional.tsx"));
+const DashboardPrazos = lazyWithRetry(() => import("./pages/DashboardPrazos.tsx"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword.tsx"));
 const DefinePassword = lazyWithRetry(() => import("./pages/DefinePassword.tsx"));
 const AdminEmployees = lazyWithRetry(() => import("./pages/AdminEmployees.tsx"));
@@ -191,6 +193,8 @@ const App = () => (
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
               <Route path="/dashboard-ia" element={<DashboardRoute><DashboardIA /></DashboardRoute>} />
+              <Route path="/dashboard-operacional" element={<DashboardRoute><DashboardOperacional /></DashboardRoute>} />
+              <Route path="/dashboard-prazos" element={<DashboardRoute><DashboardPrazos /></DashboardRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
 
               <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
