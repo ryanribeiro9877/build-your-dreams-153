@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useIaMetrics } from "@/hooks/useIaMetrics";
 import { useIaUsageByUser } from "@/hooks/useIaUsageByUser";
+import { useIaCost } from "@/hooks/useIaCost";
 
 // ── Rótulos e cores (mesma paleta do Dashboard de Tarefas) ────────────────────
 const INTENT_LABELS: Record<string, string> = {
@@ -40,6 +41,12 @@ const fmtMs = (ms: number) => {
   if (ms >= 60000) return (ms / 60000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " min";
   if (ms >= 1000) return (ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " s";
   return (ms ?? 0) + " ms";
+};
+// Custo em dólar. Abaixo de US$ 1 mostra mais casas (não zerar valores pequenos).
+const fmtUsd = (n: number | null | undefined) => {
+  const v = n ?? 0;
+  const dec = v !== 0 && Math.abs(v) < 1 ? 4 : 2;
+  return "US$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 };
 // "anthropic/claude-4.6-sonnet-20260217" → "claude-4.6-sonnet"
 const shortModel = (m: string) =>
@@ -80,6 +87,47 @@ export default function DashboardIA() {
   const navigate = useNavigate();
   const { data, loading, error } = useIaMetrics();
   const { data: usage } = useIaUsageByUser();
+  const { data: cost } = useIaCost();
+
+  // Custo por modelo (barras) — só modelos com custo casado; sonnet deve dominar (~92%).
+  const costModelData = useMemo(
+    () => (cost?.by_model ?? [])
+      .filter((m) => (m.cost_usd ?? 0) > 0)
+      .map((m, idx) => ({
+        name: shortModel(m.raw_model || m.model || "?"),
+        cost: Number(m.cost_usd ?? 0),
+        tokens: m.tokens,
+        fill: MODEL_COLORS[idx % MODEL_COLORS.length],
+      })),
+    [cost],
+  );
+
+  // Custo por dia (operacional) + projeção mensal simples (média diária × dias do mês).
+  const costDailyData = useMemo(
+    () => (cost?.daily ?? []).map((d) => ({
+      label: format(parseISO(d.date), "dd/MM", { locale: ptBR }),
+      cost: Number(d.cost_usd ?? 0),
+    })),
+    [cost],
+  );
+  const costProjection = useMemo(() => {
+    const days = cost?.daily ?? [];
+    const withCost = days.filter((d) => (d.cost_usd ?? 0) > 0);
+    const base = withCost.length > 0 ? withCost : days;
+    if (base.length === 0) return null;
+    const sum = base.reduce((a, d) => a + (d.cost_usd ?? 0), 0);
+    const avgDaily = sum / base.length;
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return { avgDaily, monthly: avgDaily * daysInMonth };
+  }, [cost]);
+
+  // Taxa de erro por usuário (cruzamento com o RPC de uso) — chave user_id → error_rate.
+  const errorRateByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    (usage?.users ?? []).forEach((u) => map.set(u.user_id, u.error_rate));
+    return map;
+  }, [usage]);
 
   const volumeData = useMemo(
     () =>
@@ -304,6 +352,131 @@ export default function DashboardIA() {
         </div>
       </div>
 
+      {/* ══ Custo em USD por chamada de LLM (RPC dashboard_ia_cost) ══════════════ */}
+      {cost && (
+        <>
+          {/* Aviso de piso: enquanto o custo vier do backfill (mensagem final), ele
+              SUBCONTA as chamadas internas do run — some quando a instrumentação por
+              chamada (source='orchestrator') dominar. */}
+          {cost.notes.cost_is_lower_bound && (
+            <div style={{ ...cardStyle, padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start", borderLeft: "3px solid #f59e0b" }}>
+              <span style={{ fontSize: 15, lineHeight: 1.2 }} aria-hidden>⚠</span>
+              <div style={{ fontSize: 12.5, color: "var(--text2, #cbd5e1)", lineHeight: 1.5 }}>
+                Custo <strong>parcial</strong> (granularidade de mensagem final); sobe com a instrumentação por chamada. O total real tende a ser maior conforme as chamadas internas de cada run passam a ser contabilizadas.
+              </div>
+            </div>
+          )}
+
+          {/* KPIs de custo */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 16 }}>
+            <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#22c55e", fontFamily: "var(--font-mono, monospace)" }}>{fmtUsd(cost.kpis.cost_real_usd)}</div>
+              <div style={{ fontSize: 10, color: "var(--text3, #888)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, textAlign: "center" }}>Custo total (operacional)</div>
+              {cost.kpis.cost_test_usd > 0 && (
+                <div style={{ fontSize: 10.5, color: "#EAB308", marginTop: 4 }}>+ {fmtUsd(cost.kpis.cost_test_usd)} teste do tech</div>
+              )}
+            </div>
+            <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#c9a84c", fontFamily: "var(--font-mono, monospace)" }}>{fmtUsd(cost.kpis.blended_usd_per_mtok)}</div>
+              <div style={{ fontSize: 10, color: "var(--text3, #888)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, textAlign: "center" }}>Custo médio / Mtok (mix)</div>
+            </div>
+            <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#8b5cf6", fontFamily: "var(--font-mono, monospace)" }}>{fmtInt(cost.kpis.generations_real)}</div>
+              <div style={{ fontSize: 10, color: "var(--text3, #888)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, textAlign: "center" }}>Chamadas de LLM</div>
+              {cost.kpis.unpriced > 0 && (
+                <div style={{ fontSize: 10.5, color: "var(--text3, #888)", marginTop: 4 }}>{fmtInt(cost.kpis.unpriced)} sem preço casado</div>
+              )}
+            </div>
+            <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#06b6d4", fontFamily: "var(--font-mono, monospace)" }}>{costProjection ? fmtUsd(costProjection.monthly) : "—"}</div>
+              <div style={{ fontSize: 10, color: "var(--text3, #888)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, textAlign: "center" }}>Projeção mensal</div>
+              {costProjection && <div style={{ fontSize: 10.5, color: "var(--text3, #888)", marginTop: 4 }}>{fmtUsd(costProjection.avgDaily)}/dia</div>}
+            </div>
+          </div>
+
+          {/* Row: Custo por modelo | Custo por dia */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div style={cardStyle}>
+              <div style={titleStyle}>Custo por modelo (USD)</div>
+              {costModelData.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: "var(--text3, #888)", padding: "40px 0", textAlign: "center" }}>Sem custo casado na janela.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={costModelData} layout="vertical" margin={{ left: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} tickFormatter={(v) => fmtUsd(Number(v))} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={130} />
+                    <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} formatter={(v) => fmtUsd(Number(v))} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
+                    <Bar dataKey="cost" name="Custo" radius={[0, 4, 4, 0]}>
+                      {costModelData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div style={cardStyle}>
+              <div style={titleStyle}>Custo por dia (USD, operacional)</div>
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={costDailyData}>
+                  <defs>
+                    <linearGradient id="iaCostGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} interval="preserveStartEnd" minTickGap={20} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--text3, #888)" }} tickFormatter={(v) => fmtUsd(Number(v))} width={70} />
+                  <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#c9a84c" }} formatter={(v) => fmtUsd(Number(v))} />
+                  <Area type="monotone" dataKey="cost" name="Custo" stroke="#22c55e" fillOpacity={1} fill="url(#iaCostGrad)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Custo por usuário (cruzado com a taxa de erro do RPC de uso) */}
+          <div style={{ ...cardStyle, marginBottom: 16, overflowX: "auto" }}>
+            <div style={titleStyle}>Custo por usuário (USD)</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Usuário</th>
+                  <th style={thStyle}>Papel</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Chamadas</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Tokens</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Taxa de erro</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Custo (USD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cost.by_user.map((u) => {
+                  const er = errorRateByUser.get(u.user_id);
+                  return (
+                    <tr key={u.user_id}>
+                      <td style={{ ...tdStyle, color: "var(--text1, #e5e7eb)", fontWeight: 600 }}>{u.name}</td>
+                      <td style={tdStyle}>{roleLabel(u.role === "-" ? "(sem papel)" : u.role)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)" }}>{fmtInt(u.generations)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", color: "var(--text3, #888)" }}>{fmtTokens(u.tokens)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", fontWeight: 700, color: er == null ? "var(--text3, #888)" : errColor(er) }}>
+                        {er == null ? "—" : `${er}%`}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", fontWeight: 700 }}>
+                        {fmtUsd(u.cost_usd)}
+                        {(u.cost_test_usd ?? 0) > 0 && <span style={{ color: "#EAB308", fontSize: 11, fontWeight: 400 }}> · +{fmtUsd(u.cost_test_usd)} teste</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {cost.by_user.length === 0 && (
+                  <tr><td style={{ ...tdStyle, textAlign: "center", color: "var(--text3, #888)" }} colSpan={6}>Sem custo registrado na janela.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {/* ══ Uso & gasto por usuário e por modelo (RPC dashboard_ia_usage_by_user) ══ */}
       {usage && (
         <>
@@ -430,7 +603,7 @@ export default function DashboardIA() {
         <div style={{ fontSize: 11, color: "var(--text3, #888)", lineHeight: 1.6 }}>
           <strong style={{ color: "var(--gold, #c9a84c)" }}>Metodologia.</strong> Dados de uso orgânico do agente na janela {janela}.
           {" "}<strong>Latência</strong> = duração de run (<code>orchestration_runs</code>), reportada pela <strong>mediana</strong> (p50) por ser robusta à cauda longa de runs deixados abertos.
-          {" "}<strong>Custo em USD não é exibido</strong> por não estar instrumentado no banco (<code>cost_usd</code> vazio e <code>model_pricing</code> não casa com os modelos usados); em seu lugar, mostramos <strong>tokens reais</strong>.
+          {" "}<strong>Custo em USD</strong> vem de <code>ai_generations</code> (1 linha por chamada de LLM; <code>cost_usd</code> calculado no insert via <code>resolve_model_price</code> + <code>model_pricing</code>). O custo operacional exclui as sessões de teste do tech (<code>is_tech_test</code>); modelos sem preço casado aparecem como "sem preço" (nunca chutamos um valor). Enquanto o aviso de custo parcial estiver visível, o total é um piso (backfill por mensagem final).
         </div>
       </div>
     </div>
