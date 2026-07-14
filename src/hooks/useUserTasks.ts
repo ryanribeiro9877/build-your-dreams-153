@@ -412,3 +412,28 @@ export async function decidirRevisaoPeca(
   if (error) throw error;
   return data as unknown as UserTaskStatus;
 }
+
+// ─── Card 8.5 — Gate de Protocolo ─────────────────────────────────────────────
+// Diferente do 8.2 (revisar_peca), NÃO existe RPC de decisão aqui: o gate é uma
+// checagem de existência de dois documentos (Reclame Aqui + Sentença Procedente).
+// O bloqueio é DURO no banco — trigger BEFORE UPDATE OF status em user_tasks
+// (trg_user_tasks_bloquear_protocolo) — então vale para QUALQUER caminho de
+// conclusão (inbox genérica, kanban). A UI só lê o estado (o que falta) e deixa
+// anexar os documentos; concluir continua pelo botão genérico "Concluir".
+// `verificar_gate_protocolo` retorna { erro } quando a tarefa é inconsistente
+// (não é protocolar_peca, sem cliente) — nesses casos não há gate a mostrar.
+export interface GateProtocoloContext {
+  client_id?: string;
+  client_name?: string | null;
+  reclame_aqui?: boolean;
+  sentenca_procedente?: boolean;
+  completo?: boolean;
+  verificado_em?: string;
+  erro?: string;
+}
+
+export async function getGateProtocoloContext(taskId: string): Promise<GateProtocoloContext> {
+  const { data, error } = await rpcUntyped("verificar_gate_protocolo", { p_task_id: taskId });
+  if (error) throw error;
+  return (data as unknown as GateProtocoloContext) ?? {};
+}

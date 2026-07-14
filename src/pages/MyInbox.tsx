@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import TaskAttachments from "@/components/TaskAttachments";
 import RevisaoPecaPanel from "@/components/RevisaoPecaPanel";
+import ProtocoloGatePanel from "@/components/ProtocoloGatePanel";
 import { useMyInbox, updateUserTaskStatus } from "@/hooks/useUserTasks";
 import { RescheduleInline } from "@/components/chat/RescheduleInline";
 import { toast } from "sonner";
@@ -156,6 +157,9 @@ export default function MyInbox() {
             {tasks.map((task) => {
               const isCompleted = task.status === "completed" || task.status === "cancelled";
               const isRevisao = task.task_type_code === "revisar_peca";
+              // Card 8.5: o gate é bloqueio DURO no banco; NÃO escondemos "Concluir"
+              // (uma tentativa prematura só devolve a mensagem clara do banco).
+              const isProtocolo = task.task_type_code === "protocolar_peca";
               const next = NEXT_STATUS[task.status];
               return (
                 <div
@@ -331,6 +335,10 @@ export default function MyInbox() {
 
                     {isRevisao && !isCompleted && (
                       <RevisaoPecaPanel taskId={task.id} onDecided={() => void refresh()} />
+                    )}
+
+                    {isProtocolo && !isCompleted && (
+                      <ProtocoloGatePanel taskId={task.id} onChanged={() => void refresh()} />
                     )}
 
                     {expandedId === task.id && (
