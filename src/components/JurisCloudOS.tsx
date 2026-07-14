@@ -20,7 +20,7 @@ import { useUiPreferences } from "@/hooks/useUiPreferences";
 import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
-  Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale,
+  Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -28,6 +28,8 @@ import type { LucideIcon } from "lucide-react";
 import JurisSidebar from "./juris-cloud/JurisSidebar";
 import JurisTopBar from "./juris-cloud/JurisTopBar";
 import JurisChatPanel from "./juris-cloud/JurisChatPanel";
+import TechActingAsBar from "./juris-cloud/TechActingAsBar";
+import { useTechTest, type TestableSector } from "@/hooks/useTechTest";
 
 // Shared constants & types
 import type { Agent, JcChatMessage, SidebarItem, MenuItem, PendingMeeting, ReuniaoDraft, PendingTask, TarefaDraft } from "./juris-cloud/types";
@@ -661,6 +663,14 @@ export default function JurisCloudOS() {
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
 
+  // ── "Atuar como setor" (só tech) ──────────────────────────────────────────
+  // O tech testa os agentes de qualquer setor escolhendo o usuário-alvo. Enquanto
+  // `activeTest` é não-nulo, a conversa é uma sessão de teste (is_tech_test): o
+  // entry_agent aponta para o assistant_root do alvo (a orquestração roda como o
+  // setor) e o backend faz dry-run das escritas. null = "Meu tech" (normal).
+  const { sectors: testSectors, startTestSession } = useTechTest();
+  const [activeTest, setActiveTest] = useState<TestableSector | null>(null);
+
   // ── Histórico de conversas ──
   // clientName/runStatus (2.4): cliente vinculado (só exibição) + status da
   // última run, para derivar o status da conversa combinado com o sinal ao vivo.
@@ -778,7 +788,55 @@ export default function JurisCloudOS() {
     setShowWelcome(false);
     setMessages([]);
     setAssistantSessionId(sessionId);
+    // Detecta se é uma sessão de TESTE do tech (is_tech_test) para manter o badge
+    // e o seletor coerentes ao reabrir — inclusive vindo da aba "Testes por setor".
+    if (hasRole("tech")) {
+      // Colunas fora dos tipos gerados → cast do builder de select.
+      const { data } = await (supabase.from("chat_sessions") as unknown as {
+        select: (c: string) => { eq: (col: string, v: string) => { maybeSingle: () => Promise<{ data: { is_tech_test?: boolean; acting_as_user_id?: string | null } | null }> } };
+      }).select("is_tech_test, acting_as_user_id").eq("id", sessionId).maybeSingle();
+      if (data?.is_tech_test && data.acting_as_user_id) {
+        const targetId = data.acting_as_user_id;
+        const found = testSectors.find((s) => s.user_id === targetId);
+        setActiveTest(found ?? { user_id: targetId, name: "Setor em teste", department: null, role_code: "" });
+      } else {
+        setActiveTest(null);
+      }
+    }
   };
+
+  // Seletor "Atuar como": troca o alvo do teste e começa uma conversa nova no
+  // modo escolhido (setor selecionado = teste; null = "Meu tech" normal).
+  const handleSelectSector = (target: TestableSector | null) => {
+    setActiveTest(target);
+    setAssistantSessionId(null);
+    setMessages([]);
+    setShowWelcome(true);
+  };
+
+  // Reconcilia o rótulo do badge quando a lista de setores chega DEPOIS de abrir
+  // uma sessão de teste via ?session (o nome placeholder vira o nome real).
+  useEffect(() => {
+    if (!activeTest) return;
+    const match = testSectors.find((s) => s.user_id === activeTest.user_id);
+    if (match && (match.name !== activeTest.name || match.department !== activeTest.department)) {
+      setActiveTest(match);
+    }
+  }, [testSectors, activeTest]);
+
+  // Abre uma conversa específica via ?session=<id> (deep-link da aba "Testes por
+  // setor"). Roda uma vez por valor do parâmetro e o limpa da URL em seguida.
+  const sessionParam = searchParams.get("session");
+  const openedParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionParam || openedParamRef.current === sessionParam) return;
+    openedParamRef.current = sessionParam;
+    void switchSession(sessionParam);
+    const next = new URLSearchParams(searchParams);
+    next.delete("session");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionParam]);
 
   // Iniciar nova conversa. Runs de outras conversas continuam no mapa (rodando e
   // sendo rastreadas); como assistantSessionId fica null, a tela nova não mostra
@@ -1068,7 +1126,7 @@ export default function JurisCloudOS() {
       // cadastro_form é resposta síncrona final (dispara o wizard) — também encerra.
       // task_alert/tarefa_confirm são alertas fora do fluxo de uma run do usuário
       // (chegam via trigger/backend) — também encerram o indicador, se houver um ativo.
-      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm" || k === "reuniao_confirm" || k === "reuniao_acao" || k === "meeting_created" || k === "meeting_reminder" || k === "meeting_rescheduled") { patchRunState(sid, null); loadSessionsRef.current?.(); }
+      if (k === "final" || k === "error" || k === "action_proposal" || k === "action_done" || k === "action_dry_run" || k === "cancelled" || k === "cadastro_form" || k === "task_alert" || k === "tarefa_confirm" || k === "reuniao_confirm" || k === "reuniao_acao" || k === "meeting_created" || k === "meeting_reminder" || k === "meeting_rescheduled") { patchRunState(sid, null); loadSessionsRef.current?.(); }
     };
 
     // Handler dos UPDATEs de orchestration_runs: encerra o "pensando" no status
@@ -1595,17 +1653,28 @@ export default function JurisCloudOS() {
     };
 
     try {
-      if (!entryAgentId) {
+      // Modo TESTE (tech "atuando como setor"): a sessão é criada por insert
+      // direto com os flags is_tech_test/acting_as_user_id e o entry_agent do
+      // alvo. Não depende do entryAgentId do próprio tech.
+      const test = activeTest;
+      if (!test && !entryAgentId) {
         await refundAndNotify(
           "nenhum agente com IA configurada — vá em /tech/agentes, escolha o agente, na aba Modelo configure provedor + modelo, e salve",
         );
         return;
       }
       if (!sid) {
-        const { sessionId, error: startErr } = await startSession(entryAgentId, { title: "Meu Assistente" });
-        if (!sessionId) { await refundAndNotify(friendlyError(startErr)); return; }
-        setAssistantSessionId(sessionId); // dispara a assinatura Realtime
-        sid = sessionId;
+        if (test) {
+          const { sessionId, error: testErr } = await startTestSession(test);
+          if (!sessionId) { await refundAndNotify(testErr ?? "falha ao iniciar a sessão de teste"); return; }
+          setAssistantSessionId(sessionId);
+          sid = sessionId;
+        } else {
+          const { sessionId, error: startErr } = await startSession(entryAgentId!, { title: "Meu Assistente" });
+          if (!sessionId) { await refundAndNotify(friendlyError(startErr)); return; }
+          setAssistantSessionId(sessionId); // dispara a assinatura Realtime
+          sid = sessionId;
+        }
       }
       // Conversa conhecida: liga o "processando" DELA no mapa (entrada por sid).
       patchRunState(sid, { thinking: true, thinkingStartedAt: Date.now(), liveStage: null, runId: null });
@@ -1823,6 +1892,7 @@ export default function JurisCloudOS() {
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: false /* removido do menu do tech */ },
     { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") && !hasRole("tech") },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/tech/agentes"), show: hasRole("tech") },
+    { id: "testes", label: "Testes", icon: FlaskConical, color: ACCENT, action: () => navigate("/tech/testes"), show: hasRole("tech") },
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/tech/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/tech/providers"), show: hasRole("tech") },
     { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: hasRole("tech") },
@@ -1917,6 +1987,17 @@ export default function JurisCloudOS() {
             agentsLoading={agentsLoading}
             showWelcome={showWelcome}
           />
+
+          {/* "Atuar como setor" (só tech): escolhe o usuário-alvo p/ testar os
+              agentes daquele setor. Badge de teste + dry-run quando ativo. */}
+          {hasRole("tech") && (
+            <TechActingAsBar
+              sectors={testSectors}
+              activeTarget={activeTest}
+              onSelect={handleSelectSector}
+              disabled={thinking}
+            />
+          )}
 
           <JurisChatPanel
             messages={messages}

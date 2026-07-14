@@ -95,6 +95,7 @@ const Audiencias = lazyWithRetry(() => import("./pages/Audiencias.tsx"));
 const AssignTask = lazyWithRetry(() => import("./pages/AssignTask.tsx"));
 const ValidationQueue = lazyWithRetry(() => import("./pages/ValidationQueue.tsx"));
 const CronJobs = lazyWithRetry(() => import("./pages/CronJobs.tsx"));
+const TechTestes = lazyWithRetry(() => import("./pages/TechTestes.tsx"));
 const ImportarDados = lazyWithRetry(() => import("./pages/ImportarDados.tsx"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound.tsx"));
 
@@ -210,6 +211,7 @@ const App = () => (
               <Route path="/tech/agentes/:id" element={<TechRoute><AgentDetail /></TechRoute>} />
               <Route path="/tech/providers" element={<TechRoute><ProvidersConfig /></TechRoute>} />
               <Route path="/tech/crons" element={<TechRoute><CronJobs /></TechRoute>} />
+              <Route path="/tech/testes" element={<TechRoute><TechTestes /></TechRoute>} />
               <Route path="/tech/importar" element={<TechRoute><ImportarDados /></TechRoute>} />
 
               {/* Compat: caminhos antigos redirecionam para o novo prefixo /tech/* (bookmarks/links legados). */}

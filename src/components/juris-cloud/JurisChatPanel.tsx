@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import {
-  AlertTriangle, Lock,
+  AlertTriangle, Lock, FlaskConical,
 } from "lucide-react";
 import type { JcChatMessage, PendingMeeting, PendingTask, ProcessListRow, Agent } from "./types";
 import type { ClientFormValues } from "@/components/clients/shared";
@@ -106,6 +106,28 @@ function MessageBubble({ msg, canAuthorPeca, onCadastrarCliente, onCadastrarClie
   }
   if (msg.kind === "reuniao_acao" && msg.reuniaoAcao) {
     return <ReuniaoAcaoCard key={msg.id} payload={msg.reuniaoAcao} />;
+  }
+  // Dry-run: confirmação de ação numa sessão de TESTE do tech (is_tech_test). O
+  // orquestrador não gravou nada em produção — só descreveu o que faria. Estilo
+  // distinto (borda tracejada âmbar) para nunca ser confundido com uma ação real
+  // executada. O texto ("🧪 Teste (dry-run)…") já vem pronto do backend.
+  if (msg.kind === "action_dry_run") {
+    return (
+      <div className="jc-msg-wrap" key={msg.id}>
+        <div className="jc-msg-avatar" style={{ background: "rgba(234,179,8,0.12)", color: "#EAB308", border: "1px dashed rgba(234,179,8,0.5)", fontSize: 11 }}>
+          <FlaskConical size={13} aria-hidden />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "90%", minWidth: 0 }}>
+          <div className="jc-msg-meta"><span className="agent-tag">Teste (dry-run)</span><span>{msg.timestamp}</span></div>
+          <div
+            className="jc-msg-bubble"
+            style={{ border: "1px dashed rgba(234,179,8,0.55)", background: "rgba(234,179,8,0.06)" }}
+          >
+            {msg.content && <SafeMarkdown className="jc-msg-text">{msg.content}</SafeMarkdown>}
+          </div>
+        </div>
+      </div>
+    );
   }
   // Etapas intermediarias da orquestracao nao sao exibidas.
   if (msg.kind === "stage" || (msg.role === "system" && msg.stage)) {

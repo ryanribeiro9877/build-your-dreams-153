@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useIaMetrics } from "@/hooks/useIaMetrics";
+import { useIaUsageByUser } from "@/hooks/useIaUsageByUser";
 
 // ── Rótulos e cores (mesma paleta do Dashboard de Tarefas) ────────────────────
 const INTENT_LABELS: Record<string, string> = {
@@ -53,9 +54,32 @@ const titleStyle: React.CSSProperties = {
 };
 const tooltipStyle = { background: "var(--bg2, #0f0f1a)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, fontSize: 11, color: "#e5e7eb" };
 
+// ── Tabela (uso por usuário / por modelo) ─────────────────────────────────────
+const thStyle: React.CSSProperties = {
+  textAlign: "left", padding: "9px 12px", fontSize: 10, fontWeight: 600,
+  color: "var(--text3, #888)", textTransform: "uppercase", letterSpacing: "0.06em",
+  borderBottom: "1px solid var(--border, #1e1e2e)", whiteSpace: "nowrap",
+};
+const tdStyle: React.CSSProperties = {
+  padding: "10px 12px", fontSize: 12.5, color: "var(--text2, #cbd5e1)",
+  borderBottom: "1px solid var(--border, #1e1e2e)", verticalAlign: "middle",
+};
+// Rótulos amigáveis de papel (role_templates.code); fallback ao próprio código.
+const ROLE_LABELS: Record<string, string> = {
+  tech: "Tecnologia", socio: "Sócio", lider_recepcao: "Líder Recepção",
+  recepcionista: "Recepção", adv_previdenciario: "Adv. Previdenciário",
+  adv_confeccao_geral: "Adv. Confecção", "(sem papel)": "—", "(sem nome)": "—",
+};
+const roleLabel = (c: string) => ROLE_LABELS[c] ?? c;
+// Taxa de erro: >20% âmbar, >=40% vermelho (destaque do briefing).
+const errColor = (e: number) => (e >= 40 ? "#ef4444" : e >= 20 ? "#f59e0b" : "var(--text2, #cbd5e1)");
+// Amostra de erro por modelo confiável só com >= 20 runs mapeados.
+const MIN_ERROR_SAMPLE = 20;
+
 export default function DashboardIA() {
   const navigate = useNavigate();
   const { data, loading, error } = useIaMetrics();
+  const { data: usage } = useIaUsageByUser();
 
   const volumeData = useMemo(
     () =>
@@ -279,6 +303,127 @@ export default function DashboardIA() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* ══ Uso & gasto por usuário e por modelo (RPC dashboard_ia_usage_by_user) ══ */}
+      {usage && (
+        <>
+          {/* Recomendações (info/warn) — hoje inclui a concentração de tokens */}
+          {usage.recommendations.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 16 }}>
+              {usage.recommendations.map((r, i) => (
+                <div key={i} style={{ ...cardStyle, padding: "12px 16px", display: "flex", gap: 10, alignItems: "flex-start", borderLeft: `3px solid ${r.level === "warn" ? "#ef4444" : "#6366f1"}` }}>
+                  <span style={{ fontSize: 15, lineHeight: 1.2 }} aria-hidden>{r.level === "warn" ? "⚠" : "ℹ"}</span>
+                  <div style={{ minWidth: 0 }}>
+                    {r.model && <div style={{ fontSize: 11, color: "var(--gold, #c9a84c)", fontWeight: 700, marginBottom: 2 }}>{shortModel(r.model)}</div>}
+                    <div style={{ fontSize: 12.5, color: "var(--text2, #cbd5e1)", lineHeight: 1.5 }}>{r.message}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tabela por usuário */}
+          <div style={{ ...cardStyle, marginBottom: 16, overflowX: "auto" }}>
+            <div style={titleStyle}>Uso &amp; gasto por usuário</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Usuário</th>
+                  <th style={thStyle}>Papel</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Mensagens</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Runs</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Taxa de erro</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Tokens (in / out)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Crédito gasto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.users.map((u) => {
+                  const hasTest = u.tokens_test > 0 || u.runs_test > 0;
+                  return (
+                    <Fragment key={u.user_id}>
+                      <tr style={hasTest ? { borderBottom: "none" } : undefined}>
+                        <td style={{ ...tdStyle, color: "var(--text1, #e5e7eb)", fontWeight: 600, ...(hasTest ? { borderBottom: "none" } : {}) }}>{u.name}</td>
+                        <td style={{ ...tdStyle, ...(hasTest ? { borderBottom: "none" } : {}) }}>{roleLabel(u.role)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", ...(hasTest ? { borderBottom: "none" } : {}) }}>{fmtInt(u.messages)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", ...(hasTest ? { borderBottom: "none" } : {}) }}>
+                          {fmtInt(u.runs)}
+                          {u.failed_runs > 0 && <span style={{ color: "#ef4444", fontSize: 11 }}> · {fmtInt(u.failed_runs)} falha{u.failed_runs > 1 ? "s" : ""}</span>}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", fontWeight: 700, color: errColor(u.error_rate), ...(hasTest ? { borderBottom: "none" } : {}) }}>{u.error_rate}%</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", ...(hasTest ? { borderBottom: "none" } : {}) }}>
+                          {fmtTokens(u.tokens_total)}
+                          <span style={{ color: "var(--text3, #888)", fontSize: 11 }}> ({fmtTokens(u.tokens_in)} / {fmtTokens(u.tokens_out)})</span>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", ...(hasTest ? { borderBottom: "none" } : {}) }}>{fmtInt(u.token_consumption)}</td>
+                      </tr>
+                      {hasTest && (
+                        <tr>
+                          <td style={{ ...tdStyle, paddingTop: 0, paddingBottom: 8, color: "#EAB308", fontSize: 11 }} colSpan={7}>
+                            🧪 dos quais, teste: {fmtTokens(u.tokens_test)} tokens · {fmtInt(u.runs_test)} run{u.runs_test === 1 ? "" : "s"} (não entram nos KPIs gerais)
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+                {usage.users.length === 0 && (
+                  <tr><td style={{ ...tdStyle, textAlign: "center", color: "var(--text3, #888)" }} colSpan={7}>Sem uso registrado na janela.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Tabela por modelo (LLM) */}
+          <div style={{ ...cardStyle, marginBottom: 16, overflowX: "auto" }}>
+            <div style={titleStyle}>Uso por modelo (LLM)</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Modelo</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Mensagens</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Tokens (in / out)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Taxa de erro (amostra)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.by_model.map((m, i) => {
+                  const weak = m.mapped_runs < MIN_ERROR_SAMPLE;
+                  return (
+                    <tr key={i}>
+                      <td style={{ ...tdStyle, color: "var(--text1, #e5e7eb)", fontWeight: 600 }}>{shortModel(m.model)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)" }}>{fmtInt(m.messages)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)", color: "var(--text3, #888)" }}>{fmtTokens(m.tokens_in)} / {fmtTokens(m.tokens_out)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)" }}>{fmtTokens(m.tokens_total)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", fontFamily: "var(--font-mono, monospace)" }}>
+                        {m.error_rate_sample == null ? (
+                          <span style={{ color: "var(--text3, #888)" }}>—</span>
+                        ) : weak ? (
+                          // Amostra fraca (< 20 runs mapeados): não afirmar a taxa como robusta.
+                          <span style={{ color: "var(--text3, #888)" }} title="Amostra insuficiente para afirmar a taxa">
+                            {m.error_rate_sample}% · amostra fraca ({fmtInt(m.mapped_runs)} runs)
+                          </span>
+                        ) : (
+                          <span style={{ color: errColor(m.error_rate_sample), fontWeight: 700 }}>
+                            {m.error_rate_sample}% <span style={{ color: "var(--text3, #888)", fontWeight: 400, fontSize: 11 }}>· amostra {fmtInt(m.mapped_runs)} runs</span>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {usage.by_model.length === 0 && (
+                  <tr><td style={{ ...tdStyle, textAlign: "center", color: "var(--text3, #888)" }} colSpan={5}>Sem modelos registrados na janela.</td></tr>
+                )}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 11, color: "var(--text3, #888)", marginTop: 10, lineHeight: 1.5 }}>
+              A taxa de erro por modelo é uma <strong>amostra</strong> (só runs cujo modelo foi mapeável): cobertura de {fmtInt(usage.notes.model_error_coverage_runs)} de {fmtInt(usage.notes.total_runs)} runs. Abaixo de {MIN_ERROR_SAMPLE} runs mapeados, a taxa aparece em cinza (amostra fraca).
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Nota metodológica — honestidade sobre o que é e o que não é medível */}
       <div style={{ ...cardStyle, background: "var(--bg2, #0f0f1a)" }}>
