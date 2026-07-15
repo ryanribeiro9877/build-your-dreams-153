@@ -14,8 +14,8 @@ Com Resend configurado, o fluxo usa `generateLink` (sem e-mail do Supabase) + en
 | `INVITE_EMAIL_FROM` | Edge secret | `JurisAI <onboarding@resend.dev>` | Remetente |
 | `INVITE_EMAIL_REPLY_TO` | Edge secret | opcional | Respostas |
 | `SITE_URL` | Edge secret | `http://localhost:8080` | Base do link no e-mail |
-| `VITE_TURNSTILE_SITE_KEY` | `.env` (Vite) | `1x0000...AA` | Widget captcha |
-| `TURNSTILE_SECRET_KEY` | Edge secret | `1x0000...AA` | Validação captcha |
+| `VITE_TURNSTILE_SITE_KEY` | Vercel (prod) / `.env` (dev) | prod `0x4AAA...` · dev `1x0000...AA` | Widget captcha |
+| `TURNSTILE_SECRET_KEY` | Edge secret | prod `0x4A...` · dev `1x0000...AA` | Validação captcha |
 
 ## Local (`supabase functions serve`)
 
