@@ -19,7 +19,7 @@ interface InviteBody {
 }
 
 const ROLE_MAP: Record<string, string> = {
-  socio: "admin",
+  socio: "director",
   adv_confeccao_geral: "lawyer",
   adv_protocolo: "lawyer",
   adv_audiencia_execucao: "lawyer",

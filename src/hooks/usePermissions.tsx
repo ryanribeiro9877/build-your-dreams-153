@@ -37,7 +37,9 @@ export function usePermissions() {
   const canDelete = ["admin", "director"].includes(primaryRole);
   const canAccessAdmin = userRoles.includes("admin");
   const canAccessFinancial = ["admin", "director", "manager", "financial"].includes(primaryRole);
-  const canAccessClients = ["admin", "receptionist"].includes(primaryRole);
+  // Clientes é EXCLUSIVO da recepção (regra de negócio, 15/07/2026).
+  // Antes incluía "admin"; removido para que sócio/diretor não vejam Clientes.
+  const canAccessClients = ["receptionist"].includes(primaryRole);
   const canEditAgents = isTech;
   const canManageCrons = isTech;
   const isReadOnly = !canEdit;
