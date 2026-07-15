@@ -205,10 +205,39 @@ serve(async (req) => {
       invite_expires_at: inviteExpiresAt,
     };
 
+    // Garante que o usuário exista ANTES de gerar o link.
+    // Motivo (bugfix 15/07/2026): generateLink({type:"invite"}) criava o
+    // usuário JÁ com e-mail confirmado — e, com e-mail confirmado, o invite
+    // não gera token de verificação pendente (auth.one_time_tokens fica
+    // vazio). O link nascia apontando para um token inexistente → otp_expired
+    // instantâneo, em qualquer dispositivo, independente de prazo/CORS/redirect.
+    // Correção: criar o usuário explicitamente (createUser, e-mail confirmado)
+    // e gerar um link de RECOVERY (fluxo desenhado para definir/redefinir
+    // senha, que gera token de uso único válido e cai na tela /definir-senha,
+    // já tratada em DefinePassword.tsx via evento PASSWORD_RECOVERY).
+    let targetUserId: string;
+    if (existingUser) {
+      targetUserId = existingUser.id;
+      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: meta });
+    } else {
+      const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: meta,
+      });
+      if (createErr || !created?.user) {
+        return new Response(JSON.stringify({ error: "invite_failed", message: createErr?.message ?? "Falha ao criar usuário." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      targetUserId = created.user.id;
+    }
+
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
-      type: "invite",
+      type: "recovery",
       email,
-      options: { data: meta, redirectTo },
+      options: { redirectTo },
     });
 
     if (linkErr || !linkData?.user) {
@@ -218,19 +247,7 @@ serve(async (req) => {
       });
     }
 
-    const userId = linkData.user.id;
-
-    // NOTA (bugfix 15/07/2026): removida a chamada updateUserById(userId,
-    // { email_confirm: true, user_metadata: ... }) que existia aqui.
-    // Ela era redundante (user_metadata já é gravado por generateLink via
-    // options.data, acima) e DESTRUTIVA — email_confirm:true limpava
-    // auth.users.confirmation_token como efeito colateral, invalidando o
-    // link de convite ANTES mesmo do e-mail ser enviado. Achado: todo
-    // convite falhava com "otp_expired" em segundos, em qualquer
-    // dispositivo, independente do prazo configurado — porque o token
-    // nunca esteve válido para começar. type=invite já confirma o e-mail
-    // ao ser redimido (o próprio clique no link é a confirmação); não
-    // precisa desse passo extra.
+    const userId = targetUserId;
 
     const actionLink = linkData.properties?.action_link ?? redirectTo;
     const inviteFrom = await getRuntimeSecret(adminClient, "INVITE_EMAIL_FROM");
