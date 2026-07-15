@@ -29,6 +29,23 @@ const IcX = (p: IconProps) => <Svg {...p}><path d="M18 6 6 18M6 6l12 12" /></Svg
 const IcTrash = (p: IconProps) => <Svg {...p}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></Svg>;
 const IcCalendarClock = (p: IconProps) => <Svg {...p}><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5M16 2v4M8 2v4M3 10h7M16 14v2l1.5 1.5" /><circle cx="16" cy="16" r="6" /></Svg>;
 
+// Estilo dos campos do formulário — mesmo padrão usado no resto do app
+// (dashboardKit/CronJobs/RevisaoPecaPanel): fundo escuro, borda sutil, texto
+// claro. Sem isso, input/select/textarea caem no branco padrão do navegador,
+// que não herda o tema do modal.
+const modalInputStyle: React.CSSProperties = {
+  width: "100%", padding: "8px 10px", borderRadius: 6,
+  background: "var(--bg1, #09090f)", border: "1px solid var(--border, #1e1e2e)",
+  color: "var(--text1, #eeeef5)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box",
+};
+const modalLabelStyle: React.CSSProperties = {
+  fontSize: 12, color: "var(--text3, #888)", display: "grid", gap: 4,
+};
+const modalButtonStyle: React.CSSProperties = {
+  padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border, #1e1e2e)",
+  background: "transparent", color: "var(--text2, #ccc)", cursor: "pointer", fontSize: 13,
+};
+
 interface Props {
   meeting: MeetingRow | null; // null = criação
   defaultDate: string;        // "YYYY-MM-DD"
@@ -140,47 +157,47 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
 
   return (
     <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface, #fff)", color: "var(--text1, #111)", borderRadius: 12, padding: 20, width: "min(560px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg3, #13131f)", color: "var(--text1, #eeeef5)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 12, padding: 20, width: "min(560px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{isEdit ? "Editar reunião" : "Nova reunião"}</h2>
           <button type="button" onClick={onClose} aria-label="Fechar"><IcX size={18} /></button>
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
-          <label>Data<input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={{ width: "100%" }} /></label>
-          <label>Horário
-            <select value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: "100%" }}>
+          <label style={modalLabelStyle}>Data<input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={modalInputStyle} /></label>
+          <label style={modalLabelStyle}>Horário
+            <select value={startTime} onChange={(e) => setStartTime(e.target.value)} style={modalInputStyle}>
               {slotOptions.length === 0 && <option value="">Sem horários disponíveis</option>}
               {slotOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          <label>Tipo
-            <select value={type} onChange={(e) => setType(e.target.value)} style={{ width: "100%" }}>
+          <label style={modalLabelStyle}>Tipo
+            <select value={type} onChange={(e) => setType(e.target.value)} style={modalInputStyle}>
               <option value="">—</option>
               {MEETING_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label>Cliente
+          <label style={modalLabelStyle}>Cliente
             <ClientAutocomplete
               clientName={clientName}
               clientId={clientId}
               onChange={(name, id) => { setClientName(name); setClientId(id); }}
             />
           </label>
-          <label>Telefone<input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></label>
-          <label>Advogado
-            <select value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} style={{ width: "100%" }}>
+          <label style={modalLabelStyle}>Telefone<input value={phone} onChange={(e) => setPhone(e.target.value)} style={modalInputStyle} /></label>
+          <label style={modalLabelStyle}>Advogado
+            <select value={lawyerId} onChange={(e) => setLawyerId(e.target.value)} style={modalInputStyle}>
               <option value="">—</option>
               {lawyers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name}</option>)}
             </select>
           </label>
-          <label>Status
-            <select value={status} onChange={(e) => setStatus(e.target.value as MeetingStatus)} style={{ width: "100%" }}>
+          <label style={modalLabelStyle}>Status
+            <select value={status} onChange={(e) => setStatus(e.target.value as MeetingStatus)} style={modalInputStyle}>
               {statusChoices.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
-          <label>Resumo<textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} style={{ width: "100%" }} /></label>
-          <label>Observações<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: "100%" }} /></label>
+          <label style={modalLabelStyle}>Resumo<textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} style={modalInputStyle} /></label>
+          <label style={modalLabelStyle}>Observações<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={modalInputStyle} /></label>
         </div>
 
         {/* Gancho Trilha D: fiado porém desabilitado até OAuth/edge existirem
@@ -195,18 +212,18 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
             else if (r.status === "error") toast.error(r.message ?? "Falha ao sincronizar com o Google Agenda.");
             else toast.info(r.message ?? "Integração Google Agenda ainda não configurada.");
           }}
-          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, opacity: GOOGLE_SYNC_ENABLED && isEdit ? 1 : 0.5, cursor: GOOGLE_SYNC_ENABLED && isEdit ? "pointer" : "not-allowed" }}>
+          style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border, #1e1e2e)", background: "transparent", color: "var(--text2, #ccc)", opacity: GOOGLE_SYNC_ENABLED && isEdit ? 1 : 0.5, cursor: GOOGLE_SYNC_ENABLED && isEdit ? "pointer" : "not-allowed" }}>
           <IcCalendarClock size={16} /> Sincronizar com Google Agenda
         </button>
 
         {isEdit && meeting?.client_id && (
-          <button type="button" onClick={() => onOpenClient(meeting.client_id!)} style={{ marginTop: 8, display: "block" }}>
+          <button type="button" onClick={() => onOpenClient(meeting.client_id!)} style={{ ...modalButtonStyle, marginTop: 8, display: "block" }}>
             Abrir cadastro do cliente
           </button>
         )}
 
         {isEdit && (
-          <button type="button" onClick={createTask} style={{ marginTop: 8, display: "block" }}>
+          <button type="button" onClick={createTask} style={{ ...modalButtonStyle, marginTop: 8, display: "block" }}>
             Criar tarefa vinculada
           </button>
         )}
@@ -227,12 +244,12 @@ export function MeetingDetailModal({ meeting, defaultDate, onClose, onSaved, onO
         )}
 
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-          <button type="button" onClick={save} disabled={saving} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EAB308", color: "#111", fontWeight: 600, cursor: "pointer" }}>
+          <button type="button" onClick={save} disabled={saving} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "var(--gold, #c9a84c)", color: "#0a0a12", fontWeight: 600, cursor: "pointer" }}>
             {saving ? "Salvando…" : "Salvar"}
           </button>
-          <button type="button" onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8 }}>Cancelar</button>
+          <button type="button" onClick={onClose} style={modalButtonStyle}>Cancelar</button>
           {isEdit && canDelete && (
-            <button type="button" onClick={remove} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, color: "#DC2626" }}>
+            <button type="button" onClick={remove} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(239,68,68,0.35)", background: "transparent", color: "#ef4444", cursor: "pointer" }}>
               <IcTrash size={16} /> Excluir
             </button>
           )}
