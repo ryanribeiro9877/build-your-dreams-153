@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, type ComponentType } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import {
-  type ClientFull, CLIENT_FULL_COLUMNS, ALLOWED_ROLES, RestrictedAccess,
+  type ClientFull, CLIENT_FULL_COLUMNS, RestrictedAccess,
   StatusBadge, EmptyState,
 } from "@/components/clients/shared";
 import {
@@ -46,9 +47,9 @@ const TABS: { key: string; label: string; Comp: ComponentType<{ client: ClientFu
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
   const { workspace } = useMyWorkspace();
+  const { canAccessClients } = usePermissions();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
 
   const [client, setClient] = useState<ClientFull | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +79,8 @@ export default function ClientDetails() {
 
   useEffect(() => { if (id) void load(id); }, [id, load]);
 
-  if (workspace && !hasAccess) return <RestrictedAccess />;
+  // DEF-2: exclusivo da recepção (mesma fonte do menu). Ver Clients.tsx.
+  if (workspace && !canAccessClients) return <RestrictedAccess />;
   if (loading) return <HexagonLoader variant="fullscreen" label="Carregando detalhes..." />;
   if (!client) return null;
 

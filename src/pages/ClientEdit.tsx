@@ -2,19 +2,20 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import {
   type ClientFull, type ClientFormValues, CLIENT_FULL_COLUMNS, formValuesFromClient,
-  ALLOWED_ROLES, RestrictedAccess,
+  RestrictedAccess,
 } from "@/components/clients/shared";
 
 export default function ClientEdit() {
   const { id } = useParams<{ id: string }>();
   const { workspace } = useMyWorkspace();
+  const { canAccessClients } = usePermissions();
   const navigate = useNavigate();
-  const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
 
   const [values, setValues] = useState<ClientFormValues | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,8 @@ export default function ClientEdit() {
 
   useEffect(() => { if (id) void load(id); }, [id, load]);
 
-  if (workspace && !hasAccess) return <RestrictedAccess />;
+  // DEF-2: exclusivo da recepção (mesma fonte do menu). Ver Clients.tsx.
+  if (workspace && !canAccessClients) return <RestrictedAccess />;
   if (loading || !values) return <HexagonLoader variant="fullscreen" label="Carregando cliente..." />;
 
   return (

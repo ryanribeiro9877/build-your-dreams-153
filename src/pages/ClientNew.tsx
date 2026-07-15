@@ -1,14 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { usePermissions } from "@/hooks/usePermissions";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
-import { ALLOWED_ROLES, RestrictedAccess } from "@/components/clients/shared";
+import { RestrictedAccess } from "@/components/clients/shared";
 
 export default function ClientNew() {
   const { workspace } = useMyWorkspace();
+  const { canAccessClients } = usePermissions();
   const navigate = useNavigate();
-  const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
 
-  if (workspace && !hasAccess) return <RestrictedAccess />;
+  // DEF-2: exclusivo da recepção (mesma fonte do menu). Ver Clients.tsx.
+  if (workspace && !canAccessClients) return <RestrictedAccess />;
 
   return (
     <div className="cli-root">

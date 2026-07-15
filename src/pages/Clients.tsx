@@ -5,9 +5,10 @@ import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import {
-  type SearchClientRow, ALLOWED_ROLES, RestrictedAccess,
+  type SearchClientRow, RestrictedAccess,
   StatusBadge, EmptyState, formatDateBR,
 } from "@/components/clients/shared";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   ClientFiltersPanel, type ClientFilters, EMPTY_FILTERS, buildFiltros,
 } from "@/components/clients/ClientFiltersPanel";
@@ -17,8 +18,8 @@ const PAGE_SIZE = 20;
 
 export default function Clients() {
   const { workspace } = useMyWorkspace();
+  const { canAccessClients } = usePermissions();
   const navigate = useNavigate();
-  const hasAccess = ALLOWED_ROLES.includes(workspace?.role_template?.code ?? "");
 
   const [clients, setClients] = useState<SearchClientRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +83,10 @@ export default function Clients() {
   const totalPages = Math.ceil(clients.length / PAGE_SIZE);
   const paginated = useMemo(() => clients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [clients, page]);
 
-  if (workspace && !hasAccess) return <RestrictedAccess />;
+  // DEF-2: guard de rota usa a MESMA fonte de verdade do menu (canAccessClients =
+  // userRole "receptionist"). Clientes é EXCLUSIVO da recepção — sem isenção de
+  // sócio/admin/diretor por URL direta.
+  if (workspace && !canAccessClients) return <RestrictedAccess />;
 
   return (
     <div className="cli-root">

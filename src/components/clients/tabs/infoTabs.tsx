@@ -252,8 +252,8 @@ export function DadosPessoaisTab({ client }: { client: ClientFull }) {
       os bytea `_enc` por SELECT, e a senha revelada NÃO persiste (some ao
       ocultar / trocar de aba / desmontar).
    A escrita passa pela RPC `save_gov_credential` (cifra server-side, exige
-   consentimento). Toda esta aba só é alcançável por recepção/sócio — a página
-   ClientDetails já barra os demais papéis (ALLOWED_ROLES / RestrictedAccess).
+   consentimento). Toda esta aba só é alcançável pela recepção — a página
+   ClientDetails já barra os demais papéis (canAccessClients / RestrictedAccess).
 */
 
 const GOV_STATUS_META: Record<string, { label: string; cls: string }> = {

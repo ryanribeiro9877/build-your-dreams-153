@@ -207,7 +207,11 @@ export function formValuesFromClient(c: ClientFull): ClientFormValues {
 
 /* ---------- Constantes ---------- */
 
-export const ALLOWED_ROLES = ["socio", "lider_recepcao", "recepcionista"];
+// DEF-2 (15/07/2026): o gate de acesso a Clientes NÃO mora mais aqui. As telas
+// de /clientes usam `usePermissions().canAccessClients` (userRole "receptionist"),
+// a MESMA fonte de verdade do menu — Clientes é EXCLUSIVO da recepção, sem
+// isenção de sócio/admin/diretor por URL direta. A antiga ALLOWED_ROLES
+// (que incluía "socio") foi removida para não reintroduzir a isenção.
 
 export const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
