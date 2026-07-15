@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
+import { RequireActivation } from "@/components/RequireActivation";
 
 /**
  * Route guard that restricts access to users with admin, director, or socio roles.
@@ -18,9 +19,9 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }

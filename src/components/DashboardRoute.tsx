@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
+import { RequireActivation } from "@/components/RequireActivation";
 
 /**
  * Papéis (role_templates.code) autorizados a ver o Dashboard.
@@ -67,10 +68,10 @@ export function DashboardRoute({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }
 
@@ -91,10 +92,10 @@ export function SocioRoute({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }
 
@@ -115,10 +116,10 @@ export function RecepcaoRoute({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }
 
@@ -139,9 +140,9 @@ export function TechOnlyRoute({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }

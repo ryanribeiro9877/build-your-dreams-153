@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
+import { RequireActivation } from "@/components/RequireActivation";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
 import { DashboardRoute, SocioRoute, RecepcaoRoute, TechOnlyRoute } from "@/components/DashboardRoute";
@@ -145,10 +146,10 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
   if (!user) return <Navigate to="/auth" replace />;
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }
 
@@ -158,10 +159,10 @@ function TechRoute({ children }: { children: ReactNode }) {
   if (!user) return <Navigate to="/auth" replace />;
   if (!hasRole("tech")) return <Navigate to="/sistema" replace />;
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }
 

@@ -36,9 +36,13 @@ export function useEmployeeRoster() {
     setLoading(true);
     setError(null);
 
+    // Só usuários ATIVOS aparecem na área de usuários/equipe. Um convidado
+    // criado (link de recovery enviado) nasce 'pendente' e só passa a 'ativo'
+    // depois de definir a senha — até lá ele não deve constar na lista.
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("user_id, display_name, full_name, job_title, is_estagiario, role_template_id");
+      .select("user_id, display_name, full_name, job_title, is_estagiario, role_template_id")
+      .eq("activation_status", "ativo");
 
     if (profilesErr) {
       setError(profilesErr.message);

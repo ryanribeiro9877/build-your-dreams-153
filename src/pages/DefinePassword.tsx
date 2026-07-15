@@ -82,10 +82,24 @@ export default function DefinePassword() {
     }
 
     const { error } = await supabase.auth.updateUser({ password });
-    setSubmitting(false);
 
     if (error) {
+      setSubmitting(false);
       toast.error(error.message);
+      return;
+    }
+
+    // Senha salva: só agora o convite é "concluído". Ativa o profile
+    // (activation_status -> 'ativo') e SÓ libera o sistema se a ativação der
+    // certo. Sem isso, a sessão de recovery continua 'pendente' e o guard
+    // (RequireActivation) prende o usuário aqui — comportamento desejado.
+    const { error: activateError } = await supabase.rpc("activate_own_profile");
+    setSubmitting(false);
+
+    if (activateError) {
+      toast.error(
+        "Sua senha foi salva, mas não conseguimos concluir a ativação. Tente novamente ou contate o administrador.",
+      );
       return;
     }
 

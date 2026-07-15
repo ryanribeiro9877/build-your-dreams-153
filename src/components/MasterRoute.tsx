@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMasterAdmin } from "@/hooks/useMasterAdmin";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
+import { RequireActivation } from "@/components/RequireActivation";
 
 /**
  * Route guard that restricts access to master admins only (via useMasterAdmin hook).
@@ -18,9 +19,9 @@ export function MasterRoute({ children }: { children: ReactNode }) {
   if (!isMaster) return <Navigate to="/sistema" replace />;
 
   return (
-    <>
+    <RequireActivation>
       <PlatformPresenceSync />
       {children}
-    </>
+    </RequireActivation>
   );
 }

@@ -254,6 +254,13 @@ serve(async (req) => {
     await sendResendEmail(resendKey, email, fullName, template.display_name, actionLink, inviteFrom);
     const emailMessage = "Convite enviado por e-mail em nome de JurisAI.";
 
+    // Gate de ativacao (FIX-GATE-ATIVACAO-CONVITE): o profile do convidado
+    // NASCE 'pendente'. Quem faz o INSERT em profiles e a RPC
+    // apply_employee_profile — seu ramo INSERT grava activation_status
+    // 'pendente' explicitamente (igual ao default da coluna). O convidado so
+    // vira 'ativo' (via activate_own_profile) depois de salvar a senha na tela
+    // /definir-senha; ate la o guard prende ele fora do app e ele nao aparece
+    // na area de usuarios. NAO mexemos no auth (createUser + recovery segue).
     await adminClient.rpc("apply_employee_profile", {
       p_user_id: userId,
       p_full_name: fullName,

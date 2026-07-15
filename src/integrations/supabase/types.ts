@@ -2414,6 +2414,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          activated_at: string | null
+          activation_status: string
           avatar_url: string | null
           created_at: string
           department: string | null
@@ -2428,6 +2430,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          activated_at?: string | null
+          activation_status?: string
           avatar_url?: string | null
           created_at?: string
           department?: string | null
@@ -2442,6 +2446,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          activated_at?: string | null
+          activation_status?: string
           avatar_url?: string | null
           created_at?: string
           department?: string | null
@@ -3573,6 +3579,7 @@ export type Database = {
       }
     }
     Functions: {
+      activate_own_profile: { Args: never; Returns: undefined }
       add_tokens: {
         Args: {
           p_amount: number
@@ -4127,6 +4134,7 @@ export type Database = {
       integration_list_rpcs: { Args: never; Returns: string[] }
       integration_list_tables: { Args: never; Returns: string[] }
       is_master_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_own_profile_active: { Args: never; Returns: boolean }
       is_recepcao_or_socio: { Args: never; Returns: boolean }
       is_role_eligible_for_task: {
         Args: { p_role_template_id: string; p_task_type_id: string }
