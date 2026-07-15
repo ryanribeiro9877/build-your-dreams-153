@@ -220,11 +220,17 @@ serve(async (req) => {
 
     const userId = linkData.user.id;
 
-    // Auto-confirmar e-mail — sem necessidade de validacao inicial
-    await adminClient.auth.admin.updateUserById(userId, {
-      email_confirm: true,
-      user_metadata: { ...meta, invite_expires_at: inviteExpiresAt },
-    });
+    // NOTA (bugfix 15/07/2026): removida a chamada updateUserById(userId,
+    // { email_confirm: true, user_metadata: ... }) que existia aqui.
+    // Ela era redundante (user_metadata já é gravado por generateLink via
+    // options.data, acima) e DESTRUTIVA — email_confirm:true limpava
+    // auth.users.confirmation_token como efeito colateral, invalidando o
+    // link de convite ANTES mesmo do e-mail ser enviado. Achado: todo
+    // convite falhava com "otp_expired" em segundos, em qualquer
+    // dispositivo, independente do prazo configurado — porque o token
+    // nunca esteve válido para começar. type=invite já confirma o e-mail
+    // ao ser redimido (o próprio clique no link é a confirmação); não
+    // precisa desse passo extra.
 
     const actionLink = linkData.properties?.action_link ?? redirectTo;
     const inviteFrom = await getRuntimeSecret(adminClient, "INVITE_EMAIL_FROM");
