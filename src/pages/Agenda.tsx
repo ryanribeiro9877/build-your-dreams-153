@@ -306,7 +306,7 @@ export default function Agenda() {
       {(selected || creating) && (
         <MeetingDetailModal
           meeting={selected}
-          defaultDate={createDate ?? toISO(days[0])}
+          defaultDate={createDate ?? todayISO}
           onClose={() => { setSelected(null); setCreating(false); setCreateDate(null); }}
           onSaved={() => { setSelected(null); setCreating(false); setCreateDate(null); refresh(); }}
           onOpenClient={(clientId) => navigate(`/clientes/${clientId}`)}

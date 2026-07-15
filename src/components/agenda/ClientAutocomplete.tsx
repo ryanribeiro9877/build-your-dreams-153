@@ -109,7 +109,11 @@ export function ClientAutocomplete({ clientName, clientId, onChange }: Props) {
           setQuery(v);
         }}
         onFocus={() => { if (candidates.length > 0) setOpen(true); }}
-        style={{ width: "100%" }}
+        style={{
+          width: "100%", padding: "8px 10px", borderRadius: 6, boxSizing: "border-box",
+          background: "var(--bg1, #09090f)", border: "1px solid var(--border, #1e1e2e)",
+          color: "var(--text1, #eeeef5)", fontSize: 13, fontFamily: "inherit",
+        }}
       />
       {clientId && (
         <span
@@ -124,8 +128,8 @@ export function ClientAutocomplete({ clientName, clientId, onChange }: Props) {
           role="listbox"
           style={{
             position: "absolute", zIndex: 10, top: "100%", left: 0, right: 0, margin: "4px 0 0",
-            padding: 4, listStyle: "none", background: "var(--surface, #fff)", color: "var(--text1, #111)",
-            border: "1px solid var(--border, #ddd)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+            padding: 4, listStyle: "none", background: "var(--bg3, #13131f)", color: "var(--text1, #eeeef5)",
+            border: "1px solid var(--border, #1e1e2e)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
             maxHeight: 240, overflowY: "auto",
           }}
         >
