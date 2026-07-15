@@ -9,7 +9,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
-import { DashboardRoute, SocioRoute, RecepcaoRoute } from "@/components/DashboardRoute";
+import { DashboardRoute, SocioRoute, RecepcaoRoute, TechOnlyRoute } from "@/components/DashboardRoute";
 
 // E5: chunk lazy obsoleto após um redeploy (hash mudou na Vercel) faz o import()
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
@@ -193,7 +193,7 @@ const App = () => (
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
-              <Route path="/dashboard-ia" element={<DashboardRoute><DashboardIA /></DashboardRoute>} />
+              <Route path="/dashboard-ia" element={<TechOnlyRoute><DashboardIA /></TechOnlyRoute>} />
               <Route path="/dashboard-operacional" element={<SocioRoute><DashboardOperacional /></SocioRoute>} />
               <Route path="/dashboard-prazos" element={<SocioRoute><DashboardPrazos /></SocioRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />

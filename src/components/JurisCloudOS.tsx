@@ -7,7 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
-import { isDashboardRole, isSocioRole, isRecepcaoRole } from "@/components/DashboardRoute";
+import { isDashboardRole, isSocioRole, isRecepcaoRole, isTechRole } from "@/components/DashboardRoute";
 import { isPecaAuthor } from "@/lib/pecaAccess";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
@@ -1894,7 +1894,7 @@ export default function JurisCloudOS() {
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: isDashboardRole(workspace?.role_template?.code) && !hasRole("tech") },
     // Dashboard IA (9.2) — mesmo gate tech+sócio (role_templates.code) e rota
     // guardada por DashboardRoute, para link e rota ficarem 1:1.
-    { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: isDashboardRole(workspace?.role_template?.code) },
+    { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: isTechRole(workspace?.role_template?.code) },
     { id: "dashboard_operacional", label: "Recepção & Jurídico", icon: Users, color: ACCENT, action: () => navigate("/dashboard-operacional"), show: isSocioRole(workspace?.role_template?.code) },
     { id: "dashboard_prazos", label: "Prazos & Audiências", icon: Clock, color: ACCENT, action: () => navigate("/dashboard-prazos"), show: isSocioRole(workspace?.role_template?.code) },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: false /* removido do menu do tech */ },

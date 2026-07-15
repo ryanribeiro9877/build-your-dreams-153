@@ -37,6 +37,17 @@ export function isRecepcaoRole(code: string | null | undefined): boolean {
 }
 
 /**
+ * Papéis (role_templates.code) autorizados a ver o Dashboard IA: exclusivo
+ * do tech. Antes era tech+socio (isDashboardRole); sócio saiu de escopo aqui
+ * (dado operacional de custo/uso de LLM, não é do sócio).
+ */
+export const TECH_ROLE_CODES = ["tech"];
+
+export function isTechRole(code: string | null | undefined): boolean {
+  return TECH_ROLE_CODES.includes(code ?? "");
+}
+
+/**
  * Route guard que restringe o Dashboard a tech + sócio.
  * O papel vem de profiles.role_template_id -> role_templates.code
  * (via useMyWorkspace), o mesmo mecanismo que decide acesso por papel no front.
@@ -100,6 +111,30 @@ export function RecepcaoRoute({ children }: { children: ReactNode }) {
   if (!user) return <Navigate to="/auth" replace />;
   if (wsLoading) return <HexagonLoader variant="fullscreen" />;
   if (!isRecepcaoRole(workspace?.role_template?.code)) {
+    return <Navigate to="/sistema" replace />;
+  }
+
+  return (
+    <>
+      <PlatformPresenceSync />
+      {children}
+    </>
+  );
+}
+
+/**
+ * Route guard que restringe o Dashboard IA ao tech (role_templates.code =
+ * 'tech'). Fora disso (inclusive sócio/master) => /sistema. Link e rota
+ * andam 1:1 com o item de menu.
+ */
+export function TechOnlyRoute({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
+  const { workspace, loading: wsLoading } = useMyWorkspace();
+
+  if (authLoading) return <HexagonLoader variant="fullscreen" />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (wsLoading) return <HexagonLoader variant="fullscreen" />;
+  if (!isTechRole(workspace?.role_template?.code)) {
     return <Navigate to="/sistema" replace />;
   }
 
