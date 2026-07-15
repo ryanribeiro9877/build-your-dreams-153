@@ -19,43 +19,62 @@ export function buildInviteEmailHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JurisAI — Convite</title>
+  <style>
+    @media only screen and (max-width:600px) {
+      .container { width:100% !important; }
+      .pad { padding:20px !important; }
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;background:#09090f;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090f;padding:40px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090f;">
     <tr>
-      <td align="center">
-        <table role="presentation" width="100%" style="max-width:560px;background:#11111a;border:1px solid #25253a;border-radius:16px;overflow:hidden;">
+      <td align="center" style="padding:40px 16px;">
+        <!-- width="560" (atributo HTML) + max-width (CSS) juntos: alguns clientes
+             de e-mail (Gmail web incluído) ignoram max-width puro em <table>. -->
+        <table role="presentation" width="560" class="container" cellpadding="0" cellspacing="0" style="width:560px;max-width:560px;background:#11111a;border:1px solid #25253a;border-radius:16px;overflow:hidden;">
           <tr>
-            <td style="background:linear-gradient(145deg,#eab308 0%,#ca9a06 100%);padding:20px 28px;">
-              <span style="font-size:24px;font-weight:700;color:#0a0a12;letter-spacing:0.04em;">JurisAI</span>
-              <div style="font-size:12px;color:#0a0a12;opacity:0.85;margin-top:4px;">Sua força de trabalho de IA jurídica</div>
+            <td class="pad" style="background:linear-gradient(145deg,#eab308 0%,#ca9a06 100%);padding:24px 28px;">
+              <div style="font-size:22px;font-weight:700;color:#0a0a12;letter-spacing:0.03em;">JurisAI</div>
+              <div style="font-size:12px;color:#0a0a12;opacity:0.8;margin-top:3px;">Sua força de trabalho de IA jurídica</div>
             </td>
           </tr>
           <tr>
-            <td style="padding:28px;">
-              <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#eeeef5;">Olá, ${safeName}</p>
-              <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#c4c4d4;">
-                Você foi convidado(a) para integrar a equipe no <strong style="color:#facc15;">JurisAI</strong>
-                com a função de <strong style="color:#facc15;">${safeRole}</strong>.
-              </p>
-              <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#c4c4d4;">
-                Para o primeiro acesso, defina sua senha pessoal. Por segurança (LGPD), ela deve ter no mínimo
-                8 caracteres, incluindo uma letra maiúscula, um número e um caractere especial.
-              </p>
+            <td class="pad" style="padding:32px 28px 8px;">
+              <p style="margin:0 0 4px;font-size:19px;font-weight:600;color:#eeeef5;">Olá, ${safeName}</p>
+              <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#c4c4d4;">Você foi convidado para integrar a equipe no JurisAI.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:rgba(250,204,21,0.12);border:1px solid rgba(250,204,21,0.35);border-radius:8px;padding:8px 16px;">
+                    <span style="font-size:12px;color:#8a8a9e;">Função:&nbsp;</span><span style="font-size:13px;font-weight:700;color:#facc15;">${safeRole}</span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#eeeef5;">Para o primeiro acesso, defina sua senha pessoal.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;width:100%;">
+                <tr>
+                  <td style="font-size:13px;color:#9898b0;line-height:1.9;">
+                    ✓&nbsp;&nbsp;Mínimo de 8 caracteres<br>
+                    ✓&nbsp;&nbsp;Uma letra maiúscula<br>
+                    ✓&nbsp;&nbsp;Um número<br>
+                    ✓&nbsp;&nbsp;Um caractere especial
+                  </td>
+                </tr>
+              </table>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="padding:8px 0 24px;">
+                  <td align="center" style="padding:0 0 28px;">
                     <a href="${safeLink}"
-                       style="display:inline-block;padding:14px 32px;background:linear-gradient(145deg,#eab308,#facc15);color:#0a0a12;text-decoration:none;font-weight:700;font-size:15px;border-radius:10px;">
+                       style="display:inline-block;padding:14px 40px;background:linear-gradient(145deg,#eab308,#facc15);color:#0a0a12;text-decoration:none;font-weight:700;font-size:15px;border-radius:10px;">
                       Definir minha senha
                     </a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 8px;font-size:12px;color:#7a7a92;line-height:1.5;">
+              <p style="margin:0 0 6px;font-size:12px;color:#7a7a92;line-height:1.5;">
                 Se o botão não abrir, copie e cole este link no navegador:
               </p>
-              <p style="margin:0 0 20px;font-size:11px;color:#9898b0;word-break:break-all;line-height:1.5;">
+              <p style="margin:0 0 24px;font-size:11px;color:#eab308;word-break:break-all;line-height:1.5;">
                 <a href="${safeLink}" style="color:#eab308;">${safeLink}</a>
               </p>
               <p style="margin:0;font-size:11px;color:#5a5a72;line-height:1.5;">
@@ -65,7 +84,7 @@ export function buildInviteEmailHtml(
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 28px;border-top:1px solid #25253a;background:#0d0d14;">
+            <td class="pad" style="padding:16px 28px;border-top:1px solid #25253a;background:#0d0d14;">
               <p style="margin:0;font-size:11px;color:#5a5a72;text-align:center;">
                 © JurisAI — Bacellar Advogados · Mensagem automática, não responda diretamente a este endereço.
               </p>
