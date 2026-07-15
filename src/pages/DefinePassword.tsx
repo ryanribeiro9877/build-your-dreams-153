@@ -154,7 +154,7 @@ export default function DefinePassword() {
               Convite expirado ou link invalido
             </div>
             <div style={{ fontSize: 12, color: "#7a7a92", lineHeight: 1.6, marginBottom: 16 }}>
-              O prazo de 7 dias para definir sua senha foi ultrapassado. Peca ao administrador para reenviar o convite.
+              O prazo de 24 horas para definir sua senha foi ultrapassado. Peca ao administrador para reenviar o convite.
             </div>
             <button
               type="button"

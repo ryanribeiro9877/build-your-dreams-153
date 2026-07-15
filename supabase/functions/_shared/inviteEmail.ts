@@ -78,7 +78,7 @@ export function buildInviteEmailHtml(
                 <a href="${safeLink}" style="color:#eab308;">${safeLink}</a>
               </p>
               <p style="margin:0;font-size:11px;color:#5a5a72;line-height:1.5;">
-                Este link é pessoal e expira em 7 dias. Se você não esperava este convite, ignore este e-mail
+                Este link é pessoal e expira em 24 horas. Se você não esperava este convite, ignore este e-mail
                 ou fale com o administrador do escritório.
               </p>
             </td>
@@ -109,7 +109,7 @@ Olá, ${fullName},
 
 Você foi convidado(a) para acessar o JurisAI como ${roleName}.
 
-Defina sua senha de acesso pelo link abaixo (válido por 7 dias):
+Defina sua senha de acesso pelo link abaixo (válido por 24 horas):
 ${actionLink}
 
 Requisitos da senha (LGPD):

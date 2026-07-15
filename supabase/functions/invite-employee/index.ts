@@ -195,7 +195,7 @@ serve(async (req) => {
       }
     }
 
-    const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const inviteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     const meta = {
       display_name: fullName,
