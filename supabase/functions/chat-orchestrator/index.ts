@@ -599,6 +599,18 @@ async function loadFirmSpecialists(
   return ((data as unknown as AgentRow[]) || []);
 }
 
+// Especialistas GLOBAIS (compartilhados, owner_user_id IS NULL — ex.: "Especialista
+// Distribuição") são alvos de delegação VÁLIDOS a partir de QUALQUER assistente
+// por-usuário: loadSubAgents filtra pelo dono e nunca os traria. Só entram os que
+// CARREGAM ferramenta — um global sem tools (ex.: "Agente Supervisor", que roda em
+// background por heartbeat) não deve poluir o roteador de chat. Dedup no chamador.
+async function loadGlobalSpecialists(admin: SupabaseClient): Promise<AgentRow[]> {
+  const { data } = await admin.from("agents")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
+    .is("owner_user_id", null).eq("is_active", true).eq("role", "specialist");
+  return ((data as unknown as AgentRow[]) || []).filter((a) => (a.allowed_tools?.length ?? 0) > 0);
+}
+
 // ─── memória de sessão (histórico por session_id + resumo rolante) ───────────
 // ISOLAMENTO ESTRITO: só lê chat_messages do session_id informado. Nunca mistura
 // mensagens de outras sessões. Carrega as últimas N trocas (user + assistant final),
@@ -1416,6 +1428,13 @@ function buildUniversalGuardrails(): string {
     "esse texto na peça ou na resposta ao usuário. A correção deve aparecer APLICADA (o texto jurídico já corrigido), " +
     "NUNCA NARRADA — não escreva 'conforme observação do validador', 'corrigi o valor conforme solicitado', nem " +
     "reproduza o guia de correção. Entregue apenas o conteúdo jurídico final, como se sempre tivesse estado correto.\n" +
+    "H. NUNCA EXPONHA IDENTIFICADORES INTERNOS: é PROIBIDO imprimir, citar ou repetir ao usuário IDs " +
+    "internos do sistema (UUIDs e chaves de banco — client_id, process_id, user_id, task_id, task_type_id, " +
+    "tipo_acao_id, responsible_lawyer_user_id e afins). Esses identificadores são de USO INTERNO das " +
+    "ferramentas: passe-os nas chamadas de tool, JAMAIS no texto da resposta. Refira-se a pessoas, clientes, " +
+    "processos e destinatários SEMPRE pelo NOME (para documentos, use o identificador HUMANO — número do " +
+    "processo/CNPJ/CPF —, nunca o UUID interno). Ex.: escreva \"o caso do cliente Empresa Teste LTDA foi " +
+    "distribuído para o Sócio Bacellar\", nunca \"cliente_id abc-123 → responsavel_user_id def-456\".\n" +
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
 }
 
@@ -1906,7 +1925,8 @@ const ROUTING_INTENT_RULES = `
 REGRAS DE ROTEAMENTO POR INTENCAO (obedeça rigorosamente):
 1. REDIGIR/CONFECCIONAR: se o usuario pede para CRIAR, REDIGIR, CONFECCIONAR, ELABORAR ou FAZER uma peça, petição, contestação, recurso, notificação, ou qualquer documento jurídico → escolha um "Especialista Confecção [Área]" (Bancário, Civil, Consumidor, Plano de Saúde, Tributário). NUNCA mande para "Especialista Atendimento" — Atendimento faz SONDAGEM de cliente, não redige.
 2. ATENDER/SONDAR: se o usuario pede para ATENDER, SONDAR, FECHAR um cliente, ou fazer triagem → "Especialista Atendimento" ou "Especialista Triagem".
-3. PROTOCOLAR: se pede para protocolar, distribuir, juntar → "Especialista Cadastro ProJuris" ou especialista de protocolo.
+3. PROTOCOLAR/JUNTAR: se pede para PROTOCOLAR uma peça, JUNTAR documento ao processo ou dar entrada no ProJuris/cartório → "Especialista Cadastro ProJuris" ou especialista de protocolo. NÃO confunda com DISTRIBUIR/ATRIBUIR caso (regra 3B).
+3B. DISTRIBUIR/ATRIBUIR CASO: se pede para DISTRIBUIR ou ATRIBUIR um caso/processo — a um Kanban/board por tipo de ação, a um advogado, a um setor, "ao sócio", "à recepção" ou a uma pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua esse processo à Ana") → SEMPRE "Especialista Distribuição". Ele localiza o cliente/processo, resolve o destinatário e aplica o gate documental §24.1. NUNCA encaminhe pedido de distribuição/atribuição ao Cadastro — atribuir caso NÃO é função do Cadastro.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
@@ -2389,6 +2409,14 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             specialists = [...specialists, ...extra];
           }
         }
+      }
+      // Especialistas GLOBAIS (owner NULL, ex.: Distribuição) SEMPRE entram como
+      // candidatos — inclusive quando o usuário já tem pool próprio (caso da recepção,
+      // em que o CROSS_AREA não dispara). Sem isto, "distribua o caso X ao sócio" nunca
+      // acha o Especialista Distribuição e vaza para o vizinho (Cadastro). Dedup por id.
+      const globalSpecs = await loadGlobalSpecialists(admin);
+      for (const g of globalSpecs) {
+        if (!specialists.some((s) => s.id === g.id)) specialists.push(g);
       }
       if (specialists.length === 0) return await fail("Nenhum especialista disponivel");
       // Aplica exclusividades de réu (Agiproteg/Agibank/Facta → sócio)
