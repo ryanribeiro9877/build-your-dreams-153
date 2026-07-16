@@ -16,8 +16,10 @@ Deno.test("cadastrar_cliente sempre execute", () => {
 Deno.test("solicitar_documentos sempre execute", () => {
   assertEquals(decideActionRoute({ isMaster: false, canAssignTask: false }, "solicitar_documentos"), "execute");
 });
-Deno.test("distribuir_caso segue o gate de atribuição", () => {
-  assertEquals(decideActionRoute({ isMaster: false, canAssignTask: false }, "distribuir_caso"), "pendencia");
+Deno.test("distribuir_caso é triagem da recepção -> sempre execute", () => {
+  // Distribuir é ato de roteamento da recepção (define o advogado responsável do
+  // caso), não atribuição de tarefa pessoal: executa direto, sem cair em pendência.
+  assertEquals(decideActionRoute({ isMaster: false, canAssignTask: false }, "distribuir_caso"), "execute");
   assertEquals(decideActionRoute({ isMaster: false, canAssignTask: true }, "distribuir_caso"), "execute");
   assertEquals(decideActionRoute({ isMaster: true, canAssignTask: false }, "distribuir_caso"), "execute");
 });
