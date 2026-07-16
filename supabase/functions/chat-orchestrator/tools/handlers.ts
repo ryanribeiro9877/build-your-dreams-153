@@ -20,9 +20,14 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       return data ?? [];
     }
     case "consultar_usuario": {
+      // Resolvedor determinístico de DESTINATÁRIO. A RPC agent_consultar_usuario
+      // casa papel/cargo ("o sócio"), nome, e-mail e app_role com fold de acento
+      // — mesmos candidatos que list_assignable_users. Substitui o ilike cru em
+      // profiles.display_name, que era cego a papel/cargo/"admin" (por isso "o
+      // sócio" caía em 0 e o agente pedia o nome). Re-checa is_recepcao_or_socio()
+      // via auth.uid(), então usa o `client` com JWT (igual a consultar_cliente).
       const q = String(args.busca ?? "").trim();
-      const { data } = await client.from("profiles")
-        .select("user_id, display_name, role_template_id").ilike("display_name", `%${q}%`).limit(10);
+      const { data } = await client.rpc("agent_consultar_usuario", { p_busca: q });
       return data ?? [];
     }
     case "consultar_tarefas": {
@@ -152,6 +157,9 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_tipo_acao_id: args.tipo_acao_id ?? null,
           p_task_type_id: args.task_type_id ?? null,
           p_title: args.title ?? null,
+          // Destinatário resolvido via consultar_usuario (override manual). Sem
+          // ele, a RPC cai no responsável do processo e depois no da área.
+          p_responsible_lawyer_user_id: args.responsible_lawyer_user_id ?? null,
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { task_id: data } };

@@ -27,8 +27,8 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   consultar_usuario: { type: "function", function: {
     name: "consultar_usuario",
-    description: "Busca usuários/colaboradores do escritório por nome. Use para resolver 'para quem' antes de criar um card.",
-    parameters: { type: "object", properties: { busca: str("nome do colaborador") }, required: ["busca"] },
+    description: "Resolve o DESTINATÁRIO (colaborador do escritório) por papel/cargo ('o sócio', 'a recepção', 'o tech', 'o previdenciário'), nome, e-mail, 'admin' ou app_role. Use SEMPRE antes de distribuir_caso/criar_card_tarefa para obter o user_id. Passe o termo do pedido cru (ex.: 'sócio'). Regras de resolução: NENHUM resultado → diga que não encontrou usuário para o termo e NÃO invente destinatário; UM resultado → siga com esse user_id; MAIS DE UM → LISTE os candidatos (nome + cargo) e PERGUNTE qual, nunca escolha sozinho.",
+    parameters: { type: "object", properties: { busca: str("papel/cargo, nome, e-mail, 'admin' ou app_role do destinatário (ex.: 'o sócio', 'Ana', 'laura@...')") }, required: ["busca"] },
   }},
   consultar_tarefas: { type: "function", function: {
     name: "consultar_tarefas",
@@ -137,12 +137,13 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   distribuir_caso: { type: "function", function: {
     name: "distribuir_caso",
-    description: "Distribui um caso ao Kanban do seu tipo de ação: cria e placa o card na coluna inicial do board correspondente. Resolva o processo com consultar_processo ANTES e passe process_id. Informe tipo_acao_id quando o processo ainda não tem tipo definido. Bloqueado se o caso tiver pendência aberta.",
+    description: "Distribui um caso ao Kanban do seu tipo de ação: cria e placa o card na coluna inicial do board correspondente. Resolva o processo com consultar_processo ANTES e passe process_id. Informe tipo_acao_id quando o processo ainda não tem tipo definido. Quando o pedido indicar um destinatário ('ao sócio', 'para a Ana'), resolva-o com consultar_usuario ANTES e passe o user_id em responsible_lawyer_user_id — nunca invente destinatário; se houver mais de um candidato, pergunte qual antes de distribuir. Sem responsible_lawyer_user_id, o caso vai ao responsável da área. Bloqueado se o caso tiver pendência aberta.",
     parameters: { type: "object", properties: {
       process_id: str("id do processo/caso (de consultar_processo)"),
       tipo_acao_id: str("id do tipo de ação (opcional se o processo já tem tipo_acao_id definido)"),
       task_type_id: str("id do tipo de tarefa do card (opcional; default = configurado no tipo de ação)"),
       title: str("título do card (opcional; default = 'Caso: <número/cliente>')"),
+      responsible_lawyer_user_id: str("id do destinatário resolvido via consultar_usuario (opcional; default = responsável da área)"),
     }, required: ["process_id"] },
   }},
   solicitar_checklist_documental: { type: "function", function: {
