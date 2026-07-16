@@ -9,5 +9,6 @@ export { mergeExtractionResults } from "./merge.ts";
 export { createTextractExtractor, TEXTRACT_ENGINE } from "./textractExtractor.ts";
 export { makeTextractRawOcr, type TextractConfig } from "./textractClient.ts";
 export { assertOpenAiDirect, makeOpenAiReinforcement } from "./llmReinforcement.ts";
+export { createOpenAiVisionExtractor, OPENAI_VISION_ENGINE } from "./openaiVisionExtractor.ts";
 export { stubExtractor, STUB_ENGINE } from "./stubExtractor.ts";
 export { getExtractor, type SecretGetter } from "./registry.ts";

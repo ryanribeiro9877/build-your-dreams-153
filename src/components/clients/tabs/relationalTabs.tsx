@@ -41,6 +41,12 @@ function statusBadge(status: string) {
   return <span className={`cli-chip ${meta.cls}`}>{meta.label}</span>;
 }
 
+// OCR só faz sentido em imagem (a edge usa visão; PDF fica de fora). Deriva pela
+// extensão do file_path (o mime não vem nesta listagem).
+function isImageDoc(filePath: string): boolean {
+  return /\.(png|jpe?g|webp|gif|bmp)$/i.test(filePath || "");
+}
+
 function eventLabel(ev: DocEvent): string {
   const d = ev.details ?? {};
   const name = typeof d.document_name === "string" ? ` · ${d.document_name}` : "";
@@ -74,6 +80,7 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [ocrBusyId, setOcrBusyId] = useState<string | null>(null);
 
   // Upload form state
   const [file, setFile] = useState<File | null>(null);
@@ -140,6 +147,37 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
     setBusyId(null);
   }
 
+  // Extrai dados do documento via OCR (edge ocr-client-document). force=true para
+  // reprocessar mesmo com notes já preenchido. Preenche notes + campos vazios do
+  // cadastro; o resultado aparece ao recarregar.
+  async function runOcr(doc: DocRow) {
+    setOcrBusyId(doc.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("ocr-client-document", {
+        body: { documentId: doc.id, force: true },
+      });
+      if (error) { toast.error(`Falha no OCR: ${error.message}`); return; }
+      const res = data as { ok?: boolean; reason?: string; chars?: number; fieldsApplied?: number };
+      if (res?.ok) {
+        const applied = res.fieldsApplied ?? 0;
+        toast.success(
+          `OCR concluído${applied > 0 ? ` · ${applied} campo${applied > 1 ? "s" : ""} do cadastro preenchido${applied > 1 ? "s" : ""}` : ""}`,
+        );
+        await load();
+      } else if (res?.reason === "ocr_disabled") {
+        toast.error("OCR está desligado (flag OCR_ENABLED).");
+      } else if (res?.reason === "empty_extraction") {
+        toast.error("Não foi possível ler texto na imagem.");
+      } else {
+        toast.error(`OCR não processou: ${res?.reason ?? "erro"}`);
+      }
+    } catch (e) {
+      toast.error(`Falha no OCR: ${e instanceof Error ? e.message : "erro"}`);
+    } finally {
+      setOcrBusyId(null);
+    }
+  }
+
   if (docs === null) return <TabLoading />;
 
   const docEvents = (docId: string) => events.filter(e => e.document_id === docId);
@@ -203,6 +241,14 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
                       title="Alterar status">
                       {STATUS_CYCLE.map(s => <option key={s} value={s}>{DOC_STATUS_META[s].label}</option>)}
                     </select>
+                    {isImageDoc(doc.file_path) && (
+                      <button className="cli-btn sm ghost" style={{ padding: "6px 10px", fontSize: 12 }}
+                        disabled={ocrBusyId === doc.id}
+                        onClick={() => void runOcr(doc)}
+                        title="Ler o documento e preencher dados do cadastro">
+                        {ocrBusyId === doc.id ? "Processando…" : (doc.notes ? "Reprocessar OCR" : "Extrair dados (OCR)")}
+                      </button>
+                    )}
                     {evs.length > 0 && (
                       <button className="go" onClick={() => setExpanded(open ? null : doc.id)}
                         title="Histórico do documento" aria-expanded={open}>{open ? "▾" : "≡"}</button>

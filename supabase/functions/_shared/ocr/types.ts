@@ -94,6 +94,13 @@ export interface ExtractionResult {
   engine: string;
   /** Avisos não-fatais (ex.: "OCR bruto sem linhas", "reforço LLM pulado"). */
   warnings: string[];
+  /**
+   * Uso de tokens do provedor, quando o motor é baseado em LLM (ex.: OpenAI
+   * Vision). OPCIONAL e aditivo — extratores sem custo de LLM (stub) ou cujo
+   * custo não é medido aqui (Textack bruto) simplesmente não o setam. O
+   * consumidor usa para logar custo em `ai_generations`.
+   */
+  usage?: { inputTokens: number; outputTokens: number; model: string };
 }
 
 /** Opções de execução do extrator. */

@@ -11,17 +11,21 @@
 // (OCR desligado), independentemente de OCR_ENGINE.
 //
 // ENGINES:
-//   • "stub"     → extrator sintético (texto simulado), SEM credencial/região
-//                  AWS — para exercitar o fluxo ponta-a-ponta em teste local.
-//   • "textract" → extrator híbrido real, com os guards de segurança do B2
-//                  (região sa-east-1, credenciais de secret, OpenAI-direto).
+//   • "stub"          → extrator sintético (texto simulado), SEM credencial/
+//                       região AWS — para exercitar o fluxo ponta-a-ponta.
+//   • "textract"      → extrator híbrido real (Textract sa-east-1 + reforço
+//                       OpenAI-direto), com os guards de segurança do B2.
+//   • "openai-vision" → extrator por VISÃO (OpenAI direto): usa a chave OpenAI
+//                       já existente no projeto, sem credencial AWS. A imagem
+//                       trafega à OpenAI (só com o gate OCR_ENABLED aberto).
 //   • desconhecido/ausente/none/off → null (OCR desligado), com log no caso
-//                  de engine desconhecido.
+//                       de engine desconhecido.
 
 import type { Extractor, LlmReinforcementFn } from "./types.ts";
 import { createTextractExtractor } from "./textractExtractor.ts";
 import { makeTextractRawOcr } from "./textractClient.ts";
 import { assertOpenAiDirect, makeOpenAiReinforcement } from "./llmReinforcement.ts";
+import { createOpenAiVisionExtractor } from "./openaiVisionExtractor.ts";
 import { stubExtractor } from "./stubExtractor.ts";
 
 /** Getter de secret trocável (env do edge ou tabela edge_runtime_secrets). */
@@ -51,6 +55,20 @@ export async function getExtractor(getSecret: SecretGetter): Promise<Extractor |
   if (engine === "stub") {
     // Stub: texto sintético, sem dependência externa (nem AWS). Só para teste.
     return stubExtractor;
+  }
+
+  if (engine === "openai-vision") {
+    // Visão OpenAI DIRETO: usa a chave OpenAI do projeto, sem AWS. A imagem
+    // trafega à OpenAI — só chega aqui com OCR_ENABLED aberto (gate acima).
+    const openaiKey = await get(getSecret, "OPENAI_API_KEY");
+    if (!openaiKey) {
+      throw new Error(
+        "OCR_ENGINE=openai-vision exige OPENAI_API_KEY (chave OpenAI) no secret.",
+      );
+    }
+    const model = (await get(getSecret, "OCR_VISION_MODEL")) ?? "gpt-4o-mini";
+    assertOpenAiDirect(model); // recusa modelo com "/" (OpenRouter)
+    return createOpenAiVisionExtractor({ apiKey: openaiKey, model });
   }
 
   if (engine === "textract") {
