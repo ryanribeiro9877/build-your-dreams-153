@@ -222,14 +222,24 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   extrato_inss: "Extrato INSS", cnis: "CNIS", procuracao: "Procuração",
   contrato: "Contrato", termo_cooperado: "Termo de Cooperado",
   certidao: "Certidão", outro: "Outro",
+  contracheque: "Contracheque", negativa_inss: "Negativa INSS",
+  negativa_plano: "Negativa do plano", comprovante_reajuste: "Comprovante de reajuste",
+  documento_fiscal: "Documento fiscal",
   audio_atendimento: "Áudio do atendimento",
   resumo_atendimento: "Resumo do atendimento",
 };
 
 // Tipos oferecidos no upload da aba Documentos (vocabulário canônico do card 3.6).
-// O CHECK no banco aceita um superset (inclui os tipos legados do cadastro).
+// O CHECK client_documents_document_type_check no banco já aceita TODOS estes
+// códigos (verificado em 16/07/2026); os tipos §24.1 (extrato_inss, contracheque,
+// negativa_inss, negativa_plano, comprovante_reajuste, certidao, documento_fiscal)
+// foram adicionados para que as âncoras do gate de distribuição possam ser
+// satisfeitas pela tela. ATENÇÃO: os `value` são os códigos EXATOS gravados em
+// document_type — não renomear sem alinhar com tipo_acao_ancora_docs.
 export const DOCUMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
-  "rg", "cpf", "comprovante", "procuracao", "contrato", "termo_cooperado", "outro",
+  "rg", "cpf", "comprovante", "procuracao", "contrato", "termo_cooperado",
+  "extrato_inss", "contracheque", "negativa_inss", "negativa_plano",
+  "comprovante_reajuste", "certidao", "documento_fiscal", "outro",
 ].map(v => ({ value: v, label: DOCUMENT_TYPE_LABELS[v] ?? v }));
 
 // Status do documento (3.6) — badge com classe de cor no estilo .cli-chip.

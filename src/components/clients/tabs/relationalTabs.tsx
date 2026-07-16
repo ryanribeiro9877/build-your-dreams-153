@@ -406,51 +406,197 @@ export function PendenciasTab({ client }: { client: ClientFull }) {
 interface ProcessRow {
   id: string; process_number: string; description: string | null;
   responsible_lawyer: string | null; next_hearing_date: string | null; status: string;
+  tipo_acao_id: string | null;
+}
+
+interface TipoAcaoRow { id: string; nome: string }
+
+// Escape hatch tipado: `tipos_acao`, a coluna `processes.tipo_acao_id` e a RPC
+// `definir_tipo_acao_processo` ainda não estão nos tipos gerados (desync
+// repo↔banco). Mesmo padrão de useAudiencias.ts — evita `any` e não mexe no
+// types.ts (que é regenerado por outra via).
+type UntypedResult<T> = Promise<{ data: T | null; error: { message?: string; code?: string } | null }>;
+const sb = supabase as unknown as {
+  from: (t: string) => {
+    select: (c: string) => {
+      eq: (k: string, v: unknown) => { order: (k: string, o: { ascending: boolean }) => UntypedResult<unknown[]> };
+      order: (k: string, o?: { ascending: boolean }) => UntypedResult<unknown[]>;
+    };
+  };
+  rpc: (fn: string, args: Record<string, unknown>) => UntypedResult<unknown>;
+};
+
+// Modal de detalhe do processo. Único ponto editável é o tipo de ação — o gate
+// de distribuição (§24.1 / distribuir_caso) exige processes.tipo_acao_id
+// preenchido. A escrita passa pela RPC definir_tipo_acao_processo (SECURITY
+// DEFINER, mesmo gate da distribuição) porque a RLS de `processes` só deixa o
+// criador dar UPDATE — e a recepção normalmente não é a criadora.
+function ProcessoDetailModal({
+  proc, tiposAcao, onClose, onSaved,
+}: {
+  proc: ProcessRow; tiposAcao: TipoAcaoRow[];
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [tipoId, setTipoId] = useState<string>(proc.tipo_acao_id ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!tipoId) { toast.error("Selecione um tipo de ação"); return; }
+    setSaving(true);
+    const { error } = await sb.rpc("definir_tipo_acao_processo", {
+      p_process_id: proc.id, p_tipo_acao_id: tipoId,
+    });
+    if (error) {
+      toast.error(`Não foi possível salvar o tipo de ação: ${error.message}`);
+      setSaving(false);
+      return;
+    }
+    toast.success("Tipo de ação atualizado");
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div role="dialog" aria-modal="true"
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+      onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: "var(--bg3, #13131f)", color: "var(--text1, #eeeef5)", border: "1px solid var(--border, #1e1e2e)", borderRadius: 12, padding: 20, width: "min(520px, 92vw)", maxHeight: "88vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>Processo</h2>
+          <button type="button" onClick={onClose} aria-label="Fechar"
+            style={{ background: "transparent", border: 0, color: "var(--text2, #ccc)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--text3, #888)" }}>Número</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{proc.process_number}</div>
+          </div>
+          {proc.description && (
+            <div>
+              <div style={{ fontSize: 12, color: "var(--text3, #888)" }}>Descrição</div>
+              <div style={{ fontSize: 14 }}>{proc.description}</div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {proc.responsible_lawyer && (
+              <div>
+                <div style={{ fontSize: 12, color: "var(--text3, #888)" }}>Responsável</div>
+                <div style={{ fontSize: 14 }}>{proc.responsible_lawyer}</div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: 12, color: "var(--text3, #888)" }}>Situação</div>
+              <div style={{ fontSize: 14 }}>{proc.status}</div>
+            </div>
+          </div>
+
+          <label style={{ fontSize: 12, color: "var(--text3, #888)", display: "grid", gap: 4 }}>
+            Tipo de ação
+            <select
+              value={tipoId}
+              onChange={e => setTipoId(e.target.value)}
+              disabled={saving}
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, background: "var(--bg1, #09090f)", border: "1px solid var(--border, #1e1e2e)", color: "var(--text1, #eeeef5)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}>
+              <option value="">— selecione —</option>
+              {tiposAcao.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+            <button type="button" onClick={onClose} disabled={saving}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border, #1e1e2e)", background: "transparent", color: "var(--text2, #ccc)", cursor: "pointer", fontSize: 13 }}>
+              Cancelar
+            </button>
+            <button type="button" onClick={() => void handleSave()} disabled={saving || !tipoId}
+              className="cli-btn sm">
+              {saving ? "Salvando…" : "Salvar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ProcessosTab({ client }: { client: ClientFull }) {
   const [rows, setRows] = useState<ProcessRow[] | null>(null);
+  const [tiposAcao, setTiposAcao] = useState<TipoAcaoRow[]>([]);
+  const [selected, setSelected] = useState<ProcessRow | null>(null);
+
+  const load = useCallback(async () => {
+    // `processes` não tem FK para `clients`; o vínculo existente é por
+    // `client_name` (texto). Renderizamos por esse vínculo, sem inventar outro.
+    const { data, error } = await sb.from("processes")
+      .select("id, process_number, description, responsible_lawyer, next_hearing_date, status, tipo_acao_id")
+      .eq("client_name", client.full_name)
+      .order("created_at", { ascending: false });
+    if (error) { setRows([]); return; }
+    setRows((data as ProcessRow[]) ?? []);
+  }, [client.full_name]);
+
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // `processes` não tem FK para `clients`; o vínculo existente é por
-      // `client_name` (texto). Renderizamos por esse vínculo, sem inventar outro.
-      const { data, error } = await supabase.from("processes")
-        .select("id, process_number, description, responsible_lawyer, next_hearing_date, status")
-        .eq("client_name", client.full_name)
-        .order("created_at", { ascending: false });
+      const { data } = await sb.from("tipos_acao").select("id, nome").order("nome");
       if (cancelled) return;
-      if (error) { setRows([]); return; }
-      setRows((data as ProcessRow[]) ?? []);
+      setTiposAcao((data as TipoAcaoRow[]) ?? []);
     })();
     return () => { cancelled = true; };
-  }, [client.full_name]);
+  }, []);
+
+  const tipoNome = useCallback(
+    (id: string | null) => (id ? tiposAcao.find(t => t.id === id)?.nome ?? null : null),
+    [tiposAcao],
+  );
 
   if (rows === null) return <TabLoading />;
   if (rows.length === 0) {
     return <EmptyState icon="⚖" title="Nenhum processo vinculado" hint="Processos são associados pelo nome do cliente. Nenhum registro encontrado." />;
   }
   return (
-    <div className="cli-card lift">
-      <div className="cli-sec-title">Processos / Ações · {rows.length}</div>
-      {rows.map(proc => {
-        const overdue = proc.next_hearing_date ? new Date(proc.next_hearing_date) < new Date() : false;
-        return (
-          <div key={proc.id} className="cli-row">
-            <div className="dot">⚖</div>
-            <div className="body">
-              <div className="t">{proc.process_number}</div>
-              <div className={`s${overdue ? " late" : ""}`}>
-                {proc.description ? `${proc.description} · ` : ""}
-                {proc.responsible_lawyer ? `Resp.: ${proc.responsible_lawyer}` : ""}
-                {proc.next_hearing_date ? ` · Audiência ${formatDateBR(proc.next_hearing_date)}` : ""}
+    <>
+      <div className="cli-card lift">
+        <div className="cli-sec-title">Processos / Ações · {rows.length}</div>
+        {rows.map(proc => {
+          const overdue = proc.next_hearing_date ? new Date(proc.next_hearing_date) < new Date() : false;
+          const nome = tipoNome(proc.tipo_acao_id);
+          return (
+            <button key={proc.id} type="button" className="cli-row"
+              onClick={() => setSelected(proc)}
+              style={{ width: "100%", textAlign: "left", background: "none", border: 0, cursor: "pointer", font: "inherit", color: "inherit" }}
+              title="Abrir processo · editar tipo de ação">
+              <div className="dot">⚖</div>
+              <div className="body">
+                <div className="t">{proc.process_number}</div>
+                <div className={`s${overdue ? " late" : ""}`}>
+                  {proc.description ? `${proc.description} · ` : ""}
+                  {`Tipo: ${nome ?? "não definido"}`}
+                  {proc.responsible_lawyer ? ` · Resp.: ${proc.responsible_lawyer}` : ""}
+                  {proc.next_hearing_date ? ` · Audiência ${formatDateBR(proc.next_hearing_date)}` : ""}
+                </div>
               </div>
-            </div>
-            <span className="cli-chip n" style={{ marginLeft: "auto" }}>{proc.status}</span>
-          </div>
-        );
-      })}
-    </div>
+              <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                {!proc.tipo_acao_id && <span className="cli-chip d">Sem tipo</span>}
+                <span className="cli-chip n">{proc.status}</span>
+                <span className="go" aria-hidden="true">→</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selected && (
+        <ProcessoDetailModal
+          proc={selected}
+          tiposAcao={tiposAcao}
+          onClose={() => setSelected(null)}
+          onSaved={() => { setSelected(null); void load(); }}
+        />
+      )}
+    </>
   );
 }
