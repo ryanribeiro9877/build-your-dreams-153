@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { NotificationCenter } from "@/components/NotificationCenter";
+import { NotificationBell } from "@/components/NotificationBell";
 import {
   Menu, AlertCircle,
   ClipboardList, ShieldCheck, KanbanSquare,
@@ -107,7 +107,7 @@ export default function JurisTopBar({
             Kanban
           </button>
 
-          <NotificationCenter />
+          <NotificationBell />
 
           <div className="jc-user-chip" onClick={() => navigate("/perfil")} title="Meu Perfil" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/perfil"); } }}>
             <div className="jc-user-avatar">{(user?.email || "U")[0].toUpperCase()}</div>

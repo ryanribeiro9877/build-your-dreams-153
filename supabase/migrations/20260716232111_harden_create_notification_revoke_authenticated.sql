@@ -1,0 +1,15 @@
+-- Hardening do sistema de notificações (espelho — versão 20260716232111).
+--
+-- Este projeto tem ALTER DEFAULT PRIVILEGES concedendo EXECUTE a `authenticated`
+-- em TODA função nova, então o `REVOKE ... FROM PUBLIC, anon` da migração
+-- 20260716231852 NÃO removeu `authenticated` de create_notification — a função
+-- ficou executável por qualquer usuário logado via PostgREST, permitindo forjar
+-- notificação para qualquer destinatário.
+--
+-- Intenção do briefing (guardrail #6): create_notification só para service_role.
+-- O trigger trg_notify_task_assignment a invoca como SECURITY DEFINER (roda como
+-- owner), então NÃO precisa de grant ao usuário — o fluxo de atribuição segue
+-- funcionando. As RPCs de leitura/marcação (mark_notification_read,
+-- mark_all_notifications_read, get_unread_notifications_count) continuam com
+-- EXECUTE para `authenticated` (escopadas a auth.uid()).
+REVOKE ALL ON FUNCTION public.create_notification(uuid,text,text,text,text,uuid,uuid,text) FROM authenticated;

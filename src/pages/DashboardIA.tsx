@@ -10,6 +10,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { useIaMetrics } from "@/hooks/useIaMetrics";
 import { useIaUsageByUser } from "@/hooks/useIaUsageByUser";
 import { useIaCost } from "@/hooks/useIaCost";
+import { ProviderCreditsCard } from "@/components/ProviderCreditsCard";
 
 // ── Rótulos e cores (mesma paleta do Dashboard de Tarefas) ────────────────────
 const INTENT_LABELS: Record<string, string> = {
@@ -476,6 +477,9 @@ export default function DashboardIA() {
           </div>
         </>
       )}
+
+      {/* ══ Créditos dos provedores (RPC dashboard_provider_credits) ══════════════ */}
+      <ProviderCreditsCard />
 
       {/* ══ Uso & gasto por usuário e por modelo (RPC dashboard_ia_usage_by_user) ══ */}
       {usage && (
