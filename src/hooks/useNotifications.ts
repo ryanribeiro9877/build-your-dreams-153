@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -91,6 +91,13 @@ export function useNotifications() {
   const userId = user?.id ?? null;
   const [state, dispatch] = useReducer(reducer, { items: [], unread: 0 });
 
+  // `navigate` do react-router pode trocar de referência a cada navegação. Guardamos
+  // numa ref para que o efeito de subscription NÃO dependa dele — assim o canal
+  // `notif:{userId}` é assinado UMA vez por usuário (padrão canal-fixo da casa) e não
+  // é destruído/reassinado a cada troca de rota (o que poderia perder um INSERT).
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
   // Carga inicial (contagem + lista). Falha é silenciosa: o sino nunca deve
   // derrubar o header.
   useEffect(() => {
@@ -130,7 +137,7 @@ export function useNotifications() {
             description: n.body ?? undefined,
             duration: 6000,
             action: n.route
-              ? { label: "Abrir", onClick: () => navigate(n.route as string) }
+              ? { label: "Abrir", onClick: () => navigateRef.current(n.route as string) }
               : undefined,
           });
         },
@@ -145,23 +152,20 @@ export function useNotifications() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [userId, navigate]);
+  }, [userId]);
 
   // Clicar numa notificação: marca lida (otimista + RPC) e navega pelo route.
-  const openNotification = useCallback(
-    async (n: AppNotification) => {
-      if (!n.read_at) {
-        dispatch({ t: "markRead", id: n.id });
-        try {
-          await markNotificationRead(n.id);
-        } catch {
-          /* o eco do Realtime / próxima carga reconcilia */
-        }
+  const openNotification = useCallback(async (n: AppNotification) => {
+    if (!n.read_at) {
+      dispatch({ t: "markRead", id: n.id });
+      try {
+        await markNotificationRead(n.id);
+      } catch {
+        /* o eco do Realtime / próxima carga reconcilia */
       }
-      if (n.route) navigate(n.route);
-    },
-    [navigate],
-  );
+    }
+    if (n.route) navigateRef.current(n.route);
+  }, []);
 
   const markAllRead = useCallback(async () => {
     dispatch({ t: "markAll" });
