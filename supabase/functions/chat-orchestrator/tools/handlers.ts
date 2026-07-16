@@ -39,8 +39,16 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       return data ?? [];
     }
     case "consultar_processo": {
+      // Resolvedor determinístico de PROCESSO/CASO (espelha consultar_cliente/
+      // consultar_usuario). A RPC agent_consultar_processo detecta número (>=5
+      // dígitos) e compara SÓ os dígitos do process_number — tolerante ao
+      // prefixo `[TESTE] ` de teste e à pontuação variável do CNJ; caso texto,
+      // casa nome do cliente/descrição/número com fold de acento. Substitui o
+      // .from("processes").or("numero.ilike...") antigo, que consultava uma
+      // coluna inexistente (a real é process_number) e não casava número limpo.
+      // Re-checa papel via auth.uid(), então usa o `client` com JWT.
       const q = String(args.busca ?? "").trim();
-      const { data } = await client.from("processes").select("*").or(`numero.ilike.%${q}%`).limit(10);
+      const { data } = await client.rpc("agent_consultar_processo", { p_busca: q });
       return data ?? [];
     }
     case "consultar_documentos": {

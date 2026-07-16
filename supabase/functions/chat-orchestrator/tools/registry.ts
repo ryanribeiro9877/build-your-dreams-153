@@ -41,8 +41,8 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   consultar_processo: { type: "function", function: {
     name: "consultar_processo",
-    description: "Busca processos por número ou nome do cliente.",
-    parameters: { type: "object", properties: { busca: str("número do processo ou nome") }, required: ["busca"] },
+    description: "Localiza o processo/caso por número do processo/protocolo (tolerante a pontuação e prefixo), nome do cliente ou termo do caso (ex.: réu). Use SEMPRE antes de distribuir_caso — o retorno traz process_id e tipo_acao_id.",
+    parameters: { type: "object", properties: { busca: str("número do processo/protocolo, nome do cliente ou termo do caso (ex.: réu 'Agibank')") }, required: ["busca"] },
   }},
   consultar_documentos: { type: "function", function: {
     name: "consultar_documentos",
