@@ -9,12 +9,18 @@ export interface ToolDef {
 // de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
-  "consultar_cep",
+  "consultar_cep", "get_revisao_peca_context",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
 export function isWriteTool(name: string): boolean {
   return !READ_TOOLS.has(name);
+}
+
+// `delegate` é NATIVA (nem leitura nem escrita comum): o orquestrador a trata
+// diretamente no ramo `delegating` (não vai a runReadTool/runWriteTool).
+export function isDelegateTool(name: string): boolean {
+  return name === "delegate";
 }
 
 const str = (description: string) => ({ type: "string", description });
@@ -173,6 +179,32 @@ export const TOOLS: Record<string, ToolDef> = {
       summary: str("resumo/assunto do atendimento (opcional)"),
       create_task: { type: "boolean", description: "se true, também gera a tarefa vinculada à reunião" },
     }, required: ["scheduled_date", "start_time", "lawyer_user_id"] },
+  }},
+  delegate: { type: "function", function: {
+    name: "delegate",
+    description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",
+    parameters: { type: "object", properties: {
+      target: str("papel/área/nome do sub-agente destino (ex.: 'diretor de área', 'executor previdenciário', 'Especialista Cadastro')"),
+      objetivo: str("o que o sub-agente deve fazer (imperativo, 1 frase)"),
+      resumo: str("contexto relevante já apurado (opcional)"),
+      client_id: str("uuid do cliente já resolvido (opcional)"),
+      process_id: str("uuid do processo já resolvido (opcional)"),
+    }, required: ["target", "objetivo"] },
+  }},
+  get_revisao_peca_context: { type: "function", function: {
+    name: "get_revisao_peca_context",
+    description: "Lê o contexto de uma tarefa de revisão de peça (revisar_peca): a peça redigida e os metadados, para você avaliar antes de decidir. Passe o task_id da revisão.",
+    parameters: { type: "object", properties: { task_id: str("id da tarefa revisar_peca") }, required: ["task_id"] },
+  }},
+  decidir_revisao_peca: { type: "function", function: {
+    name: "decidir_revisao_peca",
+    description: "Decide uma revisão de peça: 'aprovar' ou 'devolver'. APROVAR exige aceite=true (o revisor assume a RESPONSABILIDADE pela peça) — só aprove após o revisor humano confirmar o aceite; nunca aprove por conta própria. DEVOLVER reabre a confecção para o redator refazer; use observacoes para dizer o que corrigir.",
+    parameters: { type: "object", properties: {
+      task_id: str("id da tarefa revisar_peca"),
+      decisao: { type: "string", enum: ["aprovar", "devolver"], description: "decisão da revisão" },
+      observacoes: str("o que corrigir (obrigatório ao devolver; opcional ao aprovar)"),
+      aceite: { type: "boolean", description: "true confirma o aceite de responsabilidade (obrigatório para aprovar)" },
+    }, required: ["task_id", "decisao"] },
   }},
 };
 
