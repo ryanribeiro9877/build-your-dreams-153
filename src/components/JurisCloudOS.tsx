@@ -1520,6 +1520,31 @@ export default function JurisCloudOS() {
   //    e reabre um cartão pré-preenchido p/ escolher novo horário. Consome e limpa
   //    o rascunho em todos os casos (não reaparece em cadastros futuros).
   const handleClienteCadastrado = useCallback(async (clientId: string, clientName: string) => {
+    // E1 — DESFECHO PERSISTIDO: o wizard grava o cliente via save_client DIRETO do
+    // browser (a PII cifrada não trafega pelo chat), então o edge nunca fica sabendo
+    // e o histórico "mente por omissão" — o especialista do próximo turno pede o
+    // cadastro de novo. Aqui gravamos, para TODOS os caminhos, uma mensagem de
+    // desfecho na sessão (metadata.kind='final' no server → entra no histórico lido
+    // pelo N3) + carry-over do cliente (client_id/entities). Sem UUID no texto
+    // (cláusula H). Best-effort: falha aqui não bloqueia o fluxo pós-cadastro.
+    const sidNow = assistantSessionId;
+    if (sidNow) {
+      try {
+        // RPC ainda não refletida no types.ts gerado → escape hatch tipado (mesmo
+        // padrão de definir_tipo_acao_processo em relationalTabs.tsx).
+        const rpc = supabase.rpc as unknown as (
+          fn: string, args: Record<string, unknown>,
+        ) => Promise<{ error: unknown }>;
+        await rpc("registrar_desfecho_chat", {
+          p_session_id: sidNow,
+          p_summary: `✔ Cliente ${clientName} cadastrado.`,
+          p_client_id: clientId,
+          p_client_name: clientName,
+          p_kind: "cadastro",
+        });
+      } catch { /* desfecho é best-effort; segue o fluxo mesmo se falhar */ }
+    }
+
     // Fluxo de TAREFA: cria a tarefa automaticamente com o novo client_id.
     if (pendingTask) {
       const tsnap = pendingTask;
@@ -1615,7 +1640,7 @@ export default function JurisCloudOS() {
     } catch {
       reopenCard(`Cliente ${clientName} cadastrado com sucesso, mas o horário ${whenLabel} não está mais disponível. Escolha um novo horário abaixo.`);
     }
-  }, [pendingMeeting, pendingTask]);
+  }, [pendingMeeting, pendingTask, assistantSessionId]);
 
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
