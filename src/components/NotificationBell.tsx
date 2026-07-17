@@ -43,31 +43,30 @@ export function NotificationBell() {
           title="Notificações"
           aria-label={unread > 0 ? `Notificações (${unread} não lidas)` : "Notificações"}
           style={{
+            // Ícone puro, sem borda/pílula: alinha ao gap padrão do .jc-topbar-trailing
+            // (nada de marginLeft extra, o que também elimina o corte na borda).
             position: "relative",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             width: 38,
             height: 38,
-            borderRadius: 10,
-            marginLeft: 8, // respiro dos botões Tarefas/Kanban (~18px total com o gap)
+            borderRadius: 999,
             flexShrink: 0,
-            border: "1px solid rgba(234, 179, 8, 0.45)",
-            background: "rgba(234, 179, 8, 0.08)",
+            border: "none",
+            background: "transparent",
             color: "#facc15",
             cursor: "pointer",
-            transition: "filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease",
+            transition: "background 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.filter = "brightness(1.12)";
-            e.currentTarget.style.boxShadow = "0 0 16px rgba(234, 179, 8, 0.28)";
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.10)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.filter = "";
-            e.currentTarget.style.boxShadow = "";
+            e.currentTarget.style.background = "transparent";
           }}
         >
-          <Bell size={18} strokeWidth={2.4} aria-hidden />
+          <Bell size={20} strokeWidth={2.4} aria-hidden />
           {unread > 0 && (
             <span
               aria-hidden
