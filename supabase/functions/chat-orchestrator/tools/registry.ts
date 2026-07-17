@@ -180,6 +180,17 @@ export const TOOLS: Record<string, ToolDef> = {
       create_task: { type: "boolean", description: "se true, também gera a tarefa vinculada à reunião" },
     }, required: ["scheduled_date", "start_time", "lawyer_user_id"] },
   }},
+  salvar_peca: { type: "function", function: {
+    name: "salvar_peca",
+    description: "Salva a peça que VOCÊ redigiu (texto integral em `conteudo`) e a envia para revisão humana. Resolva o cliente (e o processo, se houver) ANTES. NÃO é para respostas curtas — é a peça final. Após salvar, a peça fica pendente e uma tarefa de revisão é criada para o revisor.",
+    parameters: { type: "object", properties: {
+      client_id: str("id do cliente (resolvido via consultar_cliente)"),
+      process_id: str("id do processo (opcional)"),
+      document_name: str("nome da peça (ex.: 'Contestação — Fulano x Banco')"),
+      document_type: str("tipo do documento (default 'peca')"),
+      conteudo: str("TEXTO INTEGRAL da peça em markdown"),
+    }, required: ["client_id", "document_name", "conteudo"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",

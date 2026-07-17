@@ -30,8 +30,13 @@ import {
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
 import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall } from "./taskDraft.ts";
 import * as Sentry from "https://deno.land/x/sentry/index.mjs";
-import { toolsFor, isWriteTool, READ_TOOL_NAMES } from "./tools/registry.ts";
+import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
+import {
+  type DelegationStack, type DelegationContext, type DelegMsg,
+  allowedChildRoles, resolveTarget, isAncestor, topFrame, makeFrame,
+  pushChild, popWithResult, buildDelegationContextBlock, materiaToConfeccaoCode,
+} from "./delegation.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
@@ -318,7 +323,7 @@ async function callOpenAICompatible(opts: {
   history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
   jsonMode?: boolean; cacheableSystem?: string | null;
-  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null; parallelToolCalls?: boolean;
   onDelta?: (fullText: string) => void;
   cancelPoll?: CancelPoll | null;
 }): Promise<LlmResult> {
@@ -364,6 +369,9 @@ async function callOpenAICompatible(opts: {
   if (opts.tools && opts.tools.length > 0) {
     body.tools = opts.tools;
     body.tool_choice = opts.toolChoice ?? "auto";
+    // Multi-hop: força 1 tool-call por resposta (protocolo de mensagens simples e
+    // válido no loop de frames). Só enviado quando explicitamente false.
+    if (opts.parallelToolCalls === false) body.parallel_tool_calls = false;
   }
   const streaming = !!opts.onDelta;
   if (streaming) {
@@ -549,7 +557,7 @@ async function callLLM(admin: SupabaseClient, opts: {
   history: LlmMessage[]; userMessage: string;
   temperature: number | null; top_p: number | null; maxTokens: number; timeoutMs?: number;
   jsonMode?: boolean; cacheableSystem?: string | null;
-  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null;
+  tools?: LlmToolDef[] | null; toolChoice?: "auto" | "none" | null; parallelToolCalls?: boolean;
   onDelta?: (fullText: string) => void;
   cancelPoll?: CancelPoll | null;
   ctx?: LlmCtx;
@@ -2144,6 +2152,73 @@ CLASSIFICAÇÃO DO TIPO DE AÇÃO (acao_tipo) — escolha exatamente UM:
 - "seguro_atrelado": seguro embutido/venda casada em contrato de crédito.
 - "outro": qualquer outro caso (ou quando a solicitação não é confecção de peça).`;
 
+// ─── Glue da salvar_peca (multi-hop): texto → Storage → RPC ──────────────────
+// Resolve/cria a task de confecção para que a DEVOLUÇÃO reabra algo (critério 3).
+// Cria uma user_tasks de confecção por área, atribuída ao redator (auth via userClient).
+async function ensureConfeccaoTask(
+  userClient: SupabaseClient, run: { original_message: string; user_id: string }, clientId: string,
+): Promise<string | null> {
+  try {
+    const code = materiaToConfeccaoCode(classifyMateria(run.original_message));
+    const { data: tt } = await userClient.from("task_types").select("id").eq("code", code).maybeSingle();
+    const taskTypeId = (tt as { id?: string } | null)?.id;
+    if (!taskTypeId) return null;
+    const { data, error } = await userClient.rpc("create_user_task", {
+      p_task_type_id: taskTypeId, p_assignee_user_id: run.user_id,
+      p_title: "Confecção de peça (chat)", p_description: null, p_client_id: clientId,
+      p_priority: "high", p_deadline_at: null, p_area: null, p_payload: {}, p_external_kanban_ref: null,
+    });
+    if (error) { console.warn(`[salvar_peca] confecção não criada: ${error.message}`); return null; }
+    return (data as string) ?? null;
+  } catch (e) { console.warn(`[salvar_peca] confecção erro: ${(e as Error)?.message}`); return null; }
+}
+
+// Glue: conteudo (texto) → arquivo no bucket client-documents → RPC salvar_peca.
+async function handleSalvarPeca(
+  admin: SupabaseClient, userClient: SupabaseClient,
+  run: { original_message: string; user_id: string }, agent: AgentRow,
+  args: Record<string, unknown>, frame: { delegation_context: DelegationContext | null },
+): Promise<{ ok: boolean; result?: { client_document_id: string; revisar_peca_task_id: string; reviewer_user_id: string }; error?: string }> {
+  try {
+    const clientId = String(args.client_id ?? frame.delegation_context?.client_id ?? "");
+    const processId = (args.process_id as string) ?? frame.delegation_context?.process_id ?? null;
+    const conteudo = String(args.conteudo ?? "");
+    const documentName = String(args.document_name ?? "Peça").slice(0, 200);
+    const documentType = String(args.document_type ?? "peca");
+    if (!clientId) return { ok: false, error: "salvar_peca: client_id ausente (resolva o cliente antes)." };
+    if (!conteudo.trim()) return { ok: false, error: "salvar_peca: conteúdo vazio." };
+
+    // Reviewer = dono da árvore (o sócio). Nunca cai no autor por omissão.
+    const reviewerUserId = agent.owner_user_id ?? null;
+
+    // 1) grava a peça no Storage (bucket client-documents; leitura segue RLS de client_documents)
+    const path = `pecas/${processId ?? clientId}/${crypto.randomUUID()}.md`;
+    const { error: upErr } = await admin.storage.from("client-documents")
+      .upload(path, new Blob([conteudo], { type: "text/markdown" }), { upsert: false, contentType: "text/markdown" });
+    if (upErr) return { ok: false, error: `falha no upload da peça: ${upErr.message}` };
+
+    // 2) task de confecção (para a devolução reabrir algo)
+    const confeccaoTaskId = await ensureConfeccaoTask(userClient, run, clientId);
+
+    // 3) RPC salvar_peca sob o JWT do usuário (created_by/assigner corretos)
+    const { data, error } = await userClient.rpc("salvar_peca", {
+      p_client_id: clientId,
+      p_document_name: documentName,
+      p_file_path: path,
+      p_process_id: processId,
+      p_document_type: documentType,
+      p_mime_type: "text/markdown",
+      p_reviewer_user_id: reviewerUserId,
+      p_confeccao_task_id: confeccaoTaskId,
+    });
+    if (error) return { ok: false, error: error.message };
+    const d = data as { client_document_id: string; revisar_peca_task_id: string; reviewer_user_id: string };
+    return { ok: true, result: d };
+  } catch (e) {
+    return { ok: false, error: (e as Error)?.message ?? "erro ao salvar peça" };
+  }
+}
+
 async function chooseSpecialistAndAcaoTipo(
   admin: SupabaseClient, router: AgentRow, userMsg: string, candidates: AgentRow[], intentRules: string,
   cancelPoll?: CancelPoll | null, ctx?: LlmCtx,
@@ -2495,6 +2570,19 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
     const acaoStage = run.intent_category === "ACAO_COM_TOOL" ? "executing_acao" : "executing_n3";
 
     if (run.status === "routing_n1") {
+      // Multi-hop (gated): agente de entrada com `delegate` + flag → inicia a pilha
+      // de delegação e desvia para o ramo `delegating`. Sem a flag ou sem `delegate`,
+      // segue EXATAMENTE o roteamento legado abaixo.
+      if (MULTIHOP_DELEGATION_ENABLED && (n1.allowed_tools ?? []).includes("delegate")) {
+        const rootFrame = makeFrame(n1.id, 0, null, run.original_message);
+        const stack: DelegationStack = [rootFrame];
+        await insertStage(admin, run.session_id, run.user_id, `${n1.name} avaliando a solicitação...`, "delegating", n1);
+        await upd({
+          status: "delegating", delegation_stack: stack as unknown as Record<string, unknown>,
+          chain: [...(run.chain || []), { level: 0, agent: n1.name, action: "delegating" }],
+        });
+        return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+      }
       const directors = await loadSubAgents(admin, n1.owner_user_id, ["director"]);
       // ACAO_COM_TOOL (caminho CURTO): PULA o N2-director. Uma ação operacional
       // (cadastrar, criar tarefa, pendência…) não precisa da curadoria de peça do
@@ -2552,6 +2640,130 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         status: "executing_n3", target_n3_id: n3.id, acao_tipo: acaoTipo,
         chain: [...(run.chain || []), { level: 3, agent: n3.name, ...(acaoTipo ? { acao_tipo: acaoTipo } : {}) }],
       });
+      return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+
+    } else if (run.status === "delegating") {
+      // ── Multi-hop: processa o frame do TOPO com UMA chamada de LLM por invocação ──
+      // (uma chamada por salto → nunca aninha redação longa; respeita o wall-clock).
+      const stack = ((run.delegation_stack as unknown as DelegationStack) || []);
+      const frame = topFrame(stack);
+      if (!frame) return await fail("Pilha de delegação vazia");
+      // Backstop anti-laço/DoS: saltos acumulados na chain deste run.
+      const hops = (run.chain || []).filter((c: Record<string, unknown>) =>
+        c.action === "delegate" || c.action === "read" || c.action === "return").length;
+      if (hops > MAX_DELEGATION_HOPS) return await fail("Limite de saltos de delegação atingido");
+
+      const agent = await loadAgent(admin, frame.agent_id);
+      if (!agent) return await fail("Sub-agente inválido na pilha");
+      ctxModel = agent?.model ?? undefined;
+
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      const gated = (agent.allowed_tools ?? []).filter((n) =>
+        isDelegateTool(n) ? true
+        : n === "salvar_peca" ? CHAT_TOOLS_ENABLED
+        : isWriteTool(n) ? CHAT_TOOLS_ENABLED
+        : CHAT_READ_TOOLS_ENABLED);
+      const toolDefs = toolsFor(gated);
+      const readClient = (userToken && anonKey)
+        ? createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${userToken}` } } })
+        : admin;
+      const userClient = readClient; // escrita (salvar_peca/decidir) sob o JWT do usuário
+
+      const ctxBlock = buildDelegationContextBlock(frame.delegation_context);
+      const stableSystem = (agent.system_prompt || "") + buildUniversalGuardrails() + CONSULTA_TOOL_GUIDANCE + ctxBlock;
+      const msgs: DelegMsg[] = [...frame.messages];
+
+      const r = await callLLM(admin, {
+        model: agent.model || "gpt-4o", cacheableSystem: stableSystem, systemPrompt: buildNowAnchor(),
+        history: msgs as LlmMessage[], userMessage: "",
+        temperature: agent.temperature, top_p: agent.top_p, maxTokens: agent.max_tokens ?? 4000,
+        timeoutMs: LLM_N3_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto", parallelToolCalls: false, cancelPoll,
+        ctx: { ...baseCtx, agentId: agent.id, stage: "delegating" },
+      });
+
+      // Persiste o topo com as mensagens atualizadas (sem mudar o resto da pilha).
+      const persistTop = (m: DelegMsg[]): DelegationStack =>
+        stack.map((f, idx) => idx === stack.length - 1 ? { ...f, messages: [...m] } : f);
+
+      // Sem tool-calls → texto final DESTE frame: desempilha (ou finaliza o run).
+      if (!r.toolCalls || r.toolCalls.length === 0) {
+        const popped = popWithResult(stack, r.content || "(sem conteúdo)");
+        if (popped.length === 0) {
+          await finishAcaoDone(r.content, agent, { model: r.rawModel, input_tokens: r.inputTokens, output_tokens: r.outputTokens, duration_ms: 0 }, null);
+          return;
+        }
+        await insertStage(admin, run.session_id, run.user_id, `${agent.name} concluiu e devolveu ao nível acima.`, "delegating", agent);
+        await upd({ status: "delegating", delegation_stack: popped as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "return" }] });
+        return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+      }
+
+      const call = r.toolCalls[0];
+      const name = call.function.name;
+      const args = safeJson(call.function.arguments);
+      const assistantMsg: DelegMsg = { role: "assistant", content: r.content || "", tool_calls: [call] };
+
+      // ── delegate: resolve alvo, aplica guardas, empilha filho, salta ──
+      if (isDelegateTool(name)) {
+        if (frame.depth + 1 > MAX_DELEGATION_DEPTH) {
+          const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: "ERRO: profundidade máxima de delegação atingida — resolva você mesmo ou responda ao nível acima." }];
+          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown> });
+          return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+        }
+        const childRoles = allowedChildRoles(agent.role);
+        const candidates = await loadSubAgents(admin, agent.owner_user_id!, childRoles);
+        if (childRoles.includes("specialist")) {
+          const globals = await loadGlobalSpecialists(admin);
+          for (const g of globals) if (!candidates.some((c) => c.id === g.id)) candidates.push(g);
+        }
+        const { match, ambiguous } = resolveTarget(String(args.target ?? ""), candidates.map((c) => ({ id: c.id, name: c.name, role: c.role, description: c.description })));
+        if (!match || isAncestor(stack, match.id)) {
+          const err = !match
+            ? (ambiguous.length
+                ? `AMBÍGUO: mais de um alvo casa "${args.target}" (${ambiguous.map((a) => a.name).join(", ")}). Refine o target.`
+                : `SEM ALVO: nenhum sub-agente casa "${args.target}". Alvos possíveis: ${candidates.map((c) => c.name).join(", ") || "(nenhum)"}.`)
+            : `ERRO: laço de delegação — "${match.name}" já está na cadeia. Escolha outro alvo.`;
+          const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: err }];
+          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown> });
+          return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+        }
+        const dctx: DelegationContext = {
+          objetivo: String(args.objetivo ?? "Executar a demanda delegada"),
+          resumo: (args.resumo as string) ?? null,
+          client_id: (args.client_id as string) ?? frame.delegation_context?.client_id ?? null,
+          process_id: (args.process_id as string) ?? frame.delegation_context?.process_id ?? null,
+        };
+        const seed = `${dctx.objetivo}${dctx.resumo ? `\n\nContexto: ${dctx.resumo}` : ""}`;
+        const child = makeFrame(match.id, frame.depth + 1, dctx, seed);
+        const pushed = pushChild(persistTop(msgs), call.id, assistantMsg, child);
+        await insertStage(admin, run.session_id, run.user_id, `${agent.name} acionou ${match.name}: ${dctx.objetivo}`, "delegating", agent);
+        await upd({ status: "delegating", delegation_stack: pushed as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth + 1, agent: match.name, action: "delegate", objetivo: dctx.objetivo }] });
+        return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+      }
+
+      // ── salvar_peca: glue (Storage + RPC), desempilha com o resumo ──
+      if (name === "salvar_peca") {
+        const result = await handleSalvarPeca(admin, userClient, run, agent, args, frame);
+        const summary = result.ok
+          ? `Peça salva; revisão criada (task ${result.result?.revisar_peca_task_id}) para o revisor.`
+          : `Falha ao salvar a peça: ${result.error}`;
+        if (result.ok) await insertStage(admin, run.session_id, run.user_id, summary, "delegating", agent);
+        const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: JSON.stringify(result).slice(0, 2000) }];
+        const popped = popWithResult(persistTop(m), summary);
+        if (popped.length === 0) { await finishAcaoDone(summary, agent, null, null); return; }
+        await upd({ status: "delegating", delegation_stack: popped as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "salvar_peca" }] });
+        return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
+      }
+
+      // ── leitura / revisão / escrita comum: executa inline, realimenta e salta ──
+      let toolResult: unknown;
+      if (READ_TOOL_NAMES.includes(name)) {
+        toolResult = await runReadTool(readClient, run.user_id, name, args);
+        await persistEntityCarryover(admin, run.session_id, name, toolResult);
+      } else {
+        toolResult = await runWriteTool(userClient, run.user_id, name, args);
+      }
+      const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: JSON.stringify(toolResult).slice(0, 8000) }];
+      await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "read" }] });
       return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
 
     } else if (run.status === "executing_n3") {
