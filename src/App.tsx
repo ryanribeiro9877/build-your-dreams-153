@@ -12,7 +12,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
 import { DashboardRoute, SocioRoute, RecepcaoRoute, TechOnlyRoute } from "@/components/DashboardRoute";
 
-// E5: chunk lazy obsoleto após um redeploy (hash mudou na Vercel) faz o import()
+// E5: chunk lazy obsoleto após um redeploy (hash mudou no Cloudflare Pages) faz o import()
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
 // Aqui tentamos UM reload completo (busca o manifest novo) antes de desistir;
 // na 2ª falha, deixa o Sentry.ErrorBoundary tratar. Recupera TODAS as rotas lazy.

@@ -15,7 +15,7 @@ Plataforma multi-agente de IA jurídica para escritórios de advocacia brasileir
 | Payments | Stripe (test mode) |
 | Email | Resend (transactional invites) |
 | Captcha | Cloudflare Turnstile |
-| Deploy | Vercel (frontend) + Supabase (backend) |
+| Deploy | Cloudflare Pages (frontend) + Supabase (backend) |
 
 ## Prerequisites
 
@@ -116,7 +116,7 @@ bun run types:regen
 
 ## Deployment
 
-**Frontend**: Deployed to Vercel. Push to `main` triggers automatic deployment.
+**Frontend**: Deployed to Cloudflare Pages (domain `advjurisai.com.br`). Push to `main` triggers automatic deployment.
 
 **Edge Functions**: Deploy manually:
 

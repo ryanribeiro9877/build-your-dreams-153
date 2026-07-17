@@ -83,7 +83,6 @@ const ALLOWED_ORIGINS = [
   Deno.env.get("ALLOWED_ORIGIN") || "https://advjurisai.com.br",
   "https://advjurisai.com.br",
   "https://www.advjurisai.com.br",
-  "https://build-your-dreams-153.vercel.app",
   "https://app.jurisai.com.br",
   "http://localhost:8080",
   "http://localhost:5173",
@@ -367,7 +366,7 @@ async function callOpenAICompatible(opts: {
   };
   if (opts.provider === "openrouter") {
     // Headers recomendados pela OpenRouter (opcionais, ajudam a identificar o app).
-    headers["HTTP-Referer"] = "https://build-your-dreams-153.vercel.app";
+    headers["HTTP-Referer"] = "https://advjurisai.com.br";
     headers["X-Title"] = "JurisAI";
   }
   // Instrumentação de custo (Dashboard IA): t0 do 1o disparo e TTFT (1o chunk no

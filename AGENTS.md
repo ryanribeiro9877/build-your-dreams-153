@@ -10,9 +10,9 @@
 ## 0. TL;DR em 30 segundos
 
 - **Sistema**: plataforma multi-agente jurídica BR, **uso interno** da empresa Bacellar Advogados (Salvador-BA). 1 sócio + 8 funcionárias + 1 colaborador externo.
-- **Stack**: Vite + React 18 + TypeScript + Tailwind + shadcn/ui · Supabase (Auth, Postgres com RLS, Edge Functions Deno) · Stripe (test mode) · Resend (email) · Cloudflare Turnstile (captcha) · Vercel.
+- **Stack**: Vite + React 18 + TypeScript + Tailwind + shadcn/ui · Supabase (Auth, Postgres com RLS, Edge Functions Deno) · Stripe (test mode) · Resend (email) · Cloudflare Turnstile (captcha) · Cloudflare Pages (hospedagem, domínio `advjurisai.com.br`).
 - **Dono**: Rodrigo Bacellar (`ryanribeiro@cohapm.com.br`). Idioma: **PT-BR**.
-- **Conta de teste**: `admin@juridico.com / admin123` no deploy `build-your-dreams-153.vercel.app`.
+- **Conta de teste**: `admin@juridico.com / admin123` no deploy de produção `advjurisai.com.br`.
 - **Repo**: `https://github.com/ryanribeiro9877/build-your-dreams-153` (branch `main`).
 - **Estado atual**: 24 patches aplicados (V7-V24). V21 aposentou role `ceo`; V22 adicionou biblioteca de modelos de peticao; V23 transformou o chat em **orquestracao multi-agente N1->N2->N3** (assincrona + Realtime), com modelos rapidos por nivel (NUNCA gpt-5.5 no chat); V24 fez os agentes **LEREM os documentos** — anexos do caso (`chat_attachments`, fonte autoritativa) + modelos (`document_library`) injetados no N3 com cerca anti-alucinacao; aposentou `agent_documents`.
 - **NÃO faça**: não use light mode, não invente cores fora da paleta, não mexa em arquivos sem rodar `vite build` antes de entregar, não pré-crie usuários (todos vêm do convite do sócio), não use role `ceo` (deprecated V21).
@@ -74,7 +74,7 @@
 - **Sem servidor próprio**: tudo é Edge Function (Deno) ou RPC Postgres
 
 ### Deploy
-- **Vercel** (frontend): `build-your-dreams-153.vercel.app`
+- **Cloudflare Pages** (frontend): `advjurisai.com.br`
 - **Supabase** (banco + edge functions)
 
 ---
@@ -570,7 +570,7 @@ O Ryan tem padrão de qualidade alto e detesta retrabalho:
     2. Rodar `vite build` (e lint) antes de entregar.
     3. **Criar o PR** contra `main`.
     4. **Fazer o merge** do PR na `main` usando **rebase** (não squash). O rebase preserva o commit autorado por `Claude <noreply@anthropic.com>` como tip da `main` (verificado), evitando o commit gerado pelo GitHub (`noreply@github.com`) que o stop-hook marca como "Unverified".
-    5. O merge na `main` **dispara automaticamente o deploy de produção no Vercel** (`build-your-dreams-153.vercel.app`) — é assim que o Ryan visualiza as mudanças no sistema. Sempre confirme que o deploy foi disparado e informe a URL.
+    5. O push na `main` **dispara automaticamente o deploy de produção no Cloudflare Pages** (`advjurisai.com.br`) — é assim que o Ryan visualiza as mudanças no sistema. Sempre confirme que o deploy foi disparado e informe a URL.
     - Não pare no "PR criado": o padrão inclui merge + deploy para que a mudança fique visível em produção.
 
 ---
@@ -669,5 +669,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 02/julho/2026 (consolidação do menu Configurações + fluxo de entrega padrão PR→merge→deploy Vercel)
+**Última atualização**: 17/julho/2026 (hospedagem consolidada no Cloudflare Pages — `advjurisai.com.br`)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.
