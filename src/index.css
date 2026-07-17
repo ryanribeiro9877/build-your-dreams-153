@@ -149,6 +149,9 @@
   .lf-header-back-btn svg.lucide {
     display: inline-block !important;
   }
+  .jc-notif-bell svg.lucide { display: inline-block !important; }
+  button.jc-notif-bell[aria-label]::after { content: none !important; }
+
   button.lf-header-back-btn[aria-label]::after,
   a.lf-header-back-btn[aria-label]::after {
     content: none !important;

@@ -40,6 +40,7 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <button
           type="button"
+          className="jc-notif-bell"
           title="Notificações"
           aria-label={unread > 0 ? `Notificações (${unread} não lidas)` : "Notificações"}
           style={{
