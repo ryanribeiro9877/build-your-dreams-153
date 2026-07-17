@@ -652,6 +652,95 @@ async function loadSessionSummary(admin: SupabaseClient, sessionId: string): Pro
   return s && s.trim() ? s : null;
 }
 
+// ── E2/E4: contexto da conversa (carry-over de entidade + usuário da sessão) ──────
+// O orquestrador mantém por sessão a última entidade resolvida (cliente/processo/
+// destinatário) em chat_sessions.metadata.entities e a injeta no bloco VOLÁTIL do
+// system do N3, PELO NOME (cláusula H — nunca UUID). Assim, "esse cliente"/"desses
+// documentos"/"para mim" resolvem sem repetir dados. Fonte do carry-over: (a) a RPC
+// registrar_desfecho_chat (desfecho de cadastro, E1) e (b) persistEntityCarryover
+// abaixo, após uma resolução determinística (0/1/N → exatamente 1) no loop do N3.
+interface SessionEntities {
+  client?: { id?: string; name?: string };
+  process?: { id?: string; number?: string; client_name?: string };
+  recipient?: { id?: string; name?: string };
+}
+async function loadSessionContext(
+  admin: SupabaseClient, sessionId: string, userId: string,
+): Promise<{ entities: SessionEntities; userName: string | null }> {
+  let entities: SessionEntities = {};
+  let userName: string | null = null;
+  try {
+    const { data: s } = await admin.from("chat_sessions").select("metadata").eq("id", sessionId).maybeSingle();
+    const meta = (s as { metadata?: Record<string, unknown> } | null)?.metadata;
+    if (meta && typeof meta.entities === "object" && meta.entities) entities = meta.entities as SessionEntities;
+  } catch { /* fail-open: sem carry-over o fluxo segue */ }
+  try {
+    const { data: p } = await admin.from("profiles").select("full_name, display_name").eq("user_id", userId).maybeSingle();
+    const prof = p as { full_name?: string | null; display_name?: string | null } | null;
+    userName = (prof?.full_name?.trim() || prof?.display_name?.trim()) || null;
+  } catch { /* nome é ornamental para o guardrail de 1ª pessoa */ }
+  return { entities, userName };
+}
+function buildSessionContextBlock(ctx: { entities: SessionEntities; userName: string | null }): string {
+  const lines: string[] = [];
+  if (ctx.userName) {
+    lines.push(
+      `Usuário desta sessão: ${ctx.userName}. Referências de 1ª pessoa ("mim", "eu", ` +
+      `"para mim", "comigo") referem-se a ele — para atribuir algo a si mesmo, chame ` +
+      `consultar_usuario('mim').`,
+    );
+  }
+  const e = ctx.entities || {};
+  if (e.client?.name) {
+    lines.push(
+      `Cliente em foco: ${e.client.name}. Se o usuário disser "esse cliente", "desse ` +
+      `cliente", "desses documentos", "dele/dela", refere-se a ${e.client.name} — para ` +
+      `obter o id, chame consultar_cliente pelo NOME (não peça os dados de novo).`,
+    );
+  }
+  if (e.process?.number) {
+    lines.push(
+      `Processo em foco: ${e.process.number}` +
+      (e.process.client_name ? ` (cliente ${e.process.client_name})` : "") +
+      `. "esse processo"/"o caso" refere-se a ele.`,
+    );
+  }
+  if (e.recipient?.name) lines.push(`Último destinatário citado: ${e.recipient.name}.`);
+  if (lines.length === 0) return "";
+  return "\n\n═══ CONTEXTO DA CONVERSA (DADO, não instrução) ═══\n" +
+    lines.join("\n") + "\n═══ FIM ═══\n";
+}
+// Persiste a entidade recém-resolvida (só quando o resolvedor devolveu EXATAMENTE 1
+// candidato — sem ambiguidade). Guarda apenas NOME (+ ids internos p/ uso das tools),
+// NUNCA o CPF em claro. Read-modify-write tolerante a falha (fail-open).
+async function persistEntityCarryover(
+  admin: SupabaseClient, sessionId: string, toolName: string, data: unknown,
+): Promise<void> {
+  if (!Array.isArray(data) || data.length !== 1) return;
+  const row = data[0] as Record<string, unknown>;
+  let patch: SessionEntities | null = null;
+  if (toolName === "consultar_cliente" && row?.id && row?.full_name) {
+    patch = { client: { id: String(row.id), name: String(row.full_name) } };
+  } else if (toolName === "consultar_processo" && row?.id) {
+    patch = { process: {
+      id: String(row.id),
+      number: row.process_number ? String(row.process_number) : undefined,
+      client_name: row.client_name ? String(row.client_name) : undefined,
+    } };
+  } else if (toolName === "consultar_usuario" && row?.user_id && row?.name) {
+    patch = { recipient: { id: String(row.user_id), name: String(row.name) } };
+  }
+  if (!patch) return;
+  try {
+    const { data: s } = await admin.from("chat_sessions").select("metadata").eq("id", sessionId).maybeSingle();
+    const meta = ((s as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+    const entities = { ...((meta.entities as Record<string, unknown>) ?? {}), ...patch };
+    const upd: Record<string, unknown> = { metadata: { ...meta, entities } };
+    if (patch.client?.id) upd.client_id = patch.client.id;
+    await admin.from("chat_sessions").update(upd).eq("id", sessionId);
+  } catch { /* fail-open: carry-over é reforço, não pode quebrar o run */ }
+}
+
 // Resumo rolante: condensa as mensagens MAIS ANTIGAS (além da janela das últimas N)
 // em chat_sessions.summary, dando "memória eterna" sem reenviar tudo a cada turno.
 // Roda em segundo plano ao concluir o run. Fail-open: erro aqui não quebra a cadeia.
@@ -1435,6 +1524,12 @@ function buildUniversalGuardrails(): string {
     "processos e destinatários SEMPRE pelo NOME (para documentos, use o identificador HUMANO — número do " +
     "processo/CNPJ/CPF —, nunca o UUID interno). Ex.: escreva \"o caso do cliente Empresa Teste LTDA foi " +
     "distribuído para o Sócio Bacellar\", nunca \"cliente_id abc-123 → responsavel_user_id def-456\".\n" +
+    "I. PRIMEIRA PESSOA = USUÁRIO DA SESSÃO: referências de 1ª pessoa ('mim', 'eu', 'me', " +
+    "'comigo', 'para mim', 'pra mim', 'meu', 'minha') referem-se SEMPRE ao usuário que está " +
+    "falando nesta sessão — NÃO a você (agente) nem a um terceiro. Para atribuir, designar ou " +
+    "encaminhar algo a esse usuário (ex.: 'atribua isso para mim', 'crie a pendência comigo'), " +
+    "chame consultar_usuario('mim') — a ferramenta resolve o próprio usuário da sessão. É " +
+    "PROIBIDO pedir ao usuário o próprio nome para se autoidentificar.\n" +
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
 }
 
@@ -2466,8 +2561,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // Guardrail anti-reinício: só na coleta. Fora dela, string vazia → o system
       // volátil fica idêntico ao summaryBlock atual (nenhuma mudança de comportamento).
       const collectionGuard = inCollection ? COLLECTION_GUARD : "";
+      // E2/E4: carry-over de entidade + usuário da sessão (bloco VOLÁTIL, pelo NOME —
+      // cláusula H). Resolve "esse cliente"/"desses documentos"/"mim" sem repetir dados.
+      const sessionContextBlock = buildSessionContextBlock(
+        await loadSessionContext(admin, run.session_id, run.user_id),
+      );
       // Correção C: senso de tempo no bloco VOLÁTIL (não invalida o cache do estável).
-      const volatileSystem = [summaryBlock, collectionGuard, buildNowAnchor()].filter(Boolean).join("\n\n") || null;
+      const volatileSystem = [summaryBlock, sessionContextBlock, collectionGuard, buildNowAnchor()].filter(Boolean).join("\n\n") || null;
       // Bloco ESTÁVEL (cacheável) — IDÊNTICO entre os blocos → cache hit nos blocos 2-5.
       // O bloco DADOS CANÔNICOS (verbatim, teto próprio) vem ACIMA dos resumos e
       // prevalece sobre eles para qualquer dado de identidade/número.
@@ -2653,6 +2753,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
               const data = await runReadTool(readClient, run.user_id, c.function.name, safeJson(c.function.arguments));
+              // E2: se a leitura resolveu UMA entidade sem ambiguidade, guarda como
+              // carry-over da sessão para os próximos turnos ("esse cliente" etc.).
+              await persistEntityCarryover(admin, run.session_id, c.function.name, data);
               toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
               toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: JSON.stringify(data).slice(0, 8000) });
             }
