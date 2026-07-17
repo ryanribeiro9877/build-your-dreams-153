@@ -72,6 +72,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
         encontrado: r.fonte !== "faixa" && !!r.localidade,
       };
     }
+    case "get_revisao_peca_context": {
+      // Contexto da revisão (peça + metadados). RPC SECURITY DEFINER; roda sob a
+      // identidade do usuário (o `client` carrega o JWT).
+      const { data } = await client.rpc("get_revisao_peca_context", { p_task_id: String(args.task_id) });
+      return data ?? {};
+    }
     default:
       throw new Error(`ferramenta de leitura desconhecida: ${name}`);
   }
@@ -222,6 +228,18 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           created.push(String(data));
         }
         return { ok: true, result: { pendencias: created, total: created.length } };
+      }
+      case "decidir_revisao_peca": {
+        // A RPC exige assignee_user_id = auth.uid() (ou master) e, para aprovar,
+        // p_aceite=true. userClient carrega o JWT do revisor humano.
+        const { data, error } = await userClient.rpc("decidir_revisao_peca", {
+          p_task_id: args.task_id,
+          p_decisao: args.decisao,
+          p_observacoes: args.observacoes ?? null,
+          p_aceite: args.aceite === true,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { status: data } };
       }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
