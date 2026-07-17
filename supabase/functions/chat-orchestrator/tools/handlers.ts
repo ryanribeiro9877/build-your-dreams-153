@@ -172,6 +172,34 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { task_id: data } };
       }
+      case "agendar_atendimento": {
+        // Atendimento de cliente → RPC create_meeting (mesma via da Agenda). A RPC
+        // IMPÕE o gate (recepção/sócio/admin via meetings_can_create), o advogado
+        // obrigatório, o expediente/slot e o bloqueio de passado — os erros dela são
+        // legíveis e voltam ao usuário como estão. created_by = auth.uid() (userClient
+        // carrega o JWT). lawyer_name é só exibição (não vai para o banco).
+        const { data: meetingId, error } = await userClient.rpc("create_meeting", {
+          p_scheduled_date: args.scheduled_date,
+          p_start_time: args.start_time,
+          p_end_time: args.end_time ?? null,
+          p_client_id: args.client_id ?? null,
+          p_client_name: args.client_name ?? null,
+          p_phone: args.phone ?? null,
+          p_type: args.type ?? null,
+          p_lawyer_user_id: args.lawyer_user_id ?? null,
+          p_summary: args.summary ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        // create_task encadeia create_meeting_task(meeting_id). Falha na tarefa NÃO
+        // desfaz o agendamento (a reunião já está criada) — sinaliza como aviso.
+        let taskId: string | null = null;
+        if (args.create_task === true && meetingId) {
+          const { data: t, error: te } = await userClient.rpc("create_meeting_task", { p_meeting_id: meetingId });
+          if (te) return { ok: true, result: { meeting_id: meetingId, task_warning: te.message } };
+          taskId = (t as string) ?? null;
+        }
+        return { ok: true, result: { meeting_id: meetingId, task_id: taskId } };
+      }
       case "solicitar_checklist_documental": {
         const docs = Array.isArray(args.documentos)
           ? (args.documentos as unknown[]).map((d) => String(d)).filter((d) => d.trim())

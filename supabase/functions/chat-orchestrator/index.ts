@@ -1935,6 +1935,16 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       const reu = args.reu ? ` (réu: ${args.reu})` : "";
       return `Registrar como pendentes os documentos${reu}: ${docs}.`;
     }
+    case "agendar_atendimento": {
+      // Sem UUID: mostra data/hora e os NOMES informados (lawyer_name/client_name).
+      const d = String(args.scheduled_date ?? "").trim();
+      const dm = /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : d;
+      const hora = String(args.start_time ?? "").slice(0, 5);
+      const adv = args.lawyer_name ? ` com ${args.lawyer_name}` : "";
+      const cli = args.client_name ? ` — cliente ${args.client_name}` : "";
+      const tarefa = args.create_task === true ? " (com tarefa vinculada)" : "";
+      return `Agendar atendimento em ${dm}${hora ? ` às ${hora}` : ""}${adv}${cli}${tarefa}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2017,13 +2027,23 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
 // ─── regras de roteamento de intenção (N2→N3) ──────────────────────────────
 const ROUTING_INTENT_RULES = `
 REGRAS DE ROTEAMENTO POR INTENCAO (obedeça rigorosamente):
+
+PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isolado. O verbo "atribuir" é AMBÍGUO — "atribuir uma TAREFA/pendência/reunião a alguém" é DIFERENTE de "atribuir/distribuir um CASO/PROCESSO a um advogado". Identifique o OBJETO (tarefa? pendência? reunião? caso? processo? atendimento de cliente?) e roteie por ele.
+
 1. REDIGIR/CONFECCIONAR: se o usuario pede para CRIAR, REDIGIR, CONFECCIONAR, ELABORAR ou FAZER uma peça, petição, contestação, recurso, notificação, ou qualquer documento jurídico → escolha um "Especialista Confecção [Área]" (Bancário, Civil, Consumidor, Plano de Saúde, Tributário). NUNCA mande para "Especialista Atendimento" — Atendimento faz SONDAGEM de cliente, não redige.
 2. ATENDER/SONDAR: se o usuario pede para ATENDER, SONDAR, FECHAR um cliente, ou fazer triagem → "Especialista Atendimento" ou "Especialista Triagem".
-3. PROTOCOLAR/JUNTAR: se pede para PROTOCOLAR uma peça, JUNTAR documento ao processo ou dar entrada no ProJuris/cartório → "Especialista Cadastro ProJuris" ou especialista de protocolo. NÃO confunda com DISTRIBUIR/ATRIBUIR caso (regra 3B).
-3B. DISTRIBUIR/ATRIBUIR CASO: se pede para DISTRIBUIR ou ATRIBUIR um caso/processo — a um Kanban/board por tipo de ação, a um advogado, a um setor, "ao sócio", "à recepção" ou a uma pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua esse processo à Ana") → SEMPRE "Especialista Distribuição". Ele localiza o cliente/processo, resolve o destinatário e aplica o gate documental §24.1. NUNCA encaminhe pedido de distribuição/atribuição ao Cadastro — atribuir caso NÃO é função do Cadastro.
+3. PROTOCOLAR/JUNTAR: se pede para PROTOCOLAR uma peça, JUNTAR documento ao processo ou dar entrada no ProJuris/cartório → "Especialista Cadastro ProJuris" ou especialista de protocolo. NÃO confunda com DISTRIBUIR caso (regra 3B).
+3B. DISTRIBUIR CASO/PROCESSO (objeto = CASO): se pede para DISTRIBUIR ou ENCAMINHAR um CASO, PROCESSO, AÇÃO ou número CNJ — a um Kanban/board por tipo de ação, a um ADVOGADO, a um setor, "ao sócio", "à recepção" ou a pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua ESSE PROCESSO à Ana", "encaminhe a AÇÃO Y ao previdenciário") → "Especialista Distribuição". EXIGE um objeto de CASO/PROCESSO/ação/número. NUNCA roteie para cá se o objeto for TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO — isso é a regra 3C. NUNCA encaminhe distribuição de caso ao Cadastro.
+3C. CRIAR TAREFA/PENDÊNCIA/LEMBRETE/REUNIÃO INTERNA (objeto = TAREFA): se pede para ATRIBUIR, CRIAR, ABRIR, MARCAR ou AGENDAR uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente) — ex.: "atribua uma tarefa a Kailane...", "abra uma pendência para o setor X", "crie um lembrete para amanhã", "marque uma reunião entre nós dois às 15h" → "Especialista Kanban de Pendências" (tool criar_pendencia; o campo tipo aceita "reuniao" para reunião interna). O objeto é uma TAREFA/PENDÊNCIA/REUNIÃO INTERNA — NÃO um caso/processo e NÃO um atendimento de cliente.
+3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
+
+EXEMPLOS DE DESAMBIGUAÇÃO (obrigatórios — o verbo NÃO decide, o objeto decide):
+- "atribua uma tarefa a Kailane para uma reunião entre nós dois hoje às 15:00" → "Especialista Kanban de Pendências" (criar_pendencia, tipo "reuniao"). NUNCA "Especialista Distribuição" — o objeto é uma TAREFA/REUNIÃO INTERNA, não um caso.
+- "distribua o caso do cliente João (réu Agibank) ao sócio" → "Especialista Distribuição" (distribuir_caso). O objeto é um CASO.
+- "agende um atendimento do cliente Maria com a Dra Laura amanhã às 14h" → "Especialista Agenda de Atendimento" (agendar_atendimento). O objeto é um ATENDIMENTO com cliente.
 `;
 
 // E2: classificação DETERMINÍSTICA da matéria (espelha a Regra 5 do ROUTING_INTENT_RULES).

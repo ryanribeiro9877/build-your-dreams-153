@@ -157,6 +157,23 @@ export const TOOLS: Record<string, ToolDef> = {
       prazo: str("prazo em ISO 8601 (opcional)"),
     }, required: ["cliente_id", "documentos"] },
   }},
+  agendar_atendimento: { type: "function", function: {
+    name: "agendar_atendimento",
+    description: "Agenda um ATENDIMENTO/consulta de um CLIENTE com um ADVOGADO (cria a reunião na Agenda). NÃO use para reunião INTERNA entre colaboradores (isso é criar_pendencia tipo 'reuniao') nem para distribuir caso. Regras que o sistema IMPÕE (repasse os erros como estão): só recepção/sócio/admin podem agendar; ADVOGADO RESPONSÁVEL é obrigatório; expediente seg–sex 08:00–11:00 e 13:00–16:00, slots de 15min; não agenda no passado (fuso America/Bahia). Resolva o advogado com consultar_usuario ANTES (passe lawyer_user_id e lawyer_name) e, se houver, o cliente com consultar_cliente (passe client_id); se o cliente não estiver cadastrado, informe client_name e phone.",
+    parameters: { type: "object", properties: {
+      scheduled_date: str("data do atendimento no formato AAAA-MM-DD"),
+      start_time: str("horário de início HH:MM (08:00–11:00 ou 13:00–16:00, dia útil)"),
+      end_time: str("horário de término HH:MM (opcional; default = início + 15min)"),
+      lawyer_user_id: str("id do advogado responsável, resolvido via consultar_usuario (obrigatório)"),
+      lawyer_name: str("nome do advogado (apenas para exibição na confirmação, ex.: 'Dra. Laura')"),
+      client_id: str("id do cliente, resolvido via consultar_cliente (opcional)"),
+      client_name: str("nome do cliente (quando não cadastrado)"),
+      phone: str("telefone do cliente (opcional)"),
+      type: str("tipo do atendimento (ex.: 'Consulta inicial') — opcional"),
+      summary: str("resumo/assunto do atendimento (opcional)"),
+      create_task: { type: "boolean", description: "se true, também gera a tarefa vinculada à reunião" },
+    }, required: ["scheduled_date", "start_time", "lawyer_user_id"] },
+  }},
 };
 
 export function toolsFor(allowed: string[] | null | undefined): ToolDef[] {
