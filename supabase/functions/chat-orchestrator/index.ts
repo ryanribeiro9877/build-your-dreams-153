@@ -159,6 +159,15 @@ async function userCanCreateMeetings(supabaseUrl: string, anonKey: string, token
 // Flag dedicada, reversível. Default ON.
 const TAREFA_CHAT_ENABLED = (Deno.env.get("TAREFA_CHAT_ENABLED") ?? "true") === "true";
 
+// Multi-hop (modelo do sócio): Assistente→Diretor→Executor via tool `delegate`.
+// Default OFF: deployar não muda nada até ligar. Só entra quando o agente de entrada
+// tem `delegate` em allowed_tools E esta flag está on.
+const MULTIHOP_DELEGATION_ENABLED = (Deno.env.get("MULTIHOP_DELEGATION_ENABLED") ?? "false") === "true";
+// Profundidade máxima da pilha (0 = raiz). Além disso, `delegate` devolve erro à tool.
+const MAX_DELEGATION_DEPTH = Number(Deno.env.get("MAX_DELEGATION_DEPTH")) || 4;
+// Teto global de saltos por run (backstop anti-laço/DoS).
+const MAX_DELEGATION_HOPS = Number(Deno.env.get("MAX_DELEGATION_HOPS")) || 24;
+
 // CADASTRO-CHAT-LOOP-CONCLUSAO: durante uma coleta ativa (continuacao_coleta) o
 // N3 precisa ver TODOS os campos já informados — a janela deslizante de
 // history_limit=10 dropava os primeiros (tipo, nome, CPF, ...) e o modelo
@@ -383,7 +392,7 @@ async function callOpenAICompatible(opts: {
   const cancelCfg = opts.cancelPoll ?? null;
   let externallyCancelled = false;
   let activeCtrl: AbortController | null = null;
-  const cancelTimer: number | undefined = (cancelCfg && !streaming)
+  const cancelTimer: ReturnType<typeof setInterval> | undefined = (cancelCfg && !streaming)
     ? setInterval(() => {
         cancelCfg.check()
           .then((c) => { if (c) { externallyCancelled = true; activeCtrl?.abort(); } })
