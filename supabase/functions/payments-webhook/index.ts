@@ -38,7 +38,8 @@ serve(async (req) => {
     const stripe = createStripeClient(env);
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err) {
-    console.error("Webhook signature verification failed:", err.message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Webhook signature verification failed:", msg);
     return new Response(JSON.stringify({ error: "Invalid signature" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -72,13 +73,32 @@ serve(async (req) => {
           });
         }
 
-        await supabase.rpc("add_tokens", {
+        const { error: addErr } = await supabase.rpc("add_tokens", {
           p_user_id: userId,
           p_amount: amount,
           p_type: "purchase",
           p_description: `Recarga de ${amount} tokens via Stripe`,
           p_reference_id: session.id,
         });
+        if (addErr) {
+          // 23505 = unique_violation na constraint uq_token_transactions_reference:
+          // entrega duplicada do mesmo evento (corrida com o SELECT acima) → idempotente.
+          const isDuplicate = addErr.code === "23505" ||
+            /uq_token_transactions_reference|duplicate key/i.test(addErr.message ?? "");
+          if (isDuplicate) {
+            console.log("Duplicate token grant blocked by DB constraint:", session.id);
+            return new Response(JSON.stringify({ received: true, duplicate: true }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          // Falha real: NÃO confirmar ao Stripe (responder 5xx) para ele reenviar o
+          // evento — evita que o cliente pague e fique sem os tokens, silenciosamente.
+          console.error("add_tokens failed for session", session.id, addErr.message);
+          return new Response(JSON.stringify({ error: "processing_failed" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         console.log(`Added ${amount} tokens to user ${userId}`);
       }
     }
