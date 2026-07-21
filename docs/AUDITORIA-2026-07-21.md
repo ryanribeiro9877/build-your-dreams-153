@@ -146,6 +146,36 @@ Após a auditoria, as **correções críticas foram aplicadas e verificadas**. A
 
 **A1 deployado (2026-07-21):** edge function `payments-webhook` versão **13**, `status=ACTIVE`, `verify_jwt=false` preservado. Deploy via Supabase CLI (projeto linkado), incluindo `_shared/cors.ts` e `_shared/stripe.ts`. Conteúdo em produção verificado com o fix presente.
 
-**Não aplicados (fora do escopo "crítico"):** A2 (`user_roles`), A3/A4 (`integration-api`), A5 (loop de delegação) e os médios/baixos permanecem como recomendação — ver seções 4–6.
+### 9.1 — Itens Altos (A2–A5): aplicados e verificados
+
+Todos **implementados, deployados e verificados**. As edge functions foram deployadas pelo responsável do projeto; o DDL do A2 foi aplicado via MCP após autorização.
+
+| Item | Onde | Status | Verificação |
+|---|---|---|---|
+| A2 `user_roles USING(true)` | Banco | ✅ Aplicado | Policy permissiva removida; prova lógica: recepcionista/advogado NÃO veem papéis de outros, diretor/admin veem |
+| A3 `integration-api` delete/update sem filtro | `integration-api` v31 | ✅ Deployado | Código em prod contém `assertHasFilters` em update/delete |
+| A4 `integration-api` RPC/tabela arbitrária | `integration-api` v31 | ✅ Deployado | Código em prod contém allowlist `INTEGRATION_RPCS` + denylist `SENSITIVE_TABLES` |
+| A5 loop de delegação | `chat-orchestrator` v156 | ✅ Deployado | Versão nova ativa; `delegate` não ofertado a folhas + `delegate_error` conta no teto |
+
+**A2 — SQL a aplicar** (restringe SELECT de `user_roles` ao próprio usuário + gestão; verificado que não quebra AdminRoute/MasterRoute):
+```sql
+DROP POLICY IF EXISTS "Authenticated users can view roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Users can view own roles or admins can view all" ON public.user_roles;
+CREATE POLICY "Users can view own roles or admins can view all"
+  ON public.user_roles FOR SELECT TO authenticated
+  USING (
+    user_id = (select auth.uid())
+    OR public.has_role((select auth.uid()), 'admin')
+    OR public.is_master_admin((select auth.uid()))
+  );
+```
+
+**A3/A4/A5 — deploy das edge functions:**
+```
+supabase functions deploy integration-api --project-ref tsltxvswzdnlmvljpryh
+supabase functions deploy chat-orchestrator --project-ref tsltxvswzdnlmvljpryh
+```
+
+**Não aplicados (médios/baixos):** permanecem como recomendação — ver seções 5–6.
 
 > **Nota:** as demais verificações da auditoria foram somente leitura. As únicas alterações feitas no banco foram os fixes C1/C2/C3 acima (idempotentes, verificados).
