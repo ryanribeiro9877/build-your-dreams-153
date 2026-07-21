@@ -140,14 +140,11 @@ Após a auditoria, as **correções críticas foram aplicadas e verificadas**. A
 | C1 backdoor `is_master_admin` | Banco (prod) | ✅ Aplicado | `pg_get_functiondef` não contém mais o e-mail; `is_master_admin('admin@juridico.com')` continua `true` (não perdeu acesso — já é director+sócio) |
 | C2 ownership `consume_tokens*` | Banco (prod) | ✅ Aplicado | Teste funcional: chamar com `p_user_id` de outro → exceção `unauthorized`; chamar com o próprio → passa (retorna false por saldo inexistente) |
 | C3 constraint idempotência | Banco (prod) | ✅ Aplicado | `uq_token_transactions_reference` existe; 0 duplicatas pré-existentes |
-| A1 webhook engole erro | `payments-webhook/index.ts` | ✅ Código pronto (⚠️ falta deploy) | `deno check` limpo; trata violação de unique como duplicata e retorna 5xx em falha real |
+| A1 webhook engole erro | `payments-webhook/index.ts` | ✅ Aplicado e **deployado** (v13) | `deno check` limpo; trata violação de unique como duplicata e retorna 5xx em falha real; deploy verificado (`verify_jwt=false` mantido) |
 
 **Como foi aplicado:** migração `20260721120000_apply_pending_security_fixes_c1_c2_c3.sql` — reaplica cirurgicamente os Fixes 1/2/3 da migração `20260601200000` que nunca chegou a produção, **preservando o corpo atual das funções em prod** (para não reverter evoluções posteriores). Aplicada via MCP e espelhada no repositório. Commit `84054c1`.
 
-**Pendente (passo final do A1):** deploy da edge function `payments-webhook`. Não foi feito automaticamente por ser uma função de pagamento cujo redeploy não pôde ser testado ponta-a-ponta aqui. A duplicação de crédito (núcleo do risco) **já está barrada pela constraint C3** mesmo com o webhook antigo; o deploy adiciona a proteção contra "pagamento sem crédito em falha real". Comando:
-```
-supabase functions deploy payments-webhook --project-ref tsltxvswzdnlmvljpryh --no-verify-jwt
-```
+**A1 deployado (2026-07-21):** edge function `payments-webhook` versão **13**, `status=ACTIVE`, `verify_jwt=false` preservado. Deploy via Supabase CLI (projeto linkado), incluindo `_shared/cors.ts` e `_shared/stripe.ts`. Conteúdo em produção verificado com o fix presente.
 
 **Não aplicados (fora do escopo "crítico"):** A2 (`user_roles`), A3/A4 (`integration-api`), A5 (loop de delegação) e os médios/baixos permanecem como recomendação — ver seções 4–6.
 
