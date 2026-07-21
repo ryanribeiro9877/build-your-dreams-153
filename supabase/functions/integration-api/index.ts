@@ -117,9 +117,36 @@ function assertNoRelationshipTraversal(select: string | undefined): void {
   }
 }
 
+// A4: tabelas com segredos / dados financeiros nunca acessíveis pelo gateway
+// genérico (a integration-api usa service_role e ignora RLS, então este é o
+// único controle). Use RPCs dedicadas para qualquer necessidade legítima.
+const SENSITIVE_TABLES = new Set<string>([
+  "edge_runtime_secrets",
+  "google_calendar_config",
+  "llm_provider_configs",
+  "token_balances",
+  "token_transactions",
+  "provider_budgets",
+  "provider_credit_snapshots",
+]);
+
+function assertTableAllowed(table: string): void {
+  if (SENSITIVE_TABLES.has(table.toLowerCase())) {
+    throw new Error(`Acesso à tabela '${table}' não é permitido via integration-api`);
+  }
+}
+
+// A3: delete/update sem filtro afetariam a tabela inteira (service_role, sem RLS).
+function assertHasFilters(filters: TableFilter[] | undefined, op: string): void {
+  if (!filters?.length) {
+    throw new Error(`Operação '${op}' exige ao menos um filtro (proibido afetar a tabela inteira)`);
+  }
+}
+
 async function handleSelect(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table) throw new Error("Campo table é obrigatório");
   assertIdentifier(body.table, "table");
+  assertTableAllowed(body.table);
   assertNoRelationshipTraversal(body.select);
 
   const limit = Math.min(body.limit ?? 100, MAX_SELECT_LIMIT);
@@ -145,6 +172,7 @@ async function handleSelect(admin: SupabaseClient, body: IntegrationBody) {
 async function handleInsert(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
+  assertTableAllowed(body.table);
 
   assertNoRelationshipTraversal(body.select);
   const { data, error } = await admin.from(body.table).insert(body.data).select(body.select ?? "*");
@@ -155,6 +183,8 @@ async function handleInsert(admin: SupabaseClient, body: IntegrationBody) {
 async function handleUpdate(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
+  assertTableAllowed(body.table);
+  assertHasFilters(body.filters, "update");
   assertNoRelationshipTraversal(body.select);
 
   let query = admin.from(body.table).update(body.data);
@@ -167,6 +197,8 @@ async function handleUpdate(admin: SupabaseClient, body: IntegrationBody) {
 async function handleDelete(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table) throw new Error("table é obrigatório");
   assertIdentifier(body.table, "table");
+  assertTableAllowed(body.table);
+  assertHasFilters(body.filters, "delete");
   assertNoRelationshipTraversal(body.select);
 
   let query = admin.from(body.table).delete();
@@ -179,6 +211,7 @@ async function handleDelete(admin: SupabaseClient, body: IntegrationBody) {
 async function handleUpsert(admin: SupabaseClient, body: IntegrationBody) {
   if (!body.table || body.data === undefined) throw new Error("table e data são obrigatórios");
   assertIdentifier(body.table, "table");
+  assertTableAllowed(body.table);
   assertNoRelationshipTraversal(body.select);
 
   if (body.on_conflict) assertIdentifier(body.on_conflict, "on_conflict");
@@ -192,6 +225,12 @@ async function handleRpc(admin: SupabaseClient, body: IntegrationBody) {
   const name = body.rpc;
   if (!name) throw new Error("Campo rpc é obrigatório");
   assertIdentifier(name, "rpc");
+  // A4: só RPCs da allowlist explícita. Impede chamar funções sensíveis como
+  // get_provider_key_decrypted (exfiltrar segredos) ou add_tokens/consume_tokens
+  // (manipular saldo) com a chave-deus de service_role.
+  if (!INTEGRATION_RPCS.includes(name)) {
+    throw new Error(`RPC '${name}' não permitida via integration-api`);
+  }
 
   const { data, error } = await admin.rpc(name, body.args ?? {});
   if (error) throw new Error(error.message);

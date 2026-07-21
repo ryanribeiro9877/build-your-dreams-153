@@ -2649,8 +2649,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       const frame = topFrame(stack);
       if (!frame) return await fail("Pilha de delegação vazia");
       // Backstop anti-laço/DoS: saltos acumulados na chain deste run.
+      // Inclui "delegate_error": tentativas de delegação que falham (sem alvo,
+      // ambíguo, ancestral, profundidade máx) também consomem o teto — senão um
+      // modelo que insista em delegar geraria reinvocações indefinidas.
       const hops = (run.chain || []).filter((c: Record<string, unknown>) =>
-        c.action === "delegate" || c.action === "read" || c.action === "return").length;
+        c.action === "delegate" || c.action === "read" || c.action === "return"
+        || c.action === "delegate_error").length;
       if (hops > MAX_DELEGATION_HOPS) return await fail("Limite de saltos de delegação atingido");
 
       const agent = await loadAgent(admin, frame.agent_id);
@@ -2658,8 +2662,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       ctxModel = agent?.model ?? undefined;
 
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      // A5: só oferece `delegate` a quem tem papéis-filho válidos. Um executor/
+      // especialista (allowedChildRoles vazio) que recebesse a tool cairia sempre
+      // no ramo "SEM ALVO" e reinvocaria em laço.
+      const canDelegate = allowedChildRoles(agent.role).length > 0;
       const gated = (agent.allowed_tools ?? []).filter((n) =>
-        isDelegateTool(n) ? true
+        isDelegateTool(n) ? canDelegate
         : n === "salvar_peca" ? CHAT_TOOLS_ENABLED
         : isWriteTool(n) ? CHAT_TOOLS_ENABLED
         : CHAT_READ_TOOLS_ENABLED);
@@ -2706,7 +2714,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       if (isDelegateTool(name)) {
         if (frame.depth + 1 > MAX_DELEGATION_DEPTH) {
           const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: "ERRO: profundidade máxima de delegação atingida — resolva você mesmo ou responda ao nível acima." }];
-          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown> });
+          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "delegate_error" }] });
           return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
         }
         const childRoles = allowedChildRoles(agent.role);
@@ -2723,7 +2731,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
                 : `SEM ALVO: nenhum sub-agente casa "${args.target}". Alvos possíveis: ${candidates.map((c) => c.name).join(", ") || "(nenhum)"}.`)
             : `ERRO: laço de delegação — "${match.name}" já está na cadeia. Escolha outro alvo.`;
           const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: err }];
-          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown> });
+          await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "delegate_error" }] });
           return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
         }
         const dctx: DelegationContext = {
