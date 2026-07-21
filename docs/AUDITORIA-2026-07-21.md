@@ -129,4 +129,26 @@ Obs.: `consume_tokens` (sem `_ref`) tem a mesma ausência de check, porém **nã
 | P2 | Desync migrations | Reconciliar + deploy via CI |
 | P3 | Baixos + performance RLS | `(select auth.uid())`, índices de FK, ESLint no CI |
 
-> **Nota de segurança da execução desta auditoria:** todas as verificações foram **somente leitura** (SELECT/inspeção). Nenhuma alteração foi feita no banco, no código de produção ou nas edge functions. As correções acima são recomendações — não foram aplicadas.
+---
+
+## 9. Correções aplicadas (2026-07-21)
+
+Após a auditoria, as **correções críticas foram aplicadas e verificadas**. A fase de auditoria (seções 1–8) foi somente-leitura; esta seção registra as alterações feitas depois.
+
+| Item | Onde | Status | Verificação |
+|---|---|---|---|
+| C1 backdoor `is_master_admin` | Banco (prod) | ✅ Aplicado | `pg_get_functiondef` não contém mais o e-mail; `is_master_admin('admin@juridico.com')` continua `true` (não perdeu acesso — já é director+sócio) |
+| C2 ownership `consume_tokens*` | Banco (prod) | ✅ Aplicado | Teste funcional: chamar com `p_user_id` de outro → exceção `unauthorized`; chamar com o próprio → passa (retorna false por saldo inexistente) |
+| C3 constraint idempotência | Banco (prod) | ✅ Aplicado | `uq_token_transactions_reference` existe; 0 duplicatas pré-existentes |
+| A1 webhook engole erro | `payments-webhook/index.ts` | ✅ Código pronto (⚠️ falta deploy) | `deno check` limpo; trata violação de unique como duplicata e retorna 5xx em falha real |
+
+**Como foi aplicado:** migração `20260721120000_apply_pending_security_fixes_c1_c2_c3.sql` — reaplica cirurgicamente os Fixes 1/2/3 da migração `20260601200000` que nunca chegou a produção, **preservando o corpo atual das funções em prod** (para não reverter evoluções posteriores). Aplicada via MCP e espelhada no repositório. Commit `84054c1`.
+
+**Pendente (passo final do A1):** deploy da edge function `payments-webhook`. Não foi feito automaticamente por ser uma função de pagamento cujo redeploy não pôde ser testado ponta-a-ponta aqui. A duplicação de crédito (núcleo do risco) **já está barrada pela constraint C3** mesmo com o webhook antigo; o deploy adiciona a proteção contra "pagamento sem crédito em falha real". Comando:
+```
+supabase functions deploy payments-webhook --project-ref tsltxvswzdnlmvljpryh --no-verify-jwt
+```
+
+**Não aplicados (fora do escopo "crítico"):** A2 (`user_roles`), A3/A4 (`integration-api`), A5 (loop de delegação) e os médios/baixos permanecem como recomendação — ver seções 4–6.
+
+> **Nota:** as demais verificações da auditoria foram somente leitura. As únicas alterações feitas no banco foram os fixes C1/C2/C3 acima (idempotentes, verificados).
