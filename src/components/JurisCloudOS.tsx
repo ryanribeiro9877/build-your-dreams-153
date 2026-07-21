@@ -667,6 +667,9 @@ export default function JurisCloudOS() {
   // já carregado aqui e passa por prop ao chat — evita um segundo useMyWorkspace
   // dentro do painel/bolha (canal realtime duplicado → crash).
   const canAuthorPeca = isPecaAuthor(workspace?.role_template?.code);
+  // Recepção (mesmos role codes de is_recepcao() no banco) → card de
+  // aniversariantes na tela de boas-vindas. 1:1 com o gate da RPC.
+  const isRecepcao = isRecepcaoRole(workspace?.role_template?.code);
   const { startSession, startOrchestration } = useChatOrchestrator();
   const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
   const [entryAgentId, setEntryAgentId] = useState<string | null>(null);
@@ -2053,6 +2056,7 @@ export default function JurisCloudOS() {
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}
             canAuthorPeca={canAuthorPeca}
+            isRecepcao={isRecepcao}
             onCadastrarClienteFromMeeting={handleCadastrarClienteFromMeeting}
             onCadastrarClienteFromTask={handleCadastrarClienteFromTask}
             onClienteCadastrado={handleClienteCadastrado}

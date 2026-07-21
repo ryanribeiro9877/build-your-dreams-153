@@ -7,6 +7,7 @@ import {
   Plus, Mic, Send, X, Check,
 } from "lucide-react";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import AniversariantesCard from "@/components/AniversariantesCard";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tipagens nativas — SpeechRecognition é vendor-prefixed em alguns browsers.
@@ -41,6 +42,9 @@ interface TaskSummary {
 interface WelcomeScreenProps {
   onDismiss: () => void;
   onSubmit?: (message: string, files?: File[]) => void;
+  /** Recepção (role_templates.code ∈ recepção)? Só então mostra o card de
+   *  aniversariantes — 1:1 com o gate is_recepcao() da RPC no banco. */
+  isRecepcao?: boolean;
 }
 
 const WAVEFORM_BARS = 40;
@@ -67,7 +71,7 @@ function useTypewriter(text: string, active: boolean) {
   return displayed;
 }
 
-export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false }: WelcomeScreenProps) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -541,6 +545,9 @@ export default function WelcomeScreen({ onDismiss, onSubmit }: WelcomeScreenProp
             </div>
           ))}
         </div>
+
+        {/* Card de aniversariantes do dia — exclusivo da recepção. */}
+        {isRecepcao && <AniversariantesCard />}
       </div>
 
       <style>{`

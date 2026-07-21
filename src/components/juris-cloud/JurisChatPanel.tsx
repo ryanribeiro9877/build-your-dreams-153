@@ -427,6 +427,10 @@ export interface JurisChatPanelProps {
    *  passado por prop — MessageBubble é montado por mensagem, então não pode
    *  chamar useMyWorkspace (assinaturas realtime duplicadas → crash). */
   canAuthorPeca: boolean;
+  /** Recepção? Habilita o card de aniversariantes na tela de boas-vindas.
+   *  Calculado no JurisCloudOS (isRecepcaoRole) e passado por prop, igual a
+   *  canAuthorPeca. 1:1 com o gate is_recepcao() da RPC no banco. */
+  isRecepcao: boolean;
   /** Cliente não encontrado no cartão de agendar → leva ao cadastro (Modelo A). */
   onCadastrarClienteFromMeeting?: (snapshot: PendingMeeting) => void;
   /** Cliente não encontrado no cartão de TAREFA → leva ao cadastro (Modelo A). */
@@ -458,6 +462,7 @@ export default function JurisChatPanel({
   roleLabel,
   activeDeptLabel,
   canAuthorPeca,
+  isRecepcao,
   onCadastrarClienteFromMeeting,
   onCadastrarClienteFromTask,
   onClienteCadastrado,
@@ -517,6 +522,7 @@ export default function JurisChatPanel({
       {showWelcome ? (
         <div className="jc-messages">
           <WelcomeScreen
+            isRecepcao={isRecepcao}
             onDismiss={() => setShowWelcome(false)}
             onSubmit={(msg, files) => {
               setShowWelcome(false);
