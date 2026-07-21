@@ -28,9 +28,15 @@ describe("AniversariantesCard", () => {
     state.error = null;
   });
 
-  it("estado vazio mostra a mensagem exigida", () => {
-    render(<AniversariantesCard />, { wrapper: Wrap });
-    expect(screen.getByText("Nenhum aniversariante hoje.")).toBeInTheDocument();
+  it("sem aniversariantes: não renderiza nada (card oculto)", () => {
+    const { container } = render(<AniversariantesCard />, { wrapper: Wrap });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("enquanto carrega: não renderiza nada (sem flash de card vazio)", () => {
+    state.loading = true;
+    const { container } = render(<AniversariantesCard />, { wrapper: Wrap });
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("com WhatsApp: nome linka pra ficha, idade no plural e botão wa.me pré-preenchido", () => {

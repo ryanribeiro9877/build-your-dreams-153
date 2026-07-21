@@ -14,28 +14,31 @@ import {
  * chamador (isRecepcaoRole, 1:1 com is_recepcao() do banco): este componente só
  * é montado quando é recepção, então a RPC gated nunca dispara 42501 aqui.
  *
- * A mensagem de parabéns é editável em sessão (template com {nome}); os botões
- * abrem o WhatsApp com o texto já preenchido — quem envia é a recepção.
+ * O card só APARECE quando há aniversariantes hoje — sem ninguém (ou enquanto
+ * carrega / em erro) não renderiza nada, para não ocupar o painel com um estado
+ * vazio. A mensagem de parabéns é editável em sessão (template com {nome}); os
+ * botões abrem o WhatsApp com o texto já preenchido — quem envia é a recepção.
  */
 export default function AniversariantesCard() {
   const { data, loading, error } = useAniversariantes();
   const [template, setTemplate] = useState(DEFAULT_BIRTHDAY_TEMPLATE);
   const [editing, setEditing] = useState(false);
 
+  // Nada a mostrar → não renderiza o card (nem "estado vazio").
+  if (loading || error || data.length === 0) return null;
+
   return (
     <section className="aniv-card" aria-labelledby="aniv-title">
       <div className="aniv-head">
         <h2 id="aniv-title" className="aniv-title">🎂 Aniversariantes do dia</h2>
-        {data.length > 0 && (
-          <button
-            type="button"
-            className="aniv-edit-toggle"
-            onClick={() => setEditing((v) => !v)}
-            aria-expanded={editing}
-          >
-            {editing ? "Fechar" : "✏️ Editar mensagem"}
-          </button>
-        )}
+        <button
+          type="button"
+          className="aniv-edit-toggle"
+          onClick={() => setEditing((v) => !v)}
+          aria-expanded={editing}
+        >
+          {editing ? "Fechar" : "✏️ Editar mensagem"}
+        </button>
       </div>
 
       {editing && (
@@ -53,48 +56,40 @@ export default function AniversariantesCard() {
         </div>
       )}
 
-      {loading ? (
-        <div className="aniv-empty">Carregando aniversariantes…</div>
-      ) : error ? (
-        <div className="aniv-empty">Não foi possível carregar os aniversariantes agora.</div>
-      ) : data.length === 0 ? (
-        <div className="aniv-empty">Nenhum aniversariante hoje.</div>
-      ) : (
-        <ul className="aniv-list">
-          {data.map((a) => {
-            const mensagem = renderBirthdayMessage(template, a.nome);
-            return (
-              <li key={a.client_id} className="aniv-row">
-                <div className="aniv-person">
-                  <Link to={`/clientes/${a.client_id}`} className="aniv-name">
-                    {a.nome}
-                  </Link>
-                  <span className="aniv-age">
-                    faz {a.idade} ano{a.idade === 1 ? "" : "s"} hoje
-                  </span>
-                </div>
+      <ul className="aniv-list">
+        {data.map((a) => {
+          const mensagem = renderBirthdayMessage(template, a.nome);
+          return (
+            <li key={a.client_id} className="aniv-row">
+              <div className="aniv-person">
+                <Link to={`/clientes/${a.client_id}`} className="aniv-name">
+                  {a.nome}
+                </Link>
+                <span className="aniv-age">
+                  faz {a.idade} ano{a.idade === 1 ? "" : "s"} hoje
+                </span>
+              </div>
 
-                {a.is_whatsapp ? (
-                  <a
-                    className="aniv-wa"
-                    href={waMeUrl(a.telefone, mensagem)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    💬 Parabenizar no WhatsApp
-                  </a>
-                ) : a.telefone ? (
-                  <a className="aniv-tel" href={telHref(a.telefone)}>
-                    📞 {a.telefone}
-                  </a>
-                ) : (
-                  <span className="aniv-tel aniv-tel--none">sem telefone</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              {a.is_whatsapp ? (
+                <a
+                  className="aniv-wa"
+                  href={waMeUrl(a.telefone, mensagem)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  💬 Parabenizar no WhatsApp
+                </a>
+              ) : a.telefone ? (
+                <a className="aniv-tel" href={telHref(a.telefone)}>
+                  📞 {a.telefone}
+                </a>
+              ) : (
+                <span className="aniv-tel aniv-tel--none">sem telefone</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
 
       <style>{`
         .aniv-card {
@@ -141,11 +136,6 @@ export default function AniversariantesCard() {
         }
         .aniv-editor-input:focus {
           outline: none; border-color: rgba(234,179,8,0.55);
-        }
-
-        .aniv-empty {
-          font-size: 13px; color: var(--text3);
-          padding: 8px 0; line-height: 1.5;
         }
 
         .aniv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
