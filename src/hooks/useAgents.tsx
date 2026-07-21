@@ -75,7 +75,7 @@ async function fetchAgents(): Promise<AgentRecord[]> {
   const rows = (data || []) as unknown as AgentRow[];
 
   const ownerIds = [...new Set(rows.map(r => r.owner_user_id).filter(Boolean))] as string[];
-  let ownerMap: Record<string, string> = {};
+  const ownerMap: Record<string, string> = {};
   if (ownerIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")

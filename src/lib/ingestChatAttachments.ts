@@ -60,7 +60,7 @@ function sanitizeName(name: string): string {
   // Storage keys aceitam um conjunto restrito; normaliza acentos/espaços.
   return name
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^\w.\-]+/g, "_")
+    .replace(/[^\w.-]+/g, "_")
     .slice(0, 120);
 }
 

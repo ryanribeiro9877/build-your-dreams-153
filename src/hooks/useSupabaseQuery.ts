@@ -86,7 +86,6 @@ export function useSupabaseQuery<T>(
       return;
     }
     void doFetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, doFetch, queryKey]);
 
   // Realtime subscription
