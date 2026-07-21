@@ -74,7 +74,7 @@ export function ReuniaoAcaoCard({ payload }: { payload: ReuniaoAcaoPayload }) {
         p_phone: (r.phone as string | null) ?? null,
         p_summary: (r.summary as string | null) ?? null,
         p_notes: (r.notes as string | null) ?? null,
-        p_status: isReschedule ? "rescheduled" : payload.action,
+        p_status: payload.action === "reschedule" ? "rescheduled" : payload.action,
       });
       setDone(true); toast.success("Reunião atualizada.");
     } catch (e) {

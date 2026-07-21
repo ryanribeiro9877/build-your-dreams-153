@@ -65,7 +65,10 @@ export function nextBusinessSlot(d: Date, cfg: BusinessHours = DEFAULT_BUSINESS_
 export async function loadBusinessHours(): Promise<BusinessHours> {
   try {
     const { supabase } = await import("@/integrations/supabase/client");
-    const { data, error } = await supabase.rpc("get_business_hours");
+    // get_business_hours existe no banco mas ainda não no types.ts gerado
+    // (desync repo↔banco). Cast mantém .rpc acoplado ao client (não detachar).
+    type UntypedRpc = { rpc: (fn: string) => Promise<{ data: unknown; error: { message?: string } | null }> };
+    const { data, error } = await (supabase as unknown as UntypedRpc).rpc("get_business_hours");
     if (error || !data) return DEFAULT_BUSINESS_HOURS;
     const j = data as Record<string, unknown>;
     return {

@@ -4,7 +4,35 @@ import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import type { Database } from "@/integrations/supabase/types";
 import type { MeetingStatus } from "@/lib/meetings";
 
-export type MeetingRow = Database["public"]["Tables"]["meetings"]["Row"];
+/**
+ * Linha da tabela `meetings`. Definida explicitamente porque a tabela existe
+ * no banco (produção) mas ainda não foi incorporada ao types.ts gerado
+ * (desync repo↔banco). Ao rodar `npm run types:regen`, esta interface pode
+ * ser trocada por Database["public"]["Tables"]["meetings"]["Row"].
+ */
+export interface MeetingRow {
+  id: string;
+  client_id: string | null;
+  client_name: string | null;
+  phone: string | null;
+  scheduled_date: string;
+  start_time: string;
+  end_time: string | null;
+  type: string | null;
+  lawyer_user_id: string | null;
+  receptionist_user_id: string | null;
+  summary: string | null;
+  status: MeetingStatus;
+  notes: string | null;
+  google_event_id: string | null;
+  google_calendar_id: string | null;
+  google_sync_status: string | null;
+  last_synced_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  reminder_sent_at: string | null;
+}
 export type MeetingAuditRow =
   Database["public"]["Functions"]["get_meeting_audit"]["Returns"][number];
 

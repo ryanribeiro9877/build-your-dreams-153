@@ -22,7 +22,6 @@ import JurisChatPanel from "../JurisChatPanel";
 
 // jsdom não implementa scrollIntoView (o painel chama no useEffect ao montar).
 beforeAll(() => {
-  // @ts-expect-error jsdom não tipa/implementa este método
   Element.prototype.scrollIntoView = vi.fn();
 });
 
@@ -31,6 +30,7 @@ const baseProps = {
   showWelcome: false, setShowWelcome: () => {}, inputVal: "", setInputVal: () => {},
   handleSend: () => {}, isRecording: false, toggleRecording: () => {},
   speechSupported: false, isReadOnly: false, roleLabel: "", activeDeptLabel: "Assistente",
+  canAuthorPeca: false, isRecepcao: false,
 };
 
 describe("JurisChatPanel — disparo do formulário de cadastro (CADASTRO-MODELO-A)", () => {

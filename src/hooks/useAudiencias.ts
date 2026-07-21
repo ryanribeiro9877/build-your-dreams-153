@@ -128,7 +128,7 @@ export interface CreateAudienciaArgs {
 }
 
 export async function createAudiencia(args: CreateAudienciaArgs): Promise<string> {
-  const { data, error } = await (supabase as unknown as UntypedRpc).rpc("create_audiencia", args as Record<string, unknown>);
+  const { data, error } = await (supabase as unknown as UntypedRpc).rpc("create_audiencia", args as unknown as Record<string, unknown>);
   if (error) throw new Error(error.message ?? "Falha ao criar audiência");
   return data as string;
 }
@@ -147,7 +147,7 @@ export interface UpdateAudienciaArgs {
 }
 
 export async function updateAudiencia(args: UpdateAudienciaArgs): Promise<void> {
-  const { error } = await (supabase as unknown as UntypedRpc).rpc("update_audiencia", args as Record<string, unknown>);
+  const { error } = await (supabase as unknown as UntypedRpc).rpc("update_audiencia", args as unknown as Record<string, unknown>);
   if (error) throw new Error(error.message ?? "Falha ao atualizar audiência");
 }
 

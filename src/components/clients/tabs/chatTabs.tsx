@@ -60,7 +60,9 @@ export function PecasTab({ client }: { client: ClientFull }) {
         .in("document_type", [...PECA_DOC_TYPES])
         .order("created_at", { ascending: false });
       if (cancelled) return;
-      setPecas(error ? [] : ((data as PecaRow[]) ?? []));
+      // client_documents.task_id existe no banco mas ainda não no types.ts
+      // gerado (desync); cast via unknown até o próximo types:regen.
+      setPecas(error ? [] : ((data as unknown as PecaRow[]) ?? []));
     })();
     return () => { cancelled = true; };
   }, [client.id]);
