@@ -1,8 +1,13 @@
 import { createRoot } from "react-dom/client";
+import { installDomTranslationGuard } from "./lib/domSafeMutations";
 import { initSentry } from "./lib/sentry";
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/action-card.css";
+
+// Rede de segurança contra tradutores de navegador que mutam o DOM do React
+// (ver domSafeMutations). Roda antes de qualquer render.
+installDomTranslationGuard();
 
 // Initialize Sentry error monitoring before anything else.
 initSentry();

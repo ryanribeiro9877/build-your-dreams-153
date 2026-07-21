@@ -223,7 +223,7 @@
 .cli-input.file { padding: 8px 10px; font-size: 12px; font-weight: 500; }
 .cli-filename { font-size: 11px; color: var(--cli-amber-deep); font-weight: 700; margin-top: 3px; display: block; }
 .cli-form-actions { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
-.cli-cep-hint { color: #1E66C7; font-weight: 700; font-size: 10px; }
+.cli-cep-hint { color: #1E66C7; font-weight: 700; font-size: 10px; margin-left: 6px; }
 .cli-cep-error { font-size: 10px; color: #B4442E; margin-top: 3px; display: block; font-weight: 700; }
 
 /* WhatsApp — checkbox no form (abaixo de cada telefone) */

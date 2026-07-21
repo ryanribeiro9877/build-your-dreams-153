@@ -1,8 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Impede que tradutores de navegador (Google Tradutor etc.) mutem o DOM
+         controlado pelo React. Sem isto, o tradutor troca text nodes por <font>
+         e o React quebra com "NotFoundError: removeChild ... not a child" ao
+         re-renderizar (ex.: etapa de endereço do cadastro de cliente). -->
+    <meta name="google" content="notranslate" />
     <title>JurisAI — Seus agentes trabalham. Você decide.</title>
     <meta name="description" content="JurisAI: força de trabalho de IA jurídica com 91+ agentes que protocolam, redigem, calculam e monitoram prazos por você. Você comanda. Eles executam. Conformidade LGPD e OAB.">
     <meta name="author" content="JurisAI" />
@@ -63,7 +68,9 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <!-- notranslate: reforço no container raiz do React (a tradução é ignorada
+         no elemento e em toda a sua descendência). Ver <meta google notranslate>. -->
+    <div id="root" class="notranslate"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

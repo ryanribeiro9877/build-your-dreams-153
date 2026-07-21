@@ -492,7 +492,9 @@ export default function ClienteFormWizard({
       <>
         <div className="cli-formsec">Endereço</div>
         <div>
-          <label className="cli-label">CEP {cepLoading && <span className="cli-cep-hint">buscando...</span>}</label>
+          {/* "CEP" fica num <span> próprio (nunca text node solto irmão de um nó
+              condicional) — é o construto que o tradutor de navegador quebrava. */}
+          <label className="cli-label"><span>CEP</span>{cepLoading && <span className="cli-cep-hint">buscando...</span>}</label>
           <div style={{ display: "flex", gap: 8 }}>
             <input className="cli-input" style={cepError ? { borderColor: "#B4442E" } : undefined} value={form.zip_code}
               onChange={e => {
