@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 // do módulo. Este teste só lê constantes puras, então stubamos o client.
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
-import { CLIENT_DOC_SLOTS, DOC_TYPE_BY_SLOT, buildDocInsert, type ClientDocSlot } from "./clientDocuments";
+import { CLIENT_DOC_SLOTS, DOC_TYPE_BY_SLOT, buildDocInsert, sanitizeStorageName, type ClientDocSlot } from "./clientDocuments";
 
 // Contrato do banco (produção), verificado via information_schema em 2026-07-09:
 // CHECK client_documents_document_type_check. O document_type gravado por qualquer
@@ -57,6 +57,41 @@ describe("clientDocuments — vocabulário de document_type", () => {
   it("não sobra slot fora do mapa (todo ClientDocSlot tem document_type)", () => {
     const mapped = Object.keys(DOC_TYPE_BY_SLOT) as ClientDocSlot[];
     for (const { slot } of CLIENT_DOC_SLOTS) expect(mapped).toContain(slot);
+  });
+});
+
+describe("sanitizeStorageName — chave do Storage sem caractere inválido", () => {
+  // Regressão do incidente 2026-07-22: "Comprovante de Endereço - Ana Lucia
+  // Andrade.pdf" dava HTTP 400 "Invalid key" no Storage por causa do "ç".
+  it("remove o 'ç' e demais acentos que quebravam o upload (Invalid key)", () => {
+    const out = sanitizeStorageName("Comprovante de Endereço - Ana Lucia Andrade.pdf");
+    expect(out).toBe("Comprovante_de_Endereco_-_Ana_Lucia_Andrade.pdf");
+    expect(out).toMatch(/^[A-Za-z0-9._-]+$/);
+  });
+
+  it("normaliza todos os diacríticos comuns do pt-BR", () => {
+    const out = sanitizeStorageName(" áàâãä éê íï óôõ úü ç Ç.PDF");
+    expect(out).toMatch(/^[A-Za-z0-9._-]+$/);
+    expect(out).not.toMatch(/[çÇáéíóúãõâêô]/);
+  });
+
+  it("preserva nomes já ASCII-safe (não altera o que hoje funciona)", () => {
+    expect(sanitizeStorageName("Extrato_Mercantil.pdf")).toBe("Extrato_Mercantil.pdf");
+    expect(sanitizeStorageName("Rg-Frente.png")).toBe("Rg-Frente.png");
+  });
+
+  it("colapsa separadores e apara as bordas, sem gerar chave vazia", () => {
+    expect(sanitizeStorageName("  arquivo   final .pdf")).toBe("arquivo_final_.pdf");
+    expect(sanitizeStorageName("###.pdf")).toBe("pdf");
+    expect(sanitizeStorageName("çãõ")).toBe("cao");
+    expect(sanitizeStorageName("@@@")).toBe("arquivo");
+  });
+
+  it("qualquer resultado casa o conjunto de caracteres aceito pela chave do Storage", () => {
+    const amostras = ["Relatório (2).pdf", "foto—cliente.jpeg", "nº 123 – cópia.docx", "😀 emoji.png"];
+    for (const nome of amostras) {
+      expect(sanitizeStorageName(nome)).toMatch(/^[A-Za-z0-9._-]+$/);
+    }
   });
 });
 

@@ -94,6 +94,23 @@ export function buildDocInsert(
   } as const;
 }
 
+// O Storage do Supabase rejeita chaves de objeto com caracteres não-ASCII
+// (acentos, "ç", etc.) e alguns símbolos → HTTP 400 "Invalid key" e o upload
+// falha silenciosamente para o usuário ("Falha em N documento(s)"). O nome do
+// arquivo vem do sistema de arquivos do usuário (ex.: "Comprovante de Endereço
+// - Fulano.pdf"), então PRECISA ser normalizado antes de compor a chave.
+// Remove diacríticos, troca o que sobrar de fora de [A-Za-z0-9._-] por "_",
+// colapsa repetições e apara as bordas. O document_name (rótulo exibido) NÃO é
+// afetado — só a chave interna do Storage.
+export function sanitizeStorageName(name: string): string {
+  const noDiacritics = name.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  const cleaned = noDiacritics
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[_.]+|_+$/g, "");
+  return cleaned || "arquivo";
+}
+
 // Faz o upload de um único documento e registra em client_documents.
 export async function uploadClientDocument(
   clientId: string,
@@ -105,7 +122,7 @@ export async function uploadClientDocument(
   const label = CLIENT_DOC_SLOTS.find((s) => s.slot === slot)?.label ?? slot;
   // Nome de arquivo determinístico por cliente/slot; Date.now evita colisão em
   // reenvios do mesmo slot.
-  const filePath = `${clientId}/${Date.now()}_${slot}_${file.name}`;
+  const filePath = `${clientId}/${Date.now()}_${slot}_${sanitizeStorageName(file.name)}`;
   const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
   if (upErr) return { slot, ok: false, error: upErr.message };
   const { error: insErr } = await supabase.from("client_documents").insert(
@@ -134,7 +151,7 @@ export async function uploadSignedDocument(
   documentLabel: string,
   file: File,
 ): Promise<{ ok: boolean; error?: string }> {
-  const filePath = `${clientId}/${Date.now()}_assinado_${documentType}_${file.name}`;
+  const filePath = `${clientId}/${Date.now()}_assinado_${documentType}_${sanitizeStorageName(file.name)}`;
   const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
   if (upErr) return { ok: false, error: upErr.message };
   const { error: insErr } = await supabase.from("client_documents").insert(
@@ -164,7 +181,7 @@ export async function saveGeneratedMinuta(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const { blob, filename } = await buildDocxBlob(opts.content, { title: opts.title ?? "minuta" });
-    const filePath = `${clientId}/${Date.now()}_minuta_${filename}`;
+    const filePath = `${clientId}/${Date.now()}_minuta_${sanitizeStorageName(filename)}`;
     const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, blob, {
       contentType: DOCX_MIME,
     });
