@@ -16,6 +16,7 @@ import {
   COOPERADO_DOC_DEFS,
   renderCooperadoDoc,
   type CooperadoClientData,
+  type CooperadoDocDef,
   type CooperadoDocType,
 } from "./cooperadoDocs";
 import { DOCX_MIME } from "./fillDocxTemplate";
@@ -32,9 +33,21 @@ export interface GeneratedDocResult {
   error?: string;
 }
 
+// Idempotência dos documentos de sistema (bug 2026-07-22: reabrir a fase de
+// documentos ou concluir um upload reinseria as 4 linhas — 8 anexos exibiam 25
+// documentos). Dada a lista de tipos já gerados (origem='sistema') do cliente,
+// devolve apenas as definições que ainda faltam gerar. Pura/testável.
+export function selectDocsToGenerate(
+  existingSystemTypes: Iterable<string>,
+): CooperadoDocDef[] {
+  const have = new Set(existingSystemTypes);
+  return COOPERADO_DOC_DEFS.filter((d) => !have.has(d.documentType));
+}
+
 // Gera + persiste os 4 documentos. Best-effort por documento: uma falha não
 // aborta os demais; o resultado por documento diz o que gerou e o que faltou.
 // `nowIso` opcional torna a data determinística (testes/repro).
+// Idempotente: um tipo de sistema já gerado é devolvido sem regravar (ver acima).
 export async function generateCooperadoDocuments(
   client: CooperadoClientData,
   uploadedBy: string,
@@ -42,7 +55,35 @@ export async function generateCooperadoDocuments(
 ): Promise<GeneratedDocResult[]> {
   const results: GeneratedDocResult[] = [];
 
+  // Lê os documentos de sistema já existentes para o cliente. Cada tipo presente
+  // NÃO é regenerado nem reinserido — apenas devolvido (mantém o link de
+  // download na UI). É esta checagem que corta a duplicação na raiz.
+  const { data: existingRows } = await supabase
+    .from("client_documents")
+    .select("document_type, file_path")
+    .eq("client_id", client.id)
+    .eq("origem", "sistema");
+  const existingByType = new Map<string, string | null>(
+    (existingRows ?? []).map((r) => [
+      r.document_type as string,
+      (r.file_path as string | null) ?? null,
+    ]),
+  );
+
+  // 1) Já gerados: devolve como ok, sem tocar no Storage nem no banco.
   for (const def of COOPERADO_DOC_DEFS) {
+    if (existingByType.has(def.documentType)) {
+      results.push({
+        documentType: def.documentType,
+        label: def.label,
+        ok: true,
+        filePath: existingByType.get(def.documentType) ?? undefined,
+      });
+    }
+  }
+
+  // 2) Só os tipos que faltam são efetivamente gerados e inseridos.
+  for (const def of selectDocsToGenerate(existingByType.keys())) {
     const base: GeneratedDocResult = { documentType: def.documentType, label: def.label, ok: false };
     try {
       // 1. Carrega o template (public/templates/…). Ausente => erro claro, sem gravar.

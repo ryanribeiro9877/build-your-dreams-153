@@ -38,18 +38,21 @@ async function openGenerated(filePath: string) {
 
 export function CooperadoChecklistCard({ clientId, clientName }: { clientId: string; clientName?: string }) {
   const { user } = useAuth();
+  const userId = user?.id;
   const [loading, setLoading] = useState(true);
   const [res, setRes] = useState<CooperadoOnboardingResult | null>(null);
 
+  // Depende de userId (string estável), não do objeto `user` — uma nova
+  // referência de `user` entre renders re-disparava a geração (bug 2026-07-22).
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!user) return;
-      const r = await runCooperadoOnboarding(clientId, user.id);
+      if (!userId) return;
+      const r = await runCooperadoOnboarding(clientId, userId);
       if (!cancelled) { setRes(r); setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [clientId, user]);
+  }, [clientId, userId]);
 
   const okGenerated = (res?.generated ?? []).filter((g) => g.ok);
   const failedGenerated = (res?.generated ?? []).filter((g) => !g.ok);
