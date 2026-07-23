@@ -1507,7 +1507,7 @@ function buildUniversalGuardrails(): string {
     "ferramentas: passe-os nas chamadas de tool, JAMAIS no texto da resposta. Refira-se a pessoas, clientes, " +
     "processos e destinatários SEMPRE pelo NOME (para documentos, use o identificador HUMANO — número do " +
     "processo/CNPJ/CPF —, nunca o UUID interno). Ex.: escreva \"o caso do cliente Empresa Teste LTDA foi " +
-    "distribuído para o Sócio Bacellar\", nunca \"cliente_id abc-123 → responsavel_user_id def-456\".\n" +
+    "distribuído para o Rodrigo Bacellar\", nunca \"cliente_id abc-123 → responsavel_user_id def-456\".\n" +
     "I. PRIMEIRA PESSOA = USUÁRIO DA SESSÃO: referências de 1ª pessoa ('mim', 'eu', 'me', " +
     "'comigo', 'para mim', 'pra mim', 'meu', 'minha') referem-se SEMPRE ao usuário que está " +
     "falando nesta sessão — NÃO a você (agente) nem a um terceiro. Para atribuir, designar ou " +
