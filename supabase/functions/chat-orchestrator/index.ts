@@ -40,6 +40,7 @@ import {
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isCaseDocumentAttachment } from "./caseDocFilter.ts";
 import { buildOcrDocContext } from "./ocrDocContext.ts";
+import { findIdentityDocId, parseOcrFields, fieldsForCadastro, computeMissingFields, buildPendenciaDescricao } from "./ocrApplyGlue.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
 import {
@@ -1980,14 +1981,23 @@ async function enrichCadastroArgs(
   }
 }
 
-async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string) {
+async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string, caseDocs: CaseDoc[] = []) {
   const perms = await loadActionPerms(admin, run.user_id);
+  // Trilho B: se o turno tem um anexo de identidade (doc_type identidade/cnh), a
+  // proposta de cadastrar_cliente é carimbada com o id do anexo. No confirm, o
+  // glue determinístico aplica os campos OCR (só-se-vazio) e cria a pendência de
+  // "completar cadastro". É um id (não PII); o handler de cadastro ignora chaves
+  // fora da allowlist, então o marcador não vaza para o save_client.
+  const ocrIdentityDocId = findIdentityDocId(caseDocs);
   const proposals: Record<string, unknown>[] = [];
   for (const call of calls) {
     const tool = call.function.name;
     let args = safeJson(call.function.arguments);
     // Cadastro: completa os args a partir do histórico da coleta (ver enrichCadastroArgs).
-    if (tool === "cadastrar_cliente") args = await enrichCadastroArgs(admin, run, args);
+    if (tool === "cadastrar_cliente") {
+      args = await enrichCadastroArgs(admin, run, args);
+      if (ocrIdentityDocId) args = { ...args, __ocr_attachment_id: ocrIdentityDocId };
+    }
     const route = decideActionRoute(perms, tool);
     const { data: actionRow } = await admin.from("agent_actions").insert({
       run_id: run.id, session_id: run.session_id, user_id: run.user_id, agent_id: n3.id,
@@ -2969,7 +2979,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             // Ação(ões) de ESCRITA: propõe TODAS e PAUSA aguardando confirmação do usuário.
             const writeCalls = r.toolCalls.filter((c) => isWriteTool(c.function.name));
             if (writeCalls.length > 0) {
-              return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey);
+              return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey, caseDocs);
             }
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
@@ -3337,6 +3347,41 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
   } else {
     exec = await runWriteTool(userClient, user.id, action.tool, action.args);
   }
+  // Trilho B — glue determinístico do cadastro por documento (OCR). Após um
+  // cadastrar_cliente REAL bem-sucedido carimbado com __ocr_attachment_id:
+  // aplica os campos OCR (só-se-vazio, service-role) e cria a pendência de
+  // "completar cadastro". Best-effort: NUNCA derruba a confirmação (o cadastro
+  // já foi criado). apply_ocr_client_fields é service-role (admin); a pendência
+  // usa o JWT do usuário (userClient) para auth.uid()/assignee corretos.
+  let ocrGlueNote = "";
+  if (!isDryRun && route === "execute" && exec.ok && action.tool === "cadastrar_cliente" && action.args?.__ocr_attachment_id) {
+    try {
+      const newClientId = (exec.result as { id?: string } | undefined)?.id;
+      const nome = String((exec.result as { full_name?: string } | undefined)?.full_name ?? action.args.full_name ?? "");
+      const attId = String(action.args.__ocr_attachment_id);
+      if (newClientId) {
+        const { data: attRow } = await admin.from("chat_attachments").select("ocr_fields").eq("id", attId).maybeSingle();
+        const fields = parseOcrFields((attRow as { ocr_fields?: unknown } | null)?.ocr_fields);
+        const applyMap = fieldsForCadastro(fields);
+        if (Object.keys(applyMap).length > 0) {
+          await admin.rpc("apply_ocr_client_fields", { p_client_id: newClientId, p_fields: applyMap });
+        }
+        const missing = computeMissingFields(fields);
+        await userClient.rpc("criar_pendencia", {
+          p_tipo: "completar_cadastro",
+          p_titulo: `Completar cadastro de ${nome || "cliente"}`,
+          p_cliente_id: newClientId,
+          p_descricao: buildPendenciaDescricao(nome, missing),
+          p_responsavel_user_id: null, p_prazo: null, p_data_fatal: null,
+        });
+        ocrGlueNote = missing.length
+          ? ` Criei uma pendência para completar o cadastro (${missing.join(", ")}).`
+          : " Criei uma pendência para conferir o cadastro.";
+      }
+    } catch (_e) {
+      // best-effort: cadastro já criado; falha no glue não derruba a confirmação.
+    }
+  }
   await admin.from("agent_actions").update({
     status: exec.ok ? (route === "pendencia" ? "routed_pendencia" : "executed") : "failed",
     result: exec.ok ? exec.result : { error: exec.error }, executed_at: new Date().toISOString(),
@@ -3344,7 +3389,7 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
   const seq = await nextSeq(admin, action.session_id);
   await admin.from("chat_messages").insert({
     session_id: action.session_id, user_id: user.id, role: "assistant", sequence_number: seq,
-    content: exec.ok ? (isDryRun ? `🧪 Teste (dry-run): não gravei nada em produção. Em uso real eu faria — ${humanSummary(action.tool, action.args)}` : (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso.")) : `Não consegui executar: ${exec.error}`,
+    content: exec.ok ? (isDryRun ? `🧪 Teste (dry-run): não gravei nada em produção. Em uso real eu faria — ${humanSummary(action.tool, action.args)}` : (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso." + ocrGlueNote)) : `Não consegui executar: ${exec.error}`,
     metadata: { kind: isDryRun ? "action_dry_run" : "action_done", action_id: action.id, ok: exec.ok },
   });
   const { data: remaining } = await admin.from("agent_actions")
