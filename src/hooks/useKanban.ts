@@ -88,6 +88,14 @@ export function useKanbanBoard(boardId: string | null) {
       const invMap = new Map(invList.map((r) => [r.user_task_id, r]));
       const tagList = (tagRes.data as unknown as Array<{ user_task_id: string; tags: KanbanTag[] }>) ?? [];
       const tagMap = new Map(tagList.map((r) => [r.user_task_id, r.tags]));
+      // Contagem de comentários por card (client-side; a RPC do board não a retorna).
+      const cardIds = (detail.cards ?? []).map((c) => c.id);
+      const commentCount = new Map<string, number>();
+      if (cardIds.length > 0) {
+        const { data: cc } = await supabase.from("user_task_comments").select("user_task_id").in("user_task_id", cardIds);
+        ((cc as { user_task_id: string }[] | null) ?? []).forEach((r) =>
+          commentCount.set(r.user_task_id, (commentCount.get(r.user_task_id) ?? 0) + 1));
+      }
       return {
         ...detail,
         cards: (detail.cards ?? []).map((c) => ({
@@ -95,6 +103,7 @@ export function useKanbanBoard(boardId: string | null) {
           assigner_user_id: invMap.get(c.id)?.assigner_user_id ?? null,
           validator_user_id: invMap.get(c.id)?.validator_user_id ?? null,
           tags: tagMap.get(c.id) ?? [],
+          comment_count: commentCount.get(c.id) ?? 0,
         })),
       };
     },
@@ -103,6 +112,7 @@ export function useKanbanBoard(boardId: string | null) {
       { table: "kanban_card_placements" },
       { table: "kanban_columns" },
       { table: "task_tags" },
+      { table: "user_task_comments" },
     ],
   });
 
@@ -314,6 +324,10 @@ export function useTaskComments(taskId: string | null) {
       if (rpcErr) throw rpcErr;
       return (data as unknown as TaskComment[]) ?? [];
     },
+    // Ao vivo: INSERT/DELETE de comentários DESTE card (a RLS já escopa quem recebe).
+    realtime: taskId
+      ? { table: "user_task_comments", event: "*", filter: `user_task_id=eq.${taskId}` }
+      : undefined,
   });
   return { comments: data ?? [], loading, error, refresh: refetch };
 }

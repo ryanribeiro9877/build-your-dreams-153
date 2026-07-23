@@ -454,6 +454,8 @@ export interface KanbanCardV2 {
   position: number;
   created_at: string;
   tags: KanbanTag[];
+  /** Contagem de comentários do card (mesclada client-side em useKanbanBoard). */
+  comment_count?: number;
 }
 
 /** Board no detalhe (get_kanban_board): metadados do summary + concessões de acesso. */

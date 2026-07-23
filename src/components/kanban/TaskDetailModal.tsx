@@ -1,6 +1,6 @@
 // Modal-hub de detalhe da tarefa (SP3): vínculos, edição de campos, marcadores
 // (criação livre), comentários com @menção e "Trocar quadro". Overlay inline.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { KanbanBoardDetail, TaskComment, TaskPriority } from "@/types/jurisai";
@@ -16,6 +16,9 @@ import { WorkflowSection } from "./WorkflowSection";
 import { TimesheetSection } from "./TimesheetSection";
 import { AuditSection } from "./AuditSection";
 import { COLORS, FONT, overlay, input, select, btnGhost, btnPrimary, btnMini } from "./kanbanStyles";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Person { id: string; name: string }
 
@@ -40,12 +43,24 @@ function fmt(iso: string | null): string {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// Tempo relativo em pt-BR ("há 5 minutos"); a data absoluta vai no title/hover.
+function timeAgo(iso: string): string {
+  try { return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: ptBR }); }
+  catch { return fmt(iso); }
+}
+function initialsOf(name: string): string {
+  const parts = (name || "?").trim().split(/\s+/).filter(Boolean);
+  const s = (parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "");
+  return s.toUpperCase() || "?";
+}
+
 export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, onOpenClient }: Props) {
   const navigate = useNavigate();
   const { detail, loading, refresh } = useTaskDetail(taskId);
   const [editing, setEditing] = useState(false);
   const [full, setFull] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<"detalhes" | "comentarios">("detalhes");
 
   // Rascunho de edição.
   const [draft, setDraft] = useState({
@@ -137,6 +152,19 @@ export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, on
               </div>
             </div>
 
+            {/* Abas: Detalhes | Comentários */}
+            <div style={{ display: "flex", gap: 10, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 12 }}>
+              {([["detalhes", "Detalhes"], ["comentarios", "Comentários"]] as const).map(([k, lbl]) => (
+                <button key={k} onClick={() => setTab(k)} style={{
+                  background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13,
+                  padding: "8px 4px", color: tab === k ? "#EAB308" : COLORS.text3,
+                  borderBottom: `2px solid ${tab === k ? "#EAB308" : "transparent"}`,
+                  fontWeight: tab === k ? 700 : 500, marginBottom: -1,
+                }}>{lbl}</button>
+              ))}
+            </div>
+
+            {tab === "detalhes" && (<>
             {/* Vínculos */}
             <Section title="Vínculos">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, color: COLORS.text2 }}>
@@ -239,15 +267,17 @@ export function TaskDetailModal({ taskId, boards, people, onClose, onChanged, on
               <TimesheetSection taskId={taskId} />
             </Section>
 
-            {/* Comentários */}
-            <Section title="Comentários">
-              <CommentsSection taskId={taskId} people={people} />
-            </Section>
-
             {/* Auditoria */}
             <Section title="Auditoria">
               <AuditSection taskId={taskId} people={people} />
             </Section>
+            </>)}
+
+            {tab === "comentarios" && (
+              <Section title="Comentários">
+                <CommentsSection taskId={taskId} people={people} />
+              </Section>
+            )}
           </>
         )}
       </div>
@@ -323,11 +353,20 @@ function TagEditor({ taskId, initial, onSaved }: { taskId: string; initial: stri
 }
 
 function CommentsSection({ taskId, people }: { taskId: string; people: Person[] }) {
+  const { user } = useAuth();
   const { comments, loading, refresh } = useTaskComments(taskId);
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [, setTick] = useState(0);
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? "alguém";
+
+  // Atualiza os "há X minutos" periodicamente (senão "há 1 minuto" congela).
+  useEffect(() => {
+    const h = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(h);
+  }, []);
 
   async function send() {
     if (!body.trim()) return;
@@ -342,19 +381,43 @@ function CommentsSection({ taskId, people }: { taskId: string; people: Person[] 
       setSending(false);
     }
   }
+  async function del(id: string) {
+    setDeleting(id);
+    try {
+      // RLS só deixa o AUTOR apagar o próprio comentário.
+      const { error } = await supabase.from("user_task_comments").delete().eq("id", id);
+      if (error) { toast.error("Não foi possível excluir o comentário."); return; }
+      refresh();
+    } finally {
+      setDeleting(null);
+    }
+  }
   function toggleMention(id: string) {
     setMentions((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
+  }
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } // Enter envia; Shift+Enter quebra
   }
 
   return (
     <div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", marginBottom: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto", marginBottom: 10 }}>
         {loading ? <span style={muted}>Carregando…</span>
           : comments.length === 0 ? <span style={muted}>Sem comentários.</span>
           : comments.map((c: TaskComment) => (
             <div key={c.id} style={{ background: COLORS.bg2, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "8px 10px" }}>
-              <div style={{ fontSize: 11, color: COLORS.text3, marginBottom: 3 }}>
-                <strong style={{ color: COLORS.text2 }}>{c.author_name}</strong> · {fmt(c.created_at)}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(234,179,8,.18)", color: "#EAB308", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                  {initialsOf(c.author_name)}
+                </span>
+                <strong style={{ color: COLORS.text2, fontSize: 12 }}>{c.author_name}</strong>
+                <span style={{ fontSize: 11, color: COLORS.text3 }} title={fmt(c.created_at)}>· {timeAgo(c.created_at)}</span>
+                {user?.id === c.author_user_id && (
+                  <button onClick={() => del(c.id)} disabled={deleting === c.id} title="Excluir comentário"
+                    style={{ ...btnMini, marginLeft: "auto", color: "#dc2626" }}>
+                    {deleting === c.id ? "…" : "Excluir"}
+                  </button>
+                )}
               </div>
               <div style={{ fontSize: 13, color: COLORS.text1, whiteSpace: "pre-wrap" }}>{c.body}</div>
               {c.mentioned_user_ids.length > 0 && (
@@ -365,7 +428,7 @@ function CommentsSection({ taskId, people }: { taskId: string; people: Person[] 
             </div>
           ))}
       </div>
-      <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={3} placeholder="Escreva um comentário…" style={{ ...input, width: "100%", resize: "vertical", marginBottom: 6 }} />
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={onKeyDown} maxLength={2000} rows={3} placeholder="Escreva um comentário…  (Enter envia · Shift+Enter quebra linha)" style={{ ...input, width: "100%", resize: "vertical", marginBottom: 6 }} />
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
         <span style={{ fontSize: 10, color: COLORS.text3 }}>@ Mencionar:</span>
         {people.slice(0, 30).map((p) => (

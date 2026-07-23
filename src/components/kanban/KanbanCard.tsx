@@ -188,6 +188,14 @@ export function KanbanCard({ card, simplified, canEdit, onOpen, onEdit, onDelete
       </div>
 
       <TagChips tags={card.tags} />
+      {(card.comment_count ?? 0) > 0 && (
+        <span
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: COLORS.text3, marginTop: 4 }}
+          title={`${card.comment_count} comentário${(card.comment_count ?? 0) > 1 ? "s" : ""}`}
+        >
+          💬 {card.comment_count}
+        </span>
+      )}
       {claimButton}
 
       {canEdit && <CardMenu open={menuOpen} setOpen={setMenuOpen} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />}
