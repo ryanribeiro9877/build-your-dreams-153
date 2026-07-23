@@ -366,6 +366,16 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (r && r.ok === false) return { ok: false, error: r.message ?? "Já existe um processo com esse número." };
         return { ok: true, result: data };
       }
+      case "atualizar_processo": {
+        const fields: Record<string, unknown> = {};
+        for (const k of ["andamento","status","next_hearing_date"]) {
+          const v = (args as Record<string, unknown>)[k];
+          if (v !== undefined && v !== null && String(v).trim() !== "") fields[k] = v;
+        }
+        const { data, error } = await userClient.rpc("atualizar_processo", { p_process_id: args.process_id, p_fields: fields });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }

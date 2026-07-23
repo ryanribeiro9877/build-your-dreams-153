@@ -1983,6 +1983,14 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Marcar audiência${args.tipo ? ` de ${args.tipo}` : ""}${args.processo_desc ? ` do processo ${args.processo_desc}` : ""} para ${args.data} ${args.hora}${args.local ? `, ${args.local}` : ""}.`;
     case "criar_processo":
       return `Criar processo${args.tipo_acao ? ` (${args.tipo_acao})` : ""}${args.client_nome ? ` para ${args.client_nome}` : ""}${args.reu ? `, réu ${args.reu}` : ""}${args.numero ? `, nº ${args.numero}` : ""}.`;
+    case "atualizar_processo": {
+      const alvo = args.processo_desc ? ` do processo ${args.processo_desc}` : " do processo";
+      const partes: string[] = [];
+      if (args.andamento) partes.push(`andamento: "${args.andamento}"`);
+      if (args.status) partes.push(`status → ${args.status}`);
+      if (args.next_hearing_date) partes.push(`próxima audiência → ${args.next_hearing_date}`);
+      return `Atualizar${alvo}: ${partes.join("; ") || "sem alterações"}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }

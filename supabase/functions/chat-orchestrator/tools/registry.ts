@@ -295,6 +295,17 @@ export const TOOLS: Record<string, ToolDef> = {
       notes: str("observações (opcional)"),
     }, required: ["client_id"] },
   }},
+  atualizar_processo: { type: "function", function: {
+    name: "atualizar_processo",
+    description: "Registra um andamento ou atualiza um processo que JÁ existe (andamento, status, próxima audiência). Resolva o processo ANTES com consultar_processo e passe process_id. Andamento é gravado com autor e data. Gate: advogado responsável, sócio ou admin.",
+    parameters: { type: "object", properties: {
+      process_id: str("id do processo (via consultar_processo)"),
+      processo_desc: str("número/descrição do processo — só para exibição"),
+      andamento: str("texto do andamento (registrado com autor e data)"),
+      status: str("novo status do processo (opcional)"),
+      next_hearing_date: str("data/hora da próxima audiência em ISO 8601 (opcional)"),
+    }, required: ["process_id"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",
