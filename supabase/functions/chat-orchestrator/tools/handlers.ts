@@ -30,6 +30,14 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       const { data } = await client.rpc("agent_consultar_usuario", { p_busca: q });
       return data ?? [];
     }
+    case "minha_agenda": {
+      // Consulta escopo auth.uid() (a RPC filtra). Omitir args = hoje (defaults da RPC).
+      const rpcArgs: Record<string, unknown> = {};
+      if (args.de) rpcArgs.p_de = args.de;
+      if (args.ate) rpcArgs.p_ate = args.ate;
+      const { data } = await client.rpc("minha_agenda", rpcArgs);
+      return data ?? {};
+    }
     case "consultar_tarefas": {
       let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));

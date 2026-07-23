@@ -9,7 +9,7 @@ export interface ToolDef {
 // de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
-  "consultar_cep", "get_revisao_peca_context",
+  "consultar_cep", "get_revisao_peca_context", "minha_agenda",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -233,6 +233,14 @@ export const TOOLS: Record<string, ToolDef> = {
       birth_date: str("data de nascimento AAAA-MM-DD"),
       client_origin: str("origem do cliente"), tipo_pessoa: str("pf ou pj"), status: str("status do cliente"),
     }, required: ["client_id"] },
+  }},
+  minha_agenda: { type: "function", function: {
+    name: "minha_agenda",
+    description: "Consulta a agenda do PRÓPRIO usuário (atendimentos, audiências e prazos) num intervalo de datas. Sem intervalo = hoje. Resposta direta, sem confirmação.",
+    parameters: { type: "object", properties: {
+      de: str("data inicial AAAA-MM-DD (opcional; default = hoje)"),
+      ate: str("data final AAAA-MM-DD (opcional; default = mesmo dia de 'de')"),
+    }, required: [] },
   }},
   delegate: { type: "function", function: {
     name: "delegate",
