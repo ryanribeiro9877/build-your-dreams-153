@@ -3,8 +3,22 @@ import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
-  isDocChecklistRequest, isPecaExplicitRequest,
+  isDocChecklistRequest, isPecaExplicitRequest, normalizeRouteObject,
 } from "./intentClassifier.ts";
+
+// ─── LLM-first: parsing do classificador de objeto ───────────────────────────
+Deno.test("normalizeRouteObject: mapeia categorias e cai em OUTRO no desconhecido", () => {
+  assertEquals(normalizeRouteObject("CADASTRO"), "CADASTRO");
+  assertEquals(normalizeRouteObject("cadastro"), "CADASTRO");
+  assertEquals(normalizeRouteObject("AGENDA_CLIENTE"), "AGENDA_CLIENTE");
+  assertEquals(normalizeRouteObject("agenda"), "AGENDA_CLIENTE");
+  assertEquals(normalizeRouteObject("Tarefa_Interna"), "TAREFA_INTERNA");
+  assertEquals(normalizeRouteObject("tarefa"), "TAREFA_INTERNA");
+  assertEquals(normalizeRouteObject("OUTRO"), "OUTRO");
+  assertEquals(normalizeRouteObject("peça jurídica"), "OUTRO");
+  assertEquals(normalizeRouteObject(null), "OUTRO");
+  assertEquals(normalizeRouteObject(undefined), "OUTRO");
+});
 
 // ─── #2: exceção "pedido de peça explícito" do atalho doc-identidade→cadastro ──
 Deno.test("isPecaExplicitRequest: pedidos claros de peça → true", () => {

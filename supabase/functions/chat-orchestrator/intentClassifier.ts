@@ -289,6 +289,35 @@ export function isPecaExplicitRequest(message: string): boolean {
   return PECA_VERBO_RE.test(m) && PECA_ALVO_RE.test(m);
 }
 
+// ─── LLM-FIRST ROUTING: classificador de OBJETO ──────────────────────────────
+// Os detectores regex acima (isCadastroClienteRequest, isTarefaChatRequest, e os
+// de agendaDetect.ts) deixam de DECIDIR o roteamento e viram HINTS. Quando algum
+// hint casa, o handler chama o LLM com ACTION_OBJECT_RULES para decidir o OBJETO
+// real do pedido — nunca pelo verbo isolado ("adicionar", "cadastrar", "marcar"
+// são ambíguos). Isso corrige o misroute "adicionar na agenda uma reunião de um
+// cliente" → cadastro_form: o verbo "adicionar" rege a REUNIÃO, não o "cliente".
+export type RouteObject = "CADASTRO" | "AGENDA_CLIENTE" | "TAREFA_INTERNA" | "OUTRO";
+
+export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
+
+Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
+
+- "CADASTRO": o objeto é o PRÓPRIO CADASTRO de um cliente (criar a ficha do cliente no sistema). Ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria", "adicione o cliente Pedro". Só é CADASTRO quando a coisa criada é o CLIENTE em si.
+- "AGENDA_CLIENTE": o objeto é um ATENDIMENTO, CONSULTA ou REUNIÃO COM UM CLIENTE (cliente + advogado, na agenda de atendimentos), inclusive confirmar/cancelar/remarcar. Ex.: "adicionar na agenda uma reunião de um cliente com o Dr Rodrigo", "marque uma consulta pro cliente X amanhã 10h", "cancele o atendimento do cliente Y". ATENÇÃO: mesmo que a frase diga "cadastrar/adicionar NA AGENDA", se o objeto é uma reunião/atendimento de cliente, é AGENDA_CLIENTE — NUNCA cadastro.
+- "TAREFA_INTERNA": o objeto é uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente-parte). Ex.: "atribua uma tarefa pra reunião de equipe", "abra uma pendência de procuração pro Adalberto", "crie um lembrete pra amanhã", "marque uma reunião entre nós às 15h". ATENÇÃO: mesmo que diga "cadastrar/criar uma pendência", o objeto é a pendência/tarefa — NUNCA cadastro de cliente.
+- "OUTRO": qualquer outra coisa — pedido de PEÇA/documento jurídico, DISTRIBUIR um caso/processo, consulta a dados, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO.
+
+Regra de ouro: separe CADASTRO (objeto = o cliente) de AGENDA_CLIENTE (objeto = atendimento do cliente) de TAREFA_INTERNA (objeto = tarefa/pendência interna). O verbo não decide; o objeto decide.`;
+
+/** Parsing defensivo do resultado do classificador de objeto (LLM). */
+export function normalizeRouteObject(raw: unknown): RouteObject {
+  const s = String(raw ?? "").trim().toUpperCase();
+  if (s === "CADASTRO") return "CADASTRO";
+  if (s === "AGENDA_CLIENTE" || s === "AGENDA") return "AGENDA_CLIENTE";
+  if (s === "TAREFA_INTERNA" || s === "TAREFA") return "TAREFA_INTERNA";
+  return "OUTRO";
+}
+
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451
 // "content policy", 5xx, timeout do watchdog). Um erro NÃO é um turno real do
 // especialista: não pode "encerrar" uma coleta em andamento.

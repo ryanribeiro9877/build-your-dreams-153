@@ -50,6 +50,7 @@ import {
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isPecaExplicitRequest,
+  type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject,
 } from "./intentClassifier.ts";
 
 const ALLOWED_ORIGINS = [
@@ -2050,6 +2051,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3B. DISTRIBUIR CASO/PROCESSO (objeto = CASO): se pede para DISTRIBUIR ou ENCAMINHAR um CASO, PROCESSO, AÇÃO ou número CNJ — a um Kanban/board por tipo de ação, a um ADVOGADO, a um setor, "ao sócio", "à recepção" ou a pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua ESSE PROCESSO à Ana", "encaminhe a AÇÃO Y ao previdenciário") → "Especialista Distribuição". EXIGE um objeto de CASO/PROCESSO/ação/número. NUNCA roteie para cá se o objeto for TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO — isso é a regra 3C. NUNCA encaminhe distribuição de caso ao Cadastro.
 3C. CRIAR TAREFA/PENDÊNCIA/LEMBRETE/REUNIÃO INTERNA (objeto = TAREFA): se pede para ATRIBUIR, CRIAR, ABRIR, MARCAR ou AGENDAR uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente) — ex.: "atribua uma tarefa a Kailane...", "abra uma pendência para o setor X", "crie um lembrete para amanhã", "marque uma reunião entre nós dois às 15h" → "Especialista Kanban de Pendências" (tool criar_pendencia; o campo tipo aceita "reuniao" para reunião interna). O objeto é uma TAREFA/PENDÊNCIA/REUNIÃO INTERNA — NÃO um caso/processo e NÃO um atendimento de cliente.
 3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
+3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
@@ -2272,6 +2274,31 @@ async function classifyIntent(
     // Fail-safe: na dúvida, cadeia completa (respeita a assimetria de segurança).
     console.warn(`[intent] classificação falhou (${(e as Error)?.message}) — tratando como NEGOCIO_COM_INSUMO (cadeia completa)`);
     return "NEGOCIO_COM_INSUMO";
+  }
+}
+
+// LLM-FIRST: classificador de OBJETO. Recebe a mensagem + os hints superficiais
+// (regex dos detectores) e decide o destino REAL. Os hints entram só como PISTA —
+// o LLM pode vetá-los (corrige o falso-positivo "adicionar reunião de cliente na
+// agenda" → cadastro). Fail-safe: erro/timeout → "OUTRO" (cai na cadeia, onde o
+// roteador LLM decide o especialista). Modelo rápido, JSON, 0 temperatura.
+async function classifyActionObject(
+  admin: SupabaseClient, model: string, message: string,
+  hints: { cadastro: boolean; agenda: boolean; tarefa: boolean }, ctx?: LlmCtx,
+): Promise<RouteObject> {
+  const hintNote = `Sinais superficiais (regex, PODEM estar errados — use só como pista, não como decisão): cadastro=${hints.cadastro ? "sim" : "não"}, agenda=${hints.agenda ? "sim" : "não"}, tarefa=${hints.tarefa ? "sim" : "não"}.`;
+  try {
+    const r = await callLLM(admin, {
+      model, systemPrompt: ACTION_OBJECT_RULES + buildNowAnchor(), history: [],
+      userMessage: `${hintNote}\n\nMensagem do usuário (analise-a INTEIRA):\n${message}`,
+      temperature: 0, top_p: null, maxTokens: 24, timeoutMs: LLM_AUX_TIMEOUT_MS, jsonMode: true,
+      ctx: { ...ctx, stage: "action_object" },
+    });
+    const parsed = JSON.parse(r.content) as { objeto?: string };
+    return normalizeRouteObject(parsed.objeto);
+  } catch (e) {
+    console.warn(`[llm-first] classificação de objeto falhou (${(e as Error)?.message}) — OUTRO (cadeia completa)`);
+    return "OUTRO";
   }
 }
 
@@ -3582,14 +3609,29 @@ serve(async (req) => {
       sessionId: body.sessionId, userId, agentId: agent.id, isTechTest: !!session.is_tech_test,
     };
 
-    // ─── CADASTRO-MODELO-A: disparar o formulário em vez de coletar dado-a-dado ───
-    // Troca de abordagem (supersede a coleta conversacional / Modelo B): num pedido
-    // claro de "cadastrar cliente", o agente NÃO conduz a coleta; devolve uma
-    // mensagem que o front reconhece (metadata.kind="cadastro_form") e monta o
-    // ClienteFormWizard inline. O envio grava direto via save_client (cifrado) — o
-    // mesmo caminho do "+ Novo Cliente". Sem tool-calling: independe de
-    // CHAT_TOOLS_ENABLED. Detecção determinística (não gasta o classificador).
-    if (isCadastroClienteRequest(body.message)) {
+    // ─── LLM-FIRST ROUTING: os detectores de keyword viram HINTS; o LLM decide ───
+    // Os regex (cadastro/agenda/tarefa) NÃO decidem mais sozinhos — apenas SINALIZAM
+    // candidatos. Havendo ≥1 hint, o LLM classifica o OBJETO real do pedido e escolhe
+    // qual cartão disparar (ou nenhum → cadeia/classificador). Corrige o misroute
+    // "adicionar na agenda uma reunião de um cliente" (casava o regex de cadastro pelo
+    // verbo "adicionar" + "cliente"). Frases SEM hint seguem como antes (classificador
+    // de intenção mais abaixo). +1 chamada do modelo rápido só quando há hint de ação.
+    const hintCadastro = isCadastroClienteRequest(body.message);
+    const hintReuniaoAcao = isReuniaoAcaoRequest(body.message);
+    const hintAgendar = isAgendarAtendimentoRequest(body.message);
+    const hintTarefa = TAREFA_CHAT_ENABLED && isTarefaChatRequest(body.message);
+    let routeObj: RouteObject | null = null;
+    if (hintCadastro || hintReuniaoAcao || hintAgendar || hintTarefa) {
+      routeObj = await classifyActionObject(admin, INTENT_CLASSIFIER_MODEL, body.message,
+        { cadastro: hintCadastro, agenda: hintReuniaoAcao || hintAgendar, tarefa: hintTarefa }, entryCtx);
+      console.log(`[llm-first] session=${body.sessionId} hints{cad:${hintCadastro},ag:${hintReuniaoAcao || hintAgendar},tar:${hintTarefa}} → objeto=${routeObj} (msg="${body.message.slice(0, 50)}")`);
+    }
+
+    // ─── CADASTRO-MODELO-A: cartão de cadastro (disparado quando o LLM classifica o
+    // objeto como CADASTRO). O front reconhece metadata.kind="cadastro_form" e monta o
+    // ClienteFormWizard inline; o envio grava via save_client (cifrado). Sem tool-calling
+    // (independe de CHAT_TOOLS_ENABLED).
+    if (routeObj === "CADASTRO") {
       const { data: cadRunRow, error: cadRunErr } = await admin.from("orchestration_runs").insert({
         session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
         original_message: body.message, status: "done", entry_agent_id: agent.id,
@@ -3612,17 +3654,15 @@ serve(async (req) => {
       return json(202, { runId: cadRunId, sessionId: body.sessionId, status: "done", path: "cadastro_form", intent: "ACAO_COM_TOOL" });
     }
 
-    // ─── AGENDA-CHAT (Fase 0): detector SEMPRE-ligado, curto-circuita o roteamento ─
-    // Impede que "agendar/confirmar/cancelar/reagendar reunião" caia no classificador
-    // e vire peça/.docx (bug do misroute). A flag AGENDA_CHAT_ENABLED controla só
-    // cartão vs. mensagem estática; os cartões (reuniao_confirm/reuniao_acao) chegam
-    // nas fases D/E. Precedência: AÇÃO antes de AGENDAR ("marca como realizada" é flip
-    // de status, não novo agendamento). Permissão (recepção-only) barrada de cara; a
-    // RPC segue como barreira final.
-    {
-      const isAcao = isReuniaoAcaoRequest(body.message);
-      const isAgendar = !isAcao && isAgendarAtendimentoRequest(body.message);
-      if (isAgendar || isAcao) {
+    // ─── AGENDA (cartão): disparado quando o LLM classifica o objeto como ATENDIMENTO/
+    // reunião DE CLIENTE. A flag AGENDA_CHAT_ENABLED controla só cartão vs. mensagem
+    // estática. confirm (agendar novo) vs acao (confirmar/cancelar/remarcar existente):
+    // o detector de AÇÃO decide; sem ele, default = agendar novo. Permissão (recepção-
+    // only) barrada de cara; a RPC segue como barreira final.
+    if (routeObj === "AGENDA_CLIENTE") {
+      {
+        const isAcao = hintReuniaoAcao;
+        const isAgendar = !isAcao;
         const kindPath = isAgendar ? "reuniao_confirm" : "reuniao_acao";
         const { data: agRun, error: agErr } = await admin.from("orchestration_runs").insert({
           session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
@@ -3763,7 +3803,7 @@ serve(async (req) => {
     // cliente citado. O front monta um cartão editável (metadata.kind="tarefa_confirm");
     // só no CONFIRMAR o FE chama create_user_task. Zero alucinação: falha no LLM/parse
     // -> normalizeDraft(null) (rascunho vazio, tudo em aberto para o usuário revisar).
-    if (TAREFA_CHAT_ENABLED && isTarefaChatRequest(body.message)) {
+    if (TAREFA_CHAT_ENABLED && routeObj === "TAREFA_INTERNA") {
       const { data: tarRunRow, error: tarRunErr } = await admin.from("orchestration_runs").insert({
         session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
         original_message: body.message, status: "done", entry_agent_id: agent.id,
