@@ -1968,6 +1968,13 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     }
     case "comentar_card":
       return `Comentar em ${args.task_titulo ? `"${args.task_titulo}"` : "o card"}: "${args.comentario}".`;
+    case "atualizar_cliente": {
+      const quem = args.client_nome ? `de ${args.client_nome}` : "do cliente";
+      const campos = ["phone","email","address","city","state","zip_code","birth_date","status","client_origin","tipo_pessoa"]
+        .filter((k) => (args as Record<string, unknown>)[k])
+        .map((k) => `${k} → ${(args as Record<string, unknown>)[k]}`);
+      return `Atualizar cadastro ${quem}: ${campos.join("; ") || "sem alterações"}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2105,6 +2112,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3C-bis. MOVER/EDITAR/COMENTAR TAREFA EXISTENTE (objeto = TAREFA que já existe): se pede para MOVER, MUDAR STATUS/PRAZO/PRIORIDADE, RENOMEAR ou COMENTAR uma tarefa/pendência/card que JÁ existe — ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou" → "Especialista Kanban de Pendências" (tools atualizar_tarefa e comentar_card; resolva o card com consultar_tarefas ANTES). É EDITAR uma tarefa existente, NÃO criar uma nova (3C).
 3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
+3E-bis. ATUALIZAR/CORRIGIR CLIENTE EXISTENTE (objeto = cliente que já existe): se pede para MUDAR ou CORRIGIR um dado de cadastro de um cliente que já existe — telefone, email, endereço, data de nascimento, status — ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto" → "Especialista Cadastro" (tool atualizar_cliente; resolva o cliente com consultar_cliente ANTES). É EDITAR um cliente existente, NÃO cadastrar um novo (3E). CPF e nome não mudam pelo chat.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.

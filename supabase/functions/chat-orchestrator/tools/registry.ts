@@ -221,6 +221,19 @@ export const TOOLS: Record<string, ToolDef> = {
       comentario: str("texto do comentário"),
     }, required: ["task_id", "comentario"] },
   }},
+  atualizar_cliente: { type: "function", function: {
+    name: "atualizar_cliente",
+    description: "Corrige/atualiza dados de cadastro de um cliente que JÁ existe (telefone, email, endereço, data de nascimento, origem, tipo, status). NÃO cria cliente novo (isso é cadastrar_cliente) e NUNCA altera CPF/CNPJ/nome. Resolva o cliente ANTES com consultar_cliente e passe client_id.",
+    parameters: { type: "object", properties: {
+      client_id: str("id do cliente (via consultar_cliente)"),
+      client_nome: str("nome do cliente — apenas para exibição na confirmação"),
+      phone: str("telefone"), email: str("email"),
+      address: str("logradouro"), address_number: str("número"), neighborhood: str("bairro"),
+      city: str("cidade"), state: str("UF"), zip_code: str("CEP"),
+      birth_date: str("data de nascimento AAAA-MM-DD"),
+      client_origin: str("origem do cliente"), tipo_pessoa: str("pf ou pj"), status: str("status do cliente"),
+    }, required: ["client_id"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",

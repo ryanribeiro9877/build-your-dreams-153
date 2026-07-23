@@ -307,6 +307,18 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "atualizar_cliente": {
+        // Monta o jsonb só com os campos da whitelist presentes; a RPC reaplica a
+        // whitelist e o gate (is_recepcao/admin/has_menu_grant 'clientes').
+        const fields: Record<string, unknown> = {};
+        for (const k of ["phone","email","address","address_number","address_complement","neighborhood","city","state","zip_code","birth_date","client_origin","tipo_pessoa","status"]) {
+          const v = (args as Record<string, unknown>)[k];
+          if (v !== undefined && v !== null && String(v).trim() !== "") fields[k] = v;
+        }
+        const { data, error } = await userClient.rpc("atualizar_cliente", { p_client_id: args.client_id, p_fields: fields });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }
