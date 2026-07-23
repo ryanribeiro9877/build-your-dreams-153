@@ -9,7 +9,7 @@ export interface ToolDef {
 // de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
-  "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias",
+  "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias", "resumo_do_dia",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -305,6 +305,11 @@ export const TOOLS: Record<string, ToolDef> = {
       status: str("novo status do processo (opcional)"),
       next_hearing_date: str("data/hora da próxima audiência em ISO 8601 (opcional)"),
     }, required: ["process_id"] },
+  }},
+  resumo_do_dia: { type: "function", function: {
+    name: "resumo_do_dia",
+    description: "Resumo do dia do PRÓPRIO usuário: tarefas com prazo hoje, tarefas atrasadas, atendimentos do dia, audiências próximas (7 dias), pendências abertas e notificações não lidas. Resposta única, sem confirmação.",
+    parameters: { type: "object", properties: {}, required: [] },
   }},
   delegate: { type: "function", function: {
     name: "delegate",

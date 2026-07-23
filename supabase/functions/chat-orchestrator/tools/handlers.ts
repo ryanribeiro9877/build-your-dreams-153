@@ -44,6 +44,10 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       });
       return data ?? [];
     }
+    case "resumo_do_dia": {
+      const { data } = await client.rpc("resumo_do_dia");
+      return data ?? {};
+    }
     case "consultar_tarefas": {
       let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));
