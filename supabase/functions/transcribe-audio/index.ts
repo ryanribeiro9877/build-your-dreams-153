@@ -19,10 +19,10 @@
 // OpenRouter (assertOpenAiDirect no motor). Chave via BYOK (llm_provider_configs
 // + get_provider_key_decrypted), sem secret de chave em claro.
 //
-// Auth: o caller manda o próprio JWT; a posse do anexo é validada pela RLS de
-// `chat_attachments` (callerClient → 404 se não puder ver). O download do binário
-// e o UPDATE usam service-role (adminClient). NÃO há secret interno/trigger — o
-// único chamador é o front autenticado (verify_jwt=false; a auth é feita aqui).
+// Auth: verify_jwt=true no deploy (gateway valida o JWT). Dentro, a POSSE do anexo
+// é re-validada pela RLS de `chat_attachments` (callerClient → 404 se não puder
+// ver). O download do binário e o UPDATE usam service-role (adminClient). NÃO há
+// secret interno/trigger — o único chamador é o front autenticado.
 //
 // FALHA/VAZIO: transcritor null (desligado) ou texto final vazio → NÃO grava,
 // retorna { ok:false, reason }. Custo do Whisper é por MINUTO (não por token):
