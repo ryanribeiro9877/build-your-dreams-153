@@ -19,7 +19,7 @@
 // preserva o fallback do gate (imagem sem texto → imagesWithoutText, só avisa).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getExtractor } from "../_shared/ocr/index.ts";
 
@@ -32,6 +32,44 @@ function jsonResp(req: Request, status: number, body: unknown): Response {
 
 function ocrEnabled(): boolean {
   return (Deno.env.get("OCR_ENABLED") || "").trim().toLowerCase() === "true";
+}
+
+// Deriva o provedor a partir do identificador do motor (para o dashboard de
+// custo). openai-vision → openai; textract → aws; stub → stub.
+function providerFromEngine(engine: string): string {
+  const e = (engine || "").toLowerCase();
+  if (e.includes("textract") || e.includes("aws")) return "aws";
+  if (e.includes("openai") || e.includes("vision") || e.includes("gpt")) return "openai";
+  if (e.includes("stub")) return "stub";
+  return e || "unknown";
+}
+
+// Telemetria (espelha ocr-client-document): "nenhum custo invisível". O custo em
+// tokens só existe quando o motor é LLM (openai-vision); stub/textract registram
+// a chamada com tokens=0. Best-effort: um erro de log NUNCA derruba o OCR.
+async function logGeneration(
+  admin: SupabaseClient,
+  doc: { user_id: string; session_id?: string | null },
+  engine: string,
+  usage: { inputTokens: number; outputTokens: number; model: string } | undefined,
+  status: "ok" | "empty" | "error",
+): Promise<void> {
+  try {
+    await admin.from("ai_generations").insert({
+      user_id: doc.user_id,
+      session_id: doc.session_id ?? null,
+      source: "ocr-attachment",
+      provider: providerFromEngine(engine),
+      model: usage?.model ?? null,
+      stage: "ocr",
+      status: status === "error" ? "error" : "ok",
+      error_type: status === "empty" ? "empty_extraction" : null,
+      input_tokens: usage?.inputTokens ?? 0,
+      output_tokens: usage?.outputTokens ?? 0,
+    });
+  } catch {
+    // log é best-effort; nunca derruba o OCR.
+  }
 }
 
 serve(async (req) => {
@@ -75,7 +113,7 @@ serve(async (req) => {
 
     const { data: att, error: attErr } = await callerClient
       .from("chat_attachments")
-      .select("id, storage_path, file_name, mime_type")
+      .select("id, storage_path, file_name, mime_type, user_id, session_id")
       .eq("id", attachmentId)
       .maybeSingle();
 
@@ -119,6 +157,7 @@ serve(async (req) => {
     const text = (result.text || "").trim();
     if (!text) {
       // Extrator devolveu vazio → NÃO grava extracted_text (fica null).
+      await logGeneration(adminClient, att, result.engine, result.usage, "empty");
       return jsonResp(req, 200, { ok: false, reason: "empty_extraction", engine: result.engine });
     }
 
@@ -136,6 +175,9 @@ serve(async (req) => {
     if (upErr) {
       return jsonResp(req, 500, { ok: false, reason: "update_failed", message: upErr.message });
     }
+
+    // ── Log de custo (nenhum custo invisível) ────────────────────────────────
+    await logGeneration(adminClient, att, result.engine, result.usage, "ok");
 
     return jsonResp(req, 200, {
       ok: true,

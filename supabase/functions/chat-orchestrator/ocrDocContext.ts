@@ -57,10 +57,52 @@ function docTypeOf(fields: OcrFieldLite[]): string | null {
 }
 
 /**
- * Monta o bloco de contexto dos documentos classificados por OCR. Retorna "" se
- * nenhum anexo tiver `doc_type` (comportamento atual preservado).
+ * Aritmética de idade DETERMINÍSTICA (nunca delegada ao LLM — num sistema
+ * jurídico, capacidade civil errada é inaceitável). Aceita "DD/MM/AAAA",
+ * "DD-MM-AAAA", "DD.MM.AAAA" e ISO "AAAA-MM-DD". Devolve a idade em anos
+ * completos na data `now`, ou null se a data não for parseável/plausível
+ * (nesse caso nenhuma linha de idade é injetada).
  */
-export function buildOcrDocContext(docs: OcrDoc[]): string {
+export function computeAge(birthDate: string, now: Date): number | null {
+  const s = (birthDate || "").trim();
+  let y: number, mo: number, d: number;
+  const br = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/); // DD/MM/AAAA
+  if (br) {
+    d = +br[1]; mo = +br[2]; y = +br[3];
+  } else {
+    const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // ISO AAAA-MM-DD
+    if (!iso) return null;
+    y = +iso[1]; mo = +iso[2]; d = +iso[3];
+  }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const ny = now.getUTCFullYear(), nm = now.getUTCMonth() + 1, nd = now.getUTCDate();
+  let age = ny - y;
+  if (nm < mo || (nm === mo && nd < d)) age--; // ainda não fez aniversário
+  if (age < 0 || age > 130) return null; // fora do plausível → provável erro de OCR
+  return age;
+}
+
+/**
+ * Linha de idade pronta (fato já calculado que o LLM só consome). Se a data de
+ * nascimento veio com baixa confiança ([REVISAR]), a idade sai explicitamente
+ * como "a confirmar" — nunca como fato firme.
+ */
+function ageLine(birthDate: string, needsReview: boolean, now: Date): string | null {
+  const age = computeAge(birthDate, now);
+  if (age == null) return null;
+  const capacidade = age >= 18 ? "maior de idade" : "menor de idade";
+  if (needsReview) {
+    return `  • idade calculada: ${age} anos (${capacidade}) — derivada de data de nascimento lida com BAIXA confiança; CONFIRME a data antes de afirmar`;
+  }
+  return `  • idade calculada: ${age} anos (${capacidade})`;
+}
+
+/**
+ * Monta o bloco de contexto dos documentos classificados por OCR. Retorna "" se
+ * nenhum anexo tiver `doc_type` (comportamento atual preservado). `now` é
+ * injetável para testes; em produção usa a data corrente do edge.
+ */
+export function buildOcrDocContext(docs: OcrDoc[], now: Date = new Date()): string {
   const lines: string[] = [];
   for (const d of docs) {
     const fields = parseFields(d.ocr_fields);
@@ -78,12 +120,22 @@ export function buildOcrDocContext(docs: OcrDoc[]): string {
       const flag = f.needsReview ? " [REVISAR]" : "";
       lines.push(`  • ${f.key} = ${f.value}${flag}`);
     }
+    // Idade determinística: a aritmética de data é feita AQUI (código), não pelo
+    // LLM. Considera sufixos (birth_date_2) e respeita o [REVISAR] da data.
+    const bd = fields.find((f) => f.key.replace(/_\d+$/, "") === "birth_date" && f.value);
+    if (bd) {
+      const al = ageLine(bd.value, !!bd.needsReview, now);
+      if (al) lines.push(al);
+    }
   }
   if (lines.length === 0) return "";
   return [
     "DOCUMENTO(S) IDENTIFICADO(S) POR OCR (anexo do chat):",
     ...lines,
-    "Campos marcados [REVISAR] têm baixa confiança — NÃO afirme como fato; trate como a preencher.",
+    // REGRA DE CONFIANÇA (#3): campos [REVISAR] NUNCA como fato. O caso clássico
+    // é o número do CPF lido no campo RG (verso do documento).
+    "REGRA DE CONFIANÇA (obrigatória): campos marcados [REVISAR] foram lidos com BAIXA confiança e PODEM estar errados ou trocados (ex.: o número do CPF aparecer no campo RG). É PROIBIDO apresentá-los como validados e é PROIBIDO dizer \"validei/conferi os dados\". Ao citar um campo [REVISAR], escreva exatamente no formato \"li com baixa confiança, confirme: <campo> = <valor>?\" e aguarde a confirmação do usuário antes de tratar como fato.",
+    "Afirme como certos SOMENTE os campos SEM [REVISAR]. A linha \"idade calculada\" acima já é determinística — use-a como está, não recalcule.",
     "",
     OCR_ACTION_GUIDANCE,
   ].join("\n");

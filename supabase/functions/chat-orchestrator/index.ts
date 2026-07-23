@@ -40,7 +40,7 @@ import {
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isCaseDocumentAttachment } from "./caseDocFilter.ts";
 import { buildOcrDocContext } from "./ocrDocContext.ts";
-import { findIdentityDocId, parseOcrFields, fieldsForCadastro, computeMissingFields, buildPendenciaDescricao } from "./ocrApplyGlue.ts";
+import { findIdentityDocId, isIdentityDoc, parseOcrFields, fieldsForCadastro, computeMissingFields, buildPendenciaDescricao } from "./ocrApplyGlue.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
 import {
@@ -49,6 +49,7 @@ import {
   mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
+  isPecaExplicitRequest,
 } from "./intentClassifier.ts";
 
 const ALLOWED_ORIGINS = [
@@ -592,6 +593,25 @@ async function loadGlobalSpecialists(admin: SupabaseClient): Promise<AgentRow[]>
     .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
     .is("owner_user_id", null).eq("is_active", true).eq("role", "specialist");
   return ((data as unknown as AgentRow[]) || []).filter((a) => (a.allowed_tools?.length ?? 0) > 0);
+}
+
+// #2 (documento→cadastro): resolve o "Especialista Cadastro" DO PRÓPRIO usuário
+// (agentes de cadastro são provisionados por owner_user_id, stage recepção). Só
+// serve se o agente tiver as tools do fluxo (consultar_cliente + cadastrar_cliente)
+// e max_tokens < SEGMENT_MIN_MAX_TOKENS — senão o loop de tools (ActionCard) não
+// roda no executing_n3. Prefere o "líder" sobre o "(Rascunho)". Retorna null se o
+// usuário não tiver um: nesse caso o atalho de roteamento simplesmente não ativa.
+async function resolveCadastroSpecialist(admin: SupabaseClient, ownerUserId: string): Promise<AgentRow | null> {
+  const { data } = await admin.from("agents")
+    .select("id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools")
+    .eq("owner_user_id", ownerUserId).eq("is_active", true).eq("role", "specialist")
+    .ilike("name", "%cadastro%");
+  const rows = ((data as unknown as AgentRow[]) || []).filter((a) =>
+    (a.allowed_tools ?? []).includes("cadastrar_cliente") &&
+    (a.allowed_tools ?? []).includes("consultar_cliente") &&
+    (a.max_tokens ?? 0) < SEGMENT_MIN_MAX_TOKENS);
+  if (rows.length === 0) return null;
+  return rows.find((a) => !/rascunho/i.test(a.name)) ?? rows[0]; // líder > rascunho
 }
 
 // ─── memória de sessão (histórico por session_id + resumo rolante) ───────────
@@ -3893,6 +3913,47 @@ serve(async (req) => {
         }
       } else {
         console.log(`[coleta-continuidade] session=${body.sessionId} sem coleta ativa → classificar normalmente`);
+      }
+    }
+
+    // ─── DOC-IDENTIDADE → CADASTRO (#2): turno com RG/CNH lido por OCR ───────────
+    // Quando o turno traz um documento de identidade CLASSIFICADO por OCR (doc_type
+    // identidade/cnh) e o usuário NÃO pediu explicitamente uma peça, roteia DIRETO ao
+    // Especialista Cadastro em modo AÇÃO (ACAO_COM_TOOL → loop de tools → ActionCard
+    // consultar_cliente→cadastrar_cliente). Sem isto, a imagem com OCR era tratada
+    // como insumo de PEÇA (hasReadableDocs) e caía em análise/qualificação, sem
+    // propor cadastro. Conservador: só ativa se (a) há doc de identidade recém-anexado
+    // (janela de 5 min = o anexo do turno), (b) não é pedido de peça, (c) o usuário
+    // tem um Especialista Cadastro com as tools. Senão, segue o fluxo normal.
+    // Precedência: DEPOIS de cadastro-form/agenda/tarefa/continuação-de-coleta,
+    // ANTES do classificador (a imagem OCR não deve virar insumo de peça).
+    if (!isPecaExplicitRequest(body.message)) {
+      const sinceIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recentAtts } = await admin.from("chat_attachments")
+        .select("ocr_fields")
+        .eq("session_id", body.sessionId).eq("is_active", true)
+        .not("ocr_fields", "is", null)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false }).limit(10);
+      const hasIdentityDoc = ((recentAtts as Array<{ ocr_fields?: unknown }> | null) ?? [])
+        .some((a) => isIdentityDoc(parseOcrFields(a.ocr_fields)));
+      if (hasIdentityDoc) {
+        const cad = await resolveCadastroSpecialist(admin, userId);
+        if (cad) {
+          console.log(`[doc-identidade-cadastro] session=${body.sessionId} RG/CNH por OCR → Especialista Cadastro (${cad.name}, ${cad.id})`);
+          const { data: idRunRow, error: idRunErr } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+            target_n3_id: cad.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+            chain: [{ level: 0, path: "doc_identidade_cadastro", intent: "ACAO_COM_TOOL", agent: cad.name }],
+          }).select("id").single();
+          if (idRunErr || !idRunRow) return errResp(500, "db_error", `Falha ao criar run: ${idRunErr?.message}`);
+          const idRunId = (idRunRow as { id: string }).id;
+          await insertStage(admin, body.sessionId, userId, `${cad.name} verificando o cadastro a partir do documento...`, "executing_acao", cad);
+          fireNextStep(idRunId, supabaseUrl, serviceKey, token); // propaga o JWT (leituras RLS-gated do N3)
+          return json(202, { runId: idRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", path: "doc_identidade_cadastro" });
+        }
+        console.log(`[doc-identidade-cadastro] session=${body.sessionId} doc identidade detectado, mas usuário sem Especialista Cadastro — segue fluxo normal`);
       }
     }
 

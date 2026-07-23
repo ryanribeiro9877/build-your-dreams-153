@@ -273,6 +273,22 @@ export function isDocChecklistRequest(message: string): boolean {
   return DOCCHK_ALVO_RE.test(m) && DOCCHK_INTENT_RE.test(m);
 }
 
+// ─── PEÇA EXPLÍCITA: exceção do atalho "documento de identidade → cadastro" ───
+// Quando a recepção anexa um RG/CNH, o fluxo padrão é PROPOR CADASTRO (ActionCard
+// consultar_cliente→cadastrar_cliente). Mas se o usuário PEDE EXPLICITAMENTE uma
+// peça/documento jurídico ("gere a petição com base neste RG"), o turno NÃO deve
+// ser sequestrado para cadastro — segue para a Confecção. Conservador: exige
+// verbo de PRODUÇÃO + substantivo de PEÇA na mesma frase (o AND corta falsos
+// positivos de "segue o RG", "esse é o documento dele", etc.).
+const PECA_VERBO_RE = /\b(ger\w*|fa[çc]\w*|faz\w*|redij\w*|redig\w*|elabor\w*|minut\w*|mont\w*|escrev\w*|prepar\w*|produz\w*|cri\w*|rascunh\w*)\b/i;
+const PECA_ALVO_RE = /\b(pe[çc]a|peti[çc][ãa]o|inicial|contesta[çc][ãa]o|r[ée]plica|tr[ée]plica|recurso|apela[çc][ãa]o|agravo|embargos?|contrato|procura[çc][ãa]o|parecer|notifica[çc][ãa]o|defesa|manifesta[çc][ãa]o|acordo|distrato|requerimento|impugna[çc][ãa]o)\b/i;
+
+export function isPecaExplicitRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  return PECA_VERBO_RE.test(m) && PECA_ALVO_RE.test(m);
+}
+
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451
 // "content policy", 5xx, timeout do watchdog). Um erro NÃO é um turno real do
 // especialista: não pode "encerrar" uma coleta em andamento.

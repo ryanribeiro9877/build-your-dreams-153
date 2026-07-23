@@ -3,8 +3,25 @@ import {
   type IntentCategory, mentionsAttachments, normalizeIntent, routePathFor, shouldClassify,
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
-  isDocChecklistRequest,
+  isDocChecklistRequest, isPecaExplicitRequest,
 } from "./intentClassifier.ts";
+
+// ─── #2: exceção "pedido de peça explícito" do atalho doc-identidade→cadastro ──
+Deno.test("isPecaExplicitRequest: pedidos claros de peça → true", () => {
+  assertEquals(isPecaExplicitRequest("gere a petição inicial com base neste RG"), true);
+  assertEquals(isPecaExplicitRequest("faça uma contestação"), true);
+  assertEquals(isPecaExplicitRequest("redija o contrato de honorários"), true);
+  assertEquals(isPecaExplicitRequest("elabore um recurso de apelação"), true);
+  assertEquals(isPecaExplicitRequest("monte a procuração"), true);
+});
+
+Deno.test("isPecaExplicitRequest: anexar documento sem pedir peça → false", () => {
+  assertEquals(isPecaExplicitRequest("segue o RG do cliente"), false);
+  assertEquals(isPecaExplicitRequest("esse é o documento de identidade dele"), false);
+  assertEquals(isPecaExplicitRequest("cadastra esse cliente"), false);
+  assertEquals(isPecaExplicitRequest("aqui está o RG"), false);
+  assertEquals(isPecaExplicitRequest(""), false);
+});
 
 // ─── CADASTRO-MODELO-A: disparo do formulário (isCadastroClienteRequest) ──────
 Deno.test("isCadastroClienteRequest: pedidos de cadastro → true", () => {
