@@ -46,7 +46,8 @@ import {
   getAgentsForDepartment, toLegacyAgent,
 } from "./juris-cloud/constants";
 import GlobalStyles from "./juris-cloud/GlobalStyles";
-import { useDictation } from "./juris-cloud/useDictation";
+import { toast } from "sonner";
+import { transcribeVoiceMessage } from "@/lib/transcribeVoiceMessage";
 import { useChatSessions } from "./juris-cloud/useChatSessions";
 
 // Rótulo de hora (HH:MM pt-BR) para mensagens locais injetadas no chat.
@@ -303,8 +304,6 @@ export default function JurisCloudOS() {
     setSidebarCollapsed,
   } = useUiPreferences();
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState("");
-  // Ditado por voz — hook isolado (só depende do par input/setInput do chat).
-  const { isRecording, speechSupported, toggleRecording } = useDictation(inputVal, setInputVal);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -871,6 +870,39 @@ export default function JurisCloudOS() {
     }
   }, [pendingMeeting, pendingTask, assistantSessionId]);
 
+  // Trilho A — mensagem de voz (gravar → transcrever → revisar → enviar).
+  // Recebe o Blob do useChatVoiceRecorder (no JurisChatPanel), garante uma sessão
+  // (mesma lógica do handleSend, sem cobrança de tokens — a cobrança é no envio),
+  // transcreve via Whisper e preenche o campo pra revisão. Nunca envia sozinho.
+  const handleVoiceRecorded = async (blob: Blob) => {
+    if (!user) { toast.error("Faça login para usar a mensagem de voz."); return; }
+    let sid = assistantSessionId;
+    if (!sid) {
+      const test = activeTest;
+      if (test) {
+        const { sessionId, error } = await startTestSession(test);
+        if (!sessionId) { toast.error(error ?? "Não consegui iniciar a conversa."); return; }
+        setAssistantSessionId(sessionId); sid = sessionId;
+      } else if (entryAgentId) {
+        const { sessionId, error } = await startSession(entryAgentId, { title: "Meu Assistente" });
+        if (!sessionId) { toast.error(friendlyError(error)); return; }
+        setAssistantSessionId(sessionId); sid = sessionId;
+      } else {
+        toast.error("Configure um agente com IA antes de usar a mensagem de voz.");
+        return;
+      }
+    }
+    const loadingId = toast.loading("Transcrevendo o áudio…");
+    const { ok, text } = await transcribeVoiceMessage(sid, user.id, blob);
+    toast.dismiss(loadingId);
+    if (ok && text) {
+      setInputVal((prev) => (prev.trim() ? prev.trim() + " " : "") + text);
+      toast.success("Transcrição pronta — revise e envie.");
+    } else {
+      toast.error("Não consegui transcrever o áudio. Tente de novo.");
+    }
+  };
+
   const handleSend = async (text?: string, files?: File[]) => {
     const val = (text || inputVal).trim();
     if (!val) return;
@@ -1275,9 +1307,7 @@ export default function JurisCloudOS() {
             onStop={handleStop}
             canStop={!!openRun?.runId}
             stopping={stopping}
-            isRecording={isRecording}
-            toggleRecording={toggleRecording}
-            speechSupported={speechSupported}
+            onVoiceBlob={handleVoiceRecorded}
             isReadOnly={isReadOnly}
             roleLabel={roleLabel}
             activeDeptLabel={activeDeptData?.label || "departamento"}

@@ -19,6 +19,8 @@ import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
 import { formatElapsed, LONG_RUN_NOTICE_MS, type LiveStage } from "./liveStatus";
 import { PecaModal } from "./PecaModal";
 import { truncatePecaPreview } from "./pecaPreview";
+import { useChatVoiceRecorder } from "@/hooks/useChatVoiceRecorder";
+import { TRANSCRIPTION_ENABLED } from "@/lib/transcribeVoiceMessage";
 
 // Detecta se o conteúdo é uma PEÇA/DOCUMENTO jurídico (petição, contestação,
 // procuração, notificação, contrato…) — e não uma resposta de chat comum ou um
@@ -415,10 +417,10 @@ export interface JurisChatPanelProps {
   canStop?: boolean;
   /** Cancelamento em andamento (clique feito, aguardando o backend reagir). */
   stopping?: boolean;
-  isRecording: boolean;
-  toggleRecording: () => void;
-  /** Ditado por voz suportado neste navegador? Se não, o botão de mic é desabilitado. */
-  speechSupported: boolean;
+  /** Trilho A — mensagem de voz: recebe o Blob gravado (grava → transcreve →
+   *  preenche o campo pra revisão). O painel usa useChatVoiceRecorder internamente
+   *  e chama isto no fim da gravação. Ausente ⇒ botão de microfone não aparece. */
+  onVoiceBlob?: (blob: Blob) => void;
   isReadOnly: boolean;
   roleLabel: string;
   activeDeptLabel: string;
@@ -455,9 +457,7 @@ export default function JurisChatPanel({
   onStop,
   canStop,
   stopping,
-  isRecording,
-  toggleRecording,
-  speechSupported,
+  onVoiceBlob,
   isReadOnly,
   roleLabel,
   activeDeptLabel,
@@ -472,6 +472,11 @@ export default function JurisChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+
+  // Trilho A — mensagem de voz: grava um áudio curto (≤2 min) e, ao parar, entrega
+  // o Blob a onVoiceBlob (o pai transcreve via Whisper e preenche este campo).
+  const voice = useChatVoiceRecorder(onVoiceBlob ?? (() => {}));
+  const showMic = TRANSCRIPTION_ENABLED && voice.supported && !!onVoiceBlob;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -602,49 +607,38 @@ export default function JurisChatPanel({
               value={inputVal}
               onChange={e => { setInputVal(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
               onKeyDown={handleKeyDown} rows={1} />
-            <button
-              className={`jc-mic-btn ${isRecording ? "recording" : ""}`}
-              onClick={toggleRecording}
-              disabled={!speechSupported}
-              aria-label={
-                !speechSupported
-                  ? "Ditado por voz não suportado neste navegador"
-                  : isRecording
-                    ? "Parar ditado"
-                    : "Ditar por voz"
-              }
-              title={
-                !speechSupported
-                  ? "Ditado não suportado neste navegador"
-                  : isRecording
-                    ? "Parar ditado"
-                    : "Ditar por voz (fala → texto)"
-              }
-              type="button"
-            >
-              {isRecording ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" strokeWidth="2.2"
-                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="3" y1="3" x2="21" y2="21" />
-                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" strokeWidth="2.2"
-                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="3" width="6" height="12" rx="3" />
-                  <path d="M5 11a7 7 0 0 0 14 0" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
-              )}
-              <span className="jc-sr-only">
-                {!speechSupported ? "Ditado não suportado neste navegador" : isRecording ? "Parar ditado" : "Ditar por voz"}
-              </span>
-            </button>
+            {showMic && (
+              <button
+                className={`jc-mic-btn ${voice.recording ? "recording" : ""}`}
+                onClick={() => (voice.recording ? voice.stop() : voice.start())}
+                aria-label={voice.recording ? "Parar gravação" : "Gravar mensagem de voz"}
+                title={
+                  voice.recording
+                    ? "Parar e transcrever (revise antes de enviar)"
+                    : "Gravar mensagem de voz (áudio → transcrição p/ revisão)"
+                }
+                type="button"
+              >
+                {voice.recording ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
+                       stroke="none" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2.2"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="12" rx="3" />
+                    <path d="M5 11a7 7 0 0 0 14 0" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
+                <span className="jc-sr-only">
+                  {voice.recording ? "Parar gravação" : "Gravar mensagem de voz"}
+                </span>
+              </button>
+            )}
             {thinking && onStop ? (
               // STOP instantâneo: enquanto processa, a seta vira um QUADRADO de stop.
               // Clicar cancela a run DESTA conversa (o botão volta a ser seta ao
@@ -688,7 +682,14 @@ export default function JurisChatPanel({
           </div>
           <div className="jc-input-hint">
             {isReadOnly && <span style={{ color: "#EAB308", marginRight: 8, display: "inline-flex", alignItems: "center", gap: 3 }}><Lock size={10} /> Modo leitura ({roleLabel})</span>}
-            Enter para enviar · Shift+Enter para nova linha
+            {voice.recording ? (
+              <span style={{ color: "#EF4444", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#EF4444", display: "inline-block" }} aria-hidden="true" />
+                Gravando… {formatElapsed(voice.elapsedMs / 1000)} · toque no quadrado para parar e transcrever
+              </span>
+            ) : (
+              <>Enter para enviar · Shift+Enter para nova linha</>
+            )}
           </div>
         </div>
       )}

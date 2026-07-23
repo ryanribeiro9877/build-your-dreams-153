@@ -28,8 +28,7 @@ beforeAll(() => {
 const baseProps = {
   thinking: false, thinkingAgentName: "", liveStage: null, thinkingStartedAt: null,
   showWelcome: false, setShowWelcome: () => {}, inputVal: "", setInputVal: () => {},
-  handleSend: () => {}, isRecording: false, toggleRecording: () => {},
-  speechSupported: false, isReadOnly: false, roleLabel: "", activeDeptLabel: "Assistente",
+  handleSend: () => {}, isReadOnly: false, roleLabel: "", activeDeptLabel: "Assistente",
   canAuthorPeca: false, isRecepcao: false,
 };
 
