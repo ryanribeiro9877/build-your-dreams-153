@@ -68,7 +68,10 @@ export function createOpenAiWhisper(deps: OpenAiWhisperDeps): Transcriber {
     engine: OPENAI_WHISPER_ENGINE,
     async transcribe(input: TranscriberInput): Promise<TranscriptionResult> {
       const ext = extFromMime(input.mimeType);
-      const blob = new Blob([input.bytes], { type: input.mimeType || "audio/webm" });
+      // Cast puramente de tipo (runtime inalterado): sob libs de TS mais estritas,
+      // Uint8Array<ArrayBufferLike> não casa com BlobPart (que exige ArrayBuffer,
+      // não SharedArrayBuffer). Os bytes vêm sempre de um ArrayBuffer comum.
+      const blob = new Blob([input.bytes as unknown as BlobPart], { type: input.mimeType || "audio/webm" });
       const form = new FormData();
       // Nome com extensão reconhecível é obrigatório para o Whisper decodificar.
       form.append("file", blob, `audio.${ext}`);
