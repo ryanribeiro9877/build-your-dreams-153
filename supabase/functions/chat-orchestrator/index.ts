@@ -1951,6 +1951,12 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       const tarefa = args.create_task === true ? " (com tarefa vinculada)" : "";
       return `Agendar atendimento em ${dm}${hora ? ` às ${hora}` : ""}${adv}${cli}${tarefa}.`;
     }
+    case "anexar_documento_cliente": {
+      const nome = String((args as Record<string, unknown>).__file_name ?? args.file_name ?? "documento");
+      const tipo = args.document_type && args.document_type !== "outro" ? ` (${args.document_type})` : "";
+      const cli = (args as Record<string, unknown>).__client_name ? ` de ${(args as Record<string, unknown>).__client_name}` : "";
+      return `Anexar "${nome}"${tipo} ao dossiê${cli}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2018,6 +2024,29 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
     if (tool === "cadastrar_cliente") {
       args = await enrichCadastroArgs(admin, run, args);
       if (ocrIdentityDocId) args = { ...args, __ocr_attachment_id: ocrIdentityDocId };
+    }
+    // B6 (ponte chat→dossiê): o LLM não vê UUIDs de anexo. Resolve o anexo do turno
+    // pelo file_name que o LLM informou (ou o único/último anexo) e carimba o id +
+    // nome (p/ o resumo). O handler lê __attachment_id; a RPC recebe só params limpos.
+    if (tool === "anexar_documento_cliente") {
+      const ref = String(args.file_name ?? "").toLowerCase().trim();
+      let picked: CaseDoc | null = null;
+      if (ref) {
+        picked = caseDocs.find((d) => {
+          const fn = (d.file_name || "").toLowerCase();
+          return fn === ref || fn.includes(ref) || ref.includes(fn);
+        }) ?? null;
+      }
+      if (!picked && caseDocs.length === 1) picked = caseDocs[0];
+      if (!picked && caseDocs.length > 0) picked = caseDocs[caseDocs.length - 1];
+      if (picked) {
+        args = { ...args, __attachment_id: picked.id, __file_name: picked.file_name };
+        if (args.client_id) {
+          const { data: cli } = await admin.from("clients").select("full_name").eq("id", args.client_id as string).maybeSingle();
+          const nm = (cli as { full_name?: string } | null)?.full_name;
+          if (nm) args = { ...args, __client_name: nm };
+        }
+      }
     }
     const route = decideActionRoute(perms, tool);
     const { data: actionRow } = await admin.from("agent_actions").insert({
@@ -2792,7 +2821,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         toolResult = await runReadTool(readClient, run.user_id, name, args);
         await persistEntityCarryover(admin, run.session_id, name, toolResult);
       } else {
-        toolResult = await runWriteTool(userClient, run.user_id, name, args);
+        toolResult = await runWriteTool(userClient, run.user_id, name, args, admin);
       }
       const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: JSON.stringify(toolResult).slice(0, 8000) }];
       await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "read" }] });
@@ -3392,7 +3421,7 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
     const adminUserId = await firstAdminUserId(admin);
     exec = adminUserId ? await routeAsPendencia(userClient, adminUserId, action.tool, action.args) : { ok: false, error: "nenhum admin encontrado" };
   } else {
-    exec = await runWriteTool(userClient, user.id, action.tool, action.args);
+    exec = await runWriteTool(userClient, user.id, action.tool, action.args, admin);
   }
   // Trilho B — glue determinístico do cadastro por documento (OCR). Após um
   // cadastrar_cliente REAL bem-sucedido carimbado com __ocr_attachment_id:

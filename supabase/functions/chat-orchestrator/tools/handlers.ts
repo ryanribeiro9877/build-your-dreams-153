@@ -84,7 +84,19 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
 }
 
 // WRITE — recebe um client com a IDENTIDADE DO USUÁRIO (JWT), para RLS/RBAC valerem.
-export async function runWriteTool(userClient: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
+// Sanitiza o nome do objeto p/ o Storage (ASCII restrito) — chave com acento/ç
+// devolve HTTP 400. Espelha o sanitizeName do frontend (clientDocuments.ts).
+function sanitizeStorageName(name: string): string {
+  const s = (name || "arquivo")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w.-]+/g, "_").slice(0, 120);
+  return s || "arquivo";
+}
+
+// WRITE — recebe o client com JWT do usuário (userClient, p/ RLS/RBAC) e um
+// client service-role (admin) usado por tools que precisam do Storage (cópia de
+// binário entre buckets), que a RLS de storage não cobre de forma estável.
+export async function runWriteTool(userClient: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>, admin: SupabaseClient): Promise<{ ok: boolean; result?: unknown; error?: string }> {
   try {
     switch (name) {
       case "cadastrar_cliente": {
@@ -240,6 +252,39 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { status: data } };
+      }
+      case "anexar_documento_cliente": {
+        // O attachment_id é carimbado deterministicamente em proposeAction (o LLM
+        // não vê UUIDs). Copia o binário chat-attachments → client-documents e cria
+        // a linha; a "baixa no checklist" é automática (status derivado da linha).
+        const attId = String((args as Record<string, unknown>).__attachment_id ?? "");
+        const clientId = String(args.client_id ?? "");
+        const docType = String(args.document_type ?? "").trim() || "outro";
+        if (!clientId) return { ok: false, error: "cliente não informado (resolva com consultar_cliente)." };
+        if (!attId) return { ok: false, error: "não identifiquei qual anexo vincular — nenhum documento foi anexado nesta conversa (ou o nome não bateu)." };
+        // 1. lê o anexo do chat (service-role; o id já veio carimbado do turno).
+        const { data: att } = await admin.from("chat_attachments")
+          .select("storage_path, file_name, mime_type, file_size").eq("id", attId).maybeSingle();
+        if (!att) return { ok: false, error: "anexo não encontrado." };
+        const a = att as { storage_path: string; file_name: string; mime_type: string | null; file_size: number | null };
+        // 2. baixa o binário.
+        const { data: blob, error: dlErr } = await admin.storage.from("chat-attachments").download(a.storage_path);
+        if (dlErr || !blob) return { ok: false, error: "falha ao ler o anexo do chat." };
+        // 3. copia para o dossiê do cliente (bucket client-documents).
+        const newPath = `${clientId}/${Date.now()}_chat_${sanitizeStorageName(a.file_name)}`;
+        const { error: upErr } = await admin.storage.from("client-documents")
+          .upload(newPath, blob, { contentType: a.mime_type ?? undefined, upsert: false });
+        if (upErr) return { ok: false, error: "falha ao salvar o documento no dossiê." };
+        // 4. cria a linha com o JWT do usuário (RBAC + auditoria via trigger).
+        const { data: docId, error: insErr } = await userClient.rpc("attach_client_document", {
+          p_client_id: clientId, p_document_type: docType, p_document_name: a.file_name,
+          p_file_path: newPath, p_file_size: a.file_size ?? null, p_mime_type: a.mime_type ?? null,
+        });
+        if (insErr) {
+          await admin.storage.from("client-documents").remove([newPath]).then(() => {}, () => {}); // remove órfão
+          return { ok: false, error: insErr.message };
+        }
+        return { ok: true, result: { document_id: docId, document_type: docType, document_name: a.file_name } };
       }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };

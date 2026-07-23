@@ -191,6 +191,15 @@ export const TOOLS: Record<string, ToolDef> = {
       conteudo: str("TEXTO INTEGRAL da peça em markdown"),
     }, required: ["client_id", "document_name", "conteudo"] },
   }},
+  anexar_documento_cliente: { type: "function", function: {
+    name: "anexar_documento_cliente",
+    description: "Anexa UM documento JÁ ENVIADO nesta conversa ao dossiê (aba Documentos) de um cliente CADASTRADO e dá baixa no checklist documental. Use quando o usuário pede/confirma mover um anexo do chat para o cadastro do cliente. Resolva o cliente ANTES com consultar_cliente e passe client_id. O documento precisa ter sido anexado NESTA conversa — NUNCA invente. Para vários documentos, chame a tool UMA VEZ POR DOCUMENTO.",
+    parameters: { type: "object", properties: {
+      client_id: str("id do cliente (resolvido via consultar_cliente)"),
+      document_type: str("tipo do documento — quando aplicável, use um destes para fechar o item do checklist: procuracao, contrato_honorarios, declaracao_hipossuficiencia, termo_cooperado, rg, cpf, comprovante, certidao, contrato. Se não souber, use 'outro'."),
+      file_name: str("nome do arquivo anexado a vincular, exatamente como aparece na lista de anexos desta conversa (ex.: 'procuracao.pdf'). Se houver só um anexo, pode omitir."),
+    }, required: ["client_id", "document_type"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",
