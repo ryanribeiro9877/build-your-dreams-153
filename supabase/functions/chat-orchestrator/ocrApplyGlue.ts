@@ -15,14 +15,15 @@
 // criar_pendencia) fica no handleConfirm, com admin (service-role) e userClient
 // (JWT) respectivamente.
 
+import { IDENTITY_DOC_TYPES } from "../_shared/ocr/taxonomy.ts";
+
 export interface OcrFieldLite {
   key: string;
   value: string;
   needsReview?: boolean;
 }
 
-// doc_types que disparam o fluxo de cadastro de pessoa (identidade).
-const IDENTITY_DOC_TYPES = new Set(["identidade", "cnh"]);
+// IDENTITY_DOC_TYPES (identidade/cnh) vem da taxonomia central (_shared/ocr/taxonomy.ts).
 
 // Chave do OcrField → coluna que a RPC apply_ocr_client_fields entende. Só campos
 // SEGUROS de auto-preencher (atribuíveis ao titular). full_name/doc_type ficam de fora.

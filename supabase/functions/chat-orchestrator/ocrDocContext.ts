@@ -9,18 +9,9 @@
 // key/value/needsReview) + `ocr_confidence`. Só entram anexos que têm um campo
 // `doc_type` (senão o bloco fica vazio e nada muda no comportamento atual).
 
-const DOC_TYPE_KEY = "doc_type";
+import { DOC_TYPE_LABELS } from "../_shared/ocr/taxonomy.ts";
 
-/** Rótulos legíveis por tipo de documento. */
-const DOC_TYPE_LABELS: Record<string, string> = {
-  identidade: "documento de identidade (RG)",
-  cnh: "CNH",
-  comprovante_residencia: "comprovante de residência",
-  extrato_inss: "extrato do INSS",
-  contracheque: "contracheque",
-  procuracao: "procuração",
-  outro: "outro documento",
-};
+const DOC_TYPE_KEY = "doc_type";
 
 interface OcrFieldLite {
   key: string;

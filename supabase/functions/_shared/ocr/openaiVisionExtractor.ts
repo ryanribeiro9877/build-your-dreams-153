@@ -28,6 +28,7 @@ import {
 } from "./types.ts";
 import { extractDeterministicFields } from "./deterministic.ts";
 import { assertOpenAiDirect } from "./llmReinforcement.ts";
+import { DOC_TYPES, DOC_TYPE_FIELD_KEY, docTypePromptList } from "./taxonomy.ts";
 
 export const OPENAI_VISION_ENGINE = "openai-vision";
 
@@ -50,21 +51,14 @@ const VISION_FIELD_KEYS = [
 // no mapa de cadastro do consumidor — portanto nunca auto-preenche `clients`.
 // O orquestrador lê o doc_type para decidir o fluxo agentic (ex.: identidade →
 // propor cadastro).
-export const DOC_TYPE_VALUES = [
-  "identidade", "cnh", "comprovante_residencia", "extrato_inss",
-  "contracheque", "procuracao", "outro",
-] as const;
-export const DOC_TYPE_FIELD_KEY = "doc_type";
-
 const VISION_PROMPT =
-  "Você é um OCR de documentos brasileiros (RG, CPF, CNH, comprovantes). Analise " +
-  "a IMAGEM e responda SOMENTE em JSON, sem texto fora do JSON, no formato:\n" +
+  "Você é um OCR de documentos brasileiros (RG, CPF, CNH, comprovantes, contratos, " +
+  "peças). Analise a IMAGEM e responda SOMENTE em JSON, sem texto fora do JSON, no formato:\n" +
   '{"text":"<transcrição LITERAL de todo o texto visível, linha a linha>",' +
   '"doc_type":"<tipo do documento>",' +
   '"fields":[{"key":"<chave>","value":"<valor>","confidence":<número 0..1>}]}\n' +
-  "doc_type deve ser UM de: identidade (RG/carteira de identidade), cnh, " +
-  "comprovante_residencia, extrato_inss, contracheque, procuracao, outro. " +
-  "Escolha o mais adequado; na dúvida use \"outro\".\n" +
+  "Classifique doc_type pelo CONTEÚDO (NUNCA pelo nome do arquivo). doc_type deve ser UM de: " +
+  docTypePromptList() + ". Escolha o mais adequado; na dúvida use \"outro\".\n" +
   "Chaves permitidas em fields: full_name, cpf, rg, rg_issuer (órgão emissor, ex.: " +
   "SSP/MG), rg_uf, birth_date (dd/mm/aaaa), mother_name, father_name, nationality, " +
   "gender (masculino/feminino), marital_status, cep, address, city, state.\n" +
@@ -252,7 +246,7 @@ export function createOpenAiVisionExtractor(deps: OpenAiVisionDeps): Extractor {
       // Fora de VISION_FIELD_KEYS/mapa de cadastro → nunca auto-preenche clients.
       const fields: OcrField[] = [...piiFields];
       const docTypeVal = (raw.doc_type || "").trim().toLowerCase();
-      if ((DOC_TYPE_VALUES as readonly string[]).includes(docTypeVal)) {
+      if ((DOC_TYPES as readonly string[]).includes(docTypeVal)) {
         fields.push({
           key: DOC_TYPE_FIELD_KEY,
           value: docTypeVal,
