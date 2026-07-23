@@ -36,7 +36,12 @@ interface DocEvent {
 // só habilita a mudança de status por recepção/sócio.
 const STATUS_CYCLE = ["pendente", "recebido", "validado", "rejeitado"] as const;
 
-function statusBadge(status: string) {
+function statusBadge(status: string, origem?: string | null) {
+  // Documento GERADO pelo sistema e ainda "pendente" = aguardando a assinatura/
+  // retorno do cliente — o rótulo cru "Pendente" confunde (parece documento em falta).
+  if (origem === "sistema" && status === "pendente") {
+    return <span className="cli-chip p">Aguardando assinatura/retorno</span>;
+  }
   const meta = DOC_STATUS_META[status] ?? { label: status, cls: "n" };
   return <span className={`cli-chip ${meta.cls}`}>{meta.label}</span>;
 }
@@ -51,7 +56,17 @@ function eventLabel(ev: DocEvent): string {
   const d = ev.details ?? {};
   const name = typeof d.document_name === "string" ? ` · ${d.document_name}` : "";
   switch (ev.event) {
-    case "upload": return `Enviado${name}`;
+    case "upload": {
+      // "upload" é o tipo cru do evento — não diz nada ao usuário. Mostra o NOME do
+      // documento + a ORIGEM: gerado pelo sistema (aguardando assinatura) vs. enviado.
+      const nm = typeof d.document_name === "string" && d.document_name ? d.document_name : "documento";
+      const orig = d.origem;
+      if (orig === "sistema") return `Gerado pelo sistema — ${nm}`;
+      const quem = orig === "cliente" ? "pelo cliente"
+        : orig === "recepcao" ? "pela recepção"
+        : orig === "advogado" ? "pelo advogado" : null;
+      return quem ? `Enviado ${quem} — ${nm}` : `Enviado — ${nm}`;
+    }
     case "exclusao": return `Excluído${name}`;
     case "validacao": return "Validado";
     case "rejeicao": return "Rejeitado";
@@ -234,7 +249,7 @@ export function DocumentosTab({ client }: { client: ClientFull }) {
                     </div>
                   </div>
                   <span style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto", flexShrink: 0 }}>
-                    {statusBadge(doc.status)}
+                    {statusBadge(doc.status, doc.origem)}
                     <select className="cli-select" style={{ padding: "6px 26px 6px 10px", fontSize: 12 }}
                       value={doc.status} disabled={busyId === doc.id}
                       onChange={e => void changeStatus(doc, e.target.value)}
@@ -392,7 +407,7 @@ export function PendenciasTab({ client }: { client: ClientFull }) {
   const { tasks, commentCounts } = useClientTasks(client.id);
   if (tasks === null) return <TabLoading />;
   const list = tasks.filter(t => t.is_pendencia);
-  if (list.length === 0) return <EmptyState icon="⚑" title="Nenhuma pendência registrada" />;
+  if (list.length === 0) return <EmptyState icon="⚑" title="Nenhuma pendência registrada" hint="Pendências de documentos ficam na aba Documentos (checklist e status de cada documento)." />;
   return (
     <div className="cli-card lift">
       <div className="cli-sec-title">Pendências · {list.length}</div>
