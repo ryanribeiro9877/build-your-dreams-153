@@ -1957,6 +1957,15 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       const cli = (args as Record<string, unknown>).__client_name ? ` de ${(args as Record<string, unknown>).__client_name}` : "";
       return `Anexar "${nome}"${tipo} ao dossiê${cli}.`;
     }
+    case "atualizar_tarefa": {
+      const alvo = args.task_titulo ? `"${args.task_titulo}"` : "o card";
+      const partes: string[] = [];
+      if (args.status) partes.push(`status → ${args.status}`);
+      if (args.prazo) partes.push(`prazo → ${args.prazo}`);
+      if (args.prioridade) partes.push(`prioridade → ${args.prioridade}`);
+      if (args.novo_titulo) partes.push(`título → "${args.novo_titulo}"`);
+      return `Atualizar ${alvo}: ${partes.join("; ") || "sem alterações"}.`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2091,6 +2100,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3. PROTOCOLAR/JUNTAR: se pede para PROTOCOLAR uma peça, JUNTAR documento ao processo ou dar entrada no ProJuris/cartório → "Especialista Cadastro ProJuris" ou especialista de protocolo. NÃO confunda com DISTRIBUIR caso (regra 3B).
 3B. DISTRIBUIR CASO/PROCESSO (objeto = CASO): se pede para DISTRIBUIR ou ENCAMINHAR um CASO, PROCESSO, AÇÃO ou número CNJ — a um Kanban/board por tipo de ação, a um ADVOGADO, a um setor, "ao sócio", "à recepção" ou a pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua ESSE PROCESSO à Ana", "encaminhe a AÇÃO Y ao previdenciário") → "Especialista Distribuição". EXIGE um objeto de CASO/PROCESSO/ação/número. NUNCA roteie para cá se o objeto for TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO — isso é a regra 3C. NUNCA encaminhe distribuição de caso ao Cadastro.
 3C. CRIAR TAREFA/PENDÊNCIA/LEMBRETE/REUNIÃO INTERNA (objeto = TAREFA): se pede para ATRIBUIR, CRIAR, ABRIR, MARCAR ou AGENDAR uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente) — ex.: "atribua uma tarefa a Kailane...", "abra uma pendência para o setor X", "crie um lembrete para amanhã", "marque uma reunião entre nós dois às 15h" → "Especialista Kanban de Pendências" (tool criar_pendencia; o campo tipo aceita "reuniao" para reunião interna). O objeto é uma TAREFA/PENDÊNCIA/REUNIÃO INTERNA — NÃO um caso/processo e NÃO um atendimento de cliente.
+3C-bis. MOVER/EDITAR/COMENTAR TAREFA EXISTENTE (objeto = TAREFA que já existe): se pede para MOVER, MUDAR STATUS/PRAZO/PRIORIDADE, RENOMEAR ou COMENTAR uma tarefa/pendência/card que JÁ existe — ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou" → "Especialista Kanban de Pendências" (tools atualizar_tarefa e comentar_card; resolva o card com consultar_tarefas ANTES). É EDITAR uma tarefa existente, NÃO criar uma nova (3C).
 3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.

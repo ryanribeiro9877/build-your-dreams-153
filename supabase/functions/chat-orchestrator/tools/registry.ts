@@ -200,6 +200,18 @@ export const TOOLS: Record<string, ToolDef> = {
       file_name: str("nome do arquivo anexado a vincular, exatamente como aparece na lista de anexos desta conversa (ex.: 'procuracao.pdf'). Se houver só um anexo, pode omitir."),
     }, required: ["client_id", "document_type"] },
   }},
+  atualizar_tarefa: { type: "function", function: {
+    name: "atualizar_tarefa",
+    description: "Move ou edita um card/tarefa do Kanban que JÁ existe (status, prazo, prioridade ou título). Resolva o card ANTES com consultar_tarefas e passe task_id. NÃO cria tarefa nova (criar é criar_pendencia).",
+    parameters: { type: "object", properties: {
+      task_id: str("id do card (obtido via consultar_tarefas)"),
+      task_titulo: str("título do card — apenas para exibição na confirmação"),
+      status: str("novo status: a fazer, em andamento, bloqueada, aguardando validação, concluída ou cancelada"),
+      prazo: str("novo prazo em ISO 8601 (fuso America/Bahia); não pode ser passado"),
+      prioridade: str("nova prioridade: crítica, alta, média ou baixa"),
+      novo_titulo: str("novo título do card (renomear)"),
+    }, required: ["task_id"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",

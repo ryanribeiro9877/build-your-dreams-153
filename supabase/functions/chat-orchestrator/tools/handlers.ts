@@ -286,6 +286,19 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         }
         return { ok: true, result: { document_id: docId, document_type: docType, document_name: a.file_name } };
       }
+      case "atualizar_tarefa": {
+        // Gate = kanban_can_edit_task dentro da RPC (o chat não pode mais que a tela).
+        // task_titulo é só display do card; não vai à RPC.
+        const { data, error } = await userClient.rpc("atualizar_tarefa", {
+          p_task_id: args.task_id,
+          p_status: args.status ?? null,
+          p_prazo: args.prazo ?? null,
+          p_prioridade: args.prioridade ?? null,
+          p_titulo: args.novo_titulo ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }
