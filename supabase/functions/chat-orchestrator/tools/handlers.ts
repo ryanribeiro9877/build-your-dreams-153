@@ -299,6 +299,14 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "comentar_card": {
+        // Gate = kanban_can_edit_task dentro de add_task_comment (backend pronto).
+        const { data, error } = await userClient.rpc("add_task_comment", {
+          p_task_id: args.task_id, p_body: args.comentario,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }

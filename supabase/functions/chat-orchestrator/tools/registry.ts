@@ -212,6 +212,15 @@ export const TOOLS: Record<string, ToolDef> = {
       novo_titulo: str("novo título do card (renomear)"),
     }, required: ["task_id"] },
   }},
+  comentar_card: { type: "function", function: {
+    name: "comentar_card",
+    description: "Adiciona um comentário a um card/tarefa do Kanban. Resolva o card ANTES com consultar_tarefas e passe task_id.",
+    parameters: { type: "object", properties: {
+      task_id: str("id do card (obtido via consultar_tarefas)"),
+      task_titulo: str("título do card — apenas para exibição na confirmação"),
+      comentario: str("texto do comentário"),
+    }, required: ["task_id", "comentario"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",

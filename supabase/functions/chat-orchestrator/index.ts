@@ -1966,6 +1966,8 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       if (args.novo_titulo) partes.push(`título → "${args.novo_titulo}"`);
       return `Atualizar ${alvo}: ${partes.join("; ") || "sem alterações"}.`;
     }
+    case "comentar_card":
+      return `Comentar em ${args.task_titulo ? `"${args.task_titulo}"` : "o card"}: "${args.comentario}".`;
     default: return `Executar ${tool}.`;
   }
 }
