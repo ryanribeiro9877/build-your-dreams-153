@@ -10,7 +10,8 @@ import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { RequireActivation } from "@/components/RequireActivation";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
-import { DashboardRoute, SocioRoute, RecepcaoRoute, TechOnlyRoute } from "@/components/DashboardRoute";
+import { RecepcaoRoute } from "@/components/DashboardRoute";
+import { MenuRoute } from "@/components/MenuRoute";
 
 // E5: chunk lazy obsoleto após um redeploy (hash mudou no Cloudflare Pages) faz o import()
 // rejeitar — sintoma: o menu destaca mas a rota "não abre" (Organograma/Crons).
@@ -193,13 +194,13 @@ const App = () => (
               <Route path="/clientes/:id/editar" element={<ProtectedRoute><ClientEdit /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
-              <Route path="/dashboard-ia" element={<TechOnlyRoute><DashboardIA /></TechOnlyRoute>} />
-              <Route path="/dashboard-operacional" element={<SocioRoute><DashboardOperacional /></SocioRoute>} />
-              <Route path="/dashboard-prazos" element={<SocioRoute><DashboardPrazos /></SocioRoute>} />
+              <Route path="/dashboard" element={<MenuRoute menuKey="dashboard"><Dashboard /></MenuRoute>} />
+              <Route path="/dashboard-ia" element={<MenuRoute menuKey="dashboard_ia"><DashboardIA /></MenuRoute>} />
+              <Route path="/dashboard-operacional" element={<MenuRoute menuKey="recepcao_juridico"><DashboardOperacional /></MenuRoute>} />
+              <Route path="/dashboard-prazos" element={<MenuRoute menuKey="prazos_audiencias"><DashboardPrazos /></MenuRoute>} />
               <Route path="/organograma" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
 
-              <Route path="/eficiencia" element={<ProtectedRoute><EfficiencyKPIs /></ProtectedRoute>} />
+              <Route path="/eficiencia" element={<MenuRoute menuKey="kpis"><EfficiencyKPIs /></MenuRoute>} />
               <Route path="/tokens" element={<ProtectedRoute><Tokens /></ProtectedRoute>} />
               <Route path="/admin/tokens" element={<AdminRoute><AdminTokens /></AdminRoute>} />
               <Route path="/admin/ui" element={<AdminRoute><AdminUiEvents /></AdminRoute>} />
@@ -222,9 +223,9 @@ const App = () => (
               <Route path="/admin/crons" element={<Navigate to="/tech/crons" replace />} />
               <Route path="/admin/importar" element={<Navigate to="/tech/importar" replace />} />
               <Route path="/sistema/chat" element={<ProtectedRoute><ChatWithAgent /></ProtectedRoute>} />
-              <Route path="/sistema/tarefas" element={<ProtectedRoute><MyInbox /></ProtectedRoute>} />
+              <Route path="/sistema/tarefas" element={<MenuRoute menuKey="tarefas"><MyInbox /></MenuRoute>} />
               <Route path="/sistema/equipe" element={<ProtectedRoute><TeamDashboard /></ProtectedRoute>} />
-              <Route path="/sistema/kanban" element={<ProtectedRoute><KanbanBoard /></ProtectedRoute>} />
+              <Route path="/sistema/kanban" element={<MenuRoute menuKey="kanban"><KanbanBoard /></MenuRoute>} />
               <Route path="/sistema/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
               <Route path="/sistema/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
               <Route path="/sistema/equipe/atribuir" element={<ProtectedRoute><AssignTask /></ProtectedRoute>} />

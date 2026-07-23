@@ -8,7 +8,7 @@ import {
   type SearchClientRow, RestrictedAccess,
   StatusBadge, EmptyState, formatDateBR,
 } from "@/components/clients/shared";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useMenuAccess } from "@/hooks/useMenuAccess";
 import {
   ClientFiltersPanel, type ClientFilters, EMPTY_FILTERS, buildFiltros,
 } from "@/components/clients/ClientFiltersPanel";
@@ -18,7 +18,7 @@ const PAGE_SIZE = 20;
 
 export default function Clients() {
   const { workspace } = useMyWorkspace();
-  const { canAccessClients } = usePermissions();
+  const { canSeeMenu } = useMenuAccess();
   const navigate = useNavigate();
 
   const [clients, setClients] = useState<SearchClientRow[]>([]);
@@ -83,10 +83,11 @@ export default function Clients() {
   const totalPages = Math.ceil(clients.length / PAGE_SIZE);
   const paginated = useMemo(() => clients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [clients, page]);
 
-  // DEF-2: guard de rota usa a MESMA fonte de verdade do menu (canAccessClients =
-  // userRole "receptionist"). Clientes é EXCLUSIVO da recepção — sem isenção de
-  // sócio/admin/diretor por URL direta.
-  if (workspace && !canAccessClients) return <RestrictedAccess />;
+  // Admin chave-mestra: o gate in-page usa a MESMA fonte do menu (canSeeMenu).
+  // Admin vê tudo; um override "clientes" (grant) libera a tela — e o search_clients
+  // do banco (que já honra has_menu_grant) devolve os dados. Sem grant e sem ser
+  // recepção/admin, cai em RestrictedAccess (e o backend também negaria: 42501).
+  if (workspace && !canSeeMenu("clientes")) return <RestrictedAccess />;
 
   return (
     <div className="cli-root">

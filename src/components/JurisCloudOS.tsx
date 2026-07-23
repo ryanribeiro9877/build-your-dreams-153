@@ -21,8 +21,10 @@ import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
   Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
+  ListTodo, LayoutGrid, ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useMenuAccess } from "@/hooks/useMenuAccess";
 
 // Sub-components
 import JurisSidebar from "./juris-cloud/JurisSidebar";
@@ -80,6 +82,7 @@ export default function JurisCloudOS() {
   const closeCreateEmployee = () => setSearchParams({});
   const { user, signOut, hasRole } = useAuth();
   const { canAccessDepartment, canSeeMenuItem, canSeeAgentRole, canAccessAdmin, canAccessClients, isReadOnly, roleLabel, visibility } = usePermissions();
+  const { canSeeMenu } = useMenuAccess(); // Admin chave-mestra: fonte única de acesso a menu
   useRealtimeNotifications();
   useBottleneckDetection(navigate);
   const { tokenBalance, consumeTokensWithRef, refundTokens } = useTokenBalance(navigate);
@@ -1166,31 +1169,33 @@ export default function JurisCloudOS() {
     { id: "tokens", label: "Meus Tokens", icon: Coins, color: ACCENT, action: () => navigate("/tokens"), show: true },
     { id: "usuarios-criar", label: "Criar Funcionário", icon: UserPlus, color: ACCENT, action: () => openCreateEmployee(), show: canAccessAdmin },
     { id: "usuarios-listar", label: "Listar Funcionário", icon: Users, color: ACCENT_SOFT, action: () => navigate("/admin/funcionarios"), show: canAccessAdmin },
+    { id: "permissoes-menu", label: "Permissões de menu", icon: ShieldCheck, color: ACCENT, action: () => navigate("/configuracoes/permissoes"), show: canAccessAdmin },
     { id: "perfil", label: "Meu Perfil", icon: User, color: ACCENT_SOFT, action: () => navigate("/perfil"), show: canSeeMenuItem("perfil") },
   ];
 
   // Menu items
+  // Admin chave-mestra: cada item canônico usa canSeeMenu(<chave>) — admin vê tudo,
+  // demais seguem default do papel + override. Itens tech/importar/sair/organograma
+  // não são chaves canônicas e mantêm o gate próprio.
   const MENU_ITEMS: MenuItem[] = [
-    { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenuItem("clientes") && canAccessClients },
-    { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenuItem("agenda") },
-    { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenuItem("agenda") },
-    { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenuItem("admin") && canAccessAdmin },
-    // Dashboard restrito a tech + sócio (role_templates.code). Mesmo critério do
-    // guard de rota (DashboardRoute), para link e rota ficarem 1:1.
-    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: isDashboardRole(workspace?.role_template?.code) && !hasRole("tech") },
-    // Dashboard IA (9.2) — mesmo gate tech+sócio (role_templates.code) e rota
-    // guardada por DashboardRoute, para link e rota ficarem 1:1.
-    { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: isTechRole(workspace?.role_template?.code) },
-    { id: "dashboard_operacional", label: "Recepção & Jurídico", icon: Users, color: ACCENT, action: () => navigate("/dashboard-operacional"), show: isSocioRole(workspace?.role_template?.code) },
-    { id: "dashboard_prazos", label: "Prazos & Audiências", icon: Clock, color: ACCENT, action: () => navigate("/dashboard-prazos"), show: isSocioRole(workspace?.role_template?.code) },
+    { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenu("clientes") },
+    { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
+    { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
+    { id: "tarefas", label: "Tarefas", icon: ListTodo, color: ACCENT, action: () => navigate("/sistema/tarefas"), show: canSeeMenu("tarefas") },
+    { id: "kanban", label: "Kanban", icon: LayoutGrid, color: ACCENT, action: () => navigate("/sistema/kanban"), show: canSeeMenu("kanban") },
+    { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenu("administracao") },
+    { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenu("dashboard") },
+    { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: canSeeMenu("dashboard_ia") },
+    { id: "dashboard_operacional", label: "Recepção & Jurídico", icon: Users, color: ACCENT, action: () => navigate("/dashboard-operacional"), show: canSeeMenu("recepcao_juridico") },
+    { id: "dashboard_prazos", label: "Prazos & Audiências", icon: Clock, color: ACCENT, action: () => navigate("/dashboard-prazos"), show: canSeeMenu("prazos_audiencias") },
     { id: "organograma", label: "Organograma", icon: Network, color: ACCENT_SOFT, action: () => navigate("/organograma"), show: false /* removido do menu do tech */ },
-    { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenuItem("eficiencia") && !hasRole("tech") },
+    { id: "eficiencia", label: "KPIs Eficiência", icon: Activity, color: ACCENT, action: () => navigate("/eficiencia"), show: canSeeMenu("kpis") },
     { id: "agentes", label: "Agentes", icon: Bot, color: ACCENT, action: () => navigate("/tech/agentes"), show: hasRole("tech") },
     { id: "testes", label: "Testes", icon: FlaskConical, color: ACCENT, action: () => navigate("/tech/testes"), show: hasRole("tech") },
     { id: "crons", label: "Crons", icon: Clock, color: ACCENT_SOFT, action: () => navigate("/tech/crons"), show: hasRole("tech") },
     { id: "providers", label: "Providers", icon: Settings, color: ACCENT, action: () => navigate("/tech/providers"), show: hasRole("tech") },
     { id: "importar", label: "Importar dados", icon: Upload, color: ACCENT_SOFT, action: () => navigate("/tech/importar"), show: isRecepcaoRole(workspace?.role_template?.code) },
-    { id: "configuracoes", label: "Configurações", icon: Settings, color: ACCENT, action: () => {}, show: CONFIG_MENU_CHILDREN.some(c => c.show), children: CONFIG_MENU_CHILDREN },
+    { id: "configuracoes", label: "Configurações", icon: Settings, color: ACCENT, action: () => {}, show: canSeeMenu("configuracoes") && CONFIG_MENU_CHILDREN.some(c => c.show), children: CONFIG_MENU_CHILDREN },
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
 
