@@ -1979,6 +1979,8 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Reagendar o atendimento${args.atendimento_desc ? ` de ${args.atendimento_desc}` : ""} para ${args.nova_data} ${args.nova_hora}.`;
     case "cancelar_atendimento":
       return `Cancelar o atendimento${args.atendimento_desc ? ` de ${args.atendimento_desc}` : ""}${args.motivo ? ` (motivo: ${args.motivo})` : ""}.`;
+    case "criar_audiencia":
+      return `Marcar audiência${args.tipo ? ` de ${args.tipo}` : ""}${args.processo_desc ? ` do processo ${args.processo_desc}` : ""} para ${args.data} ${args.hora}${args.local ? `, ${args.local}` : ""}.`;
     default: return `Executar ${tool}.`;
   }
 }
@@ -2118,6 +2120,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3D-bis. REAGENDAR/CANCELAR ATENDIMENTO EXISTENTE (objeto = atendimento que já existe): se pede para REAGENDAR/REMARCAR ou CANCELAR um atendimento/reunião de cliente que JÁ existe — ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina" → "Especialista Agenda de Atendimento" (tools reagendar_atendimento/cancelar_atendimento; resolva o atendimento com minha_agenda ANTES). É alterar um atendimento existente, NÃO criar um novo (3D).
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
 3E-bis. ATUALIZAR/CORRIGIR CLIENTE EXISTENTE (objeto = cliente que já existe): se pede para MUDAR ou CORRIGIR um dado de cadastro de um cliente que já existe — telefone, email, endereço, data de nascimento, status — ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto" → "Especialista Cadastro" (tool atualizar_cliente; resolva o cliente com consultar_cliente ANTES). É EDITAR um cliente existente, NÃO cadastrar um novo (3E). CPF e nome não mudam pelo chat.
+3F. AUDIÊNCIA (objeto = audiência de um PROCESSO): se pede para MARCAR/CRIAR uma AUDIÊNCIA de um processo ("marca a audiência do processo do Adalberto para 12/08 10h"), ou CONSULTAR audiências ("quais audiências dessa semana?") → o agente resolve o processo com consultar_processo e usa criar_audiencia / consultar_audiencias. É audiência JUDICIAL de um processo — NÃO confunda com reunião/atendimento de cliente na Agenda (3D).
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.

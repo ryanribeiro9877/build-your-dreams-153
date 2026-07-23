@@ -38,6 +38,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       const { data } = await client.rpc("minha_agenda", rpcArgs);
       return data ?? {};
     }
+    case "consultar_audiencias": {
+      const { data } = await client.rpc("consultar_audiencias", {
+        p_de: args.de, p_ate: args.ate, p_processo: args.process_id ?? null,
+      });
+      return data ?? [];
+    }
     case "consultar_tarefas": {
       let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));
@@ -337,6 +343,14 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
       case "cancelar_atendimento": {
         const { data, error } = await userClient.rpc("cancelar_atendimento", {
           p_id: args.meeting_id, p_motivo: args.motivo ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
+      case "criar_audiencia": {
+        const { data, error } = await userClient.rpc("criar_audiencia", {
+          p_process_id: args.process_id, p_data: args.data, p_hora: args.hora,
+          p_tipo: args.tipo, p_local: args.local ?? null, p_notes: args.notes ?? null,
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };

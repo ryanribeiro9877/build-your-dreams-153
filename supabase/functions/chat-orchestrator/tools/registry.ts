@@ -9,7 +9,7 @@ export interface ToolDef {
 // de 3 camadas (CHAT_TOOLS_ENABLED, default OFF).
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
-  "consultar_cep", "get_revisao_peca_context", "minha_agenda",
+  "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -260,6 +260,28 @@ export const TOOLS: Record<string, ToolDef> = {
       atendimento_desc: str("descrição do atendimento — só para exibição"),
       motivo: str("motivo do cancelamento (opcional)"),
     }, required: ["meeting_id"] },
+  }},
+  criar_audiencia: { type: "function", function: {
+    name: "criar_audiencia",
+    description: "Marca uma audiência para um processo. Resolva o processo ANTES com consultar_processo e passe process_id. Data futura. Gate: advogado do processo, sócio ou admin.",
+    parameters: { type: "object", properties: {
+      process_id: str("id do processo (via consultar_processo)"),
+      processo_desc: str("número/descrição do processo — só para exibição"),
+      data: str("data AAAA-MM-DD"),
+      hora: str("horário HH:MM"),
+      tipo: str("tipo da audiência (ex.: Instrução, Conciliação, Una)"),
+      local: str("local/link (opcional)"),
+      notes: str("observações (opcional)"),
+    }, required: ["process_id", "data", "hora", "tipo"] },
+  }},
+  consultar_audiencias: { type: "function", function: {
+    name: "consultar_audiencias",
+    description: "Consulta audiências num intervalo de datas (todas, ou de um processo específico). Escopo por papel (advogado vê as suas; sócio/admin/recepção todas).",
+    parameters: { type: "object", properties: {
+      de: str("data inicial AAAA-MM-DD"),
+      ate: str("data final AAAA-MM-DD"),
+      process_id: str("filtrar por um processo (opcional)"),
+    }, required: ["de", "ate"] },
   }},
   delegate: { type: "function", function: {
     name: "delegate",
