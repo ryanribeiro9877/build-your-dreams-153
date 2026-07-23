@@ -18,6 +18,10 @@ Deno.test("doc com doc_type gera bloco com tipo, campos e marca [REVISAR]", () =
   assertStringIncludes(out, "0.91");
   // doc_type não aparece como bullet de campo
   assert(!out.includes("• doc_type"), "doc_type não deve virar bullet");
+  // guia de ação anexada (cadastro novo + CPF existente = pendência de revisão)
+  assertStringIncludes(out, "consultar_cliente");
+  assertStringIncludes(out, "cadastrar_cliente");
+  assertStringIncludes(out, "não duplique");
 });
 
 Deno.test("doc sem doc_type → bloco vazio", () => {

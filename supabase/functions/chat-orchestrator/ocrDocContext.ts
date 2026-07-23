@@ -84,5 +84,21 @@ export function buildOcrDocContext(docs: OcrDoc[]): string {
     "DOCUMENTO(S) IDENTIFICADO(S) POR OCR (anexo do chat):",
     ...lines,
     "Campos marcados [REVISAR] têm baixa confiança — NÃO afirme como fato; trate como a preencher.",
+    "",
+    OCR_ACTION_GUIDANCE,
   ].join("\n");
 }
+
+// Guia de ação (Trilho B) anexada ao bloco quando há documento classificado.
+// Vive AQUI (código versionado/testável), não no prompt do agente em prod: a
+// orientação é da SITUAÇÃO (o documento), não da persona, e vale para qualquer
+// especialista que atender o turno. Cobre cadastro novo (glue determinístico
+// aplica os campos + cria a pendência após a confirmação) e CPF já cadastrado
+// (propõe pendência de revisão no cliente existente — nunca duplica).
+export const OCR_ACTION_GUIDANCE = [
+  "COMO AGIR COM O DOCUMENTO ACIMA (sempre PROPONHA via ActionCard; nunca execute sem a confirmação do usuário):",
+  "1. Se for documento de identidade (identidade/CNH) e tiver CPF: chame consultar_cliente com esse CPF para verificar se a pessoa já está cadastrada.",
+  "2. Se NÃO existir cliente com esse CPF: proponha cadastrar_cliente com o nome e o CPF lidos do documento. Os demais campos do documento serão preenchidos automaticamente após a confirmação, e uma pendência de \"completar cadastro\" será criada listando o que faltar — NÃO precisa listar campo por campo você mesmo.",
+  "3. Se o CPF JÁ estiver cadastrado: NUNCA cadastre de novo (não duplique). Em vez disso, proponha criar_pendencia apontando o cliente existente (cliente_id), título \"Revisar cadastro (documento recebido)\", descrevendo os dados lidos do documento, para revisão humana.",
+  "4. Para outros tipos de documento (comprovante de residência, extrato do INSS, contracheque, procuração): use os dados como contexto; se identificar uma ação pertinente, proponha-a via ActionCard.",
+].join("\n");
