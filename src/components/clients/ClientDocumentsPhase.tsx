@@ -40,7 +40,15 @@ export function ClientDocumentsPhase({ clientId, clientName, userId, onDone }: {
     (async () => {
       if (!userId) { setGenLoading(false); return; }
       const r = await runCooperadoOnboarding(clientId, userId);
-      if (!cancelled) { setRes(r); setGenLoading(false); }
+      if (cancelled) return;
+      setRes(r); setGenLoading(false);
+      // Feedback imediato + idempotente: distingue gerados-agora de já-existentes
+      // (23505/checagem prévia contam como "já gerados", nunca como erro vermelho).
+      const novos = r.generated.filter((g) => g.ok && !g.alreadyExisted).length;
+      const falhas = r.generated.filter((g) => !g.ok).length;
+      if (novos > 0) toast.success(`${novos} documento${novos > 1 ? "s" : ""} gerado${novos > 1 ? "s" : ""}`);
+      else if (falhas === 0 && r.generated.length > 0) toast.info("Documentos já gerados para este cliente");
+      if (falhas > 0) toast.error(`${falhas} documento${falhas > 1 ? "s" : ""} não pôde ser gerado`);
     })();
     return () => { cancelled = true; };
   }, [clientId, userId]);

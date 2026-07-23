@@ -28,6 +28,8 @@ export interface GeneratedDocResult {
   label: string;
   ok: boolean;
   filePath?: string;
+  /** true = já existia (checagem prévia OU corrida 23505); NÃO foi gerado agora. */
+  alreadyExisted?: boolean;
   /** campos sem valor no template (viraram [A PREENCHER]) — revisão humana. */
   missing?: string[];
   error?: string;
@@ -77,6 +79,7 @@ export async function generateCooperadoDocuments(
         documentType: def.documentType,
         label: def.label,
         ok: true,
+        alreadyExisted: true,
         filePath: existingByType.get(def.documentType) ?? undefined,
       });
     }
@@ -126,7 +129,13 @@ export async function generateCooperadoDocuments(
       if (insErr) {
         // Desfaz o binário órfão se o registro falhar (mesmo cuidado do upload manual).
         await supabase.storage.from(BUCKET).remove([filePath]);
-        results.push({ ...base, error: `registro: ${insErr.message}`, missing: rendered.missing });
+        // 23505 = índice único uq_client_documents_sistema_kit: outro clique/mount já
+        // inseriu este tipo (corrida que fura o check-before-insert). Idempotente =
+        // SUCESSO, não erro vermelho — o binário recém-subido virou órfão e já foi removido.
+        const already = (insErr as { code?: string }).code === "23505";
+        results.push(already
+          ? { ...base, ok: true, alreadyExisted: true, missing: rendered.missing }
+          : { ...base, error: `registro: ${insErr.message}`, missing: rendered.missing });
         continue;
       }
 
