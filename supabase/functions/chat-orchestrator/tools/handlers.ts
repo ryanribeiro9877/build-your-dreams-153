@@ -355,6 +355,17 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "criar_processo": {
+        const { data, error } = await userClient.rpc("criar_processo", {
+          p_client_id: args.client_id, p_tipo_acao: args.tipo_acao ?? null,
+          p_numero: args.numero ?? null, p_reu: args.reu ?? null, p_notes: args.notes ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        // Duplicata: a RPC devolve ok:false + message (não lança exceção).
+        const r = data as { ok?: boolean; message?: string } | null;
+        if (r && r.ok === false) return { ok: false, error: r.message ?? "Já existe um processo com esse número." };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }

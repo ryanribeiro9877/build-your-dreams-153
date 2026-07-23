@@ -283,6 +283,18 @@ export const TOOLS: Record<string, ToolDef> = {
       process_id: str("filtrar por um processo (opcional)"),
     }, required: ["de", "ate"] },
   }},
+  criar_processo: { type: "function", function: {
+    name: "criar_processo",
+    description: "Cria um processo NOVO para um cliente. Resolva o cliente ANTES com consultar_cliente e passe client_id. O tipo de ação define a área. Número é opcional. Se o número já existir, NÃO cria (proponha abrir o existente). Gate: advogado, sócio ou admin.",
+    parameters: { type: "object", properties: {
+      client_id: str("id do cliente (via consultar_cliente)"),
+      client_nome: str("nome do cliente — só para exibição"),
+      tipo_acao: str("tipo de ação/assunto (ex.: desconto indevido, RMC/RCC) — resolve a área"),
+      numero: str("número do processo (opcional)"),
+      reu: str("réu/parte contrária (opcional)"),
+      notes: str("observações (opcional)"),
+    }, required: ["client_id"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",
