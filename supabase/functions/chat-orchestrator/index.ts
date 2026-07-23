@@ -2008,6 +2008,18 @@ async function enrichCadastroArgs(
   }
 }
 
+// B6 (item 3) — guia da PONTE documento→dossiê. Injetada no contexto do
+// especialista SÓ quando há anexos no turno E ele tem a tool anexar_documento_cliente.
+// Orienta a propor o vínculo (um card por documento) quando o usuário quer guardar
+// os anexos no cadastro de um cliente. NÃO executa sozinho — sempre via ActionCard.
+const ANEXO_DOSSIE_GUIDANCE = [
+  "PONTE DOCUMENTO→DOSSIÊ: os arquivos listados abaixo foram anexados NESTA conversa e ainda NÃO estão no cadastro de nenhum cliente.",
+  "Se o usuário quer GUARDAR/ANEXAR estes documentos no cadastro de um cliente (ex.: \"anexa os documentos da Marina\", \"guarda a procuração no dossiê dele\", ou quando os anexos claramente pertencem ao cliente identificado no atendimento), proponha via ActionCard, UM CARD POR DOCUMENTO:",
+  "1. Resolva o cliente com consultar_cliente (por nome/CPF). Havendo mais de um candidato, PERGUNTE qual — nunca chute.",
+  "2. Para cada arquivo, chame anexar_documento_cliente com o client_id, o file_name (exatamente como listado nos anexos) e o document_type mais específico possível: procuracao, contrato_honorarios, declaracao_hipossuficiencia, termo_cooperado, rg, cpf, comprovante, certidao, contrato — senão 'outro'. Isso copia o arquivo para o dossiê e dá BAIXA no item do checklist.",
+  "3. Ao final, confirme por NOME o que foi anexado e o que deu baixa (ex.: \"Anexei a procuração ao dossiê de Marina — deu baixa no checklist\"). NUNCA invente documentos: só os anexados nesta conversa.",
+].join("\n");
+
 async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string, caseDocs: CaseDoc[] = []) {
   const perms = await loadActionPerms(admin, run.user_id);
   // Trilho B: se o turno tem um anexo de identidade (doc_type identidade/cnh), a
@@ -2892,6 +2904,10 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
         canonicalBlock +
         (ocrDocBlock ? "\n\n" + ocrDocBlock + "\n\n" : "") +
+        // B6 item 3: guia da ponte só quando há anexos, a escrita está ligada e este
+        // especialista carrega a tool (Cadastro/Documentação) — senão seria inócua.
+        ((caseDocs.length > 0 && CHAT_TOOLS_ENABLED && (n3.allowed_tools ?? []).includes("anexar_documento_cliente"))
+          ? "\n\n" + ANEXO_DOSSIE_GUIDANCE + "\n\n" : "") +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
       // FIX 1: contexto ENXUTO para o passo de correção. A peça já está escrita —
