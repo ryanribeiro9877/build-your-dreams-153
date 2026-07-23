@@ -77,6 +77,7 @@ const DashboardPrazos = lazyWithRetry(() => import("./pages/DashboardPrazos.tsx"
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword.tsx"));
 const DefinePassword = lazyWithRetry(() => import("./pages/DefinePassword.tsx"));
 const AdminEmployees = lazyWithRetry(() => import("./pages/AdminEmployees.tsx"));
+const MenuPermissions = lazyWithRetry(() => import("./pages/MenuPermissions.tsx"));
 const LandingPage = lazyWithRetry(() => import("./pages/LandingPage.tsx"));
 const OrgChart = lazyWithRetry(() => import("./pages/OrgChart.tsx"));
 const EfficiencyKPIs = lazyWithRetry(() => import("./pages/EfficiencyKPIs.tsx"));
@@ -183,6 +184,7 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/definir-senha" element={<DefinePassword />} />
               <Route path="/admin/funcionarios" element={<AdminRoute><AdminEmployees /></AdminRoute>} />
+              <Route path="/configuracoes/permissoes" element={<AdminRoute><MenuPermissions /></AdminRoute>} />
               <Route
                 path="/admin/funcionarios/novo"
                 element={<Navigate to="/sistema?criar=funcionario" replace />}
