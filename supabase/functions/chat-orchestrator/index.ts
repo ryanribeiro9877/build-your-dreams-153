@@ -39,6 +39,7 @@ import {
 } from "./delegation.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isCaseDocumentAttachment } from "./caseDocFilter.ts";
+import { buildOcrDocContext } from "./ocrDocContext.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
 import {
@@ -775,7 +776,7 @@ function clampChars(s: string, maxTokens: number): string {
 interface DocPiece { file_name: string; text: string; doc_type?: string | null; categoria?: string | null; }
 
 // ─── Canal A: documentos do caso (com resumo estruturado cacheado) ───────────
-interface CaseDoc { id: string; file_name: string; raw: string; summary: string | null; summaryAt: string | null; }
+interface CaseDoc { id: string; file_name: string; raw: string; summary: string | null; summaryAt: string | null; ocrFields?: unknown; ocrConfidence?: number | null; }
 
 // Máximo de chars do texto BRUTO enviado ao sumarizador (uma vez por doc, cacheado).
 // Input do sumarizador clampado para caber em uma chamada rápida (~30k tokens).
@@ -904,14 +905,14 @@ async function ensureAllCaseSummaries(admin: SupabaseClient, docs: CaseDoc[], ct
 // Canal A — DOCUMENTOS DO CASO: anexos ativos da sessão (id, nome, bruto, resumo).
 async function loadCaseDocuments(admin: SupabaseClient, sessionId: string): Promise<CaseDoc[]> {
   const { data } = await admin.from("chat_attachments")
-    .select("id, file_name, mime_type, extracted_text, summary, summary_generated_at")
+    .select("id, file_name, mime_type, extracted_text, summary, summary_generated_at, ocr_fields, ocr_confidence")
     .eq("session_id", sessionId).eq("is_active", true)
     .not("extracted_text", "is", null)
     .order("created_at", { ascending: true });
-  return (((data as { id: string; file_name: string; mime_type: string | null; extracted_text: string; summary: string | null; summary_generated_at: string | null }[]) || [])
+  return (((data as { id: string; file_name: string; mime_type: string | null; extracted_text: string; summary: string | null; summary_generated_at: string | null; ocr_fields: unknown; ocr_confidence: number | null }[]) || [])
     // Voz é comando, não prova: anexo audio/* transcrito fica fora dos docs de caso.
     .filter((d) => isCaseDocumentAttachment(d.mime_type) && d.extracted_text && d.extracted_text.trim().length > 0)
-    .map((d) => ({ id: d.id, file_name: d.file_name, raw: d.extracted_text, summary: d.summary, summaryAt: d.summary_generated_at })));
+    .map((d) => ({ id: d.id, file_name: d.file_name, raw: d.extracted_text, summary: d.summary, summaryAt: d.summary_generated_at, ocrFields: d.ocr_fields, ocrConfidence: d.ocr_confidence })));
 }
 
 // Canal B — MODELOS DE REFERÊNCIA: document_library vinculado ao agente, com texto.
@@ -2790,6 +2791,11 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // qualificação. Uma chamada por run; blocos 2-5 não precisam e mantêm o prefixo estável.
       if (canonFacts && blockIdx === 0) await enrichCepInfo(canonFacts);
       const canonicalBlock = canonFacts ? buildCanonicalFactsBlock(canonFacts) : "";
+      // Trilho B: bloco estruturado dos documentos classificados por OCR (doc_type +
+      // campos + confiança). Vazio se nenhum anexo foi classificado (sem mudança).
+      const ocrDocBlock = buildOcrDocContext(caseDocs.map((d) => ({
+        file_name: d.file_name, ocr_fields: d.ocrFields, ocr_confidence: d.ocrConfidence ?? null,
+      })));
       const stableSystem = (n3.system_prompt || "") +
         buildUniversalGuardrails() + // E9/E13: sempre-ativo (com ou sem documentos)
         // Correção B: no caminho AGÊNTICO (loop de tools do N3), o especialista precisa
@@ -2799,6 +2805,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         (caseDocs.length > 0 ? buildDraftingRules() : "") +
         buildModelBlock(modelDocs, MAX_MODEL_TOKENS) +
         canonicalBlock +
+        (ocrDocBlock ? "\n\n" + ocrDocBlock + "\n\n" : "") +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
       // FIX 1: contexto ENXUTO para o passo de correção. A peça já está escrita —
