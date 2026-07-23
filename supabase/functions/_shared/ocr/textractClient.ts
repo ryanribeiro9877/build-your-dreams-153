@@ -41,14 +41,16 @@ function toHex(buf: ArrayBuffer): string {
 
 async function sha256Hex(data: string | Uint8Array): Promise<string> {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-  return toHex(await crypto.subtle.digest("SHA-256", bytes));
+  // Cast puramente de tipo (runtime inalterado): sob libs de TS mais estritas
+  // Uint8Array<ArrayBufferLike> não casa com BufferSource (que exige ArrayBuffer).
+  return toHex(await crypto.subtle.digest("SHA-256", bytes as unknown as BufferSource));
 }
 
 async function hmac(key: ArrayBuffer | Uint8Array, msg: string): Promise<ArrayBuffer> {
   const keyBuf = key instanceof Uint8Array ? key : new Uint8Array(key);
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyBuf,
+    keyBuf as unknown as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

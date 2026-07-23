@@ -44,11 +44,27 @@ const VISION_FIELD_KEYS = [
   "cep", "address", "city", "state",
 ];
 
+// Tipo de documento (Trilho B — chat multimodal). É CLASSIFICAÇÃO do documento,
+// não um dado do cadastro: sai como um OcrField `key="doc_type"` em `fields`
+// (gravado em chat_attachments.ocr_fields) e NÃO está em VISION_FIELD_KEYS nem
+// no mapa de cadastro do consumidor — portanto nunca auto-preenche `clients`.
+// O orquestrador lê o doc_type para decidir o fluxo agentic (ex.: identidade →
+// propor cadastro).
+export const DOC_TYPE_VALUES = [
+  "identidade", "cnh", "comprovante_residencia", "extrato_inss",
+  "contracheque", "procuracao", "outro",
+] as const;
+export const DOC_TYPE_FIELD_KEY = "doc_type";
+
 const VISION_PROMPT =
   "Você é um OCR de documentos brasileiros (RG, CPF, CNH, comprovantes). Analise " +
   "a IMAGEM e responda SOMENTE em JSON, sem texto fora do JSON, no formato:\n" +
   '{"text":"<transcrição LITERAL de todo o texto visível, linha a linha>",' +
+  '"doc_type":"<tipo do documento>",' +
   '"fields":[{"key":"<chave>","value":"<valor>","confidence":<número 0..1>}]}\n' +
+  "doc_type deve ser UM de: identidade (RG/carteira de identidade), cnh, " +
+  "comprovante_residencia, extrato_inss, contracheque, procuracao, outro. " +
+  "Escolha o mais adequado; na dúvida use \"outro\".\n" +
   "Chaves permitidas em fields: full_name, cpf, rg, rg_issuer (órgão emissor, ex.: " +
   "SSP/MG), rg_uf, birth_date (dd/mm/aaaa), mother_name, father_name, nationality, " +
   "gender (masculino/feminino), marital_status, cep, address, city, state.\n" +
@@ -56,12 +72,14 @@ const VISION_PROMPT =
   "campo se conseguir LER com clareza; confidence reflete SUA certeza real. NUNCA " +
   "invente valores — prefira omitir a chutar. Datas em dd/mm/aaaa. CPF e RG com a " +
   "pontuação como aparecem. Se a imagem não for um documento legível, devolva text " +
-  "com o que houver e fields vazio.";
+  "com o que houver, doc_type \"outro\" e fields vazio.";
 
 /** Resultado bruto de uma chamada de visão (trocável para teste). */
 interface VisionRawResult {
   text: string;
   fields: Array<{ key: string; value: string; confidence: number }>;
+  /** Classificação do documento (Trilho B). Pode vir ausente. */
+  doc_type?: string;
   usage?: { inputTokens: number; outputTokens: number };
 }
 
@@ -134,13 +152,14 @@ function makeOpenAiVisionCall(deps: OpenAiVisionDeps): VisionCallFn {
       }
       const data = await resp.json();
       const content = data?.choices?.[0]?.message?.content ?? "{}";
-      let parsed: { text?: unknown; fields?: unknown } = {};
+      let parsed: { text?: unknown; fields?: unknown; doc_type?: unknown } = {};
       try {
         parsed = JSON.parse(content);
       } catch {
         parsed = {};
       }
       const text = typeof parsed?.text === "string" ? parsed.text : "";
+      const doc_type = typeof parsed?.doc_type === "string" ? parsed.doc_type : undefined;
       const rawFields = Array.isArray(parsed?.fields) ? parsed.fields : [];
       const fields = rawFields
         .filter((f): f is { key: string; value: unknown; confidence: unknown } =>
@@ -154,6 +173,7 @@ function makeOpenAiVisionCall(deps: OpenAiVisionDeps): VisionCallFn {
       return {
         text,
         fields,
+        doc_type,
         usage: {
           inputTokens: Number(u.prompt_tokens) || 0,
           outputTokens: Number(u.completion_tokens) || 0,
@@ -221,10 +241,27 @@ export function createOpenAiVisionExtractor(deps: OpenAiVisionDeps): Extractor {
         });
       }
 
-      const fields = [...detFields, ...visionFields];
-      const confidenceOverall = fields.length > 0
-        ? round2(fields.reduce((a, f) => a + f.confidence, 0) / fields.length)
+      // Confiança geral reflete só os campos de PII (regra + visão), não a
+      // classificação do documento.
+      const piiFields = [...detFields, ...visionFields];
+      const confidenceOverall = piiFields.length > 0
+        ? round2(piiFields.reduce((a, f) => a + f.confidence, 0) / piiFields.length)
         : 0;
+
+      // doc_type (Trilho B): entra como um OcrField próprio quando é do enum.
+      // Fora de VISION_FIELD_KEYS/mapa de cadastro → nunca auto-preenche clients.
+      const fields: OcrField[] = [...piiFields];
+      const docTypeVal = (raw.doc_type || "").trim().toLowerCase();
+      if ((DOC_TYPE_VALUES as readonly string[]).includes(docTypeVal)) {
+        fields.push({
+          key: DOC_TYPE_FIELD_KEY,
+          value: docTypeVal,
+          confidence: 0.9,
+          sourceDocument,
+          method: "llm",
+          needsReview: false,
+        });
+      }
 
       const result: ExtractionResult = {
         text,
