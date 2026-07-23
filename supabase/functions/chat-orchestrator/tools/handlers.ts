@@ -327,6 +327,20 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "reagendar_atendimento": {
+        const { data, error } = await userClient.rpc("reagendar_atendimento", {
+          p_id: args.meeting_id, p_nova_data: args.nova_data, p_nova_hora: args.nova_hora,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
+      case "cancelar_atendimento": {
+        const { data, error } = await userClient.rpc("cancelar_atendimento", {
+          p_id: args.meeting_id, p_motivo: args.motivo ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }

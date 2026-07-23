@@ -242,6 +242,25 @@ export const TOOLS: Record<string, ToolDef> = {
       ate: str("data final AAAA-MM-DD (opcional; default = mesmo dia de 'de')"),
     }, required: [] },
   }},
+  reagendar_atendimento: { type: "function", function: {
+    name: "reagendar_atendimento",
+    description: "Reagenda um atendimento/reunião de cliente que JÁ existe para nova data/hora. Resolva o atendimento ANTES com minha_agenda e passe meeting_id. Valida expediente (seg–sex 08–11/13–16, fuso Bahia).",
+    parameters: { type: "object", properties: {
+      meeting_id: str("id do atendimento (via minha_agenda)"),
+      atendimento_desc: str("descrição do atendimento (cliente/data atual) — só para exibição"),
+      nova_data: str("nova data AAAA-MM-DD"),
+      nova_hora: str("novo horário HH:MM"),
+    }, required: ["meeting_id", "nova_data", "nova_hora"] },
+  }},
+  cancelar_atendimento: { type: "function", function: {
+    name: "cancelar_atendimento",
+    description: "Cancela um atendimento/reunião de cliente que JÁ existe. Resolva o atendimento ANTES com minha_agenda e passe meeting_id.",
+    parameters: { type: "object", properties: {
+      meeting_id: str("id do atendimento (via minha_agenda)"),
+      atendimento_desc: str("descrição do atendimento — só para exibição"),
+      motivo: str("motivo do cancelamento (opcional)"),
+    }, required: ["meeting_id"] },
+  }},
   delegate: { type: "function", function: {
     name: "delegate",
     description: "Delega esta demanda a um SUB-AGENTE seu (diretor ou executor) e recebe de volta o resultado dele. Use quando a ação exige um nível abaixo: o Assistente delega ao Diretor; o Diretor delega ao Executor que produz. Informe `target` (papel/área/nome do sub-agente, ex.: 'diretor jurídico', 'executor previdenciário') e um `objetivo` claro. Passe `resumo`/`client_id`/`process_id` já apurados para o sub-agente não recomeçar do zero.",

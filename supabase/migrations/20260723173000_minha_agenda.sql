@@ -22,7 +22,7 @@ begin
 
   -- Atendimentos (meetings) onde o usuário é advogado, recepcionista ou criador.
   select coalesce(jsonb_agg(jsonb_build_object(
-           'data', m.scheduled_date, 'hora', to_char(m.start_time, 'HH24:MI'),
+           'id', m.id, 'data', m.scheduled_date, 'hora', to_char(m.start_time, 'HH24:MI'),
            'cliente', m.client_name, 'tipo', m.type, 'status', m.status
          ) order by m.scheduled_date, m.start_time), '[]'::jsonb)
     into v_atend
@@ -33,7 +33,7 @@ begin
 
   -- Audiências dos processos do usuário (ou onde ele é o advogado da audiência).
   select coalesce(jsonb_agg(jsonb_build_object(
-           'quando', to_char(a.data_hora at time zone 'America/Bahia', 'DD/MM HH24:MI'),
+           'id', a.id, 'quando', to_char(a.data_hora at time zone 'America/Bahia', 'DD/MM HH24:MI'),
            'processo', a.process_number, 'tipo', a.tipo_acao, 'local', a.link_local, 'status', a.status
          ) order by a.data_hora), '[]'::jsonb)
     into v_aud
