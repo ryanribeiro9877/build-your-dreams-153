@@ -42,6 +42,16 @@ export interface UseSupabaseQueryResult<T> {
   refetch: () => void;
 }
 
+// Sequência global para dar a CADA instância do hook um nome de canal Realtime
+// exclusivo. Sem isto, dois componentes que montam a MESMA query ao mesmo tempo
+// (mesmo queryKey — ex.: useMenuAccess no sidebar JurisCloudOS e no MenuRoute da
+// rota ativa, ambos via useMyWorkspace → "workspace-<id>") criam DOIS canais com o
+// mesmo tópico. O supabase-js reaproveita o canal já .subscribe()-ado do primeiro,
+// e o .on("postgres_changes") do segundo, chamado DEPOIS do subscribe, lança
+// "cannot add postgres_changes callbacks ... after subscribe()" — erro que a
+// ErrorBoundary transforma no "Algo deu errado" da tela toda.
+let __realtimeChannelSeq = 0;
+
 /**
  * Hook generico que encapsula o padrao repetido nos hooks Supabase:
  *   useState(loading, error, data)  +  useCallback(fetch)
@@ -60,6 +70,10 @@ export function useSupabaseQuery<T>(
   // passa uma arrow inline. O refetch/subscription sempre chama a versao mais recente.
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+
+  // Sufixo estável e ÚNICO desta instância do hook (ver __realtimeChannelSeq).
+  const instanceIdRef = useRef<number | null>(null);
+  if (instanceIdRef.current === null) instanceIdRef.current = ++__realtimeChannelSeq;
 
   const doFetch = useCallback(async () => {
     setLoading(true);
@@ -93,7 +107,10 @@ export function useSupabaseQuery<T>(
     if (!enabled || !realtime) return;
 
     const configs = Array.isArray(realtime) ? realtime : [realtime];
-    let channel = supabase.channel(queryKey);
+    // Tópico único por instância → nunca colide com outro componente que ouça a
+    // mesma query. Cada instância refaz seu próprio fetch ao receber o evento.
+    const channelName = `${queryKey}:${instanceIdRef.current}`;
+    let channel = supabase.channel(channelName);
 
     for (const cfg of configs) {
       channel = channel.on(
