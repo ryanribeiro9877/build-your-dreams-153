@@ -48,6 +48,11 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       const { data } = await client.rpc("resumo_do_dia");
       return data ?? {};
     }
+    case "listar_permissoes_menu": {
+      // Gate has_role(admin) DENTRO da RPC (42501 para não-admin). Client com JWT.
+      const { data } = await client.rpc("admin_list_menu_permissions");
+      return data ?? [];
+    }
     case "consultar_tarefas": {
       let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));
@@ -379,6 +384,21 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         const { data, error } = await userClient.rpc("atualizar_processo", { p_process_id: args.process_id, p_fields: fields });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
+      }
+      case "definir_permissao_menu": {
+        // Wrappers das RPCs admin-gated (has_role(admin) interno → 42501 se não-admin).
+        // O chat não pode mais que a tela /configuracoes/permissoes.
+        const acao = String(args.acao ?? "").toLowerCase();
+        const menuKey = String(args.menu_key ?? "").toLowerCase().trim();
+        if (!args.user_id) return { ok: false, error: "colaborador não informado (resolva com consultar_usuario)." };
+        if (!menuKey) return { ok: false, error: "menu não informado." };
+        let error;
+        if (acao === "conceder") ({ error } = await userClient.rpc("admin_set_user_menu", { p_user_id: args.user_id, p_menu_key: menuKey, p_granted: true }));
+        else if (acao === "revogar") ({ error } = await userClient.rpc("admin_set_user_menu", { p_user_id: args.user_id, p_menu_key: menuKey, p_granted: false }));
+        else if (acao === "padrao") ({ error } = await userClient.rpc("admin_clear_user_menu", { p_user_id: args.user_id, p_menu_key: menuKey }));
+        else return { ok: false, error: `ação inválida: ${acao} (use conceder, revogar ou padrao).` };
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { user_id: args.user_id, menu_key: menuKey, acao } };
       }
       case "registrar_protocolo": {
         // Gate = update_user_task_status (assignee/assigner/master) + trigger 8.5

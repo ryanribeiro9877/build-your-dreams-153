@@ -10,6 +10,7 @@ export interface ToolDef {
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
   "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias", "resumo_do_dia",
+  "listar_permissoes_menu",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -305,6 +306,23 @@ export const TOOLS: Record<string, ToolDef> = {
       status: str("novo status do processo (opcional)"),
       next_hearing_date: str("data/hora da próxima audiência em ISO 8601 (opcional)"),
     }, required: ["process_id"] },
+  }},
+  definir_permissao_menu: { type: "function", function: {
+    name: "definir_permissao_menu",
+    description: "Gerencia o acesso de um COLABORADOR a um MENU/tela do sistema (ação de ADMIN; só admin executa). acao=conceder libera; acao=revogar bloqueia explicitamente; acao=padrao volta ao padrão do papel (remove o override). Resolva o colaborador antes com consultar_usuario; NUNCA peça UUID.",
+    parameters: { type: "object", properties: {
+      user_id: str("ID do colaborador (via consultar_usuario; nunca peça ao usuário)."),
+      user_nome: str("Nome do colaborador, só para exibição no cartão."),
+      menu_key: { type: "string", enum: ["dashboard","clientes","recepcao_juridico","prazos_audiencias","agenda","tarefas","kanban","kpis","dashboard_ia","administracao","configuracoes"],
+        description: "Chave do menu. Mapeie o nome dito: Dashboard=dashboard, Clientes=clientes, Recepção & Jurídico=recepcao_juridico, Prazos & Audiências=prazos_audiencias, Agenda=agenda, Tarefas=tarefas, Kanban=kanban, KPIs Eficiência=kpis, Dashboard IA=dashboard_ia, Administração=administracao, Configurações=configuracoes." },
+      menu_label: str("Nome legível do menu, só para exibição no cartão."),
+      acao: { type: "string", enum: ["conceder","revogar","padrao"], description: "conceder = liberar; revogar = bloquear explicitamente; padrao = voltar ao padrão do papel." },
+    }, required: ["user_id","menu_key","acao"] },
+  }},
+  listar_permissoes_menu: { type: "function", function: {
+    name: "listar_permissoes_menu",
+    description: "Lista as permissões de menu personalizadas (overrides) de todos os colaboradores — quem teve algum menu concedido ou revogado explicitamente, e por quem. Ação de ADMIN (só admin). Sem parâmetros.",
+    parameters: { type: "object", properties: {}, required: [] },
   }},
   registrar_protocolo: { type: "function", function: {
     name: "registrar_protocolo",

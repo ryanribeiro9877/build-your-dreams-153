@@ -1995,6 +1995,14 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Gerar o kit documental${args.client_name ? ` de ${args.client_name}` : " do cliente"} (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral) e salvar no dossiê aguardando assinatura.`;
     case "registrar_protocolo":
       return `Registrar o protocolo (concluir a tarefa)${args.task_titulo ? ` — ${args.task_titulo}` : ""}${args.observacao ? `. Obs.: ${args.observacao}` : ""}. Exige Reclame Aqui + Sentença Procedente anexados ao cliente.`;
+    case "definir_permissao_menu": {
+      const a = String(args.acao ?? "");
+      const alvo = args.user_nome ? ` de ${args.user_nome}` : " do colaborador";
+      const menu = String(args.menu_label ?? args.menu_key ?? "");
+      if (a === "padrao") return `Voltar ao padrão do papel o acesso${alvo} ao menu "${menu}".`;
+      if (a === "revogar") return `Revogar (bloquear) o acesso${alvo} ao menu "${menu}".`;
+      return `Conceder o acesso${alvo} ao menu "${menu}".`;
+    }
     default: return `Executar ${tool}.`;
   }
 }
@@ -2137,6 +2145,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3E-ter. GERAR KIT DOCUMENTAL (objeto = os DOCUMENTOS/papelada de um cliente já cadastrado): se pede para GERAR, EMITIR, PREPARAR ou REFAZER os documentos, o KIT, a papelada, a procuração/contrato de honorários/declaração de hipossuficiência/ficha cadastral de um cliente que JÁ existe — ex.: "gera os documentos do Adalberto", "emite o kit do cliente Maria", "prepara a procuração e o contrato da Marina" → "Especialista Cadastro" ou "Especialista Documentação Geral" (tool gerar_kit_documental; resolva o cliente com consultar_cliente ANTES). É gerar o conjunto padrão a partir do CADASTRO — distinto de ANEXAR um arquivo enviado no chat (anexar_documento_cliente) e de CONFECCIONAR uma peça jurídica sob medida (regra 1).
 3F. AUDIÊNCIA (objeto = audiência de um PROCESSO): se pede para MARCAR/CRIAR uma AUDIÊNCIA de um processo ("marca a audiência do processo do Adalberto para 12/08 10h"), ou CONSULTAR audiências ("quais audiências dessa semana?") → o agente resolve o processo com consultar_processo e usa criar_audiencia / consultar_audiencias. É audiência JUDICIAL de um processo — NÃO confunda com reunião/atendimento de cliente na Agenda (3D).
 3G. PROCESSO/CASO (objeto = processo): se pede para CRIAR um processo novo ("abre um processo bancário para o Adalberto, réu Agibank") ou REGISTRAR ANDAMENTO / atualizar um processo existente ("registra no processo do Adalberto que a contestação foi protocolada hoje") → o agente resolve cliente/processo (consultar_cliente/consultar_processo) e usa criar_processo / atualizar_processo. Distinto de DISTRIBUIR um caso já criado (3B) e de marcar AUDIÊNCIA (3F).
+3H. PERMISSÕES DE MENU (objeto = o ACESSO de um colaborador a uma tela/menu): se pede para DAR/CONCEDER, TIRAR/REVOGAR/BLOQUEAR ou VOLTAR AO PADRÃO o acesso de um colaborador a um MENU do sistema (Dashboard, Clientes, Recepção & Jurídico, Prazos & Audiências, Agenda, Tarefas, Kanban, KPIs, Dashboard IA, Administração, Configurações) — ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu personalizadas existem?" → resolva o colaborador com consultar_usuario e use definir_permissao_menu (acao conceder/revogar/padrao) ou listar_permissoes_menu. É ação de ADMIN (só admin executa). NÃO confunda com criar/editar TAREFA (3C) nem com o menu Kanban como board de casos (3B).
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.
