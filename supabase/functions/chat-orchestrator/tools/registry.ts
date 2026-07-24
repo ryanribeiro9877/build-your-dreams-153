@@ -306,6 +306,14 @@ export const TOOLS: Record<string, ToolDef> = {
       next_hearing_date: str("data/hora da próxima audiência em ISO 8601 (opcional)"),
     }, required: ["process_id"] },
   }},
+  gerar_kit_documental: { type: "function", function: {
+    name: "gerar_kit_documental",
+    description: "Gera o kit documental do cliente (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral de cooperado), preenchido com os dados do cadastro, e salva no dossiê do cliente com status pendente (aguardando assinatura). Idempotente: documentos já gerados não são duplicados. Use quando pedirem para gerar/emitir/preparar os documentos, o kit ou a papelada de um cliente JÁ cadastrado. Resolva o cliente antes com consultar_cliente; NUNCA peça UUID ao usuário.",
+    parameters: { type: "object", properties: {
+      client_id: str("ID do cliente (obtido via consultar_cliente; nunca peça ao usuário)."),
+      client_name: str("Nome do cliente, apenas para exibição no cartão de confirmação."),
+    }, required: ["client_id"] },
+  }},
   resumo_do_dia: { type: "function", function: {
     name: "resumo_do_dia",
     description: "Resumo do dia do PRÓPRIO usuário: tarefas com prazo hoje, tarefas atrasadas, atendimentos do dia, audiências próximas (7 dias), pendências abertas e notificações não lidas. Resposta única, sem confirmação.",

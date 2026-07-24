@@ -380,6 +380,22 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "gerar_kit_documental": {
+        // A geração roda na edge `gerar-kit-documental` (porte da engine JSZip +
+        // templates). Invocamos via userClient.functions.invoke: o supabase-js
+        // repassa o Authorization (JWT do usuário) da conexão → a edge lê o cliente,
+        // sobe o binário e insere client_documents SOB A RLS DO USUÁRIO (o chat não
+        // pode mais que a tela). Idempotência (23505/check prévio) vive na edge.
+        const clientId = String(args.client_id ?? "").trim();
+        if (!clientId) return { ok: false, error: "cliente não informado (resolva com consultar_cliente)." };
+        const { data, error } = await userClient.functions.invoke("gerar-kit-documental", {
+          body: { client_id: clientId },
+        });
+        if (error) return { ok: false, error: (error as { message?: string }).message ?? "falha ao gerar o kit documental." };
+        const r = data as { ok?: boolean; error?: string } | null;
+        if (r && r.ok === false && r.error) return { ok: false, error: r.error };
+        return { ok: true, result: data };
+      }
       default:
         return { ok: false, error: `ferramenta de escrita desconhecida: ${name}` };
     }
