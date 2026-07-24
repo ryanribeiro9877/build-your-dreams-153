@@ -306,6 +306,15 @@ export const TOOLS: Record<string, ToolDef> = {
       next_hearing_date: str("data/hora da próxima audiência em ISO 8601 (opcional)"),
     }, required: ["process_id"] },
   }},
+  registrar_protocolo: { type: "function", function: {
+    name: "registrar_protocolo",
+    description: "Conclui a tarefa de protocolo (protocolar_peca) de um processo/cliente — registra que a peça foi protocolada. Exige o gate 8.5: o cliente precisa ter os documentos Reclame Aqui E Sentença Procedente anexados; senão a tool informa o que falta e NÃO conclui. Resolva a tarefa antes com consultar_tarefas (título começa por 'Protocolar peça —'); NUNCA peça UUID. Use quando disserem que protocolaram/deram entrada na peça, ou para concluir a tarefa de protocolo.",
+    parameters: { type: "object", properties: {
+      task_id: str("ID da tarefa de protocolo (protocolar_peca), obtido via consultar_tarefas."),
+      task_titulo: str("Título da tarefa, apenas para exibição no cartão de confirmação."),
+      observacao: str("Observação opcional (ex.: número de protocolo, data) — vai para as notas da tarefa."),
+    }, required: ["task_id"] },
+  }},
   gerar_kit_documental: { type: "function", function: {
     name: "gerar_kit_documental",
     description: "Gera o kit documental do cliente (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral de cooperado), preenchido com os dados do cadastro, e salva no dossiê do cliente com status pendente (aguardando assinatura). Idempotente: documentos já gerados não são duplicados. Use quando pedirem para gerar/emitir/preparar os documentos, o kit ou a papelada de um cliente JÁ cadastrado. Resolva o cliente antes com consultar_cliente; NUNCA peça UUID ao usuário.",

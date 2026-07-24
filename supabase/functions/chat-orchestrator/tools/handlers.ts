@@ -380,6 +380,21 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: data };
       }
+      case "registrar_protocolo": {
+        // Gate = update_user_task_status (assignee/assigner/master) + trigger 8.5
+        // (2 docs), tudo dentro da RPC. Ela devolve ok:false amigável quando o gate
+        // de documentos não fechou (em vez do erro cru do trigger).
+        const { data, error } = await userClient.rpc("registrar_protocolo", {
+          p_task_id: args.task_id, p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = data as { ok?: boolean; bloqueado?: boolean; faltam?: string[]; erro?: string } | null;
+        if (r && r.ok === false) {
+          if (r.bloqueado) return { ok: false, error: `Protocolo bloqueado — faltam os documentos: ${(r.faltam ?? []).join(", ")}. Anexe-os ao cliente antes de protocolar.` };
+          return { ok: false, error: r.erro ?? "não foi possível protocolar." };
+        }
+        return { ok: true, result: data };
+      }
       case "gerar_kit_documental": {
         // A geração roda na edge `gerar-kit-documental` (porte da engine JSZip +
         // templates). Invocamos via userClient.functions.invoke: o supabase-js
