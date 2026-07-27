@@ -79,8 +79,33 @@ function renderNodes(nodes: Node[]): React.ReactNode[] {
   });
 }
 
+// B5 (E2E 24/07): a aba congelou ~3 min ao renderizar a resposta de um fluxo. Sem
+// teto, uma mensagem muito grande (payload cru do orquestrador, JSON de resultado
+// de tool, resposta longa do LLM) virava MILHARES de nós React de uma vez — long
+// task que trava a aba inteira. Guardas:
+//   · até RICH_LIMIT: formatação completa (caso normal — mensagens de chat);
+//   · acima: renderiza como TEXTO PURO (1 nó, custo O(1)) — nada se perde, só a
+//     formatação; muito melhor que travar;
+//   · acima de HARD_LIMIT: trunca e avisa, para não estourar memória/layout.
+export const RICH_LIMIT = 20_000;
+export const HARD_LIMIT = 200_000;
+
 export function SafeMarkdown({ children, className }: { children: string; className?: string }) {
   if (!children) return null;
+  if (children.length > RICH_LIMIT) {
+    const truncated = children.length > HARD_LIMIT;
+    const text = truncated ? children.slice(0, HARD_LIMIT) : children;
+    return (
+      <div className={className} style={{ whiteSpace: "pre-wrap" }}>
+        {text}
+        {truncated && (
+          <span style={{ display: "block", marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+            […] conteúdo muito longo — exibindo os primeiros {HARD_LIMIT.toLocaleString("pt-BR")} caracteres.
+          </span>
+        )}
+      </div>
+    );
+  }
   const nodes = tokenize(children);
   return <div className={className}>{renderNodes(nodes)}</div>;
 }
