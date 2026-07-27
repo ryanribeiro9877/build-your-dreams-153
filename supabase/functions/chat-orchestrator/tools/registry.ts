@@ -237,7 +237,7 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   minha_agenda: { type: "function", function: {
     name: "minha_agenda",
-    description: "Consulta a agenda do PRÓPRIO usuário (atendimentos, audiências e prazos) num intervalo de datas. Sem intervalo = hoje. Resposta direta, sem confirmação.",
+    description: "Consulta a agenda do PRÓPRIO usuário (atendimentos, audiências e prazos) num intervalo de datas. Sem intervalo = hoje. Resposta direta, sem confirmação. IMPORTANTE: para LOCALIZAR um atendimento que será reagendado ou cancelado quando o usuário NÃO disse a data, consulte um intervalo FUTURO amplo (de=hoje, ate=hoje+60 dias) e pegue o PRÓXIMO atendimento do cliente — o default de hoje esconde atendimentos de amanhã em diante. Só pergunte qual é se houver mais de um candidato no período.",
     parameters: { type: "object", properties: {
       de: str("data inicial AAAA-MM-DD (opcional; default = hoje)"),
       ate: str("data final AAAA-MM-DD (opcional; default = mesmo dia de 'de')"),

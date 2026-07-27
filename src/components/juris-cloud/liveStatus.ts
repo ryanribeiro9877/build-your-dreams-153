@@ -62,15 +62,20 @@ export function stageLabel(stage: string | null | undefined): string {
 /** Deriva o LiveStage a partir de uma linha de etapa (kind === "stage"). */
 export function deriveLiveStage(row: {
   content?: string | null;
-  metadata?: { stage?: string } | null;
+  metadata?: { stage?: string; label?: string } | null;
 }): LiveStage {
   const stage = row.metadata?.stage;
   // "bloco X de N" só faz sentido — e só é honesto — durante a redação/correção
   // (executing_n3) E quando o texto traz o contador real.
   const prog = stage === "executing_n3" ? parseBlockProgress(row.content) : null;
+  // Item 5 (adendo 27/07): quando o edge manda um rótulo ESPECÍFICO da ação
+  // ("Abrindo o processo", "Registrando o protocolo"), ele vence o rótulo genérico
+  // por fase — era isso que fazia um pedido de abrir processo exibir "Redigindo a
+  // peça"/"Processando o cadastro".
+  const explicit = row.metadata?.label?.trim();
   return {
     stage,
-    label: stageLabel(stage),
+    label: explicit || stageLabel(stage),
     blockCurrent: prog?.current,
     blockTotal: prog?.total,
   };

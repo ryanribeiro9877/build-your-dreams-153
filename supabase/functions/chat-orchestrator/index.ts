@@ -2085,12 +2085,19 @@ async function nextSeq(admin: SupabaseClient, sessionId: string): Promise<number
   return (((data as { sequence_number?: number } | null)?.sequence_number) ?? 0) + 1;
 }
 
-async function insertStage(admin: SupabaseClient, sessionId: string, userId: string, text: string, stage: string, agent?: AgentRow) {
+// Item 5 (adendo 27/07): `label` é o rótulo de progresso ESPECÍFICO da ação em
+// curso ("Abrindo o processo", "Registrando o protocolo"). Sem ele o front caía nos
+// rótulos genéricos por fase e mostrava "Processando o cadastro…"/"Redigindo a
+// peça…" em fluxos não relacionados, atrapalhando o diagnóstico.
+async function insertStage(admin: SupabaseClient, sessionId: string, userId: string, text: string, stage: string, agent?: AgentRow, label?: string) {
   const seq = await nextSeq(admin, sessionId);
   await admin.from("chat_messages").insert({
     session_id: sessionId, user_id: userId, role: "system",
     agent_id: agent?.id ?? null, content: text, sequence_number: seq,
-    metadata: { kind: "stage", stage, agent_name: agent?.name ?? null, level: agent?.level ?? null },
+    metadata: {
+      kind: "stage", stage, agent_name: agent?.name ?? null, level: agent?.level ?? null,
+      ...(label ? { label } : {}),
+    },
   });
 }
 
@@ -2384,7 +2391,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3C. CRIAR TAREFA/PENDÊNCIA/LEMBRETE/REUNIÃO INTERNA (objeto = TAREFA): se pede para ATRIBUIR, CRIAR, ABRIR, MARCAR ou AGENDAR uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente) — ex.: "atribua uma tarefa a Kailane...", "abra uma pendência para o setor X", "crie um lembrete para amanhã", "marque uma reunião entre nós dois às 15h" → "Especialista Kanban de Pendências" (tool criar_pendencia; o campo tipo aceita "reuniao" para reunião interna). O objeto é uma TAREFA/PENDÊNCIA/REUNIÃO INTERNA — NÃO um caso/processo e NÃO um atendimento de cliente.
 3C-bis. MOVER/EDITAR/COMENTAR TAREFA EXISTENTE (objeto = TAREFA que já existe): se pede para MOVER, MUDAR STATUS/PRAZO/PRIORIDADE, RENOMEAR ou COMENTAR uma tarefa/pendência/card que JÁ existe — ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou" → "Especialista Kanban de Pendências" (tools atualizar_tarefa e comentar_card; resolva o card com consultar_tarefas ANTES). É EDITAR uma tarefa existente, NÃO criar uma nova (3C).
 3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
-3D-bis. REAGENDAR/CANCELAR ATENDIMENTO EXISTENTE (objeto = atendimento que já existe): se pede para REAGENDAR/REMARCAR ou CANCELAR um atendimento/reunião de cliente que JÁ existe — ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina" → "Especialista Agenda de Atendimento" (tools reagendar_atendimento/cancelar_atendimento; resolva o atendimento com minha_agenda ANTES). É alterar um atendimento existente, NÃO criar um novo (3D).
+3D-bis. REAGENDAR/CANCELAR ATENDIMENTO EXISTENTE (objeto = atendimento que já existe): se pede para REAGENDAR/REMARCAR ou CANCELAR um atendimento/reunião de cliente que JÁ existe — ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina" → "Especialista Agenda de Atendimento" (tools reagendar_atendimento/cancelar_atendimento; resolva o atendimento com minha_agenda ANTES). Quando o usuário NÃO disser a data do atendimento a alterar, consulte minha_agenda com um intervalo FUTURO amplo (de=hoje, ate=hoje+60 dias) e use o PRÓXIMO atendimento daquele cliente — consultar só "hoje" faz parecer que não existe atendimento. Só pergunte qual é se houver mais de um candidato. É alterar um atendimento existente, NÃO criar um novo (3D).
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
 3E-bis. ATUALIZAR/CORRIGIR CLIENTE EXISTENTE (objeto = cliente que já existe): se pede para MUDAR ou CORRIGIR um dado de cadastro de um cliente que já existe — telefone, email, endereço, data de nascimento, status — ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto" → "Especialista Cadastro" (tool atualizar_cliente; resolva o cliente com consultar_cliente ANTES). É EDITAR um cliente existente, NÃO cadastrar um novo (3E). CPF e nome não mudam pelo chat.
 3E-ter. GERAR KIT DOCUMENTAL (objeto = os DOCUMENTOS/papelada de um cliente já cadastrado): se pede para GERAR, EMITIR, PREPARAR ou REFAZER os documentos, o KIT, a papelada, a procuração/contrato de honorários/declaração de hipossuficiência/ficha cadastral de um cliente que JÁ existe — ex.: "gera os documentos do Adalberto", "emite o kit do cliente Maria", "prepara a procuração e o contrato da Marina" → "Especialista Cadastro" ou "Especialista Documentação Geral" (tool gerar_kit_documental; resolva o cliente com consultar_cliente ANTES). É gerar o conjunto padrão a partir do CADASTRO — distinto de ANEXAR um arquivo enviado no chat (anexar_documento_cliente) e de CONFECCIONAR uma peça jurídica sob medida (regra 1).
@@ -4360,7 +4367,10 @@ serve(async (req) => {
           }).select("id").single();
           if (objRunErr || !objRunRow) return errResp(500, "db_error", `Falha ao criar run: ${objRunErr?.message}`);
           const objRunId = (objRunRow as { id: string }).id;
-          await insertStage(admin, body.sessionId, userId, `${spec.name} ${objAction.stage}...`, "executing_acao", spec);
+          // Item 5: rótulo derivado do OBJETO escolhido (ex.: "Abrindo o processo"),
+          // não o genérico "Processando o cadastro".
+          const objLabel = objAction.stage.charAt(0).toUpperCase() + objAction.stage.slice(1);
+          await insertStage(admin, body.sessionId, userId, `${spec.name} ${objAction.stage}...`, "executing_acao", spec, objLabel);
           fireNextStep(objRunId, supabaseUrl, serviceKey, token); // propaga o JWT (RLS do N3)
           return json(202, { runId: objRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", path: objAction.path });
         }

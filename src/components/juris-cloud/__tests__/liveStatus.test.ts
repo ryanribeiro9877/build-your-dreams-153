@@ -79,3 +79,36 @@ describe("formatElapsed", () => {
     expect(formatElapsed(200)).toBe("3min 20s");
   });
 });
+
+// Item 5 do adendo (27/07): rótulos de progresso genéricos apareciam em fluxos não
+// relacionados — um pedido de "abrir processo" exibia "Redigindo a peça"/"Processando
+// o cadastro". O edge passou a mandar metadata.label derivado do objeto/tool escolhido.
+describe("deriveLiveStage — rótulo específico da ação (item 5)", () => {
+  it("usa metadata.label quando o edge manda o rótulo da ação", () => {
+    const s = deriveLiveStage({
+      content: "Especialista Distribuição abrindo o processo...",
+      metadata: { stage: "executing_acao", label: "Abrindo o processo" },
+    });
+    expect(s.label).toBe("Abrindo o processo");
+  });
+
+  it("cai no rótulo genérico da fase quando não há label", () => {
+    const s = deriveLiveStage({ content: "…", metadata: { stage: "executing_acao" } });
+    expect(s.label).toBe("Processando o cadastro");
+  });
+
+  it("label vazio/espaços não sobrescreve o rótulo da fase", () => {
+    const s = deriveLiveStage({ content: "…", metadata: { stage: "executing_n3", label: "   " } });
+    expect(s.label).toBe("Redigindo a peça");
+  });
+
+  it("label não cria contador de bloco falso", () => {
+    const s = deriveLiveStage({
+      content: "Especialista Protocolo registrando o protocolo...",
+      metadata: { stage: "executing_acao", label: "Registrando o protocolo" },
+    });
+    expect(s.label).toBe("Registrando o protocolo");
+    expect(s.blockCurrent).toBeUndefined();
+    expect(s.blockTotal).toBeUndefined();
+  });
+});
