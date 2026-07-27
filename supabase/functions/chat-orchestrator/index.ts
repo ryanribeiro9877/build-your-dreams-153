@@ -51,7 +51,7 @@ import {
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isPecaExplicitRequest,
   type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject, isOndaAcaoRequest,
-  isAceiteAtualizarProcesso,
+  isAceiteAtualizarProcesso, isRecusaAbrirOutro,
 } from "./intentClassifier.ts";
 
 const ALLOWED_ORIGINS = [
@@ -635,6 +635,12 @@ interface RouteObjectAction {
   /** Rótulo do estágio ("X está …") e do chain[0].path. */
   stage: string;
   path: string;
+  /**
+   * Instrução extra injetada no turno do agente (reteste 3, item 1): garante a
+   * RECUSA AMIGÁVEL quando o pré-requisito da ação não existe, em vez de o agente
+   * tentar "encaminhar" ou devolver texto burocrático.
+   */
+  guidance?: string;
 }
 const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   PROCESSO_CREATE: {
@@ -658,6 +664,14 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   PROTOCOLO: {
     tool: "registrar_protocolo", gate: null,
     recusa: "", stage: "registrando o protocolo", path: "objeto_protocolo",
+    guidance:
+      "PROTOCOLO — regras deste turno: (1) resolva a tarefa de protocolo com consultar_tarefas " +
+      "(o título começa por \"Protocolar peça —\") e, se houver, chame registrar_protocolo com o task_id. " +
+      "(2) Se NÃO existir tarefa de protocolo para esse cliente, responda EXATAMENTE nesta linha: " +
+      "\"Não há peça aprovada aguardando protocolo para <cliente>.\" e NÃO chame nenhuma ferramenta. " +
+      "(3) Se a tool devolver que o gate não passou, diga em uma frase quais documentos faltam " +
+      "(ex.: Reclame Aqui, Sentença Procedente) e que eles precisam ser anexados ao cliente. " +
+      "(4) NUNCA tente encaminhar/delegar a ação e NUNCA descreva seu escopo/atuação.",
   },
   TAREFA_UPDATE: {
     tool: "atualizar_tarefa", gate: null,
@@ -838,21 +852,32 @@ async function preflightCriarProcesso(
   }
   const d = dupRes as {
     cliente?: string; total_ativos?: number; bloquear?: boolean;
-    processos?: Array<{ process_id?: string; numero?: string; tipo_acao?: string; reu_descricao?: string; criado_em?: string; mesmo_tipo?: boolean }>;
+    // `reu` e `criado_em` (string pronta "DD/MM/YYYY HH24:MI") vêm limpos da RPC;
+    // reu_descricao/criado_em_iso ficam disponíveis mas não são usados no texto.
+    processos?: Array<{
+      process_id?: string; numero?: string; tipo_acao?: string; reu?: string;
+      reu_descricao?: string; criado_em?: string; criado_em_iso?: string; mesmo_tipo?: boolean;
+    }>;
   } | null;
   if (d?.bloquear) {
     // Cita o processo EQUIVALENTE (mesmo tipo), não simplesmente o mais recente.
     const p = (d.processos ?? []).find((x) => x.mesmo_tipo) ?? (d.processos ?? [])[0] ?? {};
-    const quando = p.criado_em
-      ? new Date(p.criado_em).toLocaleString("pt-BR", { timeZone: "America/Bahia", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-      : null;
+    // Reteste 3 (item 3a): `criado_em` JÁ vem formatado "DD/MM/YYYY HH24:MI" —
+    // passá-lo por new Date() gerava "Invalid Date". Usar a string como está.
+    const quando = p.criado_em ?? null;
+    // (3b) `reu` é o campo limpo (só o nome do réu); antes usávamos reu_descricao,
+    // que era left(description,120) e arrastava os andamentos para dentro do aviso.
+    const reuCitado = p.reu ?? null;
+    // (3d) sem número real, mostra o rótulo derivado — nunca gravado no banco.
+    const identificacao = p.numero ?? null;
     const partes = [
       `${d.cliente ?? "O cliente"} já tem um processo ativo`,
       p.tipo_acao ? ` de ${p.tipo_acao}` : "",
-      p.reu_descricao ? ` contra ${p.reu_descricao}` : "",
-      p.numero ? ` (nº ${p.numero}` : "",
-      p.numero && quando ? `, aberto em ${quando})` : p.numero ? ")" : "",
-      ". Quer que eu atualize esse processo (registrar andamento) em vez de abrir outro?",
+      reuCitado ? ` contra ${reuCitado}` : "",
+      identificacao ? ` (${identificacao}` : "",
+      identificacao && quando ? `, aberto em ${quando})` : identificacao ? ")" : "",
+      // (3c) typo corrigido: era "Atualizar do processo processo existente".
+      ". Quer que eu registre um andamento nesse processo em vez de abrir outro?",
     ];
     return { blockMessage: partes.join(""), offeredProcessId: p.process_id, tipoCode: t.code };
   }
@@ -2270,7 +2295,9 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       if (a === "revogar") return `Revogar (bloquear) o acesso${alvo} ao menu "${menu}".`;
       return `Conceder o acesso${alvo} ao menu "${menu}".`;
     }
-    default: return `Executar ${tool}.`;
+    // Reteste 3 (item 1): NUNCA expor o nome interno da tool no cartão — "Executar
+    // delegate" vazava implementação para o usuário. Texto neutro no fallback.
+    default: return "Confirmar esta ação no sistema.";
   }
 }
 
@@ -2358,18 +2385,34 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
     if (tool === "criar_processo") {
       const clientId = String(args.client_id ?? "").trim();
       const anonKeyPre = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-      const pre = await preflightCriarProcesso(admin, clientId, args.tipo_acao, args.reu,
-        supabaseUrl, anonKeyPre, userToken);
+      // Reteste 3 (item 2): OVERRIDE explícito — o usuário viu o aviso e respondeu
+      // "não, abre outro". Dois contratos com o mesmo banco existem na prática, então
+      // seguimos para o cartão; o aviso vai no TEXTO do cartão, não como bloqueio.
+      const override = args.__override_duplicata === true;
+      const pre: ProcessoPreflight = override
+        ? { tipoCode: typeof args.tipo_acao === "string" ? args.tipo_acao : undefined,
+            contextNote: "Este cliente já tem um processo ativo do mesmo tipo — confirmando, um 2º será aberto." }
+        : await preflightCriarProcesso(admin, clientId, args.tipo_acao, args.reu,
+            supabaseUrl, anonKeyPre, userToken);
       if (pre.blockMessage) {
         const seqB = await nextSeq(admin, run.session_id);
         await admin.from("chat_messages").insert({
           session_id: run.session_id, user_id: run.user_id, role: "assistant",
           sequence_number: seqB, agent_id: n3.id, content: pre.blockMessage,
-          // A6.3: guarda o processo OFERECIDO no próprio turno. No "sim, atualiza" o
-          // orquestrador reaproveita este id em vez de reperguntar qual processo é.
+          // A6.3 + reteste 3 (item 2): guarda o processo OFERECIDO **e os dados da
+          // criação pedida**. "sim, atualiza" reaproveita o process_id; "não, abre
+          // outro" reaproveita cliente/tipo/réu e vai direto ao cartão de criação —
+          // antes o agente descartava o contexto e reperguntava tudo.
           metadata: {
             kind: "text", intent: "ACAO_COM_TOOL", agent_name: n3.name,
             ...(pre.offeredProcessId ? { offered_process_id: pre.offeredProcessId, offer: "atualizar_processo" } : {}),
+            criar_processo_args: {
+              client_id: clientId,
+              client_nome: args.client_nome ?? null,
+              tipo_acao: pre.tipoCode ?? args.tipo_acao ?? null,
+              reu: args.reu ?? null,
+              notes: args.notes ?? null,
+            },
           },
         });
         await admin.from("orchestration_runs")
@@ -3392,7 +3435,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
                : isWriteTool(n) ? CHAT_TOOLS_ENABLED
                : CHAT_READ_TOOLS_ENABLED);
         // Item 8: enum de tipos de ação (lido do banco) no schema de criar_processo.
-        const toolDefs = withTiposAcaoEnum(toolsFor(gatedToolNames), await loadTiposAcao(admin));
+        // Reteste 3 (item 1): quando o run já veio com a TOOL do objeto decidida
+        // (chain[0].tool, posto pelo roteamento por objeto), tiramos `delegate` da
+        // mesa — senão o agente tentava "encaminhar" a ação em vez de executá-la, o
+        // que gerava o cartão "Executar delegate".
+        const objetoTool = (Array.isArray(run.chain) ? (run.chain[0] as { tool?: string } | undefined)?.tool : undefined);
+        const gatedSemRoteamento = objetoTool
+          ? gatedToolNames.filter((n: string) => !isDelegateTool(n))
+          : gatedToolNames;
+        const toolDefs = withTiposAcaoEnum(toolsFor(gatedSemRoteamento), await loadTiposAcao(admin));
         if (toolDefs.length > 0) {
           // Correção A: as leituras RLS-gated (consultar_cliente re-checa
           // is_recepcao_or_socio via auth.uid()) rodam sob a IDENTIDADE do usuário.
@@ -3439,8 +3490,27 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             if (writeCalls.length > 0) {
               return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey, caseDocs, userToken);
             }
+            // Reteste 3 (item 1): `delegate` NÃO é ação — é roteamento e aqui, no
+            // caminho de execução direta, não existe. Em vez de virar iteração vazia
+            // (runReadTool não a conhece), devolvemos uma nota explícita para o modelo
+            // usar a ferramenta da ação ou explicar o que falta.
+            const routingCalls = r.toolCalls.filter((c) => isDelegateTool(c.function.name));
+            if (routingCalls.length > 0 && routingCalls.length === r.toolCalls.length) {
+              for (const c of routingCalls) {
+                toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
+                toolMsgs.push({
+                  role: "tool", tool_call_id: c.id, name: c.function.name,
+                  content: JSON.stringify({
+                    ok: false,
+                    error: "Encaminhar/delegar não está disponível neste turno. Use a FERRAMENTA da ação pedida. Se ela não puder ser executada (pré-requisito ausente), responda ao usuário em uma frase o que exatamente falta — sem prometer encaminhar a ninguém.",
+                  }),
+                });
+              }
+              continue; // dá ao modelo uma nova chance com a nota acima
+            }
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
+              if (isDelegateTool(c.function.name)) continue; // roteamento: nunca executa aqui
               const data = await runReadTool(readClient, run.user_id, c.function.name, safeJson(c.function.arguments));
               // E2: se a leitura resolveu UMA entidade sem ambiguidade, guarda como
               // carry-over da sessão para os próximos turnos ("esse cliente" etc.).
@@ -4409,6 +4479,43 @@ serve(async (req) => {
       }
     }
 
+    // ─── Reteste 3 (item 2): "não, abre outro" = OVERRIDE com contexto ───────────
+    // A recusa da oferta era corretamente NÃO tratada como aceite, mas o agente
+    // descartava cliente/tipo/réu que ele mesmo acabara de citar e reperguntava tudo.
+    // Agora reaproveitamos os args guardados no metadata do aviso e vamos DIRETO ao
+    // cartão de criação, com o aviso no texto (override legítimo: dois contratos
+    // distintos com o mesmo banco existem na prática).
+    if (isRecusaAbrirOutro(body.message)) {
+      const { data: lastAsst2 } = await admin.from("chat_messages")
+        .select("metadata").eq("session_id", body.sessionId).eq("role", "assistant")
+        .order("sequence_number", { ascending: false }).limit(3);
+      const ofertaR = ((lastAsst2 as Array<{ metadata?: { offer?: string; criar_processo_args?: Record<string, unknown> } }> | null) ?? [])
+        .find((r) => r.metadata?.offer === "atualizar_processo" && r.metadata?.criar_processo_args);
+      const baseArgs = ofertaR?.metadata?.criar_processo_args;
+      if (baseArgs && baseArgs.client_id) {
+        const spec = await resolveSpecialistWithTool(admin, userId, "criar_processo");
+        if (spec) {
+          console.log(`[oferta-recusada] session=${body.sessionId} override → cartão de criar_processo (cliente=${baseArgs.client_id})`);
+          const { data: ovRun, error: ovErr } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+            target_n3_id: spec.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+            chain: [{ level: 0, path: "override_duplicata_processo", intent: "ACAO_COM_TOOL", agent: spec.name, tool: "criar_processo" }],
+          }).select("id").single();
+          if (ovErr || !ovRun) return errResp(500, "db_error", `Falha ao criar run: ${ovErr?.message}`);
+          const ovRunId = (ovRun as { id: string }).id;
+          const { data: ovRunFull } = await admin.from("orchestration_runs").select("*").eq("id", ovRunId).maybeSingle();
+          // Cartão montado DIRETO (sem novo turno de LLM): os dados já foram
+          // resolvidos antes; __override_duplicata faz o pré-voo não bloquear.
+          await proposeAction(admin, ovRunFull, spec, [{
+            id: `override_${ovRunId}`, type: "function",
+            function: { name: "criar_processo", arguments: JSON.stringify({ ...baseArgs, __override_duplicata: true }) },
+          }], supabaseUrl, serviceKey, [], token);
+          return json(202, { runId: ovRunId, sessionId: body.sessionId, status: "awaiting_confirmation", intent: "ACAO_COM_TOOL", path: "override_duplicata_processo" });
+        }
+      }
+    }
+
     // ─── B1: OBJETO DAS ONDAS 1-3 → especialista PORTADOR da tool ────────────────
     // Precedência: DEPOIS de cadastro-form/agenda/tarefa/continuação-de-coleta,
     // ANTES do classificador de intenção (senão "resumo do meu dia" vira TRIVIAL e
@@ -4445,9 +4552,14 @@ serve(async (req) => {
         const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool);
         if (spec) {
           console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} → tool=${objAction.tool} → ${spec.name} (${spec.id})`);
+          // guidance (reteste 3, item 1): instrução da ação injetada no turno para
+          // garantir a recusa amigável quando o pré-requisito não existe.
+          const objMsg = objAction.guidance
+            ? `${body.message}\n\n[INSTRUÇÕES DO SISTEMA PARA ESTE TURNO: ${objAction.guidance}]`
+            : body.message;
           const { data: objRunRow, error: objRunErr } = await admin.from("orchestration_runs").insert({
             session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
-            original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+            original_message: objMsg, status: "executing_n3", entry_agent_id: agent.id,
             target_n3_id: spec.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
             chain: [{ level: 0, path: objAction.path, intent: "ACAO_COM_TOOL", agent: spec.name, objeto: routeObj, tool: objAction.tool }],
           }).select("id").single();

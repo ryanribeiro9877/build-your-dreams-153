@@ -4,7 +4,7 @@ import {
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isDocChecklistRequest, isPecaExplicitRequest, normalizeRouteObject,
-  isOndaAcaoRequest, isAceiteAtualizarProcesso,
+  isOndaAcaoRequest, isAceiteAtualizarProcesso, isRecusaAbrirOutro,
 } from "./intentClassifier.ts";
 
 // ─── LLM-first: parsing do classificador de objeto ───────────────────────────
@@ -370,4 +370,25 @@ Deno.test("isAceiteAtualizarProcesso: vazio e pedido longo → false", () => {
   assertEquals(isAceiteAtualizarProcesso(
     "registra no processo do Adalberto que a contestação foi protocolada hoje e depois me diga como ficou o prazo da audiência que estava marcada para a semana que vem"
   ), false);
+});
+
+// ─── Reteste 3 (item 2): recusa da oferta = override com contexto ─────────────
+Deno.test("isRecusaAbrirOutro: recusas explícitas → true", () => {
+  assertEquals(isRecusaAbrirOutro("não, abre outro"), true);
+  assertEquals(isRecusaAbrirOutro("nao, abre outro"), true);
+  assertEquals(isRecusaAbrirOutro("é outro contrato, abre mesmo assim"), true);
+  assertEquals(isRecusaAbrirOutro("quero um novo processo"), true);
+});
+
+Deno.test("isRecusaAbrirOutro: aceite e vazio → false", () => {
+  assertEquals(isRecusaAbrirOutro("sim, atualiza"), false);
+  assertEquals(isRecusaAbrirOutro("pode atualizar"), false);
+  assertEquals(isRecusaAbrirOutro(""), false);
+});
+
+// Aceite e recusa são mutuamente exclusivos — nunca ambíguos no mesmo texto.
+Deno.test("aceite × recusa: nunca os dois ao mesmo tempo", () => {
+  for (const f of ["sim, atualiza", "não, abre outro", "pode atualizar", "quero um novo processo", "ok"]) {
+    assertEquals(isAceiteAtualizarProcesso(f) && isRecusaAbrirOutro(f), false);
+  }
 });

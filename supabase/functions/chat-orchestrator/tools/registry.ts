@@ -14,14 +14,22 @@ export const READ_TOOL_NAMES: string[] = [
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
+// Tools de ROTEAMENTO: mecanismo interno de encaminhar o turno a outro agente —
+// não são ações executáveis e NUNCA podem entrar num plano de escrita.
+// (Reteste 3, item 1): isWriteTool era por EXCLUSÃO (tudo que não é leitura é
+// escrita), então `delegate` virava writeCall → o ActionCard exibia "Executar
+// delegate" e o confirm morria em "ferramenta de escrita desconhecida: delegate".
+export const ROUTING_TOOL_NAMES: string[] = ["delegate"];
+const ROUTING_TOOLS = new Set(ROUTING_TOOL_NAMES);
+
 export function isWriteTool(name: string): boolean {
-  return !READ_TOOLS.has(name);
+  return !READ_TOOLS.has(name) && !ROUTING_TOOLS.has(name);
 }
 
 // `delegate` é NATIVA (nem leitura nem escrita comum): o orquestrador a trata
 // diretamente no ramo `delegating` (não vai a runReadTool/runWriteTool).
 export function isDelegateTool(name: string): boolean {
-  return name === "delegate";
+  return ROUTING_TOOLS.has(name);
 }
 
 const str = (description: string) => ({ type: "string", description });

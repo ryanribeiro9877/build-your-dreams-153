@@ -408,6 +408,19 @@ export function isAceiteAtualizarProcesso(message: string): boolean {
   return ACEITE_RE.test(m);
 }
 
+/**
+ * Reteste 3 (item 2): RECUSA da oferta = override explícito do pré-voo ("não, abre
+ * outro", "é outro contrato, abre mesmo assim"). É legítimo — dois contratos com o
+ * mesmo banco existem na prática. O contexto (cliente/tipo/réu) vem do metadata da
+ * oferta, então o usuário não precisa repetir nada.
+ */
+export function isRecusaAbrirOutro(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  if (m.length > 160) return false;
+  return RECUSA_RE.test(m);
+}
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;

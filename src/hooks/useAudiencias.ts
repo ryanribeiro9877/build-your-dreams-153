@@ -154,7 +154,8 @@ export async function updateAudiencia(args: UpdateAudienciaArgs): Promise<void> 
 /** Processos de um cliente. Para o picker de processo. */
 export interface ClientProcessOption {
   id: string;
-  process_number: string;
+  /** NULL até existir número no tribunal (3d) — exibir via processLabel. */
+  process_number: string | null;
   description: string | null;
 }
 

@@ -11,6 +11,7 @@ import {
   AUDIENCIA_STATUS_OPTIONS, audienciaStatusOptionsFor,
   isoToLocalInput, localInputToISO, mapAudienciaError, type AudienciaStatus,
 } from "@/lib/audiencias";
+import { processLabel } from "@/lib/processLabel";
 // Reutiliza os MESMOS tokens/estilos dos modais do /sistema (dark surface, âmbar,
 // overlay centralizado, caixa com rolagem interna) — não inventar hex.
 import { overlay, modal, input, btnPrimary, btnGhost, COLORS, FONT } from "@/components/kanban/kanbanStyles";
@@ -191,8 +192,9 @@ export function AudienciaFormModal({ audiencia, fixedClient, onClose, onSaved }:
             <select value={processId ?? ""} onChange={(e) => setProcessId(e.target.value || null)} style={invalidBorder(errProcess)}
               disabled={!clientName.trim()} aria-invalid={showErrors && !!errProcess}>
               <option value="">{clientName.trim() ? (processes.length ? "— Selecionar processo —" : "Nenhum processo vinculado a este cliente") : "Selecione o cliente primeiro"}</option>
+              {/* 3d: sem número do tribunal, mostra o rótulo derivado (não vazio). */}
               {processes.map((p) => (
-                <option key={p.id} value={p.id}>{p.process_number}{p.description ? ` · ${p.description}` : ""}</option>
+                <option key={p.id} value={p.id}>{processLabel(p)}{p.description ? ` · ${p.description}` : ""}</option>
               ))}
             </select>
             {showErrors && errProcess && <span style={errStyle}>{errProcess}</span>}

@@ -9,6 +9,7 @@ import {
   DOCUMENT_TYPE_LABELS, DOCUMENT_TYPE_OPTIONS,
   DOC_STATUS_META, DOC_ORIGEM_LABELS, DOC_ORIGEM_OPTIONS,
 } from "../shared";
+import { processLabel } from "@/lib/processLabel";
 
 const PRIORITY_META: Record<string, { label: string; cls: string }> = {
   critical: { label: "Crítica", cls: "d" },
@@ -419,9 +420,11 @@ export function PendenciasTab({ client }: { client: ClientFull }) {
 /* ---------- Processos / Ações (processes por client_name) ---------- */
 
 interface ProcessRow {
-  id: string; process_number: string; description: string | null;
+  // 3d: process_number é o número no TRIBUNAL e fica NULL até existir número real
+  // (processo aberto pelo chat). A exibição usa processLabel (rótulo derivado).
+  id: string; process_number: string | null; description: string | null;
   responsible_lawyer: string | null; next_hearing_date: string | null; status: string;
-  tipo_acao_id: string | null;
+  tipo_acao_id: string | null; client_name?: string | null; created_at?: string | null;
 }
 
 interface TipoAcaoRow { id: string; nome: string }
@@ -486,7 +489,8 @@ function ProcessoDetailModal({
         <div style={{ display: "grid", gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: "var(--text3, #888)" }}>Número</div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{proc.process_number}</div>
+            {/* 3d: sem número do tribunal, process_number é NULL → rótulo derivado. */}
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{processLabel(proc)}</div>
           </div>
           {proc.description && (
             <div>
@@ -544,7 +548,7 @@ export function ProcessosTab({ client }: { client: ClientFull }) {
     // `processes` não tem FK para `clients`; o vínculo existente é por
     // `client_name` (texto). Renderizamos por esse vínculo, sem inventar outro.
     const { data, error } = await sb.from("processes")
-      .select("id, process_number, description, responsible_lawyer, next_hearing_date, status, tipo_acao_id")
+      .select("id, process_number, description, responsible_lawyer, next_hearing_date, status, tipo_acao_id, client_name, created_at")
       .eq("client_name", client.full_name)
       .order("created_at", { ascending: false });
     if (error) { setRows([]); return; }
@@ -586,7 +590,7 @@ export function ProcessosTab({ client }: { client: ClientFull }) {
               title="Abrir processo · editar tipo de ação">
               <div className="dot">⚖</div>
               <div className="body">
-                <div className="t">{proc.process_number}</div>
+                <div className="t">{processLabel({ ...proc, tipo_acao_nome: nome })}</div>
                 <div className={`s${overdue ? " late" : ""}`}>
                   {proc.description ? `${proc.description} · ` : ""}
                   {`Tipo: ${nome ?? "não definido"}`}
