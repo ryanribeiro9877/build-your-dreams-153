@@ -296,7 +296,19 @@ export function isPecaExplicitRequest(message: string): boolean {
 // real do pedido — nunca pelo verbo isolado ("adicionar", "cadastrar", "marcar"
 // são ambíguos). Isso corrige o misroute "adicionar na agenda uma reunião de um
 // cliente" → cadastro_form: o verbo "adicionar" rege a REUNIÃO, não o "cliente".
-export type RouteObject = "CADASTRO" | "AGENDA_CLIENTE" | "TAREFA_INTERNA" | "OUTRO";
+// B1 (E2E 24/07): a taxonomia tinha só 4 objetos, então NENHUM pedido das Ondas
+// 1-3 (processo, kit documental, resumo do dia, protocolo, permissão de menu…)
+// tinha objeto próprio: caía em OUTRO e o roteador escolhia o especialista "mais
+// parecido" por semântica de nome — "abre um processo" ia para a Agenda, "gera os
+// documentos" virava questionário de peça, "resumo do meu dia" virava small talk.
+// Cada objeto abaixo tem tool e especialista portador determinísticos (ver
+// ROUTE_OBJECT_ACTIONS no index.ts) — o LLM classifica o OBJETO, não o agente.
+export type RouteObject =
+  | "CADASTRO" | "AGENDA_CLIENTE" | "TAREFA_INTERNA"
+  | "PROCESSO_CREATE" | "PROCESSO_UPDATE" | "KIT_DOCUMENTAL" | "RESUMO_DIA"
+  | "PROTOCOLO" | "TAREFA_UPDATE" | "CLIENTE_UPDATE" | "AGENDA_CONSULTA"
+  | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU"
+  | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
 
@@ -304,10 +316,21 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 
 - "CADASTRO": o objeto é o PRÓPRIO CADASTRO de um cliente (criar a ficha do cliente no sistema). Ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria", "adicione o cliente Pedro". Só é CADASTRO quando a coisa criada é o CLIENTE em si.
 - "AGENDA_CLIENTE": o objeto é um ATENDIMENTO, CONSULTA ou REUNIÃO COM UM CLIENTE (cliente + advogado, na agenda de atendimentos), inclusive confirmar/cancelar/remarcar. Ex.: "adicionar na agenda uma reunião de um cliente com o Dr Rodrigo", "marque uma consulta pro cliente X amanhã 10h", "cancele o atendimento do cliente Y". ATENÇÃO: mesmo que a frase diga "cadastrar/adicionar NA AGENDA", se o objeto é uma reunião/atendimento de cliente, é AGENDA_CLIENTE — NUNCA cadastro.
-- "TAREFA_INTERNA": o objeto é uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente-parte). Ex.: "atribua uma tarefa pra reunião de equipe", "abra uma pendência de procuração pro Adalberto", "crie um lembrete pra amanhã", "marque uma reunião entre nós às 15h". ATENÇÃO: mesmo que diga "cadastrar/criar uma pendência", o objeto é a pendência/tarefa — NUNCA cadastro de cliente.
-- "OUTRO": qualquer outra coisa — pedido de PEÇA/documento jurídico, DISTRIBUIR um caso/processo, consulta a dados, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO.
+- "TAREFA_INTERNA": o objeto é uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores. Ex.: "atribua uma tarefa pra reunião de equipe", "abra uma pendência de procuração pro Adalberto", "cadastre uma pendência de procuração pro cliente X para sexta", "crie um lembrete pra amanhã", "marque uma reunião entre nós às 15h". ATENÇÃO CRÍTICA: uma PENDÊNCIA/TAREFA continua sendo TAREFA_INTERNA mesmo quando a frase cita um CLIENTE e uma DATA/PRAZO ("pro cliente X para sexta") — o objeto é a pendência (o cliente é só o assunto dela), NUNCA um atendimento na agenda (AGENDA_CLIENTE) e NUNCA cadastro de cliente.
+- "PROCESSO_CREATE": o objeto é ABRIR/CRIAR um PROCESSO ou AÇÃO judicial novo. Ex.: "abre um processo pro cliente X, tipo indenizatório, réu Agibank", "cria uma ação de cobrança para a Maria". É o processo em si sendo criado — não confundir com DISTRIBUIR um processo já existente (OUTRO) nem com redigir a petição (OUTRO).
+- "PROCESSO_UPDATE": o objeto é um PROCESSO que já existe: registrar ANDAMENTO, mudar status/fase, anotar próxima audiência. Ex.: "registra no processo do Adalberto que a contestação foi protocolada", "atualiza o status do processo da Maria".
+- "KIT_DOCUMENTAL": o objeto são os DOCUMENTOS PADRÃO de um cliente já cadastrado (procuração, contrato de honorários, declaração de hipossuficiência, ficha cadastral) — gerar/emitir/preparar/refazer. Ex.: "gera os documentos do cliente X", "emite o kit da Maria", "prepara a procuração e o contrato do Adalberto". ATENÇÃO CRÍTICA: "gerar/emitir os DOCUMENTOS de um cliente" é SEMPRE KIT_DOCUMENTAL — NUNCA redação de peça. Só é peça (OUTRO) quando pedem para REDIGIR/ELABORAR uma peça processual sob medida (petição inicial, contestação, recurso, réplica, parecer, manifestação).
+- "RESUMO_DIA": o objeto é o RESUMO/PANORAMA do próprio dia ou da própria carga de trabalho do usuário. Ex.: "me dá o resumo do meu dia", "como está meu dia?", "o que eu tenho pra hoje?", "minhas pendências e compromissos de hoje". É um pedido de DADO operacional — NUNCA conversa/small talk.
+- "PROTOCOLO": o objeto é o PROTOCOLO de uma peça — registrar que protocolou/deu entrada, ou concluir a tarefa de protocolo. Ex.: "protocola a peça do cliente X", "já protocolei a inicial da Maria", "conclui o protocolo do Adalberto". NUNCA é redigir a peça (OUTRO).
+- "TAREFA_UPDATE": o objeto é uma TAREFA/PENDÊNCIA/CARD que JÁ existe: mover, mudar status/prazo/prioridade, renomear ou COMENTAR. Ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou". Distinto de CRIAR uma nova (TAREFA_INTERNA).
+- "CLIENTE_UPDATE": o objeto é CORRIGIR/ATUALIZAR um dado de cadastro de cliente que já existe (telefone, e-mail, endereço, nascimento, status). Ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto". Distinto de criar a ficha (CADASTRO).
+- "AGENDA_CONSULTA": o objeto é CONSULTAR a agenda/compromissos (sem alterar nada). Ex.: "o que tenho na agenda amanhã?", "quais meus atendimentos de hoje?", "minha agenda da semana".
+- "AGENDA_UPDATE": o objeto é REAGENDAR/REMARCAR ou CANCELAR um atendimento de cliente que JÁ existe. Ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina".
+- "AUDIENCIA": o objeto é uma AUDIÊNCIA judicial de um processo — marcar ou consultar. Ex.: "marca a audiência do processo do Adalberto para 12/08 às 10h", "quais audiências dessa semana?". Distinto de reunião/atendimento de cliente (AGENDA_CLIENTE).
+- "PERMISSAO_MENU": o objeto é o ACESSO de um COLABORADOR a um MENU/tela do sistema — conceder, revogar ou voltar ao padrão; ou listar essas permissões. Ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu existem?".
+- "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida, DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO.
 
-Regra de ouro: separe CADASTRO (objeto = o cliente) de AGENDA_CLIENTE (objeto = atendimento do cliente) de TAREFA_INTERNA (objeto = tarefa/pendência interna). O verbo não decide; o objeto decide.`;
+Regra de ouro: o verbo NUNCA decide; o OBJETO decide. Separe: o cliente (CADASTRO/CLIENTE_UPDATE) · o atendimento do cliente (AGENDA_CLIENTE/AGENDA_UPDATE/AGENDA_CONSULTA) · a tarefa/pendência interna (TAREFA_INTERNA/TAREFA_UPDATE) · o processo (PROCESSO_CREATE/PROCESSO_UPDATE) · os documentos padrão do cliente (KIT_DOCUMENTAL) · a audiência (AUDIENCIA) · o protocolo (PROTOCOLO) · o dia do usuário (RESUMO_DIA) · o acesso a menu (PERMISSAO_MENU). Redigir peça sob medida e distribuir caso = OUTRO.`;
 
 /** Parsing defensivo do resultado do classificador de objeto (LLM). */
 export function normalizeRouteObject(raw: unknown): RouteObject {
@@ -315,7 +338,43 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "CADASTRO") return "CADASTRO";
   if (s === "AGENDA_CLIENTE" || s === "AGENDA") return "AGENDA_CLIENTE";
   if (s === "TAREFA_INTERNA" || s === "TAREFA") return "TAREFA_INTERNA";
+  // B1: objetos das Ondas 1-3 (+ sinônimos tolerados do LLM).
+  if (s === "PROCESSO_CREATE" || s === "PROCESSO" || s === "PROCESSO_NOVO") return "PROCESSO_CREATE";
+  if (s === "PROCESSO_UPDATE" || s === "ANDAMENTO") return "PROCESSO_UPDATE";
+  if (s === "KIT_DOCUMENTAL" || s === "KIT" || s === "DOCUMENTOS") return "KIT_DOCUMENTAL";
+  if (s === "RESUMO_DIA" || s === "RESUMO") return "RESUMO_DIA";
+  if (s === "PROTOCOLO") return "PROTOCOLO";
+  if (s === "TAREFA_UPDATE") return "TAREFA_UPDATE";
+  if (s === "CLIENTE_UPDATE") return "CLIENTE_UPDATE";
+  if (s === "AGENDA_CONSULTA") return "AGENDA_CONSULTA";
+  if (s === "AGENDA_UPDATE") return "AGENDA_UPDATE";
+  if (s === "AUDIENCIA" || s === "AUDIÊNCIA") return "AUDIENCIA";
+  if (s === "PERMISSAO_MENU" || s === "PERMISSAO" || s === "MENU") return "PERMISSAO_MENU";
   return "OUTRO";
+}
+
+// ─── B1: HINT das ações das Ondas 1-3 ────────────────────────────────────────
+// O classificador de OBJETO só era chamado quando um dos 3 hints antigos casava
+// (cadastro/agenda/tarefa). Sem hint, as frases das ondas nunca chegavam nele.
+// Este detector é um GATILHO amplo (não decide nada — só libera a classificação
+// pelo LLM, mantendo o LLM-first): substantivo do domínio das ondas presente na
+// frase. Barato e conservador; classificar de novo em falso positivo devolve
+// OUTRO e o fluxo segue exatamente como antes.
+// ATENÇÃO: `\b` do JS é ASCII-only — depois de letra acentuada ("dá", "você") NÃO
+// existe fronteira, então `\b(d[áa])\b` nunca casa "dá acesso ao Kanban". Usamos
+// lookarounds que tratam acento como letra (À-ÿ) nas duas pontas.
+const ONDA_ALVO_RE =
+  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|tarefas?)(?![\wÀ-ÿ])/i;
+// Verbos/formas que indicam PEDIDO operacional (não narrativa solta).
+// "cadastr\w*" entra porque "cadastre uma PENDÊNCIA…" é pedido de tarefa (o objeto
+// é a pendência, não o cliente) — foi um dos misroutes do E2E.
+const ONDA_VERBO_RE =
+  /(?<![\wÀ-ÿ])(abr\w*|cri\w*|cadastr\w*|adicion\w*|inclu\w*|ger\w*|emit\w*|prepar\w*|refa[çz]\w*|registr\w*|anot\w*|atualiz\w*|mud\w*|mov\w*|pass\w*|conclu\w*|protocol\w*|marc\w*|reagend\w*|remarc\w*|cancel\w*|coment\w*|conced\w*|d[êé]|d[áa]|libere?|tir\w*|revog\w*|list\w*|mostr\w*|quais|qual|o que|resum\w*|corrig\w*)(?![\wÀ-ÿ])/i;
+
+export function isOndaAcaoRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  return ONDA_ALVO_RE.test(m) && ONDA_VERBO_RE.test(m);
 }
 
 // Metadata de mensagem de ERRO transitório (ex.: provedor do modelo retornou 451

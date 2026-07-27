@@ -4,6 +4,7 @@ import {
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isDocChecklistRequest, isPecaExplicitRequest, normalizeRouteObject,
+  isOndaAcaoRequest,
 } from "./intentClassifier.ts";
 
 // ─── LLM-first: parsing do classificador de objeto ───────────────────────────
@@ -18,6 +19,58 @@ Deno.test("normalizeRouteObject: mapeia categorias e cai em OUTRO no desconhecid
   assertEquals(normalizeRouteObject("peça jurídica"), "OUTRO");
   assertEquals(normalizeRouteObject(null), "OUTRO");
   assertEquals(normalizeRouteObject(undefined), "OUTRO");
+});
+
+// ─── B1 (E2E 24/07): objetos das Ondas 1-3 ────────────────────────────────────
+Deno.test("normalizeRouteObject: objetos das Ondas 1-3 + sinônimos do LLM", () => {
+  assertEquals(normalizeRouteObject("PROCESSO_CREATE"), "PROCESSO_CREATE");
+  assertEquals(normalizeRouteObject("processo"), "PROCESSO_CREATE");
+  assertEquals(normalizeRouteObject("PROCESSO_UPDATE"), "PROCESSO_UPDATE");
+  assertEquals(normalizeRouteObject("andamento"), "PROCESSO_UPDATE");
+  assertEquals(normalizeRouteObject("KIT_DOCUMENTAL"), "KIT_DOCUMENTAL");
+  assertEquals(normalizeRouteObject("documentos"), "KIT_DOCUMENTAL");
+  assertEquals(normalizeRouteObject("RESUMO_DIA"), "RESUMO_DIA");
+  assertEquals(normalizeRouteObject("resumo"), "RESUMO_DIA");
+  assertEquals(normalizeRouteObject("PROTOCOLO"), "PROTOCOLO");
+  assertEquals(normalizeRouteObject("TAREFA_UPDATE"), "TAREFA_UPDATE");
+  assertEquals(normalizeRouteObject("CLIENTE_UPDATE"), "CLIENTE_UPDATE");
+  assertEquals(normalizeRouteObject("AGENDA_CONSULTA"), "AGENDA_CONSULTA");
+  assertEquals(normalizeRouteObject("AGENDA_UPDATE"), "AGENDA_UPDATE");
+  assertEquals(normalizeRouteObject("AUDIENCIA"), "AUDIENCIA");
+  assertEquals(normalizeRouteObject("PERMISSAO_MENU"), "PERMISSAO_MENU");
+  assertEquals(normalizeRouteObject("menu"), "PERMISSAO_MENU");
+  // TAREFA_UPDATE não pode ser confundido com TAREFA (criar)
+  assertEquals(normalizeRouteObject("tarefa"), "TAREFA_INTERNA");
+});
+
+// As 5 frases que erraram no E2E precisam ACIONAR o classificador de objeto
+// (antes elas não casavam hint nenhum e nunca chegavam nele).
+Deno.test("isOndaAcaoRequest: as 5 frases do E2E acionam a classificação", () => {
+  assertEquals(isOndaAcaoRequest("abre um processo pro cliente Adalberto, tipo indenizatório, réu Agibank"), true);
+  assertEquals(isOndaAcaoRequest("gera os documentos do cliente Adalberto"), true);
+  assertEquals(isOndaAcaoRequest("me dá o resumo do meu dia"), true);
+  assertEquals(isOndaAcaoRequest("cadastre uma pendência de procuração pro cliente X para sexta"), true);
+  assertEquals(isOndaAcaoRequest("protocola a peça do cliente Adalberto"), true);
+});
+
+Deno.test("isOndaAcaoRequest: outras ações das ondas também acionam", () => {
+  assertEquals(isOndaAcaoRequest("registra no processo do Adalberto que a contestação foi protocolada"), true);
+  assertEquals(isOndaAcaoRequest("passa a pendência da procuração pra em andamento"), true);
+  assertEquals(isOndaAcaoRequest("comenta no card do Adalberto que o cliente confirmou"), true);
+  assertEquals(isOndaAcaoRequest("reagenda o atendimento do Adalberto para sexta 9h"), true);
+  assertEquals(isOndaAcaoRequest("marca a audiência do processo do Adalberto para 12/08 às 10h"), true);
+  assertEquals(isOndaAcaoRequest("dá acesso ao Kanban para a Kailane"), true);
+  assertEquals(isOndaAcaoRequest("quais audiências dessa semana?"), true);
+  assertEquals(isOndaAcaoRequest("o que eu tenho na agenda amanhã?"), true);
+});
+
+Deno.test("isOndaAcaoRequest: conversa e frases sem objeto do domínio → false", () => {
+  assertEquals(isOndaAcaoRequest(""), false);
+  assertEquals(isOndaAcaoRequest("bom dia!"), false);
+  assertEquals(isOndaAcaoRequest("obrigado, era só isso"), false);
+  assertEquals(isOndaAcaoRequest("quem é você?"), false);
+  // fala com substantivo do domínio mas SEM verbo de pedido → não aciona
+  assertEquals(isOndaAcaoRequest("o processo é muito importante para o cliente"), false);
 });
 
 // ─── #2: exceção "pedido de peça explícito" do atalho doc-identidade→cadastro ──

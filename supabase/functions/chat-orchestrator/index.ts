@@ -50,7 +50,7 @@ import {
   isAwaitingCollectionMeta, isCollectionEscape, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isPecaExplicitRequest,
-  type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject,
+  type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject, isOndaAcaoRequest,
 } from "./intentClassifier.ts";
 
 const ALLOWED_ORIGINS = [
@@ -613,6 +613,116 @@ async function resolveCadastroSpecialist(admin: SupabaseClient, ownerUserId: str
     (a.max_tokens ?? 0) < SEGMENT_MIN_MAX_TOKENS);
   if (rows.length === 0) return null;
   return rows.find((a) => !/rascunho/i.test(a.name)) ?? rows[0]; // líder > rascunho
+}
+
+// ─── B1: roteamento DETERMINÍSTICO por objeto (Ondas 1-3) ────────────────────
+// O E2E de 24/07 mostrou 5 misroutes: sem objeto próprio, o LLM escolhia o
+// especialista por semântica de NOME ("abre um processo" → Agenda de Atendimento,
+// que recusou por motivo errado). Aqui cada objeto aponta para a TOOL que o
+// resolve; o especialista é escolhido por PORTAR a tool (não por nome parecido).
+//
+// gate: função de permissão do BANCO (a mesma do gate real da RPC), chamável com
+// o JWT do usuário — pré-checa para dar a recusa CERTA ("você não tem permissão
+// para abrir processo; peça ao sócio/advogado") em vez de rotear para alguém que
+// vai recusar por outro motivo. gate=null → sem pré-checagem (a RPC é a barreira).
+interface RouteObjectAction {
+  tool: string;
+  /** RPC booleana de gate (sem argumentos) chamada com o JWT do usuário. */
+  gate: string | null;
+  /** Mensagem de recusa quando o gate reprova (PT-BR, diz a quem pedir). */
+  recusa: string;
+  /** Rótulo do estágio ("X está …") e do chain[0].path. */
+  stage: string;
+  path: string;
+}
+const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
+  PROCESSO_CREATE: {
+    tool: "criar_processo", gate: "is_socio_or_advogado",
+    recusa: "Você não tem permissão para abrir processo — isso é do advogado ou do sócio. Posso registrar uma pendência pedindo a abertura, se quiser.",
+    stage: "abrindo o processo", path: "objeto_processo_create",
+  },
+  PROCESSO_UPDATE: {
+    tool: "atualizar_processo", gate: "is_socio_or_advogado",
+    recusa: "Você não tem permissão para atualizar processo — isso é do advogado responsável ou do sócio.",
+    stage: "atualizando o processo", path: "objeto_processo_update",
+  },
+  KIT_DOCUMENTAL: {
+    tool: "gerar_kit_documental", gate: null,
+    recusa: "", stage: "gerando o kit documental", path: "objeto_kit_documental",
+  },
+  RESUMO_DIA: {
+    tool: "resumo_do_dia", gate: null,
+    recusa: "", stage: "montando o resumo do seu dia", path: "objeto_resumo_dia",
+  },
+  PROTOCOLO: {
+    tool: "registrar_protocolo", gate: null,
+    recusa: "", stage: "registrando o protocolo", path: "objeto_protocolo",
+  },
+  TAREFA_UPDATE: {
+    tool: "atualizar_tarefa", gate: null,
+    recusa: "", stage: "atualizando a tarefa", path: "objeto_tarefa_update",
+  },
+  CLIENTE_UPDATE: {
+    tool: "atualizar_cliente", gate: null,
+    recusa: "", stage: "atualizando o cadastro", path: "objeto_cliente_update",
+  },
+  AGENDA_CONSULTA: {
+    tool: "minha_agenda", gate: null,
+    recusa: "", stage: "consultando a agenda", path: "objeto_agenda_consulta",
+  },
+  AGENDA_UPDATE: {
+    tool: "reagendar_atendimento", gate: "meetings_can_create",
+    recusa: "Você não tem permissão para alterar atendimentos da agenda — isso é da recepção.",
+    stage: "alterando o atendimento", path: "objeto_agenda_update",
+  },
+  AUDIENCIA: {
+    tool: "criar_audiencia", gate: null,
+    recusa: "", stage: "cuidando da audiência", path: "objeto_audiencia",
+  },
+  PERMISSAO_MENU: {
+    tool: "definir_permissao_menu", gate: null,
+    recusa: "", stage: "ajustando as permissões de menu", path: "objeto_permissao_menu",
+  },
+};
+
+// Acha o especialista que PORTA a tool: primeiro no pool do próprio usuário
+// (allowed_tools é sincronizado por trigger a partir de agent_tools), depois entre
+// os GLOBAIS (owner NULL, ex.: Especialista Distribuição). Determinístico: sem LLM.
+async function resolveSpecialistWithTool(
+  admin: SupabaseClient, ownerUserId: string, tool: string,
+): Promise<AgentRow | null> {
+  const cols = "id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools";
+  const pick = (rows: AgentRow[] | null) =>
+    ((rows as AgentRow[]) || []).filter((a) => (a.allowed_tools ?? []).includes(tool));
+  // 1. pool do usuário (prefere o "líder" ao "(Rascunho)", como resolveCadastroSpecialist)
+  const { data: own } = await admin.from("agents").select(cols)
+    .eq("owner_user_id", ownerUserId).eq("is_active", true)
+    .in("role", ["specialist", "monitor", "executor"]);
+  const mine = pick(own as AgentRow[] | null);
+  if (mine.length) return mine.find((a) => !/rascunho/i.test(a.name)) ?? mine[0];
+  // 2. especialistas globais (owner NULL)
+  const { data: glob } = await admin.from("agents").select(cols)
+    .is("owner_user_id", null).eq("is_active", true)
+    .in("role", ["specialist", "monitor", "executor"]);
+  const gl = pick(glob as AgentRow[] | null);
+  return gl.length ? gl[0] : null;
+}
+
+// Pré-checagem de permissão com a MESMA autoridade do gate real: chama a função
+// booleana do banco com o JWT do usuário. Fail-open (true) em erro/timeout — a RPC
+// da tool continua sendo a barreira final; nunca bloqueia por falha de infra.
+async function userAllowsObject(
+  supabaseUrl: string, anonKey: string, token: string, gate: string | null,
+): Promise<boolean> {
+  if (!gate) return true;
+  try {
+    const jwt = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data, error } = await jwt.rpc(gate);
+    if (error) return true; // fail-open: a RPC da tool decide
+    return data !== false;
+  } catch (_e) {
+    return true;
+  }
 }
 
 // ─── memória de sessão (histórico por session_id + resumo rolante) ───────────
@@ -3718,11 +3828,14 @@ serve(async (req) => {
     const hintReuniaoAcao = isReuniaoAcaoRequest(body.message);
     const hintAgendar = isAgendarAtendimentoRequest(body.message);
     const hintTarefa = TAREFA_CHAT_ENABLED && isTarefaChatRequest(body.message);
+    // B1: hint das Ondas 1-3 (processo, kit, resumo do dia, protocolo, permissão…).
+    // Sem ele o classificador de objeto nunca era chamado nessas frases.
+    const hintOnda = isOndaAcaoRequest(body.message);
     let routeObj: RouteObject | null = null;
-    if (hintCadastro || hintReuniaoAcao || hintAgendar || hintTarefa) {
+    if (hintCadastro || hintReuniaoAcao || hintAgendar || hintTarefa || hintOnda) {
       routeObj = await classifyActionObject(admin, INTENT_CLASSIFIER_MODEL, body.message,
         { cadastro: hintCadastro, agenda: hintReuniaoAcao || hintAgendar, tarefa: hintTarefa }, entryCtx);
-      console.log(`[llm-first] session=${body.sessionId} hints{cad:${hintCadastro},ag:${hintReuniaoAcao || hintAgendar},tar:${hintTarefa}} → objeto=${routeObj} (msg="${body.message.slice(0, 50)}")`);
+      console.log(`[llm-first] session=${body.sessionId} hints{cad:${hintCadastro},ag:${hintReuniaoAcao || hintAgendar},tar:${hintTarefa},onda:${hintOnda}} → objeto=${routeObj} (msg="${body.message.slice(0, 50)}")`);
     }
 
     // ─── CADASTRO-MODELO-A: cartão de cadastro (disparado quando o LLM classifica o
@@ -4051,6 +4164,58 @@ serve(async (req) => {
         }
       } else {
         console.log(`[coleta-continuidade] session=${body.sessionId} sem coleta ativa → classificar normalmente`);
+      }
+    }
+
+    // ─── B1: OBJETO DAS ONDAS 1-3 → especialista PORTADOR da tool ────────────────
+    // Precedência: DEPOIS de cadastro-form/agenda/tarefa/continuação-de-coleta,
+    // ANTES do classificador de intenção (senão "resumo do meu dia" vira TRIVIAL e
+    // "protocola a peça" vira pedido de peça). Fluxo:
+    //   1. gate do BANCO reprova → recusa CERTA, sem rotear para quem vai negar por
+    //      outro motivo (foi o que aconteceu no E2E: Agenda recusando pedido de processo);
+    //   2. acha o especialista que PORTA a tool (determinístico, sem LLM);
+    //   3. run já em executing_n3 com target_n3_id — pula o chooseSpecialist (que errava).
+    // Conservador: sem especialista portador, cai no fluxo normal (nada regride).
+    {
+      const objAction = routeObj ? ROUTE_OBJECT_ACTIONS[routeObj] : undefined;
+      if (objAction) {
+        const allowed = await userAllowsObject(supabaseUrl, anonKey, token, objAction.gate);
+        if (!allowed) {
+          console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} BARRADO pelo gate ${objAction.gate} → recusa amigável`);
+          const { data: negRun } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "done", entry_agent_id: agent.id,
+            intent_category: "ACAO_COM_TOOL", route_path: "fast",
+            chain: [{ level: 0, path: `${objAction.path}_sem_permissao`, intent: "ACAO_COM_TOOL", agent: agent.name, objeto: routeObj }],
+          }).select("id").single();
+          const negSeq = await nextSeq(admin, body.sessionId);
+          await admin.from("chat_messages").insert({
+            session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
+            content: objAction.recusa, sequence_number: negSeq,
+            metadata: { kind: "text", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: body.sessionId, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, {
+            runId: (negRun as { id: string } | null)?.id ?? null, sessionId: body.sessionId,
+            status: "done", path: `${objAction.path}_sem_permissao`, intent: "ACAO_COM_TOOL",
+          });
+        }
+        const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool);
+        if (spec) {
+          console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} → tool=${objAction.tool} → ${spec.name} (${spec.id})`);
+          const { data: objRunRow, error: objRunErr } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+            target_n3_id: spec.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+            chain: [{ level: 0, path: objAction.path, intent: "ACAO_COM_TOOL", agent: spec.name, objeto: routeObj, tool: objAction.tool }],
+          }).select("id").single();
+          if (objRunErr || !objRunRow) return errResp(500, "db_error", `Falha ao criar run: ${objRunErr?.message}`);
+          const objRunId = (objRunRow as { id: string }).id;
+          await insertStage(admin, body.sessionId, userId, `${spec.name} ${objAction.stage}...`, "executing_acao", spec);
+          fireNextStep(objRunId, supabaseUrl, serviceKey, token); // propaga o JWT (RLS do N3)
+          return json(202, { runId: objRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", path: objAction.path });
+        }
+        console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} sem especialista portador de ${objAction.tool} — segue fluxo normal`);
       }
     }
 
