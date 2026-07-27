@@ -420,7 +420,8 @@ export interface JurisChatPanelProps {
   /** Trilho A — mensagem de voz: recebe o Blob gravado (grava → transcreve →
    *  preenche o campo pra revisão). O painel usa useChatVoiceRecorder internamente
    *  e chama isto no fim da gravação. Ausente ⇒ botão de microfone não aparece. */
-  onVoiceBlob?: (blob: Blob) => void;
+  /** B9: o 2º arg é o preview local (fallback da tela inicial se a edge falhar). */
+  onVoiceBlob?: (blob: Blob, fallbackText?: string) => void;
   isReadOnly: boolean;
   roleLabel: string;
   activeDeptLabel: string;
@@ -528,6 +529,10 @@ export default function JurisChatPanel({
         <div className="jc-messages">
           <WelcomeScreen
             isRecepcao={isRecepcao}
+            /* B9: microfone da tela inicial usa a MESMA edge do chat (Whisper),
+               não o reconhecimento local do navegador. Só passa quando a flag
+               está on — senão a tela mantém o fallback local. */
+            onVoiceBlob={TRANSCRIPTION_ENABLED ? onVoiceBlob : undefined}
             onDismiss={() => setShowWelcome(false)}
             onSubmit={(msg, files) => {
               setShowWelcome(false);

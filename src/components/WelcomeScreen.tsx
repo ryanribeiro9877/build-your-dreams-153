@@ -45,6 +45,14 @@ interface WelcomeScreenProps {
   /** Recepção (role_templates.code ∈ recepção)? Só então mostra o card de
    *  aniversariantes — 1:1 com o gate is_recepcao() da RPC no banco. */
   isRecepcao?: boolean;
+  /**
+   * B9 (E2E 24/07): entrega o ÁUDIO gravado ao pai, que transcreve pela edge
+   * `transcribe-audio` (Whisper) e preenche o campo para revisão — o MESMO caminho
+   * do microfone do chat. Sem esta prop, a tela cai no fallback local (Web Speech
+   * do navegador), que degradava a qualidade ("Atribua a tarefa" → "A Tribuna
+   * tarefa") e não gerava linha em ai_generations.
+   */
+  onVoiceBlob?: (blob: Blob, fallbackText?: string) => void | Promise<void>;
 }
 
 const WAVEFORM_BARS = 40;
@@ -71,7 +79,7 @@ function useTypewriter(text: string, active: boolean) {
   return displayed;
 }
 
-export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false, onVoiceBlob }: WelcomeScreenProps) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -94,6 +102,9 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const transcriptAccumRef = useRef<string>("");
+  // B9: gravação real do áudio (vai para a edge transcribe-audio via onVoiceBlob).
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // ── Profile + KPIs ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -154,6 +165,11 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch { /* noop */ }
       recognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      // Para sem disparar entrega (o onstop de entrega é armado no confirmar).
+      try { if (mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop(); } catch { /* noop */ }
+      mediaRecorderRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -267,7 +283,31 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
       return;
     }
 
-    // 2) Web Speech API pra transcrição
+    // 2) B9 — GRAVAÇÃO do áudio para a edge `transcribe-audio` (Whisper). É o
+    // caminho principal: mesmo pipeline do microfone do chat (upload em
+    // chat_attachments → edge → texto no campo para revisão), com telemetria em
+    // ai_generations. O reconhecimento local abaixo fica só como fallback.
+    audioChunksRef.current = [];
+    mediaRecorderRef.current = null;
+    if (onVoiceBlob && typeof MediaRecorder !== "undefined" && streamRef.current) {
+      try {
+        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+        const mr = mime
+          ? new MediaRecorder(streamRef.current, { mimeType: mime })
+          : new MediaRecorder(streamRef.current);
+        mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data); };
+        mr.start();
+        mediaRecorderRef.current = mr;
+      } catch (err) {
+        console.warn("[WelcomeScreen] MediaRecorder indisponível — usando transcrição local:", err);
+        mediaRecorderRef.current = null;
+      }
+    }
+
+    // 3) Web Speech API — FALLBACK/preview ao vivo (o texto exibido enquanto fala).
+    // Só decide a transcrição final quando a gravação para a edge não está ativa.
     transcriptAccumRef.current = "";
     setLiveTranscript("");
     const SR =
@@ -304,7 +344,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
     }
 
     setIsRecording(true);
-  }, []);
+  }, [onVoiceBlob]);
 
   // ── Recording — cancel (descarta) ───────────────────────────────────────
   const cancelRecording = useCallback(() => {
@@ -327,6 +367,38 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
       target_label: "Confirmar gravação",
     });
     const finalText = (transcriptAccumRef.current || liveTranscript).trim();
+    const mr = mediaRecorderRef.current;
+
+    // B9 — caminho principal: entrega o ÁUDIO ao pai (edge transcribe-audio →
+    // Whisper → campo para revisão). Precisa capturar o blob no onstop ANTES de
+    // stopRecordingInternals derrubar o stream.
+    if (mr && onVoiceBlob && mr.state !== "inactive") {
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        if (blob.size > 0) {
+          void onVoiceBlob(blob, finalText || undefined);
+        } else if (finalText) {
+          handleSubmit(finalText); // gravação vazia → não perde a fala do usuário
+        }
+      };
+      try { mr.stop(); } catch { /* noop */ }
+      // Encerra waveform/reconhecimento (o stream é fechado no onstop acima).
+      if (animFrameRef.current !== null) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { /* noop */ } recognitionRef.current = null; }
+      if (audioContextRef.current) { audioContextRef.current.close().catch(() => { /* noop */ }); audioContextRef.current = null; }
+      analyserRef.current = null;
+      setIsRecording(false);
+      setLiveTranscript("");
+      transcriptAccumRef.current = "";
+      onDismiss(); // sai da welcome: o texto transcrito aparece no campo do chat
+      return;
+    }
+
+    // Fallback: sem MediaRecorder/onVoiceBlob, usa o reconhecimento local.
     stopRecordingInternals();
     setIsRecording(false);
     setLiveTranscript("");
@@ -335,7 +407,7 @@ export default function WelcomeScreen({ onDismiss, onSubmit, isRecepcao = false 
       // Dispara o submit direto com o transcript (não passa pelo state `value`).
       handleSubmit(finalText);
     }
-  }, [liveTranscript, stopRecordingInternals, handleSubmit]);
+  }, [liveTranscript, stopRecordingInternals, handleSubmit, onVoiceBlob, onDismiss]);
 
   const greetingFull = useMemo(
     () => `Olá ${displayName}, como posso te ajudar?`,

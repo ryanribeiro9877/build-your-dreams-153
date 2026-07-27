@@ -877,7 +877,10 @@ export default function JurisCloudOS() {
   // Recebe o Blob do useChatVoiceRecorder (no JurisChatPanel), garante uma sessão
   // (mesma lógica do handleSend, sem cobrança de tokens — a cobrança é no envio),
   // transcreve via Whisper e preenche o campo pra revisão. Nunca envia sozinho.
-  const handleVoiceRecorded = async (blob: Blob) => {
+  // B9: `fallbackText` é o preview do reconhecimento local (usado só pela tela
+  // inicial). Se a edge falhar, aproveitamos esse texto em vez de descartar a fala
+  // do usuário — e avisamos que a qualidade é a do navegador.
+  const handleVoiceRecorded = async (blob: Blob, fallbackText?: string) => {
     if (!user) { toast.error("Faça login para usar a mensagem de voz."); return; }
     let sid = assistantSessionId;
     if (!sid) {
@@ -901,6 +904,10 @@ export default function JurisCloudOS() {
     if (ok && text) {
       setInputVal((prev) => (prev.trim() ? prev.trim() + " " : "") + text);
       toast.success("Transcrição pronta — revise e envie.");
+    } else if (fallbackText?.trim()) {
+      // Edge indisponível: usa o preview local, mas deixa claro que é menos preciso.
+      setInputVal((prev) => (prev.trim() ? prev.trim() + " " : "") + fallbackText.trim());
+      toast.warning("Transcrição do servidor indisponível — usei o reconhecimento do navegador. Revise o texto antes de enviar.");
     } else {
       toast.error("Não consegui transcrever o áudio. Tente de novo.");
     }
