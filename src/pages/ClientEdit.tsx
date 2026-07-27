@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useMenuAccess } from "@/hooks/useMenuAccess";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import ClienteFormWizard from "@/components/clients/ClienteFormWizard";
@@ -14,7 +14,7 @@ import {
 export default function ClientEdit() {
   const { id } = useParams<{ id: string }>();
   const { workspace } = useMyWorkspace();
-  const { canAccessClients } = usePermissions();
+  const { canSeeMenu, loading: menuLoading } = useMenuAccess();
   const navigate = useNavigate();
 
   const [values, setValues] = useState<ClientFormValues | null>(null);
@@ -36,7 +36,8 @@ export default function ClientEdit() {
   useEffect(() => { if (id) void load(id); }, [id, load]);
 
   // DEF-2: exclusivo da recepção (mesma fonte do menu). Ver Clients.tsx.
-  if (workspace && !canAccessClients) return <RestrictedAccess />;
+  // B10: mesma fonte do menu/lista/ficha (ver ClientDetails).
+  if (!menuLoading && workspace && !canSeeMenu("clientes")) return <RestrictedAccess />;
   if (loading || !values) return <HexagonLoader variant="fullscreen" label="Carregando cliente..." />;
 
   return (

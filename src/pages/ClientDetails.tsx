@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ComponentType } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useMenuAccess } from "@/hooks/useMenuAccess";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import {
@@ -47,7 +47,7 @@ const TABS: { key: string; label: string; Comp: ComponentType<{ client: ClientFu
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
   const { workspace } = useMyWorkspace();
-  const { canAccessClients } = usePermissions();
+  const { canSeeMenu, loading: menuLoading } = useMenuAccess();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -79,8 +79,11 @@ export default function ClientDetails() {
 
   useEffect(() => { if (id) void load(id); }, [id, load]);
 
-  // DEF-2: exclusivo da recepção (mesma fonte do menu). Ver Clients.tsx.
-  if (workspace && !canAccessClients) return <RestrictedAccess />;
+  // B10: MESMA fonte do menu e da lista (canSeeMenu('clientes')) — antes usava
+  // canAccessClients (só "receptionist"), então o ADMIN via o menu e a lista mas
+  // batia em "Acesso restrito" ao abrir a ficha, contradizendo a chave-mestra.
+  // Espera o hook resolver para não piscar bloqueio durante o carregamento.
+  if (!menuLoading && workspace && !canSeeMenu("clientes")) return <RestrictedAccess />;
   if (loading) return <HexagonLoader variant="fullscreen" label="Carregando detalhes..." />;
   if (!client) return null;
 
