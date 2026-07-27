@@ -103,6 +103,133 @@ export function nowLocalWall(now: Date, tz: string): string {
   return `${g.year}-${g.month}-${g.day}T${hh}:${g.minute}:${g.second}`;
 }
 
+// ─── B3 do reteste 27/07: cartão de tarefa vinha VAZIO ───────────────────────
+// A frase "cadastre uma pendência de procuração pro cliente X para sexta" trazia
+// os três dados, mas o cartão vinha em branco: o prompt só exemplificava
+// "amanhã/hoje" (dias da semana não eram resolvidos → "para sexta" virava null, o
+// mesmo bug do E2E anterior) e qualquer falha do LLM zerava tudo.
+//
+// Estes extratores são DETERMINÍSTICOS e servem de FALLBACK — o valor do LLM
+// sempre tem prioridade; eles só preenchem o que veio null. Operam sobre padrões
+// ESTRUTURAIS explícitos da frase ("pendência de X", "pro cliente Y", "para
+// sexta"), não sobre intenção — o roteamento segue LLM-first.
+// Gotcha pt-BR: `\b` é ASCII-only, então as fronteiras usam (?<![\wÀ-ÿ]).
+
+const DIAS_SEMANA: Record<string, number> = {
+  domingo: 0, segunda: 1, terca: 2, terça: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6, sábado: 6,
+};
+
+function pad(n: number): string { return String(n).padStart(2, "0"); }
+function wallOf(y: number, mo: number, d: number, h: number, mi: number): string {
+  return `${y}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:00`;
+}
+
+/** Hora citada na frase ("às 14h", "9h", "14:30"); null se não houver. */
+export function parseHoraLocal(message: string): { h: number; mi: number } | null {
+  const m = /(?<![\wÀ-ÿ])(?:[àa]s\s+)?(\d{1,2})(?::(\d{2})|\s*h(?:oras?)?(?:\s*(\d{2}))?)(?![\wÀ-ÿ:])/i.exec(message);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2] ?? m[3] ?? 0);
+  if (h > 23 || mi > 59) return null;
+  return { h, mi };
+}
+
+/**
+ * Resolve um prazo RELATIVO citado em linguagem natural para hora LOCAL de parede
+ * ("AAAA-MM-DDTHH:mm:ss"), ancorado em `nowLocal` (hora local de parede de agora).
+ * Cobre: hoje, amanhã, depois de amanhã, dias da semana (próxima ocorrência
+ * ESTRITAMENTE futura — "para sexta" numa sexta = a sexta seguinte), "semana que
+ * vem"/"próxima semana" (segunda seguinte) e "dia N" (deste mês ou do próximo, se
+ * já passou). Sem hora citada, usa 09:00 (início do expediente 08–17).
+ * Retorna null quando não há expressão de prazo reconhecível — NUNCA chuta.
+ */
+export function parseRelativeDeadline(message: string, nowLocal: string): string | null {
+  const anchor = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec((nowLocal || "").trim());
+  if (!anchor) return null;
+  const [, ay, amo, ad] = anchor;
+  const base = new Date(Date.UTC(+ay, +amo - 1, +ad)); // só a data ancora o cálculo
+  const msg = (message || "").toLowerCase();
+  const hora = parseHoraLocal(message);
+  const H = hora?.h ?? 9, MI = hora?.mi ?? 0;
+  const out = (addDays: number) => {
+    const d = new Date(base.getTime() + addDays * 86400000);
+    return wallOf(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), H, MI);
+  };
+
+  if (/(?<![\wÀ-ÿ])depois de amanh[ãa]/.test(msg)) return out(2);
+  if (/(?<![\wÀ-ÿ])amanh[ãa](?![\wÀ-ÿ])/.test(msg)) return out(1);
+  if (/(?<![\wÀ-ÿ])hoje(?![\wÀ-ÿ])/.test(msg)) return out(0);
+  if (/(semana que vem|pr[óo]xima semana)/.test(msg)) {
+    const dow = base.getUTCDay();
+    return out(((8 - dow) % 7) || 7); // próxima segunda
+  }
+  for (const [nome, alvo] of Object.entries(DIAS_SEMANA)) {
+    const re = new RegExp(`(?<![\\wÀ-ÿ])${nome}(?:-feira)?(?![\\wÀ-ÿ])`, "i");
+    if (re.test(msg)) {
+      const dow = base.getUTCDay();
+      const delta = ((alvo - dow + 7) % 7) || 7; // estritamente futuro
+      return out(delta);
+    }
+  }
+  const dm = /(?<![\wÀ-ÿ])dia\s+(\d{1,2})(?![\wÀ-ÿ:])/.exec(msg);
+  if (dm) {
+    const alvo = Number(dm[1]);
+    if (alvo >= 1 && alvo <= 31) {
+      const y = base.getUTCFullYear(), mo = base.getUTCMonth();
+      const thisMonth = new Date(Date.UTC(y, mo, alvo));
+      const d = (thisMonth.getUTCDate() === alvo && thisMonth >= base)
+        ? thisMonth
+        : new Date(Date.UTC(y, mo + 1, alvo));
+      if (d.getUTCDate() !== alvo) return null; // dia inexistente no mês (ex.: 31/02)
+      return wallOf(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), H, MI);
+    }
+  }
+  return null;
+}
+
+// Remove a cauda TEMPORAL de um trecho — com ou sem preposição ("Adalberto amanhã
+// às 10h" → "Adalberto"). Sem isto, o prazo vazava para o título/nome do cliente.
+const CAUDA_TEMPO_RE =
+  /(?<![\wÀ-ÿ])(?:(?:para|at[ée]|no|na|em|dia)\s+)?(?:hoje|amanh[ãa]|depois de amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|semana que vem|pr[óo]xima semana|semana|dia\s+\d{1,2}|[àa]s\s+\d{1,2}(?::\d{2})?\s*h?|\d{1,2}\s*h(?:oras?)?|\d{1,2}:\d{2})(?:-feira)?[\s\S]*$/i;
+
+function stripCauda(s: string): string {
+  return s.replace(CAUDA_TEMPO_RE, "").replace(/[\s,.;-]+$/, "").trim();
+}
+
+/** Objeto da pendência/tarefa: "pendência DE procuração" → "procuração". */
+export function extractPendenciaTitle(message: string): string | null {
+  const m = /(?<![\wÀ-ÿ])(?:pend[êe]ncia|tarefa|lembrete|card)\s+(?:de|do|da|dos|das|sobre|para)\s+([^,.;]{2,60})/i.exec(message || "");
+  if (!m) return null;
+  // Corta o vínculo com cliente ("procuração pro cliente X") e a cauda de prazo.
+  const semCliente = m[1].replace(/(?<![\wÀ-ÿ])(?:pro|pra|para o|para a|para|do|da|de|com o|com a)?\s*cliente(?![\wÀ-ÿ])[\s\S]*$/i, "");
+  const t = stripCauda(semCliente);
+  return t.length >= 2 ? t : null;
+}
+
+/**
+ * Cliente citado: "pro cliente X", "para o cliente X", "do cliente X".
+ * A preposição é OBRIGATÓRIA — sem ela, "sem cliente citado" capturaria "citado"
+ * como nome. Como é fallback, preferimos deixar o campo aberto a chutar errado.
+ */
+export function extractClientQuery(message: string): string | null {
+  const m = /(?<![\wÀ-ÿ])(?:pro|pra|para\s+[oa]|para|d[oa]|de|com\s+[oa])\s+cliente\s+([^,.;]{2,80})/i.exec(message || "");
+  if (!m) return null;
+  const q = stripCauda(m[1]);
+  return q.length >= 2 ? q : null;
+}
+
+/**
+ * Completa o rascunho do LLM com os extratores determinísticos. O LLM tem
+ * PRIORIDADE — só preenchemos o que veio null (nunca sobrescrevemos).
+ */
+export function fillDraftGaps(draft: TaskDraft, message: string, nowLocal: string): TaskDraft {
+  const out = { ...draft };
+  if (!out.title) out.title = extractPendenciaTitle(message);
+  if (!out.client_query) out.client_query = extractClientQuery(message);
+  if (!out.deadline_local) out.deadline_local = parseRelativeDeadline(message, nowLocal);
+  return out;
+}
+
 // Prompt de extração do rascunho. O modelo devolve o prazo como hora LOCAL de
 // parede (deadline_local), SEM fuso — ele NÃO deve converter para UTC nem usar
 // "Z"/offset (era a origem do bug +3h). `nowLocal` já é a hora local em `tz`.
@@ -112,9 +239,16 @@ export function buildTaskDraftPrompt(message: string, nowLocal: string, tz: stri
     `Agora é ${nowLocal} no fuso ${tz} (este é o horário LOCAL de parede). Responda SOMENTE um JSON com as chaves:`,
     `title, description,`,
     `deadline_local (horário LOCAL de parede no formato "AAAA-MM-DDTHH:mm:ss", SEM fuso e SEM "Z", resolvendo`,
-    `expressões relativas — "amanhã 10h", "hoje 15h" — contra o "agora" LOCAL acima; null se não houver prazo),`,
-    `deadline_display (texto curto já resolvido, ex.: "10/07 10:00"), priority (critical|high|medium|low ou null),`,
-    `client_query (nome/termo do cliente citado, ou null), assignee_hint (nome do responsável citado, ou null).`,
+    `expressões relativas contra o "agora" LOCAL acima; null se não houver prazo). RESOLVA TAMBÉM DIAS DA`,
+    `SEMANA e datas: "para sexta" / "na sexta-feira" = a PRÓXIMA sexta (estritamente futura); "segunda",`,
+    `"terça"… idem; "semana que vem"/"próxima semana" = a próxima segunda; "dia 31" = o dia 31 deste mês (ou`,
+    `do mês seguinte, se já passou); "hoje", "amanhã", "depois de amanhã". SEM hora citada, use 09:00`,
+    `(início do expediente). Ex.: se agora é segunda 27/07, "para sexta" → "2026-07-31T09:00:00".`,
+    `deadline_display (texto curto já resolvido, ex.: "31/07 09:00"), priority (critical|high|medium|low ou null),`,
+    `client_query (nome/termo do cliente citado — copie o nome COMO ESCRITO, inclusive prefixos como "[TESTE]";`,
+    `ou null), assignee_hint (nome do responsável citado, ou null).`,
+    `title: o OBJETO da tarefa/pendência, curto. Ex.: "cadastre uma pendência de procuração pro cliente X para`,
+    `sexta" → title "procuração"; "abra uma pendência dos extratos do cliente Y" → title "extratos".`,
     `IMPORTANTE: NÃO converta fusos e NÃO use "Z"/offset — informe apenas a hora local exatamente como foi pedida.`,
     `NUNCA invente. Se um campo não estiver claro, use null. Não inclua comentários fora do JSON.`,
     `Pedido: """${message}"""`,

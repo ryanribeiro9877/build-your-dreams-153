@@ -28,7 +28,7 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
-import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall } from "./taskDraft.ts";
+import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
 import { reportError, flushSentry } from "./sentry.ts";
 import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -2488,9 +2488,9 @@ async function classifyIntent(
 // roteador LLM decide o especialista). Modelo rápido, JSON, 0 temperatura.
 async function classifyActionObject(
   admin: SupabaseClient, model: string, message: string,
-  hints: { cadastro: boolean; agenda: boolean; tarefa: boolean }, ctx?: LlmCtx,
+  hints: { cadastro: boolean; agenda: boolean; tarefa: boolean; onda?: boolean }, ctx?: LlmCtx,
 ): Promise<RouteObject> {
-  const hintNote = `Sinais superficiais (regex, PODEM estar errados — use só como pista, não como decisão): cadastro=${hints.cadastro ? "sim" : "não"}, agenda=${hints.agenda ? "sim" : "não"}, tarefa=${hints.tarefa ? "sim" : "não"}.`;
+  const hintNote = `Sinais superficiais (regex, PODEM estar errados — use só como pista, não como decisão): cadastro=${hints.cadastro ? "sim" : "não"}, agenda=${hints.agenda ? "sim" : "não"}, tarefa=${hints.tarefa ? "sim" : "não"}, acao_operacional=${hints.onda ? "sim" : "não"}.`;
   try {
     const r = await callLLM(admin, {
       model, systemPrompt: ACTION_OBJECT_RULES + buildNowAnchor(), history: [],
@@ -3841,7 +3841,7 @@ serve(async (req) => {
     let routeObj: RouteObject | null = null;
     if (hintCadastro || hintReuniaoAcao || hintAgendar || hintTarefa || hintOnda) {
       routeObj = await classifyActionObject(admin, INTENT_CLASSIFIER_MODEL, body.message,
-        { cadastro: hintCadastro, agenda: hintReuniaoAcao || hintAgendar, tarefa: hintTarefa }, entryCtx);
+        { cadastro: hintCadastro, agenda: hintReuniaoAcao || hintAgendar, tarefa: hintTarefa, onda: hintOnda }, entryCtx);
       console.log(`[llm-first] session=${body.sessionId} hints{cad:${hintCadastro},ag:${hintReuniaoAcao || hintAgendar},tar:${hintTarefa},onda:${hintOnda}} → objeto=${routeObj} (msg="${body.message.slice(0, 50)}")`);
     }
 
@@ -4053,6 +4053,11 @@ serve(async (req) => {
       } catch (_e) {
         draft = normalizeDraft(null);
       }
+      // B3 do reteste 27/07: o cartão vinha VAZIO (título, cliente e prazo em
+      // branco) — o LLM não resolvia dias da semana ("para sexta") e qualquer falha
+      // dele zerava tudo. Os extratores determinísticos preenchem SÓ o que ficou
+      // null (o LLM tem prioridade), a partir de padrões estruturais da frase.
+      draft = fillDraftGaps(draft, body.message, nowLocalWall(new Date(), TZ_ESCRITORIO));
       // Resolve o prazo em UTC deterministicamente (única conversão local→UTC).
       draft.deadline_at = localWallTimeToUtcISO(draft.deadline_local, TZ_ESCRITORIO);
 

@@ -47,7 +47,9 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
 
 - "TRIVIAL": saudação, cortesia, small talk ou pergunta trivial SEM qualquer teor
   jurídico e SEM pedido de trabalho. Ex.: "oi", "bom dia", "tudo bem?", "obrigado".
-  Use TRIVIAL SOMENTE com ALTA CONFIANÇA.
+  Use TRIVIAL SOMENTE com ALTA CONFIANÇA. NÃO é TRIVIAL quando o usuário pede o
+  ESTADO DO PRÓPRIO TRABALHO (tarefas/prazos/agenda/pendências) — isso é CONSULTA,
+  mesmo em tom coloquial ou com saudação embutida ("bom dia! como está meu dia?").
 - "CONSULTA": o usuário quer CONSULTAR/BUSCAR/VER (LEITURA) um dado JÁ CADASTRADO no
   sistema (dados de um CLIENTE, tarefas, processos, documentos anexados, ou
   colaboradores) — NÃO é pedir uma peça nova, NÃO é escrever/criar nada, nem small
@@ -55,6 +57,12 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
   do cliente Fulano", "qual o telefone do cliente X", "busque o cliente Y", "quais
   tarefas do cliente Z", "que documentos o cliente W já enviou". Pedir um DADO de um
   cliente/registro existente é CONSULTA, não peça.
+  TAMBÉM É CONSULTA o PANORAMA PESSOAL do usuário — o estado do próprio trabalho
+  (tarefas, prazos, atendimentos, audiências, pendências, notificações). Ex.: "me dá
+  o resumo do meu dia", "como está meu dia", "o que eu tenho pra hoje", "minha
+  situação hoje", "o que está pendente pra mim hoje", "como está minha semana",
+  "o que tenho na agenda amanhã". REGRA: se a frase pede o ESTADO DO TRABALHO do
+  usuário, é CONSULTA — nunca TRIVIAL, mesmo com tom coloquial/saudação embutida.
 - "ACAO_COM_TOOL": pedido de AÇÃO OPERACIONAL de ESCRITA/EXECUÇÃO no sistema — NÃO é
   uma peça jurídica nem uma leitura: é uma operação que CRIA ou MODIFICA algo:
   cadastrar cliente, criar tarefa/card, solicitar documentos, pedir acesso a arquivos,
@@ -63,12 +71,20 @@ Analise a MENSAGEM INTEIRA do usuário (não só o começo) e escolha UMA catego
   ações de escrita. Ex.: "quero cadastrar um cliente", "crie uma tarefa para fulano",
   "solicite os documentos do cooperado", "abra uma pendência", "Ryan Ribeiro CPF
   123.456.789-00 endereço rua X" (quando o contexto da conversa é um cadastro).
+  TAMBÉM SÃO ACAO_COM_TOOL: PROTOCOLAR uma peça / dar entrada / "já protocolei"
+  (registra o protocolo — NÃO é redigir), abrir/atualizar PROCESSO, GERAR os
+  documentos/kit de um cliente, marcar audiência, reagendar/cancelar atendimento,
+  conceder/revogar acesso a menu. ATENÇÃO: "protocola a peça do cliente X" é
+  ACAO_COM_TOOL (o verbo é protocolar), NUNCA NEGOCIO_SEM_INSUMO — não peça dados de
+  redação (réu, fatos, valores) para protocolar.
 - "NEGOCIO_SEM_INSUMO": é uma demanda de PEÇA JURÍDICA (pedir petição, cálculo,
   análise, contestação etc.), MAS a mensagem NÃO traz informação textual suficiente
   para fundamentar a peça. Ex.: "gere uma peça" sozinho; "faça uma petição" sem
   cliente/réu/fatos/valores; pedido vago. Anexos de IMAGEM não contam como insumo
-  (não são lidos até o OCR). NÃO use para ações operacionais (cadastrar, criar tarefa
-  etc.) — essas são ACAO_COM_TOOL; nem para leitura de cadastro — essa é CONSULTA.
+  (não são lidos até o OCR). NÃO use para ações operacionais (cadastrar, criar tarefa,
+  PROTOCOLAR, abrir processo, gerar documentos do cliente) — essas são ACAO_COM_TOOL;
+  nem para leitura de cadastro/panorama do dia — essa é CONSULTA. Só use quando o
+  usuário pede o TEXTO de uma peça e faltam dados para escrevê-la.
 - "NEGOCIO_COM_INSUMO": demanda de PEÇA JURÍDICA COM dados textuais suficientes para
   o especialista trabalhar (ex.: cliente, réu, fatos, valores, tema — ou documento
   com texto legível anexado). "bom dia, preciso de uma petição de indébito para o
@@ -320,15 +336,15 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "PROCESSO_CREATE": o objeto é ABRIR/CRIAR um PROCESSO ou AÇÃO judicial novo. Ex.: "abre um processo pro cliente X, tipo indenizatório, réu Agibank", "cria uma ação de cobrança para a Maria". É o processo em si sendo criado — não confundir com DISTRIBUIR um processo já existente (OUTRO) nem com redigir a petição (OUTRO).
 - "PROCESSO_UPDATE": o objeto é um PROCESSO que já existe: registrar ANDAMENTO, mudar status/fase, anotar próxima audiência. Ex.: "registra no processo do Adalberto que a contestação foi protocolada", "atualiza o status do processo da Maria".
 - "KIT_DOCUMENTAL": o objeto são os DOCUMENTOS PADRÃO de um cliente já cadastrado (procuração, contrato de honorários, declaração de hipossuficiência, ficha cadastral) — gerar/emitir/preparar/refazer. Ex.: "gera os documentos do cliente X", "emite o kit da Maria", "prepara a procuração e o contrato do Adalberto". ATENÇÃO CRÍTICA: "gerar/emitir os DOCUMENTOS de um cliente" é SEMPRE KIT_DOCUMENTAL — NUNCA redação de peça. Só é peça (OUTRO) quando pedem para REDIGIR/ELABORAR uma peça processual sob medida (petição inicial, contestação, recurso, réplica, parecer, manifestação).
-- "RESUMO_DIA": o objeto é o RESUMO/PANORAMA do próprio dia ou da própria carga de trabalho do usuário. Ex.: "me dá o resumo do meu dia", "como está meu dia?", "o que eu tenho pra hoje?", "minhas pendências e compromissos de hoje". É um pedido de DADO operacional — NUNCA conversa/small talk.
-- "PROTOCOLO": o objeto é o PROTOCOLO de uma peça — registrar que protocolou/deu entrada, ou concluir a tarefa de protocolo. Ex.: "protocola a peça do cliente X", "já protocolei a inicial da Maria", "conclui o protocolo do Adalberto". NUNCA é redigir a peça (OUTRO).
+- "RESUMO_DIA": o objeto é o RESUMO/PANORAMA do próprio dia, da semana ou da própria carga de trabalho do usuário (tarefas, prazos, agenda, pendências). Ex.: "me dá o resumo do meu dia", "como está meu dia?", "o que eu tenho pra hoje?", "minha situação hoje", "o que está pendente pra mim hoje", "como está minha semana", "minhas pendências e compromissos de hoje". ATENÇÃO CRÍTICA: é um pedido de DADO operacional, NUNCA conversa/small talk — e continua sendo RESUMO_DIA mesmo com tom coloquial ou saudação embutida ("bom dia! me dá o resumo do meu dia"). Só é conversa quando NÃO se pede nada sobre o trabalho ("bom dia, tudo bem?").
+- "PROTOCOLO": o objeto é o PROTOCOLO de uma peça — registrar que protocolou/deu entrada, ou concluir a tarefa de protocolo. Ex.: "protocola a peça do cliente X", "protocola a inicial do Adalberto", "já protocolei a peça da Maria", "conclui o protocolo do Adalberto", "dá entrada na peça do cliente Y". ATENÇÃO CRÍTICA: a palavra "peça" AQUI é o objeto que será PROTOCOLADO — não é pedido de redação. Se o verbo é PROTOCOLAR / DAR ENTRADA / JÁ PROTOCOLEI, é sempre PROTOCOLO, mesmo que a frase contenha "peça", "petição", "inicial" ou "contestação". PROTOCOLAR ≠ REDIGIR: só é peça (OUTRO) quando pedem para ESCREVER/ELABORAR o texto.
 - "TAREFA_UPDATE": o objeto é uma TAREFA/PENDÊNCIA/CARD que JÁ existe: mover, mudar status/prazo/prioridade, renomear ou COMENTAR. Ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou". Distinto de CRIAR uma nova (TAREFA_INTERNA).
 - "CLIENTE_UPDATE": o objeto é CORRIGIR/ATUALIZAR um dado de cadastro de cliente que já existe (telefone, e-mail, endereço, nascimento, status). Ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto". Distinto de criar a ficha (CADASTRO).
 - "AGENDA_CONSULTA": o objeto é CONSULTAR a agenda/compromissos (sem alterar nada). Ex.: "o que tenho na agenda amanhã?", "quais meus atendimentos de hoje?", "minha agenda da semana".
 - "AGENDA_UPDATE": o objeto é REAGENDAR/REMARCAR ou CANCELAR um atendimento de cliente que JÁ existe. Ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina".
 - "AUDIENCIA": o objeto é uma AUDIÊNCIA judicial de um processo — marcar ou consultar. Ex.: "marca a audiência do processo do Adalberto para 12/08 às 10h", "quais audiências dessa semana?". Distinto de reunião/atendimento de cliente (AGENDA_CLIENTE).
 - "PERMISSAO_MENU": o objeto é o ACESSO de um COLABORADOR a um MENU/tela do sistema — conceder, revogar ou voltar ao padrão; ou listar essas permissões. Ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu existem?".
-- "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida, DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO.
+- "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
 Regra de ouro: o verbo NUNCA decide; o OBJETO decide. Separe: o cliente (CADASTRO/CLIENTE_UPDATE) · o atendimento do cliente (AGENDA_CLIENTE/AGENDA_UPDATE/AGENDA_CONSULTA) · a tarefa/pendência interna (TAREFA_INTERNA/TAREFA_UPDATE) · o processo (PROCESSO_CREATE/PROCESSO_UPDATE) · os documentos padrão do cliente (KIT_DOCUMENTAL) · a audiência (AUDIENCIA) · o protocolo (PROTOCOLO) · o dia do usuário (RESUMO_DIA) · o acesso a menu (PERMISSAO_MENU). Redigir peça sob medida e distribuir caso = OUTRO.`;
 
@@ -364,12 +380,15 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
 // existe fronteira, então `\b(d[áa])\b` nunca casa "dá acesso ao Kanban". Usamos
 // lookarounds que tratam acento como letra (À-ÿ) nas duas pontas.
 const ONDA_ALVO_RE =
-  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|tarefas?)(?![\wÀ-ÿ])/i;
+  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|minha semana|hoje|semana|situa[çc][ãa]o|compromissos?|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|pend[êe]nte|tarefas?)(?![\wÀ-ÿ])/i;
 // Verbos/formas que indicam PEDIDO operacional (não narrativa solta).
 // "cadastr\w*" entra porque "cadastre uma PENDÊNCIA…" é pedido de tarefa (o objeto
 // é a pendência, não o cliente) — foi um dos misroutes do E2E.
+// "como está meu dia", "o que eu tenho pra hoje", "minha situação hoje" não tinham
+// verbo nesta lista — por isso nem chegavam ao classificador de objeto (B1 do
+// reteste 27/07). Formas de ESTADO (como/está/tenho/tem/anda) entram aqui.
 const ONDA_VERBO_RE =
-  /(?<![\wÀ-ÿ])(abr\w*|cri\w*|cadastr\w*|adicion\w*|inclu\w*|ger\w*|emit\w*|prepar\w*|refa[çz]\w*|registr\w*|anot\w*|atualiz\w*|mud\w*|mov\w*|pass\w*|conclu\w*|protocol\w*|marc\w*|reagend\w*|remarc\w*|cancel\w*|coment\w*|conced\w*|d[êé]|d[áa]|libere?|tir\w*|revog\w*|list\w*|mostr\w*|quais|qual|o que|resum\w*|corrig\w*)(?![\wÀ-ÿ])/i;
+  /(?<![\wÀ-ÿ])(abr\w*|cri\w*|cadastr\w*|adicion\w*|inclu\w*|ger\w*|emit\w*|prepar\w*|refa[çz]\w*|registr\w*|anot\w*|atualiz\w*|mud\w*|mov\w*|pass\w*|conclu\w*|protocol\w*|marc\w*|reagend\w*|remarc\w*|cancel\w*|coment\w*|conced\w*|d[êé]|d[áa]|libere?|tir\w*|revog\w*|list\w*|mostr\w*|quais|qual|o que|resum\w*|corrig\w*|como|est[áa]|t[êe]m|tenho|anda|minha|meu)(?![\wÀ-ÿ])/i;
 
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();

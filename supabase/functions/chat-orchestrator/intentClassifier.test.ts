@@ -64,6 +64,29 @@ Deno.test("isOndaAcaoRequest: outras ações das ondas também acionam", () => {
   assertEquals(isOndaAcaoRequest("o que eu tenho na agenda amanhã?"), true);
 });
 
+// Reteste 27/07: estas frases-âncora de PANORAMA PESSOAL não acionavam o
+// classificador (faltava alvo "hoje/semana/situação/pendente" e verbo de ESTADO
+// "como/está/tenho"), então "me dá o resumo do meu dia" morria em TRIVIAL.
+Deno.test("isOndaAcaoRequest: panorama pessoal (todas as frases-âncora do briefing)", () => {
+  assertEquals(isOndaAcaoRequest("me dá o resumo do meu dia"), true);
+  assertEquals(isOndaAcaoRequest("como está meu dia"), true);
+  assertEquals(isOndaAcaoRequest("como está meu dia?"), true);
+  assertEquals(isOndaAcaoRequest("o que eu tenho pra hoje"), true);
+  assertEquals(isOndaAcaoRequest("minha situação hoje"), true);
+  assertEquals(isOndaAcaoRequest("o que está pendente pra mim hoje"), true);
+  assertEquals(isOndaAcaoRequest("como está minha semana"), true);
+  assertEquals(isOndaAcaoRequest("quais meus compromissos de hoje?"), true);
+});
+
+// Reteste 27/07: "protocola a peça do cliente X" caía em NEGOCIO_SEM_INSUMO
+// (questionário de peça). O hint precisa acionar a classificação nas variações.
+Deno.test("isOndaAcaoRequest: protocolar em suas variações", () => {
+  assertEquals(isOndaAcaoRequest("protocola a peça do [TESTE] CLIENTE E2E ONDAS"), true);
+  assertEquals(isOndaAcaoRequest("protocola a inicial do Adalberto"), true);
+  assertEquals(isOndaAcaoRequest("já protocolei a peça da Maria"), true);
+  assertEquals(isOndaAcaoRequest("conclui o protocolo do Adalberto"), true);
+});
+
 Deno.test("isOndaAcaoRequest: conversa e frases sem objeto do domínio → false", () => {
   assertEquals(isOndaAcaoRequest(""), false);
   assertEquals(isOndaAcaoRequest("bom dia!"), false);
