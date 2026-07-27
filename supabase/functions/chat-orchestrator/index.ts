@@ -30,7 +30,7 @@ import {
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
 import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
 import { reportError, flushSentry } from "./sentry.ts";
-import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES } from "./tools/registry.ts";
+import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import {
   type DelegationStack, type DelegationContext, type DelegMsg,
@@ -723,6 +723,112 @@ async function userAllowsObject(
   } catch (_e) {
     return true;
   }
+}
+
+// ─── Item 8 (adendo 27/07): tipos de ação como ENUMERAÇÃO FECHADA ────────────
+// O processo nascia com tipo_acao_id NULL: a tool recebia texto livre e o
+// casamento falhava em silêncio ("refinanciamento" vs "Refin"). Sem tipo, o gate
+// de documentos-âncora (24.1) e a distribuição por área não funcionam. Agora o
+// catálogo é LIDO DO BANCO em runtime e injetado como enum no schema que vai ao
+// LLM — ele escolhe um `code`; a resolução code→id é do banco (resolver_tipo_acao).
+interface TipoAcaoOpt { code: string; nome: string }
+let _tiposAcaoCache: { at: number; rows: TipoAcaoOpt[] } | null = null;
+const TIPOS_ACAO_TTL_MS = 5 * 60 * 1000;
+
+async function loadTiposAcao(admin: SupabaseClient): Promise<TipoAcaoOpt[]> {
+  if (_tiposAcaoCache && Date.now() - _tiposAcaoCache.at < TIPOS_ACAO_TTL_MS) return _tiposAcaoCache.rows;
+  const { data } = await admin.from("tipos_acao").select("code, nome, sort_order")
+    .eq("ativo", true).order("sort_order", { ascending: true, nullsFirst: false });
+  const rows = ((data as Array<{ code: string; nome: string }> | null) ?? [])
+    .filter((r) => r.code).map((r) => ({ code: r.code, nome: r.nome }));
+  if (rows.length) _tiposAcaoCache = { at: Date.now(), rows };
+  return rows;
+}
+
+// Injeta o enum de tipos no schema de criar_processo (clone — nunca muta TOOLS).
+function withTiposAcaoEnum(defs: ToolDef[], tipos: TipoAcaoOpt[]): ToolDef[] {
+  if (!tipos.length) return defs;
+  const lista = tipos.map((t) => `${t.code} — ${t.nome}`).join("; ");
+  return defs.map((d) => {
+    if (d.function?.name !== "criar_processo") return d;
+    const params = JSON.parse(JSON.stringify(d.function.parameters ?? {})) as {
+      properties?: Record<string, unknown>; required?: string[];
+    };
+    if (params.properties && params.properties.tipo_acao) {
+      params.properties.tipo_acao = {
+        type: "string",
+        enum: tipos.map((t) => t.code),
+        description: `OBRIGATÓRIO — a tese do processo. Escolha UM code desta lista: ${lista}. Se o pedido não permitir identificar a tese com segurança, NÃO chame a tool: pergunte ao usuário qual é a tese.`,
+      };
+      params.required = Array.from(new Set([...(params.required ?? []), "tipo_acao"]));
+    }
+    return { ...d, function: { ...d.function, parameters: params } };
+  });
+}
+
+// ─── Item 7 (adendo 27/07): pré-voo de criar_processo ────────────────────────
+// Barra ANTES do ActionCard: (a) tipo de ação não resolvido → pergunta a tese
+// (item 8); (b) duplicata equivalente ativa → avisa citando o processo existente e
+// oferece atualizar, SEM botão de confirmação. A regra de duplicidade vive no banco
+// (verificar_processo_duplicado — mesmo cliente + mesmo tipo null-safe + mesmo réu
+// quando informado); NÃO é reimplementada aqui.
+interface ProcessoPreflight {
+  /** Preenchido = responder isto como texto e NÃO renderizar cartão. */
+  blockMessage?: string;
+  /** Code canônico do tipo, quando resolvido. */
+  tipoCode?: string;
+  /** Aviso de contexto para o texto do cartão (não bloqueia). */
+  contextNote?: string;
+}
+async function preflightCriarProcesso(
+  admin: SupabaseClient, clientId: string, tipoAcaoRaw: unknown, reuRaw: unknown,
+): Promise<ProcessoPreflight> {
+  if (!clientId) return {};
+  const reu = typeof reuRaw === "string" && reuRaw.trim() ? reuRaw.trim() : null;
+  // 1. Tipo (item 8): resolve pelo banco; sem tipo NÃO se abre processo.
+  const { data: tipoRes } = await admin.rpc("resolver_tipo_acao", { p_termo: tipoAcaoRaw ?? null });
+  const t = tipoRes as { ok?: boolean; id?: string; code?: string; nome?: string; informado?: string } | null;
+  if (!t?.ok) {
+    const tipos = await loadTiposAcao(admin);
+    const opcoes = tipos.slice(0, 6).map((x) => x.nome.split("(")[0].trim().split("/")[0].trim()).join(", ");
+    const informado = t?.informado;
+    return {
+      blockMessage: (informado
+        ? `Não reconheci o tipo de ação "${informado}". `
+        : "Para abrir o processo eu preciso saber a tese. ") +
+        `Qual é? Ex.: ${opcoes}…`,
+    };
+  }
+  // 2. Duplicata (item 7): contrato pronto no banco.
+  const { data: dupRes } = await admin.rpc("verificar_processo_duplicado", {
+    p_client_id: clientId, p_tipo_acao_id: t.id ?? null, p_reu: reu,
+  });
+  const d = dupRes as {
+    cliente?: string; total_ativos?: number; bloquear?: boolean;
+    processos?: Array<{ numero?: string; tipo_acao?: string; reu_descricao?: string; criado_em?: string }>;
+  } | null;
+  if (d?.bloquear) {
+    const p = (d.processos ?? [])[0] ?? {};
+    const quando = p.criado_em
+      ? new Date(p.criado_em).toLocaleString("pt-BR", { timeZone: "America/Bahia", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : null;
+    const partes = [
+      `${d.cliente ?? "O cliente"} já tem um processo ativo`,
+      p.tipo_acao ? ` de ${p.tipo_acao}` : "",
+      p.reu_descricao ? ` contra ${p.reu_descricao}` : "",
+      p.numero ? ` (nº ${p.numero}` : "",
+      p.numero && quando ? `, aberto em ${quando})` : p.numero ? ")" : "",
+      ". Quer que eu atualize esse processo (registrar andamento) em vez de abrir outro?",
+    ];
+    return { blockMessage: partes.join("") };
+  }
+  const total = d?.total_ativos ?? 0;
+  return {
+    tipoCode: t.code,
+    contextNote: total > 0
+      ? `Atenção: este cliente já tem ${total} processo(s) ativo(s) — confirme se este é realmente um caso novo.`
+      : undefined,
+  };
 }
 
 // ─── memória de sessão (histórico por session_id + resumo rolante) ───────────
@@ -2092,7 +2198,10 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "criar_audiencia":
       return `Marcar audiência${args.tipo ? ` de ${args.tipo}` : ""}${args.processo_desc ? ` do processo ${args.processo_desc}` : ""} para ${args.data} ${args.hora}${args.local ? `, ${args.local}` : ""}.`;
     case "criar_processo":
-      return `Criar processo${args.tipo_acao ? ` (${args.tipo_acao})` : ""}${args.client_nome ? ` para ${args.client_nome}` : ""}${args.reu ? `, réu ${args.reu}` : ""}${args.numero ? `, nº ${args.numero}` : ""}.`;
+      // __aviso vem do pré-voo (item 7, caso não-bloqueante): o cliente já tem
+      // processo(s) ativo(s), mas nenhum equivalente — contexto, não impedimento.
+      return `Criar processo${args.tipo_acao ? ` (${args.tipo_acao})` : ""}${args.client_nome ? ` para ${args.client_nome}` : ""}${args.reu ? `, réu ${args.reu}` : ""}${args.numero ? `, nº ${args.numero}` : ""}.` +
+        (args.__aviso ? `\n⚠ ${args.__aviso}` : "");
     case "atualizar_processo": {
       const alvo = args.processo_desc ? ` do processo ${args.processo_desc}` : " do processo";
       const partes: string[] = [];
@@ -2188,6 +2297,32 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
   for (const call of calls) {
     const tool = call.function.name;
     let args = safeJson(call.function.arguments);
+    // ─── Itens 7 e 8 (adendo 27/07): PRÉ-VOO de criar_processo ────────────────
+    // Decisão do Ryan: duplicata tem de ser barrada ANTES do cartão — não
+    // "propõe → confirma → falha" (era o que a tela mostrava às 10:57).
+    // Também resolvemos o TIPO aqui: sem tipo o processo nascia NULL, quebrando
+    // o gate de âncora e a distribuição. Em ambos os casos respondemos com TEXTO
+    // (sem ActionCard) e encerramos o run.
+    if (tool === "criar_processo") {
+      const clientId = String(args.client_id ?? "").trim();
+      const pre = await preflightCriarProcesso(admin, clientId, args.tipo_acao, args.reu);
+      if (pre.blockMessage) {
+        const seqB = await nextSeq(admin, run.session_id);
+        await admin.from("chat_messages").insert({
+          session_id: run.session_id, user_id: run.user_id, role: "assistant",
+          sequence_number: seqB, agent_id: n3.id, content: pre.blockMessage,
+          metadata: { kind: "text", intent: "ACAO_COM_TOOL", agent_name: n3.name },
+        });
+        await admin.from("orchestration_runs")
+          .update({ status: "done", pending_actions: null, updated_at: new Date().toISOString() })
+          .eq("id", run.id);
+        return; // sem cartão: nada a confirmar
+      }
+      // Passa adiante o code canônico do tipo (o handler/RPC resolve para o id) e,
+      // quando houver processos ativos que NÃO bloqueiam, o cartão avisa no texto.
+      if (pre.tipoCode) args = { ...args, tipo_acao: pre.tipoCode };
+      if (pre.contextNote) args = { ...args, __aviso: pre.contextNote };
+    }
     // Cadastro: completa os args a partir do histórico da coleta (ver enrichCadastroArgs).
     if (tool === "cadastrar_cliente") {
       args = await enrichCadastroArgs(admin, run, args);
@@ -2899,7 +3034,8 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         : n === "salvar_peca" ? CHAT_TOOLS_ENABLED
         : isWriteTool(n) ? CHAT_TOOLS_ENABLED
         : CHAT_READ_TOOLS_ENABLED);
-      const toolDefs = toolsFor(gated);
+      // Item 8: enum de tipos de ação (lido do banco) no schema de criar_processo.
+      const toolDefs = withTiposAcaoEnum(toolsFor(gated), await loadTiposAcao(admin));
       const readClient = (userToken && anonKey)
         ? createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${userToken}` } } })
         : admin;
@@ -3196,7 +3332,8 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           (n) => n === DOC_CHECKLIST_TOOL ? CHAT_DOC_CHECKLIST_ENABLED
                : isWriteTool(n) ? CHAT_TOOLS_ENABLED
                : CHAT_READ_TOOLS_ENABLED);
-        const toolDefs = toolsFor(gatedToolNames);
+        // Item 8: enum de tipos de ação (lido do banco) no schema de criar_processo.
+        const toolDefs = withTiposAcaoEnum(toolsFor(gatedToolNames), await loadTiposAcao(admin));
         if (toolDefs.length > 0) {
           // Correção A: as leituras RLS-gated (consultar_cliente re-checa
           // is_recepcao_or_socio via auth.uid()) rodam sob a IDENTIDADE do usuário.
