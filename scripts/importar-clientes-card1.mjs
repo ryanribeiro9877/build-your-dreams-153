@@ -36,7 +36,7 @@
 // ============================================================================
 
 import { writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { readWorkbook } from "./lib/xlsxLite.mjs";
@@ -58,9 +58,27 @@ const EXECUTAR = has("--executar");
 const LIMIT = Number(arg("--limit", "0")) || 0;
 const BATCH = Math.min(Math.max(Number(arg("--batch", "50")) || 50, 1), 100);
 
-const F_DRYRUN = path.join(DIR, "CARD1-DRYRUN-IMPORTACAO-CLIENTES.xlsx");
-const F_BANCOS = path.join(DIR, "Clientes X bancos.xlsx");
-const F_SUSEP = path.join(DIR, "Dados - Seguro SUSEP.xlsx");
+// Projeto e chave ANON — ambos PÚBLICOS (a anon key é a que roda no navegador; toda
+// a proteção real está na RLS e nos gates das RPCs). Ficam aqui só para o operador
+// não precisar procurá-los; podem ser sobrescritos por env.
+const SUPABASE_URL_DEFAULT = "https://tsltxvswzdnlmvljpryh.supabase.co";
+const SUPABASE_ANON_DEFAULT = "sb_publishable_TXDq-dBuHoB3Wms48i77UA_9AD7SnXN";
+
+// Resolve o arquivo tolerando o sufixo de download duplicado ("… (1).xlsx") e
+// variações de espaço/underscore no nome.
+function resolveArquivo(dir, nomeExato, prefixo) {
+  const exato = path.join(dir, nomeExato);
+  if (existsSync(exato)) return exato;
+  const alvo = prefixo.replace(/[\s_]+/g, "").toLowerCase();
+  const cand = readdirSync(dir)
+    .filter((f) => /\.xlsx$/i.test(f) && f.replace(/[\s_]+/g, "").toLowerCase().startsWith(alvo))
+    .sort();
+  return cand.length ? path.join(dir, cand[0]) : exato;
+}
+
+const F_DRYRUN = resolveArquivo(DIR, "CARD1-DRYRUN-IMPORTACAO-CLIENTES.xlsx", "CARD1-DRYRUN");
+const F_BANCOS = resolveArquivo(DIR, "Clientes X bancos.xlsx", "Clientes X bancos");
+const F_SUSEP = resolveArquivo(DIR, "Dados - Seguro SUSEP.xlsx", "Dados - Seguro SUSEP");
 
 // ─── índice de SENHAS a partir das planilhas originais ──────────────────────
 // Cada entrada descreve onde estão nome/CPF/senha (índices 0-based de coluna).
@@ -224,13 +242,19 @@ async function main() {
   }
 
   // ── login do operador (env; a RPC exige auth.uid(): service-role NÃO serve) ──
-  const url = process.env.SUPABASE_URL;
-  const anon = process.env.SUPABASE_ANON_KEY;
+  // URL e chave ANON são públicas (a anon key é a mesma que roda no front), então
+  // ficam como default para o operador só precisar informar e-mail e senha. A senha
+  // NUNCA é argumento de linha de comando (ficaria no histórico do shell).
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || SUPABASE_URL_DEFAULT;
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_DEFAULT;
   const email = process.env.IMPORT_USER_EMAIL;
   const senhaOp = process.env.IMPORT_USER_PASSWORD;
-  if (!url || !anon || !email || !senhaOp) {
-    console.error("✖ defina SUPABASE_URL, SUPABASE_ANON_KEY, IMPORT_USER_EMAIL e IMPORT_USER_PASSWORD no ambiente.");
-    console.error("  (a RPC usa auth.uid() para created_by e exige admin/sócio/recepção — service-role não funciona)");
+  if (!email || !senhaOp) {
+    console.error("✖ defina IMPORT_USER_EMAIL e IMPORT_USER_PASSWORD no ambiente.");
+    console.error("  A RPC usa auth.uid() para created_by e exige admin/sócio/recepção");
+    console.error("  (service-role deixa auth.uid() nulo e a RPC recusa).");
+    console.error("  Contas aceitas: admin@juridico.com (Rodrigo), 2mitos2016@gmail.com (Ryan),");
+    console.error("  kailane@juridico.com, tais@juridico.com, yasmin@juridico.com.");
     process.exit(1);
   }
   const sb = createClient(url, anon, { auth: { persistSession: false } });
