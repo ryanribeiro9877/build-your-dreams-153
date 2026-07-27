@@ -38,3 +38,10 @@ supabase/.temp/
 
 # Brainstorm mockups e rascunhos efêmeros
 .superpowers/
+
+# CARD 1 — planilhas de importação de clientes: contêm CPF e senhas do GOV.BR.
+# NUNCA versionar. O script (scripts/importar-clientes-card1.mjs) as lê de um
+# diretório externo (ex.: Downloads) e envia direto à RPC, que cifra no cofre.
+*.xlsx
+*.xls
+CARD1-erros-importacao.json
