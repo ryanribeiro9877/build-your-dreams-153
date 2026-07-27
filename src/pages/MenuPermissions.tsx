@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSupabaseQuery } from "@/hooks/useSupabaseQuery";
 import { HexagonLoader } from "@/components/HexagonLoader";
-import { RestrictedAccess, formatDateBR } from "@/components/clients/shared";
+import { RestrictedAccess } from "@/components/clients/shared";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MENU_KEYS, MENU_KEY_LABELS, DATA_GATE_READY, type MenuKey } from "@/hooks/useMenuAccess";
 
@@ -17,9 +17,30 @@ interface MenuPermRow {
 // Estado tri: undefined = padrão do papel; true = concedido; false = revogado.
 type TriState = boolean | undefined;
 
-const supaRpc = supabase.rpc as unknown as (
+// B8 (E2E 24/07): ANTES isto era `const supaRpc = supabase.rpc as unknown as …`,
+// que DESACOPLA o método do client — ao chamar, `this` fica undefined e o
+// supabase-js quebra em `this.rest`. A leitura das permissões falhava em silêncio
+// (data=null → perms=[]), então TODA célula aparecia como "padrão" mesmo com
+// override ativo no banco; a lista de usuários funcionava porque era chamada
+// acoplada (`supabase.rpc(...)`). Agora o cast preserva o acoplamento: chamamos
+// sempre `supabase.rpc(...)` e só tipamos o nome da RPC (que não está nos tipos
+// gerados). Ver memória "supabase.rpc detached this".
+const supaRpc = (
   fn: string, args?: Record<string, unknown>,
-) => Promise<{ data: unknown; error: { message?: string } | null }>;
+): Promise<{ data: unknown; error: { message?: string } | null }> =>
+  (supabase.rpc as unknown as (
+    f: string, a?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>).call(supabase, fn, args);
+
+// "24/07 14:46" no fuso do escritório — quem concedeu/revogou e QUANDO.
+function fmtQuando(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    timeZone: "America/Bahia",
+  });
+}
 
 function cellStyle(s: TriState): React.CSSProperties {
   const base: React.CSSProperties = {
@@ -39,7 +60,9 @@ export default function MenuPermissions() {
   const usersQ = useSupabaseQuery<AssignableUser[]>({
     queryKey: "menu-perms-users",
     fetcher: async () => {
-      const { data, error } = await supabase.rpc("list_assignable_users");
+      // supaRpc (acoplado) também aqui: list_assignable_users não está nos tipos
+      // gerados e o cast do helper evita o TS2345 sem perder o `this`.
+      const { data, error } = await supaRpc("list_assignable_users");
       if (error) throw error;
       return (data as unknown as AssignableUser[]) ?? [];
     },
@@ -70,7 +93,9 @@ export default function MenuPermissions() {
     const r = byCell.get(`${userId}|${key}`);
     if (!r) return "Segue o padrão do papel. Clique para conceder.";
     const quem = r.granted_by_name ? ` por ${r.granted_by_name}` : "";
-    const quando = r.updated_at ? ` em ${formatDateBR(r.updated_at)}` : "";
+    // B8: o tooltip precisa de data E hora ("em 24/07 14:46"); formatDateBR só dá a
+    // data (e é compartilhado com outras telas, então formatamos aqui).
+    const quando = r.updated_at ? ` em ${fmtQuando(r.updated_at)}` : "";
     return `${r.granted ? "Concedido" : "Revogado"}${quem}${quando}. Clique para alternar.`;
   };
 
@@ -100,6 +125,18 @@ export default function MenuPermissions() {
         Cada célula alterna entre <b>padrão do papel</b> → <b>concedido</b> → <b>revogado</b>. O admin vê todos os menus e não aparece na matriz.
         Menus com <span title="acesso a dados pode exigir liberação adicional" style={{ color: "#b45309" }}>⚠</span> mostram a tela, mas o acesso aos <b>dados</b> pode exigir liberação adicional no banco.
       </p>
+
+      {/* B8: a falha de leitura era SILENCIOSA — a matriz mostrava tudo como
+          "padrão" e parecia divergir do banco. Agora o erro aparece. */}
+      {permsQ.error && (
+        <div style={{
+          marginBottom: 16, padding: "10px 12px", borderRadius: 8, fontSize: 13,
+          background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", color: "#dc2626",
+        }}>
+          ⚠ Não consegui carregar as permissões salvas ({permsQ.error}). As células abaixo podem não refletir o banco —
+          recarregue a página antes de alterar.
+        </div>
+      )}
 
       <table style={{ borderCollapse: "separate", borderSpacing: 4, fontSize: 13 }}>
         <thead>
