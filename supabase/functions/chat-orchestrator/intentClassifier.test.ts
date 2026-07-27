@@ -4,7 +4,7 @@ import {
   isAwaitingCollectionMeta, isCollectionEscape, isErrorMeta, findActiveCollection,
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isDocChecklistRequest, isPecaExplicitRequest, normalizeRouteObject,
-  isOndaAcaoRequest,
+  isOndaAcaoRequest, isAceiteAtualizarProcesso,
 } from "./intentClassifier.ts";
 
 // ─── LLM-first: parsing do classificador de objeto ───────────────────────────
@@ -342,4 +342,32 @@ Deno.test("isCollectionContinuation: vazio / null / não-array → false", () =>
   assertEquals(isCollectionContinuation(undefined), false);
   assertEquals(isCollectionContinuation("continuacao_coleta"), false);
   assertEquals(isCollectionContinuation([{ level: 0 }]), false);
+});
+
+// ─── A6.3 (reteste v170): aceite da oferta de atualizar o processo ─────────────
+// O aviso de duplicata oferece atualizar o processo existente; responder "sim,
+// atualiza" perdia o contexto e o agente repergunta va qual processo era.
+Deno.test("isAceiteAtualizarProcesso: aceites curtos → true", () => {
+  assertEquals(isAceiteAtualizarProcesso("sim, atualiza"), true);
+  assertEquals(isAceiteAtualizarProcesso("sim"), true);
+  assertEquals(isAceiteAtualizarProcesso("isso mesmo"), true);
+  assertEquals(isAceiteAtualizarProcesso("pode atualizar"), true);
+  assertEquals(isAceiteAtualizarProcesso("atualiza esse mesmo"), true);
+  assertEquals(isAceiteAtualizarProcesso("ok, registra o andamento"), true);
+  assertEquals(isAceiteAtualizarProcesso("por favor"), true);
+});
+
+Deno.test("isAceiteAtualizarProcesso: recusa/insistência → false (segue como novo)", () => {
+  assertEquals(isAceiteAtualizarProcesso("não, abre outro"), false);
+  assertEquals(isAceiteAtualizarProcesso("nao"), false);
+  assertEquals(isAceiteAtualizarProcesso("é outro contrato, abre mesmo assim"), false);
+  assertEquals(isAceiteAtualizarProcesso("quero um novo processo"), false);
+});
+
+Deno.test("isAceiteAtualizarProcesso: vazio e pedido longo → false", () => {
+  assertEquals(isAceiteAtualizarProcesso(""), false);
+  // pedido novo e longo não é aceite, mesmo contendo "registra"
+  assertEquals(isAceiteAtualizarProcesso(
+    "registra no processo do Adalberto que a contestação foi protocolada hoje e depois me diga como ficou o prazo da audiência que estava marcada para a semana que vem"
+  ), false);
 });

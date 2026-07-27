@@ -390,6 +390,24 @@ const ONDA_ALVO_RE =
 const ONDA_VERBO_RE =
   /(?<![\wÀ-ÿ])(abr\w*|cri\w*|cadastr\w*|adicion\w*|inclu\w*|ger\w*|emit\w*|prepar\w*|refa[çz]\w*|registr\w*|anot\w*|atualiz\w*|mud\w*|mov\w*|pass\w*|conclu\w*|protocol\w*|marc\w*|reagend\w*|remarc\w*|cancel\w*|coment\w*|conced\w*|d[êé]|d[áa]|libere?|tir\w*|revog\w*|list\w*|mostr\w*|quais|qual|o que|resum\w*|corrig\w*|como|est[áa]|t[êe]m|tenho|anda|minha|meu)(?![\wÀ-ÿ])/i;
 
+// ─── A6.3 (reteste v170): aceitar a oferta "quer que eu atualize esse processo?" ──
+// O aviso de duplicata oferece atualizar o processo existente. Respondendo "sim,
+// atualiza", o orquestrador PERDIA o contexto e reperguntava qual processo era.
+// Este detector reconhece a ACEITAÇÃO curta; o process_id vem do metadata da
+// própria oferta (offered_process_id), não de nova resolução.
+const ACEITE_RE =
+  /(?<![\wÀ-ÿ])(sim|isso|isso mesmo|claro|pode|pode ser|por favor|beleza|ok|okay|atualiz\w*|prefiro atualizar|melhor atualizar|vamos atualizar|registra\w*|registre)(?![\wÀ-ÿ])/i;
+// Nega explícita: não confundir "não, abre outro" com aceite.
+const RECUSA_RE = /(?<![\wÀ-ÿ])(n[ãa]o|nao|outro|novo processo|abre mesmo|abra mesmo|mesmo assim|insisto)(?![\wÀ-ÿ])/i;
+
+export function isAceiteAtualizarProcesso(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  if (m.length > 160) return false;      // resposta longa = novo pedido, não aceite
+  if (RECUSA_RE.test(m)) return false;   // "não, abre outro" → segue como novo
+  return ACEITE_RE.test(m);
+}
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;

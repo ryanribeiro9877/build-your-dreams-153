@@ -51,6 +51,7 @@ import {
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isPecaExplicitRequest,
   type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject, isOndaAcaoRequest,
+  isAceiteAtualizarProcesso,
 } from "./intentClassifier.ts";
 
 const ALLOWED_ORIGINS = [
@@ -685,22 +686,35 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
 };
 
-// Acha o especialista que PORTA a tool: primeiro no pool do próprio usuário
-// (allowed_tools é sincronizado por trigger a partir de agent_tools), depois entre
-// os GLOBAIS (owner NULL, ex.: Especialista Distribuição). Determinístico: sem LLM.
+// Acha o agente que PORTA a tool (allowed_tools é sincronizado por trigger a partir
+// de agent_tools). Determinístico: sem LLM.
+//
+// INVARIANTE (A3/A6 do reteste v170): se o objeto tem tool, o alvo TEM de portar
+// essa tool, PREFERINDO o assistant_root ("Meu Assistente") do próprio usuário.
+// Antes esta busca filtrava só specialist/monitor/executor e IGNORAVA o
+// assistant_root — que é justamente quem porta registrar_protocolo, criar_processo,
+// resumo_do_dia e as permissões de menu nos 7 usuários. Resultado: retornava null
+// (ou um GLOBAL que não executa) e o turno caía no fluxo normal, indo para um
+// especialista alheio que respondia recusa burocrática ("não tenho escopo…",
+// "minha atuação aqui é apenas distribuição…") — e a devolução prometida nunca
+// acontecia. Preferir o assistant_root também torna o alvo ESTÁVEL (não oscila
+// entre portadores a cada tentativa).
 async function resolveSpecialistWithTool(
   admin: SupabaseClient, ownerUserId: string, tool: string,
 ): Promise<AgentRow | null> {
   const cols = "id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools";
   const pick = (rows: AgentRow[] | null) =>
     ((rows as AgentRow[]) || []).filter((a) => (a.allowed_tools ?? []).includes(tool));
-  // 1. pool do usuário (prefere o "líder" ao "(Rascunho)", como resolveCadastroSpecialist)
   const { data: own } = await admin.from("agents").select(cols)
     .eq("owner_user_id", ownerUserId).eq("is_active", true)
-    .in("role", ["specialist", "monitor", "executor"]);
+    .in("role", ["assistant_root", "ceo", "specialist", "monitor", "executor"]);
   const mine = pick(own as AgentRow[] | null);
+  // 1. assistant_root do PRÓPRIO usuário (alvo preferencial e estável).
+  const root = mine.find((a) => a.role === "assistant_root" || a.role === "ceo");
+  if (root) return root;
+  // 2. especialista do usuário (prefere o "líder" ao "(Rascunho)").
   if (mine.length) return mine.find((a) => !/rascunho/i.test(a.name)) ?? mine[0];
-  // 2. especialistas globais (owner NULL)
+  // 3. agentes GLOBAIS (owner NULL, ex.: Especialista Distribuição).
   const { data: glob } = await admin.from("agents").select(cols)
     .is("owner_user_id", null).eq("is_active", true)
     .in("role", ["specialist", "monitor", "executor"]);
@@ -779,12 +793,21 @@ interface ProcessoPreflight {
   tipoCode?: string;
   /** Aviso de contexto para o texto do cartão (não bloqueia). */
   contextNote?: string;
+  /** Processo existente oferecido no aviso — para o "sim, atualiza" não reperguntar. */
+  offeredProcessId?: string;
 }
 async function preflightCriarProcesso(
   admin: SupabaseClient, clientId: string, tipoAcaoRaw: unknown, reuRaw: unknown,
+  supabaseUrl?: string, anonKey?: string, userToken?: string | null,
 ): Promise<ProcessoPreflight> {
   if (!clientId) return {};
   const reu = typeof reuRaw === "string" && reuRaw.trim() ? reuRaw.trim() : null;
+  // verificar_processo_duplicado EXIGE auth.uid() (levanta 42501 sem ele). Sob
+  // service-role o pré-voo virava no-op SILENCIOSO — causa do A6. Usa o JWT do
+  // usuário quando disponível.
+  const jwtClient = (supabaseUrl && anonKey && userToken)
+    ? createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${userToken}` } } })
+    : null;
   // 1. Tipo (item 8): resolve pelo banco; sem tipo NÃO se abre processo.
   const { data: tipoRes } = await admin.rpc("resolver_tipo_acao", { p_termo: tipoAcaoRaw ?? null });
   const t = tipoRes as { ok?: boolean; id?: string; code?: string; nome?: string; informado?: string } | null;
@@ -799,16 +822,27 @@ async function preflightCriarProcesso(
         `Qual é? Ex.: ${opcoes}…`,
     };
   }
-  // 2. Duplicata (item 7): contrato pronto no banco.
-  const { data: dupRes } = await admin.rpc("verificar_processo_duplicado", {
+  // 2. Duplicata (item 7): contrato pronto no banco, chamado com o JWT do usuário.
+  if (!jwtClient) {
+    // Sem JWT não há como consultar (a RPC exige auth.uid()). NÃO silencia: loga,
+    // porque foi exatamente o silêncio que fez o pré-voo parecer implementado.
+    console.warn("[preflight-processo] sem JWT do usuário — pré-voo de duplicata NÃO executado");
+    return { tipoCode: t.code };
+  }
+  const { data: dupRes, error: dupErr } = await jwtClient.rpc("verificar_processo_duplicado", {
     p_client_id: clientId, p_tipo_acao_id: t.id ?? null, p_reu: reu,
   });
+  if (dupErr) {
+    console.error(`[preflight-processo] verificar_processo_duplicado falhou: ${dupErr.message}`);
+    return { tipoCode: t.code }; // fail-open: a guarda de 30 min da RPC ainda protege
+  }
   const d = dupRes as {
     cliente?: string; total_ativos?: number; bloquear?: boolean;
-    processos?: Array<{ numero?: string; tipo_acao?: string; reu_descricao?: string; criado_em?: string }>;
+    processos?: Array<{ process_id?: string; numero?: string; tipo_acao?: string; reu_descricao?: string; criado_em?: string; mesmo_tipo?: boolean }>;
   } | null;
   if (d?.bloquear) {
-    const p = (d.processos ?? [])[0] ?? {};
+    // Cita o processo EQUIVALENTE (mesmo tipo), não simplesmente o mais recente.
+    const p = (d.processos ?? []).find((x) => x.mesmo_tipo) ?? (d.processos ?? [])[0] ?? {};
     const quando = p.criado_em
       ? new Date(p.criado_em).toLocaleString("pt-BR", { timeZone: "America/Bahia", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
       : null;
@@ -820,7 +854,7 @@ async function preflightCriarProcesso(
       p.numero && quando ? `, aberto em ${quando})` : p.numero ? ")" : "",
       ". Quer que eu atualize esse processo (registrar andamento) em vez de abrir outro?",
     ];
-    return { blockMessage: partes.join("") };
+    return { blockMessage: partes.join(""), offeredProcessId: p.process_id, tipoCode: t.code };
   }
   const total = d?.total_ativos ?? 0;
   return {
@@ -1731,6 +1765,13 @@ function buildUniversalGuardrails(): string {
     "sem o resultado dela. É PROIBIDO dizer 'pendência gerada/aberta', 'cadastro realizado', 'agendado' se " +
     "a ferramenta não foi chamada e não retornou sucesso. Se o pedido tiver MAIS DE UMA ação (ex.: 'cadastrar " +
     "E agendar'), chame TODAS as ferramentas correspondentes na mesma resposta.\n" +
+    "F-bis. NUNCA PROMETA O QUE VOCÊ NÃO FAZ (A3 do reteste v170): você NÃO tem como " +
+    "'devolver ao orquestrador', 'acionar outro setor', 'encaminhar ao responsável' por conta própria — " +
+    "não existe esse mecanismo do seu lado. É PROIBIDO responder frases como 'devolvo ao orquestrador', " +
+    "'vou acionar o especialista de protocolo' ou 'encaminho ao responsável': a devolução prometida não " +
+    "acontece e o usuário fica sem resposta. Se o pedido exigir uma ferramenta que você NÃO tem, diga " +
+    "apenas, em uma frase, o que o usuário precisa fazer ou pedir a quem — sem prometer nenhuma ação sua. " +
+    "Se você TEM a ferramenta, use-a (regra F) em vez de descrever escopo/atuação.\n" +
     "G. TEXTO INTERNO DE ORQUESTRAÇÃO — JAMAIS NA PEÇA: observações/críticas do validador ou revisor, as " +
     "instruções de correção que você recebeu, marcadores internos ([REVISAR], [ORIENTAÇÃO INTERNA], [TESTE ...], " +
     "\"VIOLAÇÕES DETECTADAS\", \"observações do validador\" e afins) e qualquer meta-comentário sobre o processo de " +
@@ -2292,7 +2333,11 @@ const ANEXO_DOSSIE_GUIDANCE = [
   "3. Ao final, confirme por NOME o que foi anexado e o que deu baixa (ex.: \"Anexei a procuração ao dossiê de Marina — deu baixa no checklist\"). NUNCA invente documentos: só os anexados nesta conversa.",
 ].join("\n");
 
-async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string, caseDocs: CaseDoc[] = []) {
+// `userToken` (A6 do reteste v170): o pré-voo de duplicata chama uma RPC que EXIGE
+// auth.uid() — sob service-role ela lança 42501 e o pré-voo virava no-op silencioso
+// (o cartão saía e a barreira só atuava na confirmação). Por isso o JWT do usuário
+// tem de chegar até aqui.
+async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: LlmToolCall[], supabaseUrl: string, serviceKey: string, caseDocs: CaseDoc[] = [], userToken?: string | null) {
   const perms = await loadActionPerms(admin, run.user_id);
   // Trilho B: se o turno tem um anexo de identidade (doc_type identidade/cnh), a
   // proposta de cadastrar_cliente é carimbada com o id do anexo. No confirm, o
@@ -2312,13 +2357,20 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
     // (sem ActionCard) e encerramos o run.
     if (tool === "criar_processo") {
       const clientId = String(args.client_id ?? "").trim();
-      const pre = await preflightCriarProcesso(admin, clientId, args.tipo_acao, args.reu);
+      const anonKeyPre = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      const pre = await preflightCriarProcesso(admin, clientId, args.tipo_acao, args.reu,
+        supabaseUrl, anonKeyPre, userToken);
       if (pre.blockMessage) {
         const seqB = await nextSeq(admin, run.session_id);
         await admin.from("chat_messages").insert({
           session_id: run.session_id, user_id: run.user_id, role: "assistant",
           sequence_number: seqB, agent_id: n3.id, content: pre.blockMessage,
-          metadata: { kind: "text", intent: "ACAO_COM_TOOL", agent_name: n3.name },
+          // A6.3: guarda o processo OFERECIDO no próprio turno. No "sim, atualiza" o
+          // orquestrador reaproveita este id em vez de reperguntar qual processo é.
+          metadata: {
+            kind: "text", intent: "ACAO_COM_TOOL", agent_name: n3.name,
+            ...(pre.offeredProcessId ? { offered_process_id: pre.offeredProcessId, offer: "atualizar_processo" } : {}),
+          },
         });
         await admin.from("orchestration_runs")
           .update({ status: "done", pending_actions: null, updated_at: new Date().toISOString() })
@@ -3142,7 +3194,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // (delegate e salvar_peca são tratados nos blocos acima e não passam por aqui.)
       if (!READ_TOOL_NAMES.includes(name)) {
         await insertStage(admin, run.session_id, run.user_id, `${agent.name} preparou a ação para sua confirmação.`, "delegating", agent);
-        return await proposeAction(admin, run, agent, [call], supabaseUrl, serviceKey);
+        return await proposeAction(admin, run, agent, [call], supabaseUrl, serviceKey, [], userToken);
       }
 
       // ── leitura: executa inline, realimenta e salta ───────────────────────────
@@ -3385,7 +3437,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             // Ação(ões) de ESCRITA: propõe TODAS e PAUSA aguardando confirmação do usuário.
             const writeCalls = r.toolCalls.filter((c) => isWriteTool(c.function.name));
             if (writeCalls.length > 0) {
-              return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey, caseDocs);
+              return await proposeAction(admin, run, n3, writeCalls, supabaseUrl, serviceKey, caseDocs, userToken);
             }
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
@@ -4320,6 +4372,40 @@ serve(async (req) => {
         }
       } else {
         console.log(`[coleta-continuidade] session=${body.sessionId} sem coleta ativa → classificar normalmente`);
+      }
+    }
+
+    // ─── A6.3: "sim, atualiza" reaproveita o processo OFERECIDO ──────────────────
+    // O aviso de duplicata (pré-voo) oferece atualizar o processo existente e grava
+    // offered_process_id no metadata daquele turno. Sem este bloco, a resposta curta
+    // "sim, atualiza" perdia o contexto e o agente reperguntava qual processo era.
+    // Vem ANTES do classificador (um "sim" isolado seria TRIVIAL).
+    if (isAceiteAtualizarProcesso(body.message)) {
+      const { data: lastAsst } = await admin.from("chat_messages")
+        .select("metadata").eq("session_id", body.sessionId).eq("role", "assistant")
+        .order("sequence_number", { ascending: false }).limit(3);
+      const oferta = ((lastAsst as Array<{ metadata?: { offer?: string; offered_process_id?: string } }> | null) ?? [])
+        .find((r) => r.metadata?.offer === "atualizar_processo" && r.metadata?.offered_process_id);
+      const pid = oferta?.metadata?.offered_process_id;
+      if (pid) {
+        const spec = await resolveSpecialistWithTool(admin, userId, "atualizar_processo");
+        if (spec) {
+          console.log(`[oferta-atualizar] session=${body.sessionId} aceite → atualizar_processo(${pid}) em ${spec.name}`);
+          // O process_id vai no texto do turno para o agente NÃO reperguntar: ele já
+          // tem a instrução e o id resolvido; o andamento sai do pedido anterior.
+          const enriched = `${body.message}\n\n[CONTEXTO DO SISTEMA: o usuário ACEITOU atualizar o processo existente, cujo process_id é "${pid}". Chame atualizar_processo com esse process_id e registre um andamento resumindo o que o usuário pediu antes nesta conversa. NÃO pergunte qual é o processo nem peça o número — você já tem o id.]`;
+          const { data: ofRun, error: ofErr } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: enriched, status: "executing_n3", entry_agent_id: agent.id,
+            target_n3_id: spec.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+            chain: [{ level: 0, path: "oferta_atualizar_processo", intent: "ACAO_COM_TOOL", agent: spec.name, process_id: pid }],
+          }).select("id").single();
+          if (ofErr || !ofRun) return errResp(500, "db_error", `Falha ao criar run: ${ofErr?.message}`);
+          const ofRunId = (ofRun as { id: string }).id;
+          await insertStage(admin, body.sessionId, userId, `${spec.name} registrando o andamento no processo...`, "executing_acao", spec, "Atualizando o processo");
+          fireNextStep(ofRunId, supabaseUrl, serviceKey, token);
+          return json(202, { runId: ofRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", path: "oferta_atualizar_processo" });
+        }
       }
     }
 
