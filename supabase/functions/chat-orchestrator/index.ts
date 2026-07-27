@@ -2990,14 +2990,21 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
       }
 
-      // ── leitura / revisão / escrita comum: executa inline, realimenta e salta ──
-      let toolResult: unknown;
-      if (READ_TOOL_NAMES.includes(name)) {
-        toolResult = await runReadTool(readClient, run.user_id, name, args);
-        await persistEntityCarryover(admin, run.session_id, name, toolResult);
-      } else {
-        toolResult = await runWriteTool(userClient, run.user_id, name, args, admin);
+      // ── B3: ESCRITA aqui também passa por ActionCard ─────────────────────────
+      // Este ramo (delegação multi-hop) executava QUALQUER tool não-leitura inline,
+      // sem confirmação — furo do invariante "toda escrita passa por ActionCard".
+      // Foi o que o E2E pegou: como admin, criar_processo rodou direto (e 2× seguidas
+      // criou 2 processos). Agora propõe e PAUSA em awaiting_confirmation; ao
+      // confirmar, handleConfirm executa e encerra o run com a mensagem de sucesso.
+      // (delegate e salvar_peca são tratados nos blocos acima e não passam por aqui.)
+      if (!READ_TOOL_NAMES.includes(name)) {
+        await insertStage(admin, run.session_id, run.user_id, `${agent.name} preparou a ação para sua confirmação.`, "delegating", agent);
+        return await proposeAction(admin, run, agent, [call], supabaseUrl, serviceKey);
       }
+
+      // ── leitura: executa inline, realimenta e salta ───────────────────────────
+      const toolResult: unknown = await runReadTool(readClient, run.user_id, name, args);
+      await persistEntityCarryover(admin, run.session_id, name, toolResult);
       const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: JSON.stringify(toolResult).slice(0, 8000) }];
       await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "read" }] });
       return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
