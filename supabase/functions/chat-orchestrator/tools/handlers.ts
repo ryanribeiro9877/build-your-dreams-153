@@ -404,16 +404,24 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
       case "registrar_credencial_gov": {
         // Gate (recepção/sócio/admin) dentro da RPC; a senha é cifrada no cofre por
         // save_gov_credential com consentimento v1.0.
-        // PRIVACIDADE: a senha NUNCA é logada aqui e NÃO volta no result — o result
-        // é realimentado no histórico do LLM, então só devolvemos o que é seguro
-        // (cliente, nível, status, se substituiu credencial anterior + o aviso da RPC
-        // de não repetir a senha na resposta).
-        if (!args.client_id) return { ok: false, error: "cliente não informado (resolva com consultar_cliente)." };
+        // A RPC resolve o cliente por client_id OU por NOME (ILIKE) e devolve
+        // ok:false com motivo quando não dá: cliente_nao_encontrado, ambiguo (com
+        // candidatos) ou cliente_nao_informado. Traduzimos isso em PERGUNTA ao
+        // usuário — nunca em "sucesso".
+        // PRIVACIDADE: a senha NUNCA é logada e NÃO volta no result (o result é
+        // realimentado no histórico do LLM); só cliente, nível, status, se substituiu
+        // credencial anterior e o aviso da RPC.
         const senhaGov = typeof args.senha === "string" ? args.senha : "";
-        if (!senhaGov.trim()) return { ok: false, error: "não recebi a senha para guardar." };
+        if (!senhaGov.trim()) return { ok: false, error: "não recebi a senha para guardar no cofre." };
+        const nomeCli = [args.cliente_nome, args.client_nome, args.nome]
+          .find((v) => typeof v === "string" && v.trim()) as string | undefined;
+        if (!args.client_id && !nomeCli) {
+          return { ok: false, error: "de qual cliente é essa credencial? Me diga o nome." };
+        }
         const { data, error } = await userClient.rpc("registrar_credencial_gov", {
-          p_client_id: args.client_id,
           p_senha: senhaGov,
+          p_client_id: args.client_id ?? null,
+          p_cliente_nome: nomeCli ?? null,
           p_usuario: args.usuario ?? null,
           p_nivel: args.nivel ?? null,
           p_tem_2fa: args.tem_2fa === true,
@@ -421,6 +429,17 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         });
         if (error) return { ok: false, error: error.message };
         const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) {
+          const motivo = String(r.motivo ?? "");
+          const msg = String(r.mensagem ?? "não consegui guardar a credencial.");
+          if (motivo === "ambiguo") {
+            const nomes = (Array.isArray(r.candidatos) ? r.candidatos : [])
+              .map((c) => String((c as { nome?: string })?.nome ?? "")).filter(Boolean);
+            // Devolve a PERGUNTA com os candidatos — a senha continua fora do texto.
+            return { ok: false, error: `${msg}${nomes.length ? ` Candidatos: ${nomes.join("; ")}.` : ""} Me diga qual é o cliente que eu guardo a credencial (a senha que você já passou não foi salva).` };
+          }
+          return { ok: false, error: `${msg} (a senha não foi salva)` };
+        }
         return {
           ok: true,
           result: {

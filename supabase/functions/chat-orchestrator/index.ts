@@ -31,6 +31,7 @@ import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
 import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
 import { reportError, flushSentry } from "./sentry.ts";
 import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
+import { pickAgentForTool } from "./tools/pickAgent.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import {
   type DelegationStack, type DelegationContext, type DelegMsg,
@@ -628,6 +629,13 @@ async function resolveCadastroSpecialist(admin: SupabaseClient, ownerUserId: str
 // vai recusar por outro motivo. gate=null → sem pré-checagem (a RPC é a barreira).
 interface RouteObjectAction {
   tool: string;
+  /**
+   * Tools de APOIO que o alvo precisa para cumprir a ação (resolver cliente, achar a
+   * tarefa, ler a agenda…). O roteamento prefere quem tem a tool da ação E estas —
+   * ver resolveSpecialistWithTool. Sem isso, o alvo recusava "por falta de
+   * ferramenta" e o turno morria ali.
+   */
+  support?: string[];
   /** RPC booleana de gate (sem argumentos) chamada com o JWT do usuário. */
   gate: string | null;
   /** Mensagem de recusa quando o gate reprova (PT-BR, diz a quem pedir). */
@@ -645,16 +653,19 @@ interface RouteObjectAction {
 const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   PROCESSO_CREATE: {
     tool: "criar_processo", gate: "is_socio_or_advogado",
+    support: ["consultar_cliente"],
     recusa: "Você não tem permissão para abrir processo — isso é do advogado ou do sócio. Posso registrar uma pendência pedindo a abertura, se quiser.",
     stage: "abrindo o processo", path: "objeto_processo_create",
   },
   PROCESSO_UPDATE: {
     tool: "atualizar_processo", gate: "is_socio_or_advogado",
+    support: ["consultar_cliente", "consultar_processo"],
     recusa: "Você não tem permissão para atualizar processo — isso é do advogado responsável ou do sócio.",
     stage: "atualizando o processo", path: "objeto_processo_update",
   },
   KIT_DOCUMENTAL: {
     tool: "gerar_kit_documental", gate: null,
+    support: ["consultar_cliente"],
     recusa: "", stage: "gerando o kit documental", path: "objeto_kit_documental",
   },
   RESUMO_DIA: {
@@ -663,6 +674,7 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   PROTOCOLO: {
     tool: "registrar_protocolo", gate: null,
+    support: ["consultar_tarefas", "consultar_cliente"],
     recusa: "", stage: "registrando o protocolo", path: "objeto_protocolo",
     guidance:
       "PROTOCOLO — regras deste turno: (1) resolva a tarefa de protocolo com consultar_tarefas " +
@@ -675,10 +687,14 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   TAREFA_UPDATE: {
     tool: "atualizar_tarefa", gate: null,
+    support: ["consultar_tarefas"],
     recusa: "", stage: "atualizando a tarefa", path: "objeto_tarefa_update",
   },
   CLIENTE_UPDATE: {
     tool: "atualizar_cliente", gate: null,
+    // Simétrico ao CREDENCIAL_GOV: se o composto for classificado como CLIENTE_UPDATE,
+    // o alvo também precisa poder guardar a credencial.
+    support: ["consultar_cliente", "registrar_credencial_gov"],
     recusa: "", stage: "atualizando o cadastro", path: "objeto_cliente_update",
   },
   AGENDA_CONSULTA: {
@@ -687,21 +703,30 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   AGENDA_UPDATE: {
     tool: "reagendar_atendimento", gate: "meetings_can_create",
+    support: ["minha_agenda", "consultar_cliente"],
     recusa: "Você não tem permissão para alterar atendimentos da agenda — isso é da recepção.",
     stage: "alterando o atendimento", path: "objeto_agenda_update",
   },
   AUDIENCIA: {
     tool: "criar_audiencia", gate: null,
+    support: ["consultar_processo"],
     recusa: "", stage: "cuidando da audiência", path: "objeto_audiencia",
   },
   PERMISSAO_MENU: {
     tool: "definir_permissao_menu", gate: null,
+    support: ["consultar_usuario"],
     recusa: "", stage: "ajustando as permissões de menu", path: "objeto_permissao_menu",
   },
   CREDENCIAL_GOV: {
     // Gate (recepção/sócio/admin) fica na RPC: um admin que não seja sócio passa lá,
     // então pré-checar aqui poderia barrar quem tem direito (fail-open é o certo).
     tool: "registrar_credencial_gov", gate: null,
+    // `atualizar_cliente` entra no kit porque o PEDIDO COMPOSTO ("inclua o telefone X
+    // e a senha do gov Y") é o caso de uso do incidente: o assistant_root porta a
+    // credencial e consultar_cliente, mas NÃO porta atualizar_cliente — rotear para
+    // ele deixaria o telefone de fora e cairíamos de novo no "sucesso" parcial. Com o
+    // kit completo, o alvo passa a ser o Especialista Cadastro, que tem as três.
+    support: ["consultar_cliente", "atualizar_cliente"],
     recusa: "", stage: "guardando a credencial no cofre", path: "objeto_credencial_gov",
     guidance:
       "CREDENCIAL GOV.BR — regras deste turno: (1) resolva o cliente com consultar_cliente " +
@@ -728,27 +753,26 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
 // "minha atuação aqui é apenas distribuição…") — e a devolução prometida nunca
 // acontecia. Preferir o assistant_root também torna o alvo ESTÁVEL (não oscila
 // entre portadores a cada tentativa).
+// `support`: tools de APOIO que o alvo precisa para cumprir a ação (ex.: resolver o
+// cliente com consultar_cliente antes de guardar a credencial). Entre os portadores
+// da tool principal, preferimos quem TAMBÉM tem as de apoio — o incidente da
+// credencial da Kailane nasceu de um alvo que tinha a tool da ação mas não a de
+// apoio, então recusou "por falta de ferramenta" em vez de o orquestrador mandar o
+// turno a quem tinha tudo.
 async function resolveSpecialistWithTool(
-  admin: SupabaseClient, ownerUserId: string, tool: string,
+  admin: SupabaseClient, ownerUserId: string, tool: string, support: string[] = [],
 ): Promise<AgentRow | null> {
   const cols = "id, name, role, level, provider, model, temperature, top_p, max_tokens, system_prompt, description, is_active, owner_user_id, history_limit, allowed_tools";
-  const pick = (rows: AgentRow[] | null) =>
-    ((rows as AgentRow[]) || []).filter((a) => (a.allowed_tools ?? []).includes(tool));
   const { data: own } = await admin.from("agents").select(cols)
     .eq("owner_user_id", ownerUserId).eq("is_active", true)
     .in("role", ["assistant_root", "ceo", "specialist", "monitor", "executor"]);
-  const mine = pick(own as AgentRow[] | null);
-  // 1. assistant_root do PRÓPRIO usuário (alvo preferencial e estável).
-  const root = mine.find((a) => a.role === "assistant_root" || a.role === "ceo");
-  if (root) return root;
-  // 2. especialista do usuário (prefere o "líder" ao "(Rascunho)").
-  if (mine.length) return mine.find((a) => !/rascunho/i.test(a.name)) ?? mine[0];
-  // 3. agentes GLOBAIS (owner NULL, ex.: Especialista Distribuição).
   const { data: glob } = await admin.from("agents").select(cols)
     .is("owner_user_id", null).eq("is_active", true)
     .in("role", ["specialist", "monitor", "executor"]);
-  const gl = pick(glob as AgentRow[] | null);
-  return gl.length ? gl[0] : null;
+  // A regra de escolha vive em tools/pickAgent.ts (testada sem banco).
+  return pickAgentForTool(
+    (own as AgentRow[]) ?? [], (glob as AgentRow[]) ?? [], tool, support,
+  ) as AgentRow | null;
 }
 
 // Pré-checagem de permissão com a MESMA autoridade do gate real: chama a função
@@ -2319,7 +2343,11 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "registrar_credencial_gov": {
       // A SENHA NUNCA aparece no cartão (o texto vai para a conversa e fica no
       // histórico). Só dizemos de quem é a credencial e os metadados.
-      const quem = args.client_nome ? ` de ${args.client_nome}` : " do cliente";
+      // O nome pode vir como cliente_nome (o que a RPC usa para resolver) ou
+      // client_nome (display). A SENHA nunca entra neste texto.
+      const nomeCred = [args.cliente_nome, args.client_nome, args.nome]
+        .find((v) => typeof v === "string" && v.trim());
+      const quem = nomeCred ? ` de ${nomeCred}` : " do cliente";
       const extras: string[] = [];
       if (args.nivel) extras.push(`nível ${String(args.nivel).toLowerCase()}`);
       if (args.tem_2fa === true) extras.push("com verificação em 2 fatores");
@@ -4498,7 +4526,7 @@ serve(async (req) => {
         .find((r) => r.metadata?.offer === "atualizar_processo" && r.metadata?.offered_process_id);
       const pid = oferta?.metadata?.offered_process_id;
       if (pid) {
-        const spec = await resolveSpecialistWithTool(admin, userId, "atualizar_processo");
+        const spec = await resolveSpecialistWithTool(admin, userId, "atualizar_processo", ["consultar_processo", "consultar_cliente"]);
         if (spec) {
           console.log(`[oferta-atualizar] session=${body.sessionId} aceite → atualizar_processo(${pid}) em ${spec.name}`);
           // O process_id vai no texto do turno para o agente NÃO reperguntar: ele já
@@ -4533,7 +4561,7 @@ serve(async (req) => {
         .find((r) => r.metadata?.offer === "atualizar_processo" && r.metadata?.criar_processo_args);
       const baseArgs = ofertaR?.metadata?.criar_processo_args;
       if (baseArgs && baseArgs.client_id) {
-        const spec = await resolveSpecialistWithTool(admin, userId, "criar_processo");
+        const spec = await resolveSpecialistWithTool(admin, userId, "criar_processo", ["consultar_cliente"]);
         if (spec) {
           console.log(`[oferta-recusada] session=${body.sessionId} override → cartão de criar_processo (cliente=${baseArgs.client_id})`);
           const { data: ovRun, error: ovErr } = await admin.from("orchestration_runs").insert({
@@ -4589,7 +4617,7 @@ serve(async (req) => {
             status: "done", path: `${objAction.path}_sem_permissao`, intent: "ACAO_COM_TOOL",
           });
         }
-        const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool);
+        const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool, objAction.support ?? []);
         if (spec) {
           console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} → tool=${objAction.tool} → ${spec.name} (${spec.id})`);
           // guidance (reteste 3, item 1): instrução da ação injetada no turno para

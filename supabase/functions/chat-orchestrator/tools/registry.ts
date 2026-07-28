@@ -336,14 +336,14 @@ export const TOOLS: Record<string, ToolDef> = {
     name: "registrar_credencial_gov",
     description: "Guarda no COFRE CIFRADO a credencial do GOV.BR/INSS de um cliente (senha, login, nível da conta, 2 fatores). Use quando o usuário informar a senha do gov/INSS de um cliente — ex.: \"a senha do gov dele é X\", \"guarda a senha do INSS da Maria: X\", \"conta bronze, senha X\". Resolva o cliente antes com consultar_cliente; NUNCA peça UUID. IMPORTANTE: a senha vai cifrada para o cofre — NUNCA repita a senha na sua resposta ao usuário, nem confirme o valor dela.",
     parameters: { type: "object", properties: {
-      client_id: str("ID do cliente (via consultar_cliente; nunca peça ao usuário)."),
-      client_nome: str("Nome do cliente, apenas para exibição no cartão de confirmação."),
       senha: str("Senha do GOV.BR/INSS exatamente como o usuário informou. Vai cifrada para o cofre."),
+      cliente_nome: str("Nome do cliente como o usuário falou (ex.: \"Ivan Moreira Correia\"). Basta o nome: o sistema resolve o cliente e, se houver mais de um, devolve os candidatos para você perguntar qual é."),
+      client_id: str("ID do cliente, se você já o resolveu com consultar_cliente. Opcional — NUNCA peça UUID ao usuário."),
       usuario: str("Login do GOV.BR, se informado (se ausente, o sistema usa o CPF do cliente)."),
       nivel: { type: "string", enum: ["ouro", "prata", "bronze"], description: "Nível da conta GOV.BR, se informado." },
       tem_2fa: { type: "boolean", description: "true se a conta exige verificação em 2 fatores." },
       status_acesso: { type: "string", enum: ["pendente", "valido", "senha_incorreta", "bloqueado"], description: "Situação do acesso; use senha_incorreta quando o usuário disser que a senha não funciona." },
-    }, required: ["client_id", "senha"] },
+    }, required: ["senha"] },
   }},
   registrar_protocolo: { type: "function", function: {
     name: "registrar_protocolo",
