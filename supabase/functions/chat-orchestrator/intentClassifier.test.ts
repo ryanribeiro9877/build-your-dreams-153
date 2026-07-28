@@ -392,3 +392,32 @@ Deno.test("aceite × recusa: nunca os dois ao mesmo tempo", () => {
     assertEquals(isAceiteAtualizarProcesso(f) && isRecusaAbrirOutro(f), false);
   }
 });
+
+// ─── CREDENCIAL_GOV (pacote de 27/07 · tool registrar_credencial_gov) ─────────
+// Estas frases não têm verbo de ação ("a senha dele É X"), então precisam de um
+// padrão próprio — sem colocar "é" no verbo genérico, que faria "o processo é
+// importante" acionar o classificador.
+Deno.test("isOndaAcaoRequest: frases de credencial GOV acionam a classificação", () => {
+  assertEquals(isOndaAcaoRequest("a senha do gov dele é Abc123@"), true);
+  assertEquals(isOndaAcaoRequest("guarda a senha do INSS da Maria: Abc123@"), true);
+  assertEquals(isOndaAcaoRequest("senha do gov: Abc123@, conta bronze"), true);
+  assertEquals(isOndaAcaoRequest("a senha dele é Abc123@"), true);
+  assertEquals(isOndaAcaoRequest("anota a credencial do gov.br dele"), true);
+  assertEquals(isOndaAcaoRequest("a conta dela é bronze"), true);
+  assertEquals(isOndaAcaoRequest("essa senha do gov não funciona mais"), true);
+  // pedido COMPOSTO (cadastro + credencial) também precisa acionar
+  assertEquals(isOndaAcaoRequest("inclua o telefone 71988887777 e a senha do gov Abc123@"), true);
+});
+
+Deno.test("normalizeRouteObject: CREDENCIAL_GOV e sinônimos", () => {
+  assertEquals(normalizeRouteObject("CREDENCIAL_GOV"), "CREDENCIAL_GOV");
+  assertEquals(normalizeRouteObject("credencial"), "CREDENCIAL_GOV");
+  assertEquals(normalizeRouteObject("SENHA_GOV"), "CREDENCIAL_GOV");
+  // não confundir com permissão de menu de colaborador
+  assertEquals(normalizeRouteObject("PERMISSAO_MENU"), "PERMISSAO_MENU");
+});
+
+Deno.test("isOndaAcaoRequest: 'é' não virou gatilho genérico (anti-regressão)", () => {
+  assertEquals(isOndaAcaoRequest("o processo é muito importante para o cliente"), false);
+  assertEquals(isOndaAcaoRequest("esse cliente é antigo"), false);
+});

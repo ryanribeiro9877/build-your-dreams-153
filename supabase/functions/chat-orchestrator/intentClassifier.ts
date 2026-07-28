@@ -323,7 +323,7 @@ export type RouteObject =
   | "CADASTRO" | "AGENDA_CLIENTE" | "TAREFA_INTERNA"
   | "PROCESSO_CREATE" | "PROCESSO_UPDATE" | "KIT_DOCUMENTAL" | "RESUMO_DIA"
   | "PROTOCOLO" | "TAREFA_UPDATE" | "CLIENTE_UPDATE" | "AGENDA_CONSULTA"
-  | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU"
+  | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU" | "CREDENCIAL_GOV"
   | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
@@ -343,6 +343,7 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "AGENDA_CONSULTA": o objeto é CONSULTAR a agenda/compromissos (sem alterar nada). Ex.: "o que tenho na agenda amanhã?", "quais meus atendimentos de hoje?", "minha agenda da semana".
 - "AGENDA_UPDATE": o objeto é REAGENDAR/REMARCAR ou CANCELAR um atendimento de cliente que JÁ existe. Ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina".
 - "AUDIENCIA": o objeto é uma AUDIÊNCIA judicial de um processo — marcar ou consultar. Ex.: "marca a audiência do processo do Adalberto para 12/08 às 10h", "quais audiências dessa semana?". Distinto de reunião/atendimento de cliente (AGENDA_CLIENTE).
+- "CREDENCIAL_GOV": o objeto é a CREDENCIAL do GOV.BR/INSS de um CLIENTE — senha, login, nível da conta (ouro/prata/bronze), 2 fatores. Ex.: "a senha do gov dele é X", "guarda a senha do INSS da Maria: X", "senha do gov: X, conta bronze", "a senha dele não funciona mais", "anota que a conta dela é prata". ATENÇÃO: é a senha DO CLIENTE para acessar o GOV.BR — não confundir com dados de contato do cadastro (CLIENTE_UPDATE) nem com permissão de menu de colaborador (PERMISSAO_MENU). Se o pedido trouxer TAMBÉM dados de cadastro ("inclua o telefone X e a senha do gov Y"), o objeto é CREDENCIAL_GOV e o agente deve executar AS DUAS ações (atualizar o cadastro E guardar a credencial).
 - "PERMISSAO_MENU": o objeto é o ACESSO de um COLABORADOR a um MENU/tela do sistema — conceder, revogar ou voltar ao padrão; ou listar essas permissões. Ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu existem?".
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
@@ -366,6 +367,7 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "AGENDA_UPDATE") return "AGENDA_UPDATE";
   if (s === "AUDIENCIA" || s === "AUDIÊNCIA") return "AUDIENCIA";
   if (s === "PERMISSAO_MENU" || s === "PERMISSAO" || s === "MENU") return "PERMISSAO_MENU";
+  if (s === "CREDENCIAL_GOV" || s === "CREDENCIAL" || s === "SENHA_GOV") return "CREDENCIAL_GOV";
   return "OUTRO";
 }
 
@@ -379,8 +381,10 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
 // ATENÇÃO: `\b` do JS é ASCII-only — depois de letra acentuada ("dá", "você") NÃO
 // existe fronteira, então `\b(d[áa])\b` nunca casa "dá acesso ao Kanban". Usamos
 // lookarounds que tratam acento como letra (À-ÿ) nas duas pontas.
+// "senha/gov/inss/conta bronze" entram como ALVO: a credencial do GOV.BR do cliente
+// é objeto próprio (CREDENCIAL_GOV) desde o pacote de 27/07.
 const ONDA_ALVO_RE =
-  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|minha semana|hoje|semana|situa[çc][ãa]o|compromissos?|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|pend[êe]nte|tarefas?)(?![\wÀ-ÿ])/i;
+  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|minha semana|hoje|semana|situa[çc][ãa]o|compromissos?|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|pend[êe]nte|tarefas?|senhas?|gov|gov\.?br|inss|credencial|conta (ouro|prata|bronze)|ouro|prata|bronze|2 fatores|dois fatores)(?![\wÀ-ÿ])/i;
 // Verbos/formas que indicam PEDIDO operacional (não narrativa solta).
 // "cadastr\w*" entra porque "cadastre uma PENDÊNCIA…" é pedido de tarefa (o objeto
 // é a pendência, não o cliente) — foi um dos misroutes do E2E.
@@ -421,9 +425,24 @@ export function isRecusaAbrirOutro(message: string): boolean {
   return RECUSA_RE.test(m);
 }
 
+// CREDENCIAL do GOV.BR: frases como "a senha dele é X", "senha do gov: X" não têm
+// verbo de ação — o verbo é o próprio "é"/":" . Não dá para colocar "é" no
+// ONDA_VERBO_RE genérico (qualquer "o processo é importante" passaria a acionar o
+// classificador), então este padrão é reconhecido à parte, exigindo a palavra
+// senha/credencial perto de gov/inss OU de uma atribuição de valor.
+const CREDENCIAL_RE =
+  /(?<![\wÀ-ÿ])(senhas?|credencial)(?![\wÀ-ÿ])[\s\S]{0,40}?((?<![\wÀ-ÿ])(gov|gov\.?br|inss)(?![\wÀ-ÿ])|[:=]|(?<![\wÀ-ÿ])[ée](?![\wÀ-ÿ]))/i;
+const CREDENCIAL_GOV_RE =
+  /(?<![\wÀ-ÿ])(gov|gov\.?br|inss)(?![\wÀ-ÿ])[\s\S]{0,40}?(?<![\wÀ-ÿ])(senhas?|credencial|conta)(?![\wÀ-ÿ])/i;
+// Nível da conta GOV informado sem citar "senha"/"gov": "a conta dela é bronze",
+// "nível ouro", "perfil prata".
+const NIVEL_CONTA_RE =
+  /(?<![\wÀ-ÿ])(conta|perfil|n[íi]vel)(?![\wÀ-ÿ])[\s\S]{0,25}?(?<![\wÀ-ÿ])(ouro|prata|bronze)(?![\wÀ-ÿ])/i;
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
+  if (CREDENCIAL_RE.test(m) || CREDENCIAL_GOV_RE.test(m) || NIVEL_CONTA_RE.test(m)) return true;
   return ONDA_ALVO_RE.test(m) && ONDA_VERBO_RE.test(m);
 }
 

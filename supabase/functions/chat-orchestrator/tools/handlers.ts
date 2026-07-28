@@ -401,6 +401,34 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { user_id: args.user_id, menu_key: menuKey, acao } };
       }
+      case "registrar_credencial_gov": {
+        // Gate (recepção/sócio/admin) dentro da RPC; a senha é cifrada no cofre por
+        // save_gov_credential com consentimento v1.0.
+        // PRIVACIDADE: a senha NUNCA é logada aqui e NÃO volta no result — o result
+        // é realimentado no histórico do LLM, então só devolvemos o que é seguro
+        // (cliente, nível, status, se substituiu credencial anterior + o aviso da RPC
+        // de não repetir a senha na resposta).
+        if (!args.client_id) return { ok: false, error: "cliente não informado (resolva com consultar_cliente)." };
+        const senhaGov = typeof args.senha === "string" ? args.senha : "";
+        if (!senhaGov.trim()) return { ok: false, error: "não recebi a senha para guardar." };
+        const { data, error } = await userClient.rpc("registrar_credencial_gov", {
+          p_client_id: args.client_id,
+          p_senha: senhaGov,
+          p_usuario: args.usuario ?? null,
+          p_nivel: args.nivel ?? null,
+          p_tem_2fa: args.tem_2fa === true,
+          p_status_acesso: args.status_acesso ?? "pendente",
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        return {
+          ok: true,
+          result: {
+            cliente: r.cliente, nivel: r.nivel, status_acesso: r.status_acesso,
+            substituiu_anterior: r.substituiu_anterior, aviso: r.aviso,
+          },
+        };
+      }
       case "registrar_protocolo": {
         // Gate = update_user_task_status (assignee/assigner/master) + trigger 8.5
         // (2 docs), tudo dentro da RPC. Ela devolve ok:false amigável quando o gate

@@ -332,6 +332,19 @@ export const TOOLS: Record<string, ToolDef> = {
     description: "Lista as permissões de menu personalizadas (overrides) de todos os colaboradores — quem teve algum menu concedido ou revogado explicitamente, e por quem. Ação de ADMIN (só admin). Sem parâmetros.",
     parameters: { type: "object", properties: {}, required: [] },
   }},
+  registrar_credencial_gov: { type: "function", function: {
+    name: "registrar_credencial_gov",
+    description: "Guarda no COFRE CIFRADO a credencial do GOV.BR/INSS de um cliente (senha, login, nível da conta, 2 fatores). Use quando o usuário informar a senha do gov/INSS de um cliente — ex.: \"a senha do gov dele é X\", \"guarda a senha do INSS da Maria: X\", \"conta bronze, senha X\". Resolva o cliente antes com consultar_cliente; NUNCA peça UUID. IMPORTANTE: a senha vai cifrada para o cofre — NUNCA repita a senha na sua resposta ao usuário, nem confirme o valor dela.",
+    parameters: { type: "object", properties: {
+      client_id: str("ID do cliente (via consultar_cliente; nunca peça ao usuário)."),
+      client_nome: str("Nome do cliente, apenas para exibição no cartão de confirmação."),
+      senha: str("Senha do GOV.BR/INSS exatamente como o usuário informou. Vai cifrada para o cofre."),
+      usuario: str("Login do GOV.BR, se informado (se ausente, o sistema usa o CPF do cliente)."),
+      nivel: { type: "string", enum: ["ouro", "prata", "bronze"], description: "Nível da conta GOV.BR, se informado." },
+      tem_2fa: { type: "boolean", description: "true se a conta exige verificação em 2 fatores." },
+      status_acesso: { type: "string", enum: ["pendente", "valido", "senha_incorreta", "bloqueado"], description: "Situação do acesso; use senha_incorreta quando o usuário disser que a senha não funciona." },
+    }, required: ["client_id", "senha"] },
+  }},
   registrar_protocolo: { type: "function", function: {
     name: "registrar_protocolo",
     description: "Conclui a tarefa de protocolo (protocolar_peca) de um processo/cliente — registra que a peça foi protocolada. Exige o gate 8.5: o cliente precisa ter os documentos Reclame Aqui E Sentença Procedente anexados; senão a tool informa o que falta e NÃO conclui. Resolva a tarefa antes com consultar_tarefas (título começa por 'Protocolar peça —'); NUNCA peça UUID. Use quando disserem que protocolaram/deram entrada na peça, ou para concluir a tarefa de protocolo.",

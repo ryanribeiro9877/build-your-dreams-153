@@ -698,6 +698,21 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
     tool: "definir_permissao_menu", gate: null,
     recusa: "", stage: "ajustando as permissões de menu", path: "objeto_permissao_menu",
   },
+  CREDENCIAL_GOV: {
+    // Gate (recepção/sócio/admin) fica na RPC: um admin que não seja sócio passa lá,
+    // então pré-checar aqui poderia barrar quem tem direito (fail-open é o certo).
+    tool: "registrar_credencial_gov", gate: null,
+    recusa: "", stage: "guardando a credencial no cofre", path: "objeto_credencial_gov",
+    guidance:
+      "CREDENCIAL GOV.BR — regras deste turno: (1) resolva o cliente com consultar_cliente " +
+      "e chame registrar_credencial_gov com a senha EXATAMENTE como o usuário informou. " +
+      "(2) PEDIDO COMPOSTO: se a mensagem trouxer TAMBÉM dados de cadastro (telefone, e-mail, " +
+      "endereço, nascimento), chame TAMBÉM atualizar_cliente — são DUAS ações no mesmo turno, " +
+      "uma para o cadastro e outra para o cofre. NUNCA trate as duas como uma só. " +
+      "(3) NUNCA repita a senha na resposta, nem para confirmar: diga apenas que a credencial " +
+      "foi guardada no cofre. (4) Se alguma parte do pedido não puder ser executada, diga " +
+      "EXPLICITAMENTE o que foi feito e o que não foi, e por quê — nunca declare sucesso geral.",
+  },
 };
 
 // Acha o agente que PORTA a tool (allowed_tools é sincronizado por trigger a partir
@@ -1790,6 +1805,20 @@ function buildUniversalGuardrails(): string {
     "sem o resultado dela. É PROIBIDO dizer 'pendência gerada/aberta', 'cadastro realizado', 'agendado' se " +
     "a ferramenta não foi chamada e não retornou sucesso. Se o pedido tiver MAIS DE UMA ação (ex.: 'cadastrar " +
     "E agendar'), chame TODAS as ferramentas correspondentes na mesma resposta.\n" +
+    "F-ter. RELATO PARCIAL OBRIGATÓRIO — É PROIBIDO DECLARAR SUCESSO GERAL QUANDO PARTE " +
+    "DO PEDIDO NÃO FOI EXECUTADA. Se o usuário pediu DUAS OU MAIS coisas (ex.: \"inclua o " +
+    "telefone X e a senha do gov Y\"), verifique CADA UMA: para cada parte, ou você chamou a " +
+    "ferramenta correspondente, ou tem de dizer que NÃO foi feita e por quê (falta de " +
+    "ferramenta, falta de permissão, dado ausente). Frases como \"tudo certo\", \"executado com " +
+    "sucesso\", \"já atualizei\" são PROIBIDAS quando qualquer parte ficou de fora — foi essa " +
+    "omissão que fez a recepção acreditar que uma senha estava salva quando não estava. " +
+    "Formato quando há parte não feita: diga primeiro o que FOI feito, depois \"não fiz X " +
+    "porque …\" e o que o usuário precisa fazer. Preferir admitir o que faltou a dar uma " +
+    "confirmação que o sistema não pode sustentar.\n" +
+    "F-quater. SENHA/CREDENCIAL NUNCA NA RESPOSTA: ao guardar uma credencial (GOV.BR, INSS, " +
+    "banco), é PROIBIDO repetir, confirmar, mascarar parcialmente ou citar a senha na resposta, " +
+    "no resumo ou em qualquer texto visível. Diga apenas que a credencial foi guardada no cofre " +
+    "cifrado. A senha existe no sistema apenas dentro do cofre.\n" +
     "F-bis. NUNCA PROMETA O QUE VOCÊ NÃO FAZ (A3 do reteste v170): você NÃO tem como " +
     "'devolver ao orquestrador', 'acionar outro setor', 'encaminhar ao responsável' por conta própria — " +
     "não existe esse mecanismo do seu lado. É PROIBIDO responder frases como 'devolvo ao orquestrador', " +
@@ -2287,6 +2316,16 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Gerar o kit documental${args.client_name ? ` de ${args.client_name}` : " do cliente"} (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral) e salvar no dossiê aguardando assinatura.`;
     case "registrar_protocolo":
       return `Registrar o protocolo (concluir a tarefa)${args.task_titulo ? ` — ${args.task_titulo}` : ""}${args.observacao ? `. Obs.: ${args.observacao}` : ""}. Exige Reclame Aqui + Sentença Procedente anexados ao cliente.`;
+    case "registrar_credencial_gov": {
+      // A SENHA NUNCA aparece no cartão (o texto vai para a conversa e fica no
+      // histórico). Só dizemos de quem é a credencial e os metadados.
+      const quem = args.client_nome ? ` de ${args.client_nome}` : " do cliente";
+      const extras: string[] = [];
+      if (args.nivel) extras.push(`nível ${String(args.nivel).toLowerCase()}`);
+      if (args.tem_2fa === true) extras.push("com verificação em 2 fatores");
+      if (args.status_acesso && args.status_acesso !== "pendente") extras.push(`situação: ${args.status_acesso}`);
+      return `Guardar a credencial GOV.BR${quem} no cofre cifrado${extras.length ? ` (${extras.join(", ")})` : ""}.`;
+    }
     case "definir_permissao_menu": {
       const a = String(args.acao ?? "");
       const alvo = args.user_nome ? ` de ${args.user_nome}` : " do colaborador";
@@ -2489,6 +2528,7 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3D-bis. REAGENDAR/CANCELAR ATENDIMENTO EXISTENTE (objeto = atendimento que já existe): se pede para REAGENDAR/REMARCAR ou CANCELAR um atendimento/reunião de cliente que JÁ existe — ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina" → "Especialista Agenda de Atendimento" (tools reagendar_atendimento/cancelar_atendimento; resolva o atendimento com minha_agenda ANTES). Quando o usuário NÃO disser a data do atendimento a alterar, consulte minha_agenda com um intervalo FUTURO amplo (de=hoje, ate=hoje+60 dias) e use o PRÓXIMO atendimento daquele cliente — consultar só "hoje" faz parecer que não existe atendimento. Só pergunte qual é se houver mais de um candidato. É alterar um atendimento existente, NÃO criar um novo (3D).
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
 3E-bis. ATUALIZAR/CORRIGIR CLIENTE EXISTENTE (objeto = cliente que já existe): se pede para MUDAR ou CORRIGIR um dado de cadastro de um cliente que já existe — telefone, email, endereço, data de nascimento, status — ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto" → "Especialista Cadastro" (tool atualizar_cliente; resolva o cliente com consultar_cliente ANTES). É EDITAR um cliente existente, NÃO cadastrar um novo (3E). CPF e nome não mudam pelo chat.
+3E-quater. CREDENCIAL GOV.BR DO CLIENTE (objeto = a senha/conta gov do cliente): se o usuário informa a SENHA do GOV.BR/INSS de um cliente, o nível da conta (ouro/prata/bronze), 2 fatores, ou diz que a senha não funciona mais — ex.: "a senha do gov dele é X", "guarda a senha do INSS da Maria: X", "a conta dela é bronze", "essa senha do gov não funciona" → "Especialista Cadastro" (tool registrar_credencial_gov; resolva o cliente com consultar_cliente ANTES). A senha vai CIFRADA para o cofre e NUNCA é repetida na resposta. PEDIDO COMPOSTO: se a mesma frase traz dado de cadastro E a senha ("inclua o telefone X e a senha do gov Y"), são DUAS ações — atualizar_cliente E registrar_credencial_gov; execute as duas e relate as duas.
 3E-ter. GERAR KIT DOCUMENTAL (objeto = os DOCUMENTOS/papelada de um cliente já cadastrado): se pede para GERAR, EMITIR, PREPARAR ou REFAZER os documentos, o KIT, a papelada, a procuração/contrato de honorários/declaração de hipossuficiência/ficha cadastral de um cliente que JÁ existe — ex.: "gera os documentos do Adalberto", "emite o kit do cliente Maria", "prepara a procuração e o contrato da Marina" → "Especialista Cadastro" ou "Especialista Documentação Geral" (tool gerar_kit_documental; resolva o cliente com consultar_cliente ANTES). É gerar o conjunto padrão a partir do CADASTRO — distinto de ANEXAR um arquivo enviado no chat (anexar_documento_cliente) e de CONFECCIONAR uma peça jurídica sob medida (regra 1).
 3F. AUDIÊNCIA (objeto = audiência de um PROCESSO): se pede para MARCAR/CRIAR uma AUDIÊNCIA de um processo ("marca a audiência do processo do Adalberto para 12/08 10h"), ou CONSULTAR audiências ("quais audiências dessa semana?") → o agente resolve o processo com consultar_processo e usa criar_audiencia / consultar_audiencias. É audiência JUDICIAL de um processo — NÃO confunda com reunião/atendimento de cliente na Agenda (3D).
 3G. PROCESSO/CASO (objeto = processo): se pede para CRIAR um processo novo ("abre um processo bancário para o Adalberto, réu Agibank") ou REGISTRAR ANDAMENTO / atualizar um processo existente ("registra no processo do Adalberto que a contestação foi protocolada hoje") → o agente resolve cliente/processo (consultar_cliente/consultar_processo) e usa criar_processo / atualizar_processo. Distinto de DISTRIBUIR um caso já criado (3B) e de marcar AUDIÊNCIA (3F).
