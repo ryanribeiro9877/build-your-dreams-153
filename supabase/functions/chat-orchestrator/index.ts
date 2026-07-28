@@ -32,6 +32,7 @@ import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWa
 import { reportError, flushSentry } from "./sentry.ts";
 import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
 import { pickAgentForTool } from "./tools/pickAgent.ts";
+import { montarFiltroCampanha } from "./tools/campanhaFiltro.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
 import {
   type DelegationStack, type DelegationContext, type DelegMsg,
@@ -716,6 +717,51 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
     tool: "definir_permissao_menu", gate: null,
     support: ["consultar_usuario"],
     recusa: "", stage: "ajustando as permissões de menu", path: "objeto_permissao_menu",
+  },
+  // ─── Motor 1 (Cards 3/4/5) ────────────────────────────────────────────────
+  RELACAO_BANCARIA: {
+    tool: "registrar_relacao_bancaria", gate: null,
+    support: ["consultar_cliente"],   // a RPC só aceita UUID; o handler resolve o nome
+    recusa: "", stage: "registrando o vínculo bancário", path: "objeto_relacao_bancaria",
+    guidance:
+      "RELAÇÃO BANCÁRIA — o cliente pode ter DUAS informações na mesma frase: onde ele RECEBE " +
+      "o benefício (banco_beneficio) e o PRODUTO que tem com um banco (banco + tipo_relacao). " +
+      "Se a frase trouxer as duas, mande as duas na MESMA chamada. Marque extrato_em_posse/" +
+      "contrato_em_posse só quando o usuário disser que o escritório JÁ TEM o documento.",
+  },
+  CAMPANHA: {
+    tool: "criar_campanha", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "montando a campanha", path: "objeto_campanha",
+    guidance:
+      "CAMPANHA — traduza o pedido em FILTRO usando as chaves disponíveis (recebe_em, " +
+      "tem_consignado_com, tem_extrato_de, cidade, uf, status, gov, origem, tem_pendencia, " +
+      "docs_completos) e escolha o objetivo mais próximo. Nomes de banco em MAIÚSCULAS. " +
+      "Se não houver critério nenhum, PERGUNTE — não crie campanha para a base toda.",
+  },
+  LIGACAO: {
+    tool: "registrar_ligacao", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "registrando a ligação", path: "objeto_ligacao",
+    guidance:
+      "LIGAÇÃO — informe o resultado em português (atendeu / não atendeu / número errado / " +
+      "pediu retorno / recusou / caixa postal). Se o cliente pediu retorno, calcule " +
+      "retornar_em em ISO a partir do que o usuário falou (\"amanhã às 10\") — é isso que cria " +
+      "a pendência de retorno no Kanban. Sem retornar_em, a pendência NÃO é criada: nesse " +
+      "caso diga isso ao usuário.",
+  },
+  KPI_LIGACOES: {
+    tool: "kpi_ligacoes", gate: null,
+    recusa: "", stage: "somando as ligações", path: "objeto_kpi_ligacoes",
+  },
+  AUDIO_AUTORIZACAO: {
+    tool: "anexar_audio_autorizacao", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "guardando o áudio de autorização", path: "objeto_audio_autorizacao",
+    guidance:
+      "ÁUDIO DE AUTORIZAÇÃO — o áudio precisa ter sido anexado NESTA conversa. Diga de qual " +
+      "cliente é. Se o áudio ainda não tiver transcrição, avise o usuário que o áudio foi " +
+      "guardado mas a transcrição não ficou pronta — não afirme que ambas as coisas foram feitas.",
   },
   CREDENCIAL_GOV: {
     // Gate (recepção/sócio/admin) fica na RPC: um admin que não seja sócio passa lá,
@@ -2340,6 +2386,42 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Gerar o kit documental${args.client_name ? ` de ${args.client_name}` : " do cliente"} (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral) e salvar no dossiê aguardando assinatura.`;
     case "registrar_protocolo":
       return `Registrar o protocolo (concluir a tarefa)${args.task_titulo ? ` — ${args.task_titulo}` : ""}${args.observacao ? `. Obs.: ${args.observacao}` : ""}. Exige Reclame Aqui + Sentença Procedente anexados ao cliente.`;
+    case "registrar_relacao_bancaria": {
+      const alvo = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const partes: string[] = [];
+      if (args.banco_beneficio) partes.push(`recebe no ${args.banco_beneficio}`);
+      if (args.banco && args.tipo_relacao) {
+        partes.push(`tem ${String(args.tipo_relacao).replace(/_/g, " ")} com o ${args.banco}`);
+      }
+      if (args.reconhece === false) partes.push("NÃO reconhece esse contrato");
+      const posse: string[] = [];
+      if (args.extrato_em_posse === true) posse.push(`extrato em posse${args.extrato_ano ? ` (${args.extrato_ano})` : ""}`);
+      if (args.contrato_em_posse === true) posse.push("contrato em posse");
+      return `Registrar: ${alvo} ${partes.join(" e ") || "— dado bancário"}${posse.length ? ` · ${posse.join(", ")}` : ""}.`;
+    }
+    case "criar_campanha": {
+      // __fila vem do pré-voo (previewCampanha): quantos clientes entram, contados
+      // ANTES da confirmação com o mesmo filtro que a RPC vai usar.
+      const filtros = ["recebe_em", "tem_consignado_com", "tem_extrato_de", "cidade", "uf", "status", "gov", "origem"]
+        .filter((k) => args[k]).map((k) => `${k.replace(/_/g, " ")}: ${args[k]}`);
+      if (args.tem_pendencia === true) filtros.push("com pendência aberta");
+      if (args.docs_completos === true) filtros.push("documentação completa");
+      if (args.docs_completos === false) filtros.push("documentação incompleta");
+      const quantos = typeof args.__fila === "number"
+        ? ` — ${args.__fila} cliente(s) na fila`
+        : " — a quantidade da fila sai na confirmação";
+      return `Criar a campanha "${args.nome}" (objetivo: ${String(args.objetivo ?? "outro").replace(/_/g, " ")})${filtros.length ? ` para ${filtros.join(", ")}` : ""}${quantos}.`;
+    }
+    case "registrar_ligacao": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const ret = args.retornar_em ? ` · retornar em ${args.retornar_em}` : "";
+      const obs = args.observacao ? ` · "${args.observacao}"` : "";
+      return `Registrar ligação para ${quem}: ${args.resultado}${ret}${obs}.`;
+    }
+    case "anexar_audio_autorizacao": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      return `Guardar no dossiê de ${quem} o áudio de AUTORIZAÇÃO${args.__file_name ? ` (${args.__file_name})` : ""}, com a transcrição.`;
+    }
     case "registrar_credencial_gov": {
       // A SENHA NUNCA aparece no cartão (o texto vai para a conversa e fica no
       // histórico). Só dizemos de quem é a credencial e os metadados.
@@ -2443,6 +2525,41 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
   for (const call of calls) {
     const tool = call.function.name;
     let args = safeJson(call.function.arguments);
+    // ─── Card 4: PRÉ-VOO da campanha — contar a fila ANTES do cartão ──────────
+    // O usuário precisa saber quantos clientes entram antes de confirmar. O filtro
+    // usa as MESMAS chaves de search_clients, então contamos com ela (consulta, com
+    // o JWT do usuário). Falha aqui não bloqueia: o cartão avisa que a contagem sai
+    // na confirmação.
+    if (tool === "criar_campanha" && userToken) {
+      try {
+        const anonK = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+        if (anonK) {
+          const jwt = createClient(supabaseUrl, anonK, { global: { headers: { Authorization: `Bearer ${userToken}` } } });
+          const { data: rows, error: errPrev } = await jwt.rpc("search_clients", { p_filtros: montarFiltroCampanha(args) });
+          if (!errPrev && Array.isArray(rows)) args = { ...args, __fila: rows.length };
+          else if (errPrev) console.warn(`[campanha-preview] search_clients falhou: ${errPrev.message}`);
+        }
+      } catch (e) {
+        console.warn(`[campanha-preview] falhou: ${(e as Error)?.message}`);
+      }
+    }
+    // ─── Card 5: carimba o ÁUDIO do turno (o LLM não vê UUID de anexo) ────────
+    // NÃO usa caseDocs: anexos audio/* são deliberadamente excluídos dos documentos
+    // de caso ("voz é comando, não prova" — ver caseDocFilter). Buscamos o áudio
+    // direto em chat_attachments, o mais recente da sessão.
+    if (tool === "anexar_audio_autorizacao") {
+      const ref = String(args.file_name ?? "").toLowerCase().trim();
+      const { data: atts } = await admin.from("chat_attachments")
+        .select("id, file_name, mime_type, created_at")
+        .eq("session_id", run.session_id).eq("is_active", true)
+        .order("created_at", { ascending: false }).limit(20);
+      const rows = ((atts as Array<{ id: string; file_name: string; mime_type: string | null }> | null) ?? [])
+        .filter((a) => /^audio\//i.test(a.mime_type ?? "") || /\.(webm|mp3|m4a|ogg|wav|aac)$/i.test(a.file_name ?? ""));
+      let picked = ref ? rows.find((a) => (a.file_name || "").toLowerCase().includes(ref)) : undefined;
+      picked ??= rows[0];   // mais recente
+      if (picked) args = { ...args, __attachment_id: picked.id, __file_name: picked.file_name };
+    }
+
     // ─── Itens 7 e 8 (adendo 27/07): PRÉ-VOO de criar_processo ────────────────
     // Decisão do Ryan: duplicata tem de ser barrada ANTES do cartão — não
     // "propõe → confirma → falha" (era o que a tela mostrava às 10:57).
@@ -2561,6 +2678,9 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3F. AUDIÊNCIA (objeto = audiência de um PROCESSO): se pede para MARCAR/CRIAR uma AUDIÊNCIA de um processo ("marca a audiência do processo do Adalberto para 12/08 10h"), ou CONSULTAR audiências ("quais audiências dessa semana?") → o agente resolve o processo com consultar_processo e usa criar_audiencia / consultar_audiencias. É audiência JUDICIAL de um processo — NÃO confunda com reunião/atendimento de cliente na Agenda (3D).
 3G. PROCESSO/CASO (objeto = processo): se pede para CRIAR um processo novo ("abre um processo bancário para o Adalberto, réu Agibank") ou REGISTRAR ANDAMENTO / atualizar um processo existente ("registra no processo do Adalberto que a contestação foi protocolada hoje") → o agente resolve cliente/processo (consultar_cliente/consultar_processo) e usa criar_processo / atualizar_processo. Distinto de DISTRIBUIR um caso já criado (3B) e de marcar AUDIÊNCIA (3F).
 3H. PERMISSÕES DE MENU (objeto = o ACESSO de um colaborador a uma tela/menu): se pede para DAR/CONCEDER, TIRAR/REVOGAR/BLOQUEAR ou VOLTAR AO PADRÃO o acesso de um colaborador a um MENU do sistema (Dashboard, Clientes, Recepção & Jurídico, Prazos & Audiências, Agenda, Tarefas, Kanban, KPIs, Dashboard IA, Administração, Configurações) — ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu personalizadas existem?" → resolva o colaborador com consultar_usuario e use definir_permissao_menu (acao conceder/revogar/padrao) ou listar_permissoes_menu. É ação de ADMIN (só admin executa). NÃO confunda com criar/editar TAREFA (3C) nem com o menu Kanban como board de casos (3B).
+3I. DADO BANCÁRIO DO CLIENTE (objeto = vínculo com banco): onde o cliente RECEBE o benefício, produto que tem com um banco (consignado, cartão, empréstimo, seguro), se reconhece o contrato, extrato/contrato em posse — ex.: "a dona Antonieta recebe no Agibank e tem consignado com o Agibank", "já temos o extrato do Bradesco de 2025" → "Especialista Cadastro" (tool registrar_relacao_bancaria). NÃO é abrir processo (3G) nem contato do cadastro (3E-bis).
+3J. CAMPANHA / LIGAÇÃO / NÚMEROS DA RECEPÇÃO: criar fila de ligação por filtro ("cria uma campanha para ligar para quem recebe no Bradesco") → criar_campanha; registrar o resultado de uma ligação já feita ("liguei para a dona Maria, não atendeu"; "pediu retorno amanhã às 10") → registrar_ligacao; pedir números ("quantas ligações fizemos hoje?", "como está a campanha X") → kpi_ligacoes. Três objetos distintos: criar a fila ≠ registrar a chamada ≠ ler indicador.
+3K. ÁUDIO DE AUTORIZAÇÃO: quando o usuário anexa um áudio e diz que é a autorização/anuência do cliente ("esse áudio é a autorização da dona Maria") → anexar_audio_autorizacao (guarda no dossiê com a transcrição). Distinto de anexar documento comum e de mensagem de voz que é só comando ao sistema.
 4. MONITORAR/ACOMPANHAR: se pede status, andamento, prazo → um "Monitor" adequado.
 5. AREA: escolha a subárea (Bancário, Civil, Consumidor, Plano de Saúde, Tributário) pelo contexto factual: banco/cartão/empréstimo/consignado → Bancário; seguro saúde/plano/cobertura → Plano de Saúde; produto/serviço/CDC/negativação → Consumidor; contrato/responsabilidade civil/dano geral → Civil; tributo/imposto → Tributário.
 6. EM DUVIDA entre Atendimento e Confecção: prefira Confecção quando houver documentos anexados ou pedido explícito de peça.

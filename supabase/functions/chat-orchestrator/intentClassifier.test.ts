@@ -421,3 +421,71 @@ Deno.test("isOndaAcaoRequest: 'é' não virou gatilho genérico (anti-regressão
   assertEquals(isOndaAcaoRequest("o processo é muito importante para o cliente"), false);
   assertEquals(isOndaAcaoRequest("esse cliente é antigo"), false);
 });
+
+// ─── Motor 1 · Cards 3/4/5 (28/07): banco, campanha, ligação, KPI, áudio ──────
+// As frases do aceite têm de ACIONAR o classificador de objeto. Várias não têm
+// verbo de ação ("ele recebe no Bradesco", "liguei para a dona Maria"), por isso há
+// padrões próprios — mesmo motivo do CREDENCIAL_GOV.
+Deno.test("isOndaAcaoRequest: relação bancária (Card 3)", () => {
+  assertEquals(isOndaAcaoRequest("a dona Antonieta recebe no Agibank e tem consignado com o Agibank"), true);
+  assertEquals(isOndaAcaoRequest("ele recebe no Bradesco"), true);
+  assertEquals(isOndaAcaoRequest("já temos o extrato do Bradesco de 2025"), true);
+  assertEquals(isOndaAcaoRequest("o cliente trouxe o contrato do BMG"), true);
+  assertEquals(isOndaAcaoRequest("ele não reconhece esse cartão consignado"), true);
+});
+
+Deno.test("isOndaAcaoRequest: campanha (Card 4)", () => {
+  assertEquals(isOndaAcaoRequest("cria uma campanha para ligar para todos os clientes que recebem no Bradesco, para pedir o extrato"), true);
+  assertEquals(isOndaAcaoRequest("quero ligar para quem tem consignado com o Agibank"), true);
+  assertEquals(isOndaAcaoRequest("monta uma fila de ligação dos clientes bronze"), true);
+});
+
+Deno.test("isOndaAcaoRequest: ligação registrada (Card 4)", () => {
+  assertEquals(isOndaAcaoRequest("liguei para a dona Maria, não atendeu"), true);
+  assertEquals(isOndaAcaoRequest("falei com o Sr. João, pediu retorno amanhã às 10"), true);
+  assertEquals(isOndaAcaoRequest("número errado da Antonieta"), true);
+  assertEquals(isOndaAcaoRequest("caiu na caixa postal"), true);
+});
+
+Deno.test("isOndaAcaoRequest: KPI de ligações (Card 4)", () => {
+  assertEquals(isOndaAcaoRequest("quantas ligações fizemos hoje?"), true);
+  assertEquals(isOndaAcaoRequest("como está a campanha do Bradesco?"), true);
+  assertEquals(isOndaAcaoRequest("produtividade da recepção esta semana"), true);
+});
+
+Deno.test("isOndaAcaoRequest: áudio de autorização (Card 5)", () => {
+  assertEquals(isOndaAcaoRequest("esse áudio é a autorização da dona Maria"), true);
+  assertEquals(isOndaAcaoRequest("anexa a gravação da autorização do Ivan"), true);
+  assertEquals(isOndaAcaoRequest("segue o áudio dele autorizando o escritório"), true);
+});
+
+Deno.test("normalizeRouteObject: objetos do Motor 1 + sinônimos", () => {
+  assertEquals(normalizeRouteObject("RELACAO_BANCARIA"), "RELACAO_BANCARIA");
+  assertEquals(normalizeRouteObject("banco"), "RELACAO_BANCARIA");
+  assertEquals(normalizeRouteObject("CAMPANHA"), "CAMPANHA");
+  assertEquals(normalizeRouteObject("LIGACAO"), "LIGACAO");
+  assertEquals(normalizeRouteObject("chamada"), "LIGACAO");
+  assertEquals(normalizeRouteObject("KPI_LIGACOES"), "KPI_LIGACOES");
+  assertEquals(normalizeRouteObject("kpi"), "KPI_LIGACOES");
+  assertEquals(normalizeRouteObject("AUDIO_AUTORIZACAO"), "AUDIO_AUTORIZACAO");
+  assertEquals(normalizeRouteObject("autorizacao"), "AUDIO_AUTORIZACAO");
+});
+
+// Anti-regressão: conversa e as frases antigas seguem como antes.
+Deno.test("isOndaAcaoRequest: Motor 1 não criou gatilho amplo demais", () => {
+  assertEquals(isOndaAcaoRequest("bom dia, tudo bem?"), false);
+  assertEquals(isOndaAcaoRequest("obrigado!"), false);
+  assertEquals(isOndaAcaoRequest("esse cliente é antigo"), false);
+});
+
+// GOTCHA pt-BR (28/07): `\w` é ASCII, então `coment\w*` casa só "coment" e o
+// lookahead (?![\wÀ-ÿ]) REJEITA por causa do "á" de "comentário" — a frase inteira
+// deixava de acionar o classificador. Em cauda de palavra use [\wÀ-ÿ]*.
+Deno.test("isOndaAcaoRequest: palavras com CAUDA ACENTUADA acionam", () => {
+  assertEquals(isOndaAcaoRequest("coloca um comentário no card do Adalberto"), true);
+  assertEquals(isOndaAcaoRequest("faz a atualização do processo do Ivan"), true);
+  assertEquals(isOndaAcaoRequest("monta uma fila de ligação dos clientes bronze"), true);
+  assertEquals(isOndaAcaoRequest("quantas ligações fizemos hoje?"), true);
+  assertEquals(isOndaAcaoRequest("esse áudio é a autorização da dona Maria"), true);
+  assertEquals(isOndaAcaoRequest("anexa a gravação da autorização do Ivan"), true);
+});

@@ -324,6 +324,8 @@ export type RouteObject =
   | "PROCESSO_CREATE" | "PROCESSO_UPDATE" | "KIT_DOCUMENTAL" | "RESUMO_DIA"
   | "PROTOCOLO" | "TAREFA_UPDATE" | "CLIENTE_UPDATE" | "AGENDA_CONSULTA"
   | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU" | "CREDENCIAL_GOV"
+  // Motor 1 (Cards 3/4/5): segmentação bancária → campanha → ligação → KPI.
+  | "RELACAO_BANCARIA" | "CAMPANHA" | "LIGACAO" | "KPI_LIGACOES" | "AUDIO_AUTORIZACAO"
   | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
@@ -343,6 +345,11 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "AGENDA_CONSULTA": o objeto é CONSULTAR a agenda/compromissos (sem alterar nada). Ex.: "o que tenho na agenda amanhã?", "quais meus atendimentos de hoje?", "minha agenda da semana".
 - "AGENDA_UPDATE": o objeto é REAGENDAR/REMARCAR ou CANCELAR um atendimento de cliente que JÁ existe. Ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina".
 - "AUDIENCIA": o objeto é uma AUDIÊNCIA judicial de um processo — marcar ou consultar. Ex.: "marca a audiência do processo do Adalberto para 12/08 às 10h", "quais audiências dessa semana?". Distinto de reunião/atendimento de cliente (AGENDA_CLIENTE).
+- "RELACAO_BANCARIA": o objeto é o VÍNCULO BANCÁRIO de um cliente — onde ele RECEBE o benefício, que produto tem com um banco (consignado, cartão consignado, empréstimo, seguro, conta), se reconhece o contrato, e se o escritório já tem o EXTRATO/CONTRATO em posse. Ex.: "a dona Antonieta recebe no Agibank e tem consignado com o Agibank", "ele recebe no Bradesco", "já temos o extrato do Bradesco de 2025", "o cliente trouxe o contrato", "ele não reconhece esse empréstimo do BMG". É dado BANCÁRIO do cliente — não confundir com abrir processo (PROCESSO_CREATE) nem com cadastro/contato (CLIENTE_UPDATE).
+- "CAMPANHA": o objeto é uma CAMPANHA de ligação — criar uma fila de clientes por filtro para a recepção ligar. Ex.: "cria uma campanha para ligar para todos os clientes que recebem no Bradesco, para pedir o extrato", "quero ligar para quem tem consignado com o Agibank", "monta uma fila dos clientes bronze para converter". É a CRIAÇÃO da fila — não é registrar uma ligação já feita (LIGACAO) nem pedir números (KPI_LIGACOES).
+- "LIGACAO": o objeto é o RESULTADO de uma ligação JÁ FEITA a um cliente. Ex.: "liguei para a dona Maria, não atendeu", "falei com o Sr. João, pediu retorno amanhã às 10", "número errado da Antonieta", "ela recusou", "caiu na caixa postal". É o registro do que aconteceu na chamada.
+- "KPI_LIGACOES": o objeto são os NÚMEROS das ligações/campanhas. Ex.: "quantas ligações fizemos hoje?", "como está a campanha do Bradesco?", "produtividade da recepção esta semana", "quantas a Kailane fez?". É leitura de indicador — não registra nada.
+- "AUDIO_AUTORIZACAO": o objeto é um ÁUDIO em que o CLIENTE AUTORIZA o escritório a agir, para guardar no dossiê com a transcrição. Ex.: "esse áudio é a autorização da dona Maria", "anexa a gravação da autorização do Ivan", "segue o áudio dele autorizando". Distinto de anexar um documento comum (OUTRO/anexar_documento_cliente) e de uma mensagem de voz que é só um comando ao sistema.
 - "CREDENCIAL_GOV": o objeto é a CREDENCIAL do GOV.BR/INSS de um CLIENTE — senha, login, nível da conta (ouro/prata/bronze), 2 fatores. Ex.: "a senha do gov dele é X", "guarda a senha do INSS da Maria: X", "senha do gov: X, conta bronze", "a senha dele não funciona mais", "anota que a conta dela é prata". ATENÇÃO: é a senha DO CLIENTE para acessar o GOV.BR — não confundir com dados de contato do cadastro (CLIENTE_UPDATE) nem com permissão de menu de colaborador (PERMISSAO_MENU). Se o pedido trouxer TAMBÉM dados de cadastro ("inclua o telefone X e a senha do gov Y"), o objeto é CREDENCIAL_GOV e o agente deve executar AS DUAS ações (atualizar o cadastro E guardar a credencial).
 - "PERMISSAO_MENU": o objeto é o ACESSO de um COLABORADOR a um MENU/tela do sistema — conceder, revogar ou voltar ao padrão; ou listar essas permissões. Ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu existem?".
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
@@ -368,6 +375,12 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "AUDIENCIA" || s === "AUDIÊNCIA") return "AUDIENCIA";
   if (s === "PERMISSAO_MENU" || s === "PERMISSAO" || s === "MENU") return "PERMISSAO_MENU";
   if (s === "CREDENCIAL_GOV" || s === "CREDENCIAL" || s === "SENHA_GOV") return "CREDENCIAL_GOV";
+  // Motor 1 (Cards 3/4/5) + sinônimos tolerados do LLM.
+  if (s === "RELACAO_BANCARIA" || s === "RELACAO" || s === "BANCO") return "RELACAO_BANCARIA";
+  if (s === "CAMPANHA" || s === "CAMPANHA_LIGACAO") return "CAMPANHA";
+  if (s === "LIGACAO" || s === "LIGAÇÃO" || s === "CHAMADA") return "LIGACAO";
+  if (s === "KPI_LIGACOES" || s === "KPI" || s === "PRODUTIVIDADE") return "KPI_LIGACOES";
+  if (s === "AUDIO_AUTORIZACAO" || s === "AUDIO" || s === "AUTORIZACAO") return "AUDIO_AUTORIZACAO";
   return "OUTRO";
 }
 
@@ -384,7 +397,7 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
 // "senha/gov/inss/conta bronze" entram como ALVO: a credencial do GOV.BR do cliente
 // é objeto próprio (CREDENCIAL_GOV) desde o pacote de 27/07.
 const ONDA_ALVO_RE =
-  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol\w*|resumo (do )?(meu )?dia|meu dia|minha semana|hoje|semana|situa[çc][ãa]o|compromissos?|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment\w*|agenda|atendimentos?|pend[êe]ncias?|pend[êe]nte|tarefas?|senhas?|gov|gov\.?br|inss|credencial|conta (ouro|prata|bronze)|ouro|prata|bronze|2 fatores|dois fatores)(?![\wÀ-ÿ])/i;
+  /(?<![\wÀ-ÿ])(processos?|a[çc][ãa]o judicial|kit|documenta[çc][ãa]o do cliente|documentos? d[oae]|procura[çc][ãa]o|contrato de honor[áa]rios|hipossufici[êe]ncia|ficha cadastral|protocol[\wÀ-ÿ]*|resumo (do )?(meu )?dia|meu dia|minha semana|hoje|semana|situa[çc][ãa]o|compromissos?|audi[êe]ncias?|andamento|permiss[ãa]o|permiss[õo]es|menu|acesso ao|kanban|card|coment[\wÀ-ÿ]*|agenda|atendimentos?|pend[êe]ncias?|pend[êe]nte|tarefas?|senhas?|gov|gov\.?br|inss|credencial|conta (ouro|prata|bronze)|ouro|prata|bronze|2 fatores|dois fatores)(?![\wÀ-ÿ])/i;
 // Verbos/formas que indicam PEDIDO operacional (não narrativa solta).
 // "cadastr\w*" entra porque "cadastre uma PENDÊNCIA…" é pedido de tarefa (o objeto
 // é a pendência, não o cliente) — foi um dos misroutes do E2E.
@@ -392,7 +405,7 @@ const ONDA_ALVO_RE =
 // verbo nesta lista — por isso nem chegavam ao classificador de objeto (B1 do
 // reteste 27/07). Formas de ESTADO (como/está/tenho/tem/anda) entram aqui.
 const ONDA_VERBO_RE =
-  /(?<![\wÀ-ÿ])(abr\w*|cri\w*|cadastr\w*|adicion\w*|inclu\w*|ger\w*|emit\w*|prepar\w*|refa[çz]\w*|registr\w*|anot\w*|atualiz\w*|mud\w*|mov\w*|pass\w*|conclu\w*|protocol\w*|marc\w*|reagend\w*|remarc\w*|cancel\w*|coment\w*|conced\w*|d[êé]|d[áa]|libere?|tir\w*|revog\w*|list\w*|mostr\w*|quais|qual|o que|resum\w*|corrig\w*|como|est[áa]|t[êe]m|tenho|anda|minha|meu)(?![\wÀ-ÿ])/i;
+  /(?<![\wÀ-ÿ])(abr[\wÀ-ÿ]*|cri[\wÀ-ÿ]*|cadastr[\wÀ-ÿ]*|adicion[\wÀ-ÿ]*|inclu[\wÀ-ÿ]*|ger[\wÀ-ÿ]*|emit[\wÀ-ÿ]*|prepar[\wÀ-ÿ]*|refa[çz][\wÀ-ÿ]*|registr[\wÀ-ÿ]*|anot[\wÀ-ÿ]*|atualiz[\wÀ-ÿ]*|mud[\wÀ-ÿ]*|mov[\wÀ-ÿ]*|pass[\wÀ-ÿ]*|conclu[\wÀ-ÿ]*|protocol[\wÀ-ÿ]*|marc[\wÀ-ÿ]*|reagend[\wÀ-ÿ]*|remarc[\wÀ-ÿ]*|cancel[\wÀ-ÿ]*|coment[\wÀ-ÿ]*|conced[\wÀ-ÿ]*|d[êé]|d[áa]|libere?|tir[\wÀ-ÿ]*|revog[\wÀ-ÿ]*|list[\wÀ-ÿ]*|mostr[\wÀ-ÿ]*|quais|qual|o que|resum[\wÀ-ÿ]*|corrig[\wÀ-ÿ]*|como|est[áa]|t[êe]m|tenho|anda|minha|meu)(?![\wÀ-ÿ])/i;
 
 // ─── A6.3 (reteste v170): aceitar a oferta "quer que eu atualize esse processo?" ──
 // O aviso de duplicata oferece atualizar o processo existente. Respondendo "sim,
@@ -439,10 +452,28 @@ const CREDENCIAL_GOV_RE =
 const NIVEL_CONTA_RE =
   /(?<![\wÀ-ÿ])(conta|perfil|n[íi]vel)(?![\wÀ-ÿ])[\s\S]{0,25}?(?<![\wÀ-ÿ])(ouro|prata|bronze)(?![\wÀ-ÿ])/i;
 
+// ─── Motor 1 (Cards 3/4/5): banco, campanha, ligação, KPI, áudio ─────────────
+// Padrões próprios porque estas frases também não têm verbo de ação claro:
+// "ele recebe no Bradesco", "liguei para a dona Maria, não atendeu".
+const RELACAO_BANCARIA_RE =
+  /(?<![\wÀ-ÿ])(receb\w*\s+(n?[oa]s?\s+)?(banco|bradesco|agibank|itau|ita[úu]|bmg|caixa|santander|mercantil|crefisa|facta|inbursa|brb|banco do brasil|pan|c6|daycoval|safra|ol[ée])|consignad\w*|cart[ãa]o consignado|empr[ée]stimo pessoal|extrato d[oe]|contrato d[oe]|banco pagador|onde receb\w*)(?![\wÀ-ÿ])/i;
+// ATENÇÃO: `\w` é ASCII, então `liga\w*` casa só "liga" e o lookahead (?![\wÀ-ÿ])
+// REJEITA por causa do "ç" de "ligação". Em cauda de palavra pt-BR use [\wÀ-ÿ]*.
+const CAMPANHA_RE =
+  /(?<![\wÀ-ÿ])(campanha|fila de liga[\wÀ-ÿ]*|mutir[ãa]o|(?:quero|vamos|precisamos)\s+ligar\s+para|ligar\s+para\s+(?:todos|quem|os clientes))(?![\wÀ-ÿ])/i;
+const LIGACAO_RE =
+  /(?<![\wÀ-ÿ])(liguei|ligamos|falei com|atendeu|n[ãa]o atendeu|caixa postal|n[úu]mero errado|pediu (?:para )?retorn\w*|ligar depois|recusou)(?![\wÀ-ÿ])/i;
+const KPI_LIGACOES_RE =
+  /(?<![\wÀ-ÿ])(quantas liga[\wÀ-ÿ]*|liga[\wÀ-ÿ]*\s+(?:de |feitas|hoje)|produtividade|como (?:est[áa]|vai) a campanha|desempenho da recep[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+const AUDIO_AUTORIZACAO_RE =
+  /(?<![\wÀ-ÿ])(([áa]udio|grava[çc][ãa]o|gravou|gravei)[\s\S]{0,40}?(autoriza[\wÀ-ÿ]*|anu[êe]nci[\wÀ-ÿ]*|consent[\wÀ-ÿ]*)|(autoriza[\wÀ-ÿ]*|anu[êe]nci[\wÀ-ÿ]*)[\s\S]{0,40}?([áa]udio|grava[çc][ãa]o))(?![\wÀ-ÿ])/i;
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
   if (CREDENCIAL_RE.test(m) || CREDENCIAL_GOV_RE.test(m) || NIVEL_CONTA_RE.test(m)) return true;
+  if (RELACAO_BANCARIA_RE.test(m) || CAMPANHA_RE.test(m) || LIGACAO_RE.test(m)
+      || KPI_LIGACOES_RE.test(m) || AUDIO_AUTORIZACAO_RE.test(m)) return true;
   return ONDA_ALVO_RE.test(m) && ONDA_VERBO_RE.test(m);
 }
 

@@ -10,7 +10,7 @@ export interface ToolDef {
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
   "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias", "resumo_do_dia",
-  "listar_permissoes_menu",
+  "listar_permissoes_menu", "kpi_ligacoes",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -331,6 +331,73 @@ export const TOOLS: Record<string, ToolDef> = {
     name: "listar_permissoes_menu",
     description: "Lista as permissões de menu personalizadas (overrides) de todos os colaboradores — quem teve algum menu concedido ou revogado explicitamente, e por quem. Ação de ADMIN (só admin). Sem parâmetros.",
     parameters: { type: "object", properties: {}, required: [] },
+  }},
+  // ─── Card 3: relação bancária do cliente ───────────────────────────────────
+  registrar_relacao_bancaria: { type: "function", function: {
+    name: "registrar_relacao_bancaria",
+    description: "Registra o vínculo bancário de um cliente: onde ele RECEBE o benefício (banco pagador) e/ou que produto ele tem com um banco (consignado, cartão consignado, empréstimo pessoal, seguro, conta). Também marca se o escritório já tem o EXTRATO ou o CONTRATO em posse. Use em frases como \"a dona Antonieta recebe no Agibank e tem consignado com o Agibank\", \"já temos o extrato do Bradesco de 2025\", \"ele trouxe o contrato\". Repetir não duplica (upsert por cliente+banco+tipo) e nunca desmarca um extrato já registrado.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente como o usuário falou. Basta o nome; se houver mais de um, os candidatos voltam para você perguntar."),
+      client_id: str("ID do cliente, se já resolvido com consultar_cliente. Opcional — nunca peça UUID ao usuário."),
+      banco_beneficio: str("Banco onde o cliente RECEBE o benefício (\"recebe no BRADESCO\"). Só isto já é útil, sem produto."),
+      banco: str("Banco do PRODUTO (ex.: AGIBANK), quando o cliente tem consignado/seguro/etc. com ele."),
+      tipo_relacao: { type: "string", enum: ["consignado", "emprestimo_pessoal", "cartao_consignado", "seguro", "conta", "outro"], description: "Produto que o cliente tem nesse banco. Obrigatório junto com `banco`." },
+      reconhece: { type: "boolean", description: "O cliente RECONHECE esse contrato/produto? false quando ele nega (é o caso típico de refin não autorizado)." },
+      extrato_em_posse: { type: "boolean", description: "true se o escritório já tem o extrato desse banco." },
+      extrato_ano: { type: "number", description: "Ano do extrato em posse (ex.: 2025)." },
+      contrato_em_posse: { type: "boolean", description: "true se o escritório já tem o contrato." },
+      notes: str("Observação curta, se o usuário der contexto."),
+    }, required: [] },
+  }},
+  // ─── Card 4: campanha de ligação, registro e KPI ───────────────────────────
+  criar_campanha: { type: "function", function: {
+    name: "criar_campanha",
+    description: "Cria uma CAMPANHA de ligação com uma fila de clientes montada por filtro. Use em \"cria uma campanha para ligar para todos os clientes que recebem no Bradesco, para pedir o extrato\", \"quero ligar para quem tem consignado com o Agibank\". O sistema monta a fila e diz quantos clientes entraram.",
+    parameters: { type: "object", properties: {
+      nome: str("Nome curto da campanha (ex.: \"Extratos Bradesco\"). Se o usuário não der, crie um descritivo."),
+      objetivo: { type: "string", enum: ["pedir_documento", "pedir_senha_gov", "agendar_atendimento", "renovar_procuracao", "converter_conta_bronze", "informar_andamento", "outro"], description: "Para que é a ligação." },
+      recebe_em: str("Filtro: banco onde o cliente RECEBE o benefício (ex.: BRADESCO)."),
+      tem_consignado_com: str("Filtro: banco com quem o cliente tem consignado (ex.: AGIBANK)."),
+      tem_extrato_de: str("Filtro: banco cujo extrato o escritório já tem."),
+      cidade: str("Filtro: cidade."),
+      uf: str("Filtro: UF (2 letras)."),
+      status: str("Filtro: status do cliente (ex.: ativo)."),
+      gov: { type: "string", enum: ["ouro", "prata", "bronze"], description: "Filtro: nível da conta GOV.BR." },
+      origem: str("Filtro: origem do cadastro (ex.: planilha)."),
+      tem_pendencia: { type: "boolean", description: "Filtro: só clientes com pendência aberta." },
+      docs_completos: { type: "boolean", description: "Filtro: só clientes com documentação completa (ou incompleta, se false)." },
+    }, required: ["nome", "objetivo"] },
+  }},
+  registrar_ligacao: { type: "function", function: {
+    name: "registrar_ligacao",
+    description: "Registra o RESULTADO de uma ligação para um cliente. Use em \"liguei para a dona Maria, não atendeu\", \"falei com o Sr. João, pediu retorno amanhã às 10\", \"número errado\". Se o resultado for pedido de retorno, informe `retornar_em` que o sistema cria sozinho a pendência \"Retornar ligação\" no Kanban.",
+    parameters: { type: "object", properties: {
+      resultado: str("Como terminou a ligação, em português: atendeu / não atendeu / número errado / pediu retorno / recusou / caixa postal."),
+      cliente_nome: str("Nome do cliente como o usuário falou (\"a dona Maria\" → Maria). Se houver mais de um, os candidatos voltam para você perguntar."),
+      client_id: str("ID do cliente, se já resolvido. Opcional."),
+      observacao: str("O que o cliente disse, em uma frase."),
+      retornar_em: str("Quando retornar, em ISO (AAAA-MM-DDTHH:mm:ssZ). Obrigatório quando o resultado é pedido de retorno."),
+      campanha_id: str("ID da campanha, se a ligação faz parte de uma."),
+    }, required: ["resultado"] },
+  }},
+  kpi_ligacoes: { type: "function", function: {
+    name: "kpi_ligacoes",
+    description: "Números das ligações por operador e o progresso das campanhas ativas num período. Use em \"quantas ligações fizemos hoje?\", \"como está a campanha do Bradesco?\", \"produtividade da recepção esta semana\". Sem intervalo = hoje. Resposta direta, sem confirmação.",
+    parameters: { type: "object", properties: {
+      de: str("data inicial AAAA-MM-DD (opcional; default = hoje)"),
+      ate: str("data final AAAA-MM-DD (opcional; default = mesmo dia de 'de')"),
+    }, required: [] },
+  }},
+  // ─── Card 5: áudio de autorização do cliente ───────────────────────────────
+  anexar_audio_autorizacao: { type: "function", function: {
+    name: "anexar_audio_autorizacao",
+    description: "Guarda no dossiê do cliente um ÁUDIO em que ele AUTORIZA o escritório a agir (autorização/anuência gravada), junto com a transcrição. Use quando o usuário anexar um áudio e disser que é a autorização do cliente: \"esse áudio é a autorização da dona Maria\", \"anexa a gravação da autorização do Ivan\". O áudio precisa ter sido anexado nesta conversa.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente de quem é a autorização."),
+      client_id: str("ID do cliente, se já resolvido. Opcional."),
+      process_id: str("ID do processo, se a autorização é de um processo específico. Opcional."),
+      file_name: str("Nome do arquivo de áudio anexado nesta conversa, se houver mais de um."),
+    }, required: [] },
   }},
   registrar_credencial_gov: { type: "function", function: {
     name: "registrar_credencial_gov",

@@ -1,6 +1,8 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCep } from "../cep.ts";
 import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
+import { montarFiltroCampanha } from "./campanhaFiltro.ts";
+export { montarFiltroCampanha, CAMPANHA_FILTRO_KEYS } from "./campanhaFiltro.ts";
 
 // READ — recebe um SupabaseClient (client) e o user_id para escopar.
 // IMPORTANTE (Correção A): para consultar_cliente o `client` DEVE carregar a
@@ -46,6 +48,14 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
     }
     case "resumo_do_dia": {
       const { data } = await client.rpc("resumo_do_dia");
+      return data ?? {};
+    }
+    case "kpi_ligacoes": {
+      // Escopo/gate na RPC; sem intervalo = hoje (defaults da RPC → omitir args).
+      const rpcArgs: Record<string, unknown> = {};
+      if (args.de) rpcArgs.p_de = args.de;
+      if (args.ate) rpcArgs.p_ate = args.ate;
+      const { data } = await client.rpc("kpi_ligacoes", rpcArgs);
       return data ?? {};
     }
     case "listar_permissoes_menu": {
@@ -109,6 +119,57 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
 // WRITE — recebe um client com a IDENTIDADE DO USUÁRIO (JWT), para RLS/RBAC valerem.
 // Sanitiza o nome do objeto p/ o Storage (ASCII restrito) — chave com acento/ç
 // devolve HTTP 400. Espelha o sanitizeName do frontend (clientDocuments.ts).
+// ─── Padrão comum das tools dos Cards 3/4/5 (item 0 do briefing) ─────────────
+// As RPCs resolvem o cliente por NOME e devolvem ok:false com motivo. Traduzimos o
+// motivo em PERGUNTA ao usuário — nunca em "sucesso". Uma tool ruim aqui é pior que
+// nenhuma: foi a resposta de sucesso sem execução que gerou o incidente de 28/07.
+function nomeCliente(args: Record<string, unknown>): string | undefined {
+  return [args.cliente_nome, args.client_nome, args.nome]
+    .find((v) => typeof v === "string" && v.trim()) as string | undefined;
+}
+
+/** Converte o ok:false da RPC em mensagem acionável (com candidatos, quando houver). */
+function erroClienteRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): string {
+  const motivo = String(r.motivo ?? "");
+  const base = String(r.mensagem ?? "");
+  if (motivo === "ambiguo") {
+    const nomes = (Array.isArray(r.candidatos) ? r.candidatos : [])
+      .map((c) => String((c as { nome?: string })?.nome ?? "")).filter(Boolean);
+    return `${base || "Há mais de um cliente com esse nome."}${nomes.length ? ` Candidatos: ${nomes.join("; ")}.` : ""} Me diga qual é — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "cliente_nao_encontrado") {
+    return `${base || "Não encontrei esse cliente."} Confirme o nome ou cadastre o cliente primeiro — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "cliente_nao_informado") {
+    return `${base || "Preciso saber de qual cliente é."} — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "resultado_invalido") {
+    return base || "Resultado inválido: use atendeu, não atendeu, número errado, pediu retorno, recusou ou caixa postal.";
+  }
+  return `${base || "não consegui concluir"} — ${oQueNaoFoiFeito}`;
+}
+
+/**
+ * Resolve o cliente por NOME para as RPCs que só aceitam UUID
+ * (registrar_relacao_bancaria). Usa agent_consultar_cliente com o JWT do usuário
+ * (ela re-checa papel via auth.uid()), replicando os mesmos motivos 0/1/N.
+ */
+async function resolverClientePorNome(
+  userClient: SupabaseClient, nome: string,
+): Promise<{ id?: string; nome?: string; erro?: string }> {
+  const { data, error } = await userClient.rpc("agent_consultar_cliente", { p_busca: nome });
+  if (error) return { erro: `não consegui buscar o cliente (${error.message})` };
+  const rows = (Array.isArray(data) ? data : []) as Array<{ id?: string; full_name?: string; nome?: string }>;
+  if (rows.length === 0) return { erro: `não encontrei cliente com "${nome}". Confirme o nome ou cadastre o cliente primeiro.` };
+  if (rows.length > 1) {
+    const nomes = rows.slice(0, 5).map((r) => String(r.full_name ?? r.nome ?? "")).filter(Boolean);
+    return { erro: `há mais de um cliente com "${nome}". Candidatos: ${nomes.join("; ")}. Me diga qual é.` };
+  }
+  const r = rows[0];
+  return { id: String(r.id ?? ""), nome: String(r.full_name ?? r.nome ?? nome) };
+}
+
+
 function sanitizeStorageName(name: string): string {
   const s = (name || "arquivo")
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -400,6 +461,113 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         else return { ok: false, error: `ação inválida: ${acao} (use conceder, revogar ou padrao).` };
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { user_id: args.user_id, menu_key: menuKey, acao } };
+      }
+      // ─── Card 3: relação bancária ─────────────────────────────────────────
+      case "registrar_relacao_bancaria": {
+        // A RPC só aceita client_id (não resolve nome), então a resolução 0/1/N do
+        // item 0 é feita AQUI, com o JWT do usuário.
+        let clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        let clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId) {
+          if (!clienteNome) return { ok: false, error: "de qual cliente é esse dado bancário? Me diga o nome." };
+          const res = await resolverClientePorNome(userClient, clienteNome);
+          if (res.erro) return { ok: false, error: `${res.erro} (nada foi registrado)` };
+          clienteId = res.id!; clienteNome = res.nome ?? clienteNome;
+        }
+        const temProduto = !!(args.banco && args.tipo_relacao);
+        if (!temProduto && !args.banco_beneficio) {
+          return { ok: false, error: "me diga onde o cliente recebe o benefício e/ou com qual banco ele tem consignado/seguro." };
+        }
+        const { data, error } = await userClient.rpc("registrar_relacao_bancaria", {
+          p_client_id: clienteId,
+          p_banco: temProduto ? args.banco : null,
+          p_tipo_relacao: temProduto ? args.tipo_relacao : null,
+          p_reconhece: typeof args.reconhece === "boolean" ? args.reconhece : null,
+          p_extrato_em_posse: typeof args.extrato_em_posse === "boolean" ? args.extrato_em_posse : null,
+          p_extrato_ano: typeof args.extrato_ano === "number" ? args.extrato_ano : null,
+          p_contrato_em_posse: typeof args.contrato_em_posse === "boolean" ? args.contrato_em_posse : null,
+          p_notes: args.notes ?? null,
+          p_banco_beneficio: args.banco_beneficio ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "nada foi registrado") };
+        return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
+      }
+      // ─── Card 4: campanha e ligação ───────────────────────────────────────
+      case "criar_campanha": {
+        const filtro = montarFiltroCampanha(args);
+        if (Object.keys(filtro).length === 0) {
+          return { ok: false, error: "preciso de pelo menos um critério para montar a fila (ex.: banco onde recebe, banco do consignado, cidade, nível GOV)." };
+        }
+        const { data, error } = await userClient.rpc("criar_campanha", {
+          p_nome: args.nome, p_objetivo: args.objetivo, p_filtro: filtro,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "a campanha não foi criada") };
+        // Fila vazia é resultado honesto, não erro: a campanha existe mas não há quem ligar.
+        return { ok: true, result: r };
+      }
+      case "registrar_ligacao": {
+        const { data, error } = await userClient.rpc("registrar_ligacao", {
+          p_resultado: args.resultado,
+          p_client_id: args.client_id ?? null,
+          p_cliente_nome: nomeCliente(args) ?? null,
+          p_observacao: args.observacao ?? null,
+          p_campanha_id: args.campanha_id ?? null,
+          p_retornar_em: args.retornar_em ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "a ligação não foi registrada") };
+        return { ok: true, result: r };
+      }
+      // ─── Card 5: áudio de autorização ─────────────────────────────────────
+      case "anexar_audio_autorizacao": {
+        // Glue no mesmo padrão de anexar_documento_cliente: o áudio já está em
+        // chat_attachments (o mic do chat sobe e a edge transcribe-audio grava a
+        // transcrição em extracted_text). Aqui copiamos para o bucket do dossiê e
+        // passamos file_path + transcrição para a RPC.
+        const attId = String((args as Record<string, unknown>).__attachment_id ?? "");
+        if (!attId) return { ok: false, error: "não identifiquei o áudio — anexe a gravação nesta conversa antes (nada foi anexado ao dossiê)." };
+        let clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        let clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId) {
+          if (!clienteNome) return { ok: false, error: "de qual cliente é essa autorização? Me diga o nome." };
+          const res = await resolverClientePorNome(userClient, clienteNome);
+          if (res.erro) return { ok: false, error: `${res.erro} (o áudio não foi anexado)` };
+          clienteId = res.id!; clienteNome = res.nome ?? clienteNome;
+        }
+        const { data: att } = await admin.from("chat_attachments")
+          .select("storage_path, file_name, mime_type, extracted_text").eq("id", attId).maybeSingle();
+        if (!att) return { ok: false, error: "não encontrei o áudio anexado (o áudio não foi anexado ao dossiê)." };
+        const a = att as { storage_path: string; file_name: string; mime_type: string | null; extracted_text: string | null };
+        const { data: blob, error: dlErr } = await admin.storage.from("chat-attachments").download(a.storage_path);
+        if (dlErr || !blob) return { ok: false, error: "falha ao ler o áudio do chat (nada foi anexado)." };
+        const novoPath = `${clienteId}/${Date.now()}_autorizacao_${sanitizeStorageName(a.file_name)}`;
+        const { error: upErr } = await admin.storage.from("client-documents")
+          .upload(novoPath, blob, { contentType: a.mime_type ?? "audio/webm", upsert: false });
+        if (upErr) return { ok: false, error: "falha ao salvar o áudio no dossiê." };
+        const { data, error } = await userClient.rpc("anexar_audio_autorizacao", {
+          p_file_path: novoPath,
+          p_client_id: clienteId,
+          p_cliente_nome: null,
+          p_transcricao: a.extracted_text ?? null,
+          p_process_id: args.process_id ?? null,
+          p_nome_arquivo: a.file_name,
+        });
+        if (error) {
+          await admin.storage.from("client-documents").remove([novoPath]).then(() => {}, () => {}); // sem órfão
+          return { ok: false, error: error.message };
+        }
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) {
+          await admin.storage.from("client-documents").remove([novoPath]).then(() => {}, () => {}); // sem órfão
+          return { ok: false, error: erroClienteRpc(r, "o áudio não foi anexado") };
+        }
+        // Diz explicitamente quando NÃO houve transcrição — meia-execução é relatada.
+        return { ok: true, result: { ...r, cliente: clienteNome || r.cliente, transcricao_ausente: !a.extracted_text } };
       }
       case "registrar_credencial_gov": {
         // Gate (recepção/sócio/admin) dentro da RPC; a senha é cifrada no cofre por
