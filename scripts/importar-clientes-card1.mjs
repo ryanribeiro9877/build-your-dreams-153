@@ -57,6 +57,9 @@ const DIR = arg("--dir", "C:/Users/Infosol/Downloads");
 const EXECUTAR = has("--executar");
 const LIMIT = Number(arg("--limit", "0")) || 0;
 const BATCH = Math.min(Math.max(Number(arg("--batch", "50")) || 50, 1), 100);
+// Aba que passar disto é sinalizada no log (não aborta: o dado é necessário, mas o
+// operador precisa saber ONDE o tempo foi gasto).
+const ABA_LENTA_MS = Number(arg("--aviso-aba-ms", "4000")) || 4000;
 
 // Projeto e chave ANON — ambos PÚBLICOS (a anon key é a que roda no navegador; toda
 // a proteção real está na RLS e nos gates das RPCs). Ficam aqui só para o operador
@@ -105,12 +108,37 @@ async function construirIndiceSenhas() {
   const cache = new Map();
   let lidas = 0;
 
+  // Lê cada arquivo UMA vez, e SÓ as abas que têm coluna de senha (o caso real quer
+  // 6 de 11 abas em Clientes X bancos). Progresso por aba: sem isso não se distingue
+  // "lento" de "travado" — foi o que causou a interrupção no teste do Ryan.
+  const porArquivo = new Map();
   for (const cfg of ABAS_SENHA) {
-    if (!existsSync(cfg.file)) { console.warn(`  ⚠ arquivo ausente: ${path.basename(cfg.file)}`); continue; }
-    if (!cache.has(cfg.file)) cache.set(cfg.file, await readWorkbook(cfg.file));
+    if (!porArquivo.has(cfg.file)) porArquivo.set(cfg.file, []);
+    porArquivo.get(cfg.file).push(cfg.aba);
+  }
+  for (const [file, abas] of porArquivo) {
+    if (!existsSync(file)) { console.warn(`  ⚠ arquivo ausente: ${path.basename(file)}`); continue; }
+    const base = path.basename(file);
+    console.log(`  lendo ${base} · ${abas.length} aba(s) com senha`);
+    const t0 = Date.now();
+    const sheets = await readWorkbook(file, {
+      onlySheets: abas,
+      onSheet: ({ name, index, total, rows, ms, skipped }) => {
+        if (skipped) return;                       // aba fora do escopo: não polui o log
+        const alerta = ms > ABA_LENTA_MS ? "  ⚠ lenta" : "";
+        console.log(`    · aba ${index}/${total} "${name}" · ${rows} linhas · ${ms}ms${alerta}`);
+      },
+    });
+    cache.set(file, sheets);
+    console.log(`    ${base}: ${Date.now() - t0}ms`);
+  }
+
+  for (const cfg of ABAS_SENHA) {
+    if (!cache.has(cfg.file)) continue;
     const alvo = normalizeName(cfg.aba);
     const sheet = cache.get(cfg.file).find((s) => normalizeName(s.name).startsWith(alvo));
     if (!sheet) { console.warn(`  ⚠ aba não encontrada: "${cfg.aba}" em ${path.basename(cfg.file)}`); continue; }
+    if (!sheet.rows.length) { console.warn(`  ⚠ aba vazia após leitura: "${sheet.name}"`); continue; }
 
     for (const row of sheet.rows.slice(1)) {
       const nome = String(row[cfg.nome] ?? "").trim();
@@ -165,11 +193,27 @@ function itensDaAba(sheet, cols) {
   return out;
 }
 
-/** Anexa a senha vinda das originais. Nada é logado. */
+/**
+ * Anexa a senha vinda das originais. Nada é logado.
+ *
+ * CONTROLE (importante): a senha só é anexada se o DRY-RUN marcou "tem senha" para
+ * aquele cliente. O casamento por NOME (necessário para os 148 sem CPF) casaria
+ * homônimos e poderia gravar a credencial de OUTRA pessoa no cofre — risco
+ * inaceitável. Com o controle, a extração fica limitada ao plano já validado:
+ * quem o plano diz que tem senha e nós encontramos entra; o resto é reportado.
+ */
 function anexarSenha(item, idx) {
   const porCpf = item.cpf ? idx.porCpf.get(onlyDigits(item.cpf)) : null;
-  const entry = porCpf ?? idx.porNome.get(normalizeName(item.nome)) ?? null;
+  // Por CPF é identificação forte; por nome só quando o plano confirma que há senha.
+  const porNome = item.__temSenha ? idx.porNome.get(normalizeName(item.nome)) : null;
+  const entry = porCpf ?? porNome ?? null;
   if (!entry) return item;
+  if (!item.__temSenha && entry.senha) {
+    // Encontramos senha para quem o plano NÃO marcou: não gravamos (pode ser
+    // homônimo). Só contabilizamos para o relatório.
+    item.__senhaNaoConfirmada = true;
+    return item;
+  }
   if (entry.senha) {
     item.senha = entry.senha;
     if (item.cpf) item.usuario = onlyDigits(item.cpf); // login GOV = CPF (a RPC também faz isso)
@@ -188,7 +232,13 @@ async function main() {
     if (!existsSync(f)) { console.error(`✖ arquivo não encontrado: ${f}`); process.exit(1); }
   }
 
-  const dry = await readWorkbook(F_DRYRUN);
+  console.log(`  lendo ${path.basename(F_DRYRUN)}`);
+  const dry = await readWorkbook(F_DRYRUN, {
+    onlySheets: ["IMPORTAR", "JA_EXISTEM", "SEM_CPF"],   // CONFLITOS/RESUMO não são usados
+    onSheet: ({ name, rows, ms, skipped }) => {
+      if (!skipped) console.log(`    · aba "${name}" · ${rows} linhas · ${ms}ms`);
+    },
+  });
   const pick = (n) => dry.find((s) => normalizeName(s.name) === normalizeName(n));
   const abaImportar = pick("IMPORTAR");
   const abaSemCpf = pick("SEM_CPF");
@@ -220,6 +270,7 @@ async function main() {
   const comRel = itens.filter((i) => i.relacoes?.length).length;
   const marcadosTemSenha = itens.filter((i) => i.__temSenha).length;
   const semSenhaMasMarcado = itens.filter((i) => i.__temSenha && !i.senha && i.status_acesso !== "senha_incorreta").length;
+  const naoConfirmadas = itens.filter((i) => i.__senhaNaoConfirmada).length;
 
   console.log("\n  RELATÓRIO DE EXTRAÇÃO (esperado do dry-run entre parênteses)");
   console.log(`   itens .............. ${itens.length}`);
@@ -227,13 +278,15 @@ async function main() {
   console.log(`   sem CPF ............ ${semCpf} (148)`);
   console.log(`   com senha .......... ${comSenha} (577)`);
   console.log(`   marcados "tem senha" ${marcadosTemSenha} · sem senha localizada: ${semSenhaMasMarcado}`);
+  console.log(`   senha encontrada mas NÃO confirmada pelo plano (descartada): ${naoConfirmadas}`);
   console.log(`   2 fatores .......... ${com2fa} (118)`);
   console.log(`   senha incorreta .... ${incorreta} (24)`);
   console.log(`   com nível .......... ${comNivel} (518) · bronze ${bronze} (115)`);
   console.log(`   com banco pagador .. ${comBanco} (615)`);
   console.log(`   com relação ........ ${comRel} (553)`);
 
-  const paraEnviar = (LIMIT ? itens.slice(0, LIMIT) : itens).map(({ __temSenha, ...rest }) => rest);
+  const paraEnviar = (LIMIT ? itens.slice(0, LIMIT) : itens)
+    .map(({ __temSenha, __senhaNaoConfirmada, ...rest }) => rest);
 
   if (!EXECUTAR) {
     console.log("\n  CONFERÊNCIA apenas — nada foi gravado. Reexecute com --executar para importar.");
