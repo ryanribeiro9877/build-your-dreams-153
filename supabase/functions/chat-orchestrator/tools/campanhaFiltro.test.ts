@@ -27,8 +27,9 @@ Deno.test("montarFiltroCampanha: vazio/nulo/espaço não vira filtro", () => {
 });
 
 Deno.test("montarFiltroCampanha: cobre todas as chaves documentadas", () => {
+  const BOOL: string[] = ["gov", "tem_pendencia", "docs_completos"];
   const todas: Record<string, unknown> = {};
-  for (const k of CAMPANHA_FILTRO_KEYS) todas[k] = k === "tem_pendencia" || k === "docs_completos" ? true : "x";
+  for (const k of CAMPANHA_FILTRO_KEYS) todas[k] = BOOL.includes(k) ? true : "x";
   assertEquals(Object.keys(montarFiltroCampanha(todas)).sort(), [...CAMPANHA_FILTRO_KEYS].sort());
 });
 
@@ -40,7 +41,29 @@ Deno.test("montarFiltroCampanha: alias consignado_com → tem_consignado_com", (
   assertEquals(montarFiltroCampanha({ consignado_com: "agibank" }), { tem_consignado_com: "AGIBANK" });
   assertEquals(montarFiltroCampanha({ extrato_de: "bradesco" }), { tem_extrato_de: "BRADESCO" });
   assertEquals(montarFiltroCampanha({ banco_beneficio: "itau" }), { recebe_em: "ITAU" });
-  assertEquals(montarFiltroCampanha({ nivel: "bronze" }), { gov: "bronze" });
+});
+
+// Medido no banco (impersonando a recepção, 29/07): em search_clients o `gov` é
+// BOOLEANO (gov_br_profile is not null), não o nível da conta.
+//   {"gov":"bronze"}        → ERRO 22P02 invalid input syntax for type boolean
+//   {"tem_pendencia":"sim"} → ERRO 22P02
+//   {"gov":true}            → 447 clientes (contra 562 sem filtro)
+// Ou seja: texto numa chave booleana MATA criar_campanha. Não existe filtro por
+// bronze/prata/ouro na RPC — "nivel" não pode virar `gov`.
+Deno.test("montarFiltroCampanha: nível NÃO vira gov (viraria 22P02)", () => {
+  assertEquals(montarFiltroCampanha({ nivel: "bronze" }), {});
+  assertEquals(montarFiltroCampanha({ gov_br: "ouro" }), {});
+  assertEquals(montarFiltroCampanha({ gov: "bronze" }), {});
+});
+
+Deno.test("montarFiltroCampanha: chave booleana coage sim/não e descarta o resto", () => {
+  assertEquals(montarFiltroCampanha({ gov: "sim" }), { gov: true });
+  assertEquals(montarFiltroCampanha({ tem_pendencia: "não" }), { tem_pendencia: false });
+  assertEquals(montarFiltroCampanha({ docs_completos: "true" }), { docs_completos: true });
+  assertEquals(montarFiltroCampanha({ docs_completos: "0" }), { docs_completos: false });
+  // Não reconhecido → filtro a menos (contagem maior, visível no pré-voo) em vez
+  // de 22P02 derrubando a criação.
+  assertEquals(montarFiltroCampanha({ tem_pendencia: "talvez" }), {});
 });
 
 Deno.test("montarFiltroCampanha: a chave canônica vence o alias", () => {

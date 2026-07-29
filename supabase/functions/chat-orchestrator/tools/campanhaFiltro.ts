@@ -22,15 +22,38 @@ const UPPER_KEYS = new Set(["recebe_em", "tem_consignado_com", "tem_extrato_de",
  * `{"tem_consignado_com":"AGIBANK"}` devolve 214. Uma campanha criada com o nome
  * errado colocaria a base inteira na fila de ligação. Como a documentação circula com
  * os dois nomes, traduzimos em vez de deixar passar.
+ *
+ * NÃO existe alias de "nível" para `gov`: em `search_clients`, `gov` é BOOLEANO
+ * (`gov_br_profile is not null`), não o nível da conta. `{"gov":"bronze"}` viraria
+ * `('bronze')::boolean` e derrubaria criar_campanha com 22P02. Filtrar por
+ * bronze/prata/ouro não é possível hoje — a RPC não expõe essa comparação
+ * (converter_conta_bronze é OBJETIVO da campanha, não filtro).
  */
 const FILTRO_ALIASES: Record<string, string> = {
   consignado_com: "tem_consignado_com",
   extrato_de: "tem_extrato_de",
   recebe: "recebe_em",
   banco_beneficio: "recebe_em",
-  nivel: "gov",
-  gov_br: "gov",
 };
+
+/**
+ * Chaves que `search_clients` lê com `::boolean`. Valor que o Postgres não sabe
+ * converter (o "sim" que o LLM adora) derruba a RPC com 22P02, então coagimos
+ * aqui e DESCARTAMOS o que não for reconhecível — filtro a menos devolve gente
+ * demais na contagem do pré-voo (visível antes de confirmar), enquanto um 22P02
+ * mata a criação da campanha.
+ */
+const BOOLEAN_KEYS = new Set(["gov", "tem_pendencia", "docs_completos"]);
+const BOOL_TRUE = new Set(["true", "t", "1", "sim", "s", "yes", "y", "on"]);
+const BOOL_FALSE = new Set(["false", "f", "0", "nao", "não", "n", "no", "off"]);
+
+function coagirBooleano(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  const s = String(v ?? "").trim().toLowerCase();
+  if (BOOL_TRUE.has(s)) return true;
+  if (BOOL_FALSE.has(s)) return false;
+  return undefined;
+}
 
 /**
  * Objetivos ACEITOS pelo CHECK de `campanhas.objetivo` (lido do banco em 29/07):
@@ -76,7 +99,11 @@ export function montarFiltroCampanha(args: Record<string, unknown>): Record<stri
   for (const k of CAMPANHA_FILTRO_KEYS) {
     const v = src[k];
     if (v === undefined || v === null) continue;
-    if (typeof v === "boolean") { f[k] = v; continue; }   // false é filtro válido
+    if (BOOLEAN_KEYS.has(k)) {
+      const b = coagirBooleano(v);
+      if (b !== undefined) f[k] = b;                      // false é filtro válido
+      continue;
+    }
     const s = String(v).trim();
     if (!s) continue;
     f[k] = UPPER_KEYS.has(k) ? s.toUpperCase() : s;

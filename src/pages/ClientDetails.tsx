@@ -16,6 +16,7 @@ import {
   DocumentosTab, TarefasTab, PendenciasTab, ProcessosTab,
 } from "@/components/clients/tabs/relationalTabs";
 import { PecasTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
+import { BancosTab } from "@/components/clients/tabs/bancosTab";
 import { HistoricoTab } from "@/components/clients/tabs/historicoTab";
 import { AudienciasTab } from "@/components/clients/tabs/audienciasTab";
 
@@ -23,14 +24,17 @@ import { AudienciasTab } from "@/components/clients/tabs/audienciasTab";
 const ReunioesTab = () => <EmptyState icon="👥" title="Nenhuma reunião registrada" hint="Quando houver uma fonte de reuniões no sistema, elas aparecem aqui." />;
 const ProtocolosTab = () => <EmptyState icon="🗎" title="Nenhum protocolo registrado" hint="Quando houver uma fonte de protocolos no sistema, eles aparecem aqui." />;
 
-// Shell das 16 abas, na ordem do card. Cada aba renderiza sob demanda
+// Shell das abas, na ordem do card. Cada aba renderiza sob demanda
 // (só a ativa é montada → carga lazy do seu conteúdo).
+// Bancos (Motor 1 · Card 3) entra depois de Endereço: fecha o bloco de dados
+// do próprio cliente, antes das abas relacionais (documentos, tarefas…).
 const TABS: { key: string; label: string; Comp: ComponentType<{ client: ClientFull }> }[] = [
   { key: "resumo", label: "Resumo", Comp: ResumoTab },
   { key: "dados", label: "Dados pessoais", Comp: DadosPessoaisTab },
   { key: "govbr", label: "Gov.br", Comp: GovBrTab },
   { key: "contatos", label: "Contatos", Comp: ContatosTab },
   { key: "endereco", label: "Endereço", Comp: EnderecoTab },
+  { key: "bancos", label: "Bancos", Comp: BancosTab },
   { key: "documentos", label: "Documentos", Comp: DocumentosTab },
   { key: "pendencias", label: "Pendências", Comp: PendenciasTab },
   { key: "tarefas", label: "Tarefas", Comp: TarefasTab },
