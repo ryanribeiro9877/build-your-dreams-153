@@ -10,7 +10,7 @@ import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { RequireActivation } from "@/components/RequireActivation";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MasterRoute } from "@/components/MasterRoute";
-import { RecepcaoRoute } from "@/components/DashboardRoute";
+import { RecepcaoRoute, RecepcaoOuSocioRoute } from "@/components/DashboardRoute";
 import { MenuRoute } from "@/components/MenuRoute";
 
 // E5: chunk lazy obsoleto após um redeploy (hash mudou no Cloudflare Pages) faz o import()
@@ -68,6 +68,7 @@ const Clients = lazyWithRetry(() => import("./pages/Clients.tsx"));
 const ClientNew = lazyWithRetry(() => import("./pages/ClientNew.tsx"));
 const ClientEdit = lazyWithRetry(() => import("./pages/ClientEdit.tsx"));
 const ClientDetails = lazyWithRetry(() => import("./pages/ClientDetails.tsx"));
+const Campanhas = lazyWithRetry(() => import("./pages/Campanhas.tsx"));
 const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
@@ -194,6 +195,8 @@ const App = () => (
               <Route path="/clientes/novo" element={<ProtectedRoute><ClientNew /></ProtectedRoute>} />
               <Route path="/clientes/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
               <Route path="/clientes/:id/editar" element={<ProtectedRoute><ClientEdit /></ProtectedRoute>} />
+              {/* Motor 1 · Card 4 — guard espelha o gate das RPCs (recepção + sócio + admin). */}
+              <Route path="/campanhas" element={<RecepcaoOuSocioRoute><Campanhas /></RecepcaoOuSocioRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<MenuRoute menuKey="dashboard"><Dashboard /></MenuRoute>} />

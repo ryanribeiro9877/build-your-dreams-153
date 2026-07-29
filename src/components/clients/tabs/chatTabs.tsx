@@ -10,6 +10,7 @@ import {
   transcribeAttendance, fetchAttendanceTranscriptions, type StoredTranscription,
 } from "@/lib/attendanceTranscriptionClient";
 import { useAuth } from "@/hooks/useAuth";
+import { sanitizeStorageName } from "@/lib/clientDocuments";
 
 /* ---------- Peças (client_documents: minutas e petições iniciais) ----------
    Peças ficam em public.client_documents (NÃO existe tabela `pecas`). A aba lista
@@ -307,11 +308,147 @@ function AttendanceSessions({ clientId, reloadKey }: { clientId: string; reloadK
   );
 }
 
+/* ---------- Áudios de AUTORIZAÇÃO (Motor 1 · Card 5) ----------
+   Coisa diferente do áudio de atendimento acima: é a autorização gravada do
+   cliente (document_type='audio_autorizacao'), anexada pelo chat via a RPC
+   anexar_audio_autorizacao (que grava origem='chat' e guarda a transcrição em
+   `notes`) ou enviada à mão aqui.
+
+   O upload manual insere DIRETO em client_documents — a policy de INSERT libera
+   recepção/sócio para este document_type — com origem='recepcao', porque a RPC
+   crava origem='chat' e usá-la aqui mentiria sobre a procedência do arquivo. */
+
+const AUDIO_AUTORIZACAO_TYPE = "audio_autorizacao";
+
+interface AutorizacaoRow {
+  id: string;
+  document_name: string;
+  file_path: string;
+  mime_type: string | null;
+  notes: string | null;
+  origem: string | null;
+  created_at: string;
+}
+
+function AudioPlayer({ filePath }: { filePath: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [erro, setErro] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.storage.from("client-documents").createSignedUrl(filePath, 3600);
+      if (cancelled) return;
+      if (error || !data?.signedUrl) { setErro(true); return; }
+      setUrl(data.signedUrl);
+    })();
+    return () => { cancelled = true; };
+  }, [filePath]);
+  if (erro) {
+    return (
+      <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>
+        Não foi possível abrir este áudio (o arquivo pode ter sido removido do Storage).
+      </div>
+    );
+  }
+  return url
+    ? <audio controls src={url} style={{ width: "100%", height: 34 }} />
+    : <div style={{ fontSize: 12, color: "var(--cli-muted)" }}>carregando áudio…</div>;
+}
+
+function AutorizacaoAudios({ client }: { client: ClientFull }) {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<AutorizacaoRow[] | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.from("client_documents")
+      .select("id, document_name, file_path, mime_type, notes, origem, created_at")
+      .eq("client_id", client.id)
+      .eq("document_type", AUDIO_AUTORIZACAO_TYPE)
+      .order("created_at", { ascending: false });
+    setRows(error ? [] : ((data as AutorizacaoRow[]) ?? []));
+  }, [client.id]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function enviar() {
+    if (!file || !user) { toast.error("Selecione um arquivo de áudio."); return; }
+    setEnviando(true);
+    // Nome com acento/ç na CHAVE do Storage devolve HTTP 400 "Invalid key" — a
+    // chave nunca é composta com file.name cru (o rótulo exibido segue original).
+    const filePath = `${client.id}/${Date.now()}_${sanitizeStorageName(file.name)}`;
+    const { error: upErr } = await supabase.storage.from("client-documents").upload(filePath, file);
+    if (upErr) { toast.error(`Nada foi salvo: ${upErr.message}`); setEnviando(false); return; }
+    const { error } = await supabase.from("client_documents").insert({
+      client_id: client.id, client_name: client.full_name,
+      document_type: AUDIO_AUTORIZACAO_TYPE, document_name: file.name,
+      file_path: filePath, file_size: file.size, mime_type: file.type || null,
+      origem: "recepcao", uploaded_by: user.id, status: "recebido",
+    });
+    if (error) {
+      // Registro falhou → o binário ficaria órfão no bucket.
+      await supabase.storage.from("client-documents").remove([filePath]);
+      toast.error(`Áudio NÃO registrado: ${error.message}`);
+    } else {
+      toast.success("Áudio de autorização anexado.");
+      setFile(null);
+      await load();
+    }
+    setEnviando(false);
+  }
+
+  return (
+    <div className="cli-card lift" style={{ marginBottom: 14 }}>
+      <div className="cli-sec-title">
+        Áudios de autorização{rows && rows.length > 0 ? ` · ${rows.length}` : ""}
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
+        <div style={{ flex: "1 1 240px" }}>
+          <label className="cli-label">Anexar áudio (envio manual)</label>
+          <input className="cli-input file" type="file" accept="audio/*"
+            onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        </div>
+        <button className="cli-btn sm" disabled={!file || enviando} onClick={() => void enviar()}>
+          {enviando ? "Enviando…" : "Anexar"}
+        </button>
+      </div>
+
+      {rows === null ? <TabLoading />
+        : rows.length === 0 ? (
+          <EmptyState icon="◉" title="Nenhuma autorização gravada"
+            hint="Áudios enviados pelo chat (com transcrição) ou anexados aqui aparecem nesta lista." />
+        ) : rows.map(r => (
+          <div key={r.id} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginBottom: 3 }}>
+              {r.document_name}
+              {r.origem ? ` · ${DOC_ORIGEM_LABELS[r.origem] ?? r.origem}` : ""}
+              {` · ${formatDateBR(r.created_at)}`}
+            </div>
+            <AudioPlayer filePath={r.file_path} />
+            {r.notes?.trim() ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginBottom: 4 }}>Transcrição</div>
+                <div className="cli-notes" style={{ whiteSpace: "pre-wrap" }}>{r.notes}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 500, marginTop: 4 }}>
+                Sem transcrição — o áudio foi anexado sem texto.
+              </div>
+            )}
+          </div>
+        ))}
+    </div>
+  );
+}
+
 export function AudiosTab({ client }: { client: ClientFull }) {
   const [reloadKey, setReloadKey] = useState(0);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   return (
     <div>
+      <AutorizacaoAudios client={client} />
       <AttendanceRecorder client={client} onSaved={reload} />
       <AttendanceSessions clientId={client.id} reloadKey={reloadKey} />
     </div>

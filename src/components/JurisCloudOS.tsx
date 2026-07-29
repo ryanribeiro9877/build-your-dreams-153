@@ -21,7 +21,7 @@ import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
   Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
-  ListTodo, LayoutGrid, ShieldCheck,
+  ListTodo, LayoutGrid, ShieldCheck, PhoneCall,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMenuAccess } from "@/hooks/useMenuAccess";
@@ -1186,6 +1186,10 @@ export default function JurisCloudOS() {
   // não são chaves canônicas e mantêm o gate próprio.
   const MENU_ITEMS: MenuItem[] = [
     { id: "clientes", label: "Clientes", icon: Users, color: ACCENT, action: () => navigate("/clientes"), show: canSeeMenu("clientes") },
+    // Campanhas (Motor 1 · Card 4) não é chave canônica de menu: o `show` repete
+    // EXATAMENTE a condição do RecepcaoOuSocioRoute, que por sua vez espelha o
+    // gate das RPCs (is_recepcao_or_socio OR admin). Link e rota 1:1.
+    { id: "campanhas", label: "Campanhas", icon: PhoneCall, color: ACCENT, action: () => navigate("/campanhas"), show: isRecepcao || isSocioRole(workspace?.role_template?.code) || hasRole("admin") },
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
     { id: "tarefas", label: "Tarefas", icon: ListTodo, color: ACCENT, action: () => navigate("/sistema/tarefas"), show: canSeeMenu("tarefas") },

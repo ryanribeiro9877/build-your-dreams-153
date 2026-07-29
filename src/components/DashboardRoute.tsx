@@ -124,6 +124,38 @@ export function RecepcaoRoute({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Route guard das telas do Motor 1 (Campanhas de ligação).
+ *
+ * Espelha EXATAMENTE o gate das RPCs que a tela consome (criar_campanha,
+ * registrar_ligacao, kpi_ligacoes):
+ *     is_recepcao_or_socio() OR has_role(auth.uid(),'admin')
+ * e `is_recepcao_or_socio` no banco cobre socio + os três papéis de recepção.
+ *
+ * Deliberadamente NÃO é o RecepcaoRoute: aquele exclui sócio e admin, e um front
+ * mais restrito que o backend foi exatamente o bug B10 (o admin via o menu, abria
+ * a tela e batia em bloqueio, contradizendo a chave-mestra).
+ */
+export function RecepcaoOuSocioRoute({ children }: { children: ReactNode }) {
+  const { user, userRoles, loading: authLoading } = useAuth();
+  const { workspace, loading: wsLoading } = useMyWorkspace();
+
+  if (authLoading) return <HexagonLoader variant="fullscreen" />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (wsLoading) return <HexagonLoader variant="fullscreen" />;
+
+  const code = workspace?.role_template?.code;
+  const liberado = isRecepcaoRole(code) || isSocioRole(code) || userRoles.includes("admin");
+  if (!liberado) return <Navigate to="/sistema" replace />;
+
+  return (
+    <RequireActivation>
+      <PlatformPresenceSync />
+      {children}
+    </RequireActivation>
+  );
+}
+
+/**
  * Route guard que restringe o Dashboard IA ao tech (role_templates.code =
  * 'tech'). Fora disso (inclusive sócio/master) => /sistema. Link e rota
  * andam 1:1 com o item de menu.
