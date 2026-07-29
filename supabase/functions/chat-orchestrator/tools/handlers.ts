@@ -211,7 +211,10 @@ function erroProcessoRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): s
       || motivo === "status_invalido" || motivo === "desfecho_invalido" || motivo === "dias_invalido") {
     return base || `valor inválido — ${oQueNaoFoiFeito}`;
   }
-  if (motivo === "sem_execucao" || motivo === "execucao_nao_encontrada") {
+  // `execucao_nao_iniciada` é o que remarcar_revisao_execucao devolve quando o
+  // processo existe mas não tem execução (visto no espelho da migração do Card 9).
+  if (motivo === "sem_execucao" || motivo === "execucao_nao_encontrada"
+      || motivo === "execucao_nao_iniciada") {
     return `${base || "esse processo ainda não tem execução em acompanhamento."} Inicie a execução primeiro — ${oQueNaoFoiFeito}`;
   }
   if (motivo === "execucao_ja_existe") {

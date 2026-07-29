@@ -65,6 +65,9 @@ function falha(data: RpcRes | null, error: { code?: string; message?: string } |
     execucao_ja_existe: "esse processo já tem execução em acompanhamento",
     sem_execucao: "esse processo não tem execução em acompanhamento",
     execucao_nao_encontrada: "execução não encontrada",
+    // O que remarcar_revisao_execucao devolve quando o processo existe mas não
+    // tem execução (visto no espelho da migração do Card 9).
+    execucao_nao_iniciada: "esse processo ainda não tem execução em acompanhamento",
     fase_invalida: data.mensagem ?? "fase inválida",
     dias_invalido: data.mensagem ?? "informe de 1 a 90 dias",
   };
