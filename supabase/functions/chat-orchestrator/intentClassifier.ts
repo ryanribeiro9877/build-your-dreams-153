@@ -326,6 +326,10 @@ export type RouteObject =
   | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU" | "CREDENCIAL_GOV"
   // Motor 1 (Cards 3/4/5): segmentação bancária → campanha → ligação → KPI.
   | "RELACAO_BANCARIA" | "CAMPANHA" | "LIGACAO" | "KPI_LIGACOES" | "AUDIO_AUTORIZACAO"
+  // Motores 2 e 3 (Cards 6/7/8/9/10).
+  | "RECLAMACAO_ADMIN" | "RECLAMACAO_RESPOSTA" | "RECLAMACAO_CONSULTA"
+  | "EXECUCAO_INICIAR" | "EXECUCAO_FASE" | "EXECUCAO_CONSULTA" | "EXECUCAO_REVISAO"
+  | "EVENTO_PROCESSUAL" | "FILA_GOV" | "CREDENCIAL_GOV_STATUS" | "CONVERSAO_GOV"
   | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
@@ -352,6 +356,17 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "AUDIO_AUTORIZACAO": o objeto é um ÁUDIO em que o CLIENTE AUTORIZA o escritório a agir, para guardar no dossiê com a transcrição. Ex.: "esse áudio é a autorização da dona Maria", "anexa a gravação da autorização do Ivan", "segue o áudio dele autorizando". Distinto de anexar um documento comum (OUTRO/anexar_documento_cliente) e de uma mensagem de voz que é só um comando ao sistema.
 - "CREDENCIAL_GOV": o objeto é a CREDENCIAL do GOV.BR/INSS de um CLIENTE — senha, login, nível da conta (ouro/prata/bronze), 2 fatores. Ex.: "a senha do gov dele é X", "guarda a senha do INSS da Maria: X", "senha do gov: X, conta bronze", "a senha dele não funciona mais", "anota que a conta dela é prata". ATENÇÃO: é a senha DO CLIENTE para acessar o GOV.BR — não confundir com dados de contato do cadastro (CLIENTE_UPDATE) nem com permissão de menu de colaborador (PERMISSAO_MENU). Se o pedido trouxer TAMBÉM dados de cadastro ("inclua o telefone X e a senha do gov Y"), o objeto é CREDENCIAL_GOV e o agente deve executar AS DUAS ações (atualizar o cadastro E guardar a credencial).
 - "PERMISSAO_MENU": o objeto é o ACESSO de um COLABORADOR a um MENU/tela do sistema — conceder, revogar ou voltar ao padrão; ou listar essas permissões. Ex.: "dá acesso ao Kanban para a Kailane", "tira o menu de Configurações do João", "quais permissões de menu existem?".
+- "RECLAMACAO_ADMIN": o objeto é uma RECLAMAÇÃO ADMINISTRATIVA nova, feita fora do Judiciário (Procon, Bacen, INSS, consumidor.gov, ouvidoria do banco, e-mail ao banco), com protocolo e prazos. Ex.: "registra reclamação no Bacen pra dona Abigail, tarifa indevida, protocolo BCB-123, prazo fatal 13/08", "abri um Procon pro Ivan", "mandei e-mail pra ouvidoria do BMG sobre o desconto". É o REGISTRO da reclamação — não é processo judicial (PROCESSO_CREATE) nem tarefa interna (TAREFA_INTERNA).
+- "RECLAMACAO_RESPOSTA": o objeto é a RESPOSTA/DESFECHO de uma reclamação administrativa que JÁ existe. Ex.: "o Bacen negou a reclamação da Abigail", "o Procon atendeu", "deu o prazo e o banco não respondeu nada". Negada ou sem resposta serve de prova do interesse de agir.
+- "RECLAMACAO_CONSULTA": o objeto é a LISTA de reclamações administrativas. Ex.: "quais reclamações vencem essa semana?", "que reclamações a dona Abigail tem?", "tem alguma reclamação sem resposta?". É leitura — não registra nada.
+- "EXECUCAO_INICIAR": o objeto é COMEÇAR o acompanhamento da EXECUÇÃO de um processo (réu, responsável, valor). Ex.: "abre o acompanhamento da execução do processo X, réu Sindicato dos Rurais, quem toca é a Daiane", "começa a execução do processo Y no valor de 12 mil".
+- "EXECUCAO_FASE": o objeto é a FASE de uma execução que já está em acompanhamento — mover para frente. Ex.: "o réu pagou no processo X", "pedimos penhora", "entrou o Sisbajud", "saiu o alvará", "penhora deu negativa", "encerra a execução do processo Y".
+- "EXECUCAO_CONSULTA": o objeto é a LISTA de execuções. Ex.: "quais execuções estão em penhora?", "as execuções da Daiane", "como está a execução do processo X". É leitura.
+- "EXECUCAO_REVISAO": o objeto é o LEMBRETE de revisar uma execução — reabrir o prazo de olhar de novo. Ex.: "olhei a execução do processo X, volta em 10 dias", "me lembra dessa execução a cada 15 dias", "revisa isso semana que vem". É o re-agendamento da revisão, não a mudança de fase (EXECUCAO_FASE).
+- "EVENTO_PROCESSUAL": o objeto é um EVENTO do processo que DISPARA PRAZOS automáticos — sentença procedente (prazos de embargos e recurso) ou execução ajuizada/protocolada (prazo de pagamento). Ex.: "saiu sentença procedente no processo X", "ganhamos o processo do Adalberto", "protocolei a execução do processo Y". ATENÇÃO: aqui o objeto é o EVENTO que gera os prazos — não é registrar andamento genérico (PROCESSO_UPDATE) nem protocolar peça (PROTOCOLO).
+- "FILA_GOV": o objeto é a FILA DE TRABALHO das contas gov.br — listar clientes por estado da credencial. Ex.: "quais clientes são bronze?", "quem está com senha inválida?", "quem tem 2FA?", "de quem a gente não tem senha?". É leitura e NUNCA revela senha.
+- "CREDENCIAL_GOV_STATUS": o objeto é a SITUAÇÃO do acesso gov.br de um cliente, sem informar senha nova. Ex.: "a senha da dona Elza está errada", "a conta do Ivan foi bloqueada", "consegui entrar na conta dela, tá valendo". Distinto de CREDENCIAL_GOV, que é quando o usuário INFORMA a senha para guardar no cofre.
+- "CONVERSAO_GOV": o objeto é a CONVERSÃO da conta gov.br de um cliente (bronze precisa vir presencialmente para reconhecimento facial). Ex.: "a dona Maria é bronze, precisa vir converter", "agenda a conversão da conta do Ivan até dia 15".
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
 Regra de ouro: o verbo NUNCA decide; o OBJETO decide. Separe: o cliente (CADASTRO/CLIENTE_UPDATE) · o atendimento do cliente (AGENDA_CLIENTE/AGENDA_UPDATE/AGENDA_CONSULTA) · a tarefa/pendência interna (TAREFA_INTERNA/TAREFA_UPDATE) · o processo (PROCESSO_CREATE/PROCESSO_UPDATE) · os documentos padrão do cliente (KIT_DOCUMENTAL) · a audiência (AUDIENCIA) · o protocolo (PROTOCOLO) · o dia do usuário (RESUMO_DIA) · o acesso a menu (PERMISSAO_MENU). Redigir peça sob medida e distribuir caso = OUTRO.`;
@@ -382,6 +397,26 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "LIGACAO" || s === "LIGAÇÃO" || s === "CHAMADA") return "LIGACAO";
   if (s === "KPI_LIGACOES" || s === "KPI" || s === "PRODUTIVIDADE") return "KPI_LIGACOES";
   if (s === "AUDIO_AUTORIZACAO" || s === "AUDIO" || s === "AUTORIZACAO") return "AUDIO_AUTORIZACAO";
+  // Motores 2 e 3 (Cards 6/7/8/9/10) + sinônimos tolerados do LLM.
+  if (s === "RECLAMACAO_ADMIN" || s === "RECLAMACAO" || s === "RECLAMAÇÃO"
+      || s === "RECLAMACAO_ADMINISTRATIVA") return "RECLAMACAO_ADMIN";
+  if (s === "RECLAMACAO_RESPOSTA" || s === "RESPOSTA_RECLAMACAO"
+      || s === "DESFECHO_RECLAMACAO") return "RECLAMACAO_RESPOSTA";
+  if (s === "RECLAMACAO_CONSULTA" || s === "CONSULTA_RECLAMACAO"
+      || s === "RECLAMACOES") return "RECLAMACAO_CONSULTA";
+  if (s === "EXECUCAO_INICIAR" || s === "EXECUCAO" || s === "EXECUÇÃO"
+      || s === "INICIAR_EXECUCAO") return "EXECUCAO_INICIAR";
+  if (s === "EXECUCAO_FASE" || s === "FASE_EXECUCAO" || s === "FASE") return "EXECUCAO_FASE";
+  if (s === "EXECUCAO_CONSULTA" || s === "CONSULTA_EXECUCAO"
+      || s === "EXECUCOES") return "EXECUCAO_CONSULTA";
+  if (s === "EXECUCAO_REVISAO" || s === "REVISAO_EXECUCAO"
+      || s === "TICKLER") return "EXECUCAO_REVISAO";
+  if (s === "EVENTO_PROCESSUAL" || s === "EVENTO" || s === "SENTENCA"
+      || s === "SENTENÇA") return "EVENTO_PROCESSUAL";
+  if (s === "FILA_GOV" || s === "FILA_CREDENCIAIS" || s === "FILA_CREDENCIAIS_GOV") return "FILA_GOV";
+  if (s === "CREDENCIAL_GOV_STATUS" || s === "STATUS_CREDENCIAL"
+      || s === "STATUS_GOV") return "CREDENCIAL_GOV_STATUS";
+  if (s === "CONVERSAO_GOV" || s === "CONVERSAO" || s === "CONVERSÃO") return "CONVERSAO_GOV";
   return "OUTRO";
 }
 
@@ -469,12 +504,30 @@ const KPI_LIGACOES_RE =
 const AUDIO_AUTORIZACAO_RE =
   /(?<![\wÀ-ÿ])(([áa]udio|grava[çc][ãa]o|gravou|gravei)[\s\S]{0,40}?(autoriza[\wÀ-ÿ]*|anu[êe]nci[\wÀ-ÿ]*|consent[\wÀ-ÿ]*)|(autoriza[\wÀ-ÿ]*|anu[êe]nci[\wÀ-ÿ]*)[\s\S]{0,40}?([áa]udio|grava[çc][ãa]o))(?![\wÀ-ÿ])/i;
 
+// ─── Motores 2 e 3 (Cards 6/7/8/9/10) ────────────────────────────────────────
+// Mesma razão dos padrões acima: "o réu pagou", "saiu sentença procedente" e
+// "quais clientes são bronze?" não têm verbo de ação da lista genérica.
+// Cauda de palavra SEMPRE [\wÀ-ÿ]* — `\w` é ASCII e reprovaria "execução",
+// "penhora negativa"/"reclamação" no lookahead.
+const RECLAMACAO_RE =
+  /(?<![\wÀ-ÿ])(reclama[\wÀ-ÿ]*|procon|bacen|consumidor\.?gov|ouvidoria|protocolo\s+(?:bcb|pc)[\s-]?\d)(?![\wÀ-ÿ])/i;
+const EXECUCAO_RE =
+  /(?<![\wÀ-ÿ])(execu[\wÀ-ÿ]*|penhora[\wÀ-ÿ]*|sisbajud|alvar[áa][\wÀ-ÿ]*|dep[óo]sito judicial|redirecionamento|r[ée]u\s+(?:pagou|n[ãa]o pagou)|expedi[çc][\wÀ-ÿ]*\s+de\s+alvar[áa])(?![\wÀ-ÿ])/i;
+const EVENTO_PROCESSUAL_RE =
+  /(?<![\wÀ-ÿ])(senten[çc][\wÀ-ÿ]*\s+procedent[\wÀ-ÿ]*|procedent[\wÀ-ÿ]*|ganhamos|prazo\s+(?:de\s+)?(?:embargos|recurso|pagamento))(?![\wÀ-ÿ])/i;
+const FILA_GOV_RE =
+  /(?<![\wÀ-ÿ])((?:quais|quem|quantos)[\s\S]{0,30}?(?:bronze|prata|ouro|2fa|dois fatores)|senha (?:inv[áa]lid[\wÀ-ÿ]*|errada|n[ãa]o funciona)|conta bloqueada|sem senha|sem credencial|convers[ãa]o d[ae] conta|converter a conta)(?![\wÀ-ÿ])/i;
+const REVISAO_EXECUCAO_RE =
+  /(?<![\wÀ-ÿ])((?:olhei|revisei|conferi|verifiquei)[\s\S]{0,40}?(?:volta|revis[\wÀ-ÿ]*|de novo|daqui)|me lembr[\wÀ-ÿ]*\s+(?:disso|dessa|desse)[\s\S]{0,20}?dias|a cada \d+ dias)(?![\wÀ-ÿ])/i;
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
   if (CREDENCIAL_RE.test(m) || CREDENCIAL_GOV_RE.test(m) || NIVEL_CONTA_RE.test(m)) return true;
   if (RELACAO_BANCARIA_RE.test(m) || CAMPANHA_RE.test(m) || LIGACAO_RE.test(m)
       || KPI_LIGACOES_RE.test(m) || AUDIO_AUTORIZACAO_RE.test(m)) return true;
+  if (RECLAMACAO_RE.test(m) || EXECUCAO_RE.test(m) || EVENTO_PROCESSUAL_RE.test(m)
+      || FILA_GOV_RE.test(m) || REVISAO_EXECUCAO_RE.test(m)) return true;
   return ONDA_ALVO_RE.test(m) && ONDA_VERBO_RE.test(m);
 }
 

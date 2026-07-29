@@ -784,6 +784,122 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
       "foi guardada no cofre. (4) Se alguma parte do pedido não puder ser executada, diga " +
       "EXPLICITAMENTE o que foi feito e o que não foi, e por quê — nunca declare sucesso geral.",
   },
+
+  // ─── Motor 2 · Card 6: reclamações administrativas ──────────────────────────
+  RECLAMACAO_ADMIN: {
+    tool: "registrar_reclamacao", gate: null,
+    support: ["consultar_cliente", "consultar_processo"],
+    recusa: "", stage: "registrando a reclamação administrativa", path: "objeto_reclamacao_admin",
+    guidance:
+      "RECLAMAÇÃO ADMINISTRATIVA — mapeie o órgão para um destes: procon, bacen, inss, " +
+      "consumidor_gov, ouvidoria_banco, email_banco, outro (\"Banco Central\" → bacen; " +
+      "\"reclamei na ouvidoria do BMG\" → ouvidoria_banco). Datas em AAAA-MM-DD; ano omitido " +
+      "= ano corrente. PRAZO FATAL e PRAZO DE RESPOSTA são campos DIFERENTES: \"prazo fatal\" " +
+      "é prazo_fatal. Se o usuário não disser a data da reclamação, é hoje — não pergunte.",
+  },
+  RECLAMACAO_RESPOSTA: {
+    tool: "registrar_resposta_reclamacao", gate: null,
+    support: ["consultar_reclamacoes", "consultar_cliente"],
+    recusa: "", stage: "registrando a resposta da reclamação", path: "objeto_reclamacao_resposta",
+    guidance:
+      "RESPOSTA DE RECLAMAÇÃO — a tool exige o reclamacao_id: liste primeiro com " +
+      "consultar_reclamacoes e use o id de lá. Se o cliente tiver MAIS DE UMA reclamação " +
+      "pendente, PERGUNTE qual antes de registrar. Desfecho: atendida, negada ou sem_resposta. " +
+      "Ao confirmar negada/sem_resposta, lembre que isso serve de prova do interesse de agir.",
+  },
+  RECLAMACAO_CONSULTA: {
+    tool: "consultar_reclamacoes", gate: null,
+    recusa: "", stage: "consultando as reclamações", path: "objeto_reclamacao_consulta",
+    guidance:
+      "CONSULTA DE RECLAMAÇÕES — \"vencem essa semana\" / \"até sexta\": calcule a data e passe " +
+      "em vencendo_ate (AAAA-MM-DD), que filtra só as PENDENTES. Sem cliente e sem data, " +
+      "lista todas.",
+  },
+
+  // ─── Motor 3 · Cards 8/9/10: execução, revisão e prazos ─────────────────────
+  EXECUCAO_INICIAR: {
+    tool: "iniciar_execucao", gate: null,
+    support: ["consultar_processo"],
+    recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
+    stage: "iniciando o acompanhamento da execução", path: "objeto_execucao_iniciar",
+    guidance:
+      "INICIAR EXECUÇÃO — um processo tem no máximo UMA execução. Identifique o processo pelo " +
+      "número; se a tool disser que não achou um único, peça o número exato (não escolha por " +
+      "conta própria). responsavel_nome é texto livre (\"Daiane\", \"Rodrigo\") — não tente " +
+      "resolver para um usuário do sistema.",
+  },
+  EXECUCAO_FASE: {
+    tool: "atualizar_fase_execucao", gate: null,
+    support: ["consultar_processo", "consultar_execucoes"],
+    recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
+    stage: "movendo a fase da execução", path: "objeto_execucao_fase",
+    guidance:
+      "FASE DA EXECUÇÃO — traduza o fato para a fase: pagou → pago; pedimos penhora → " +
+      "pedido_penhora; entrou Sisbajud → sisbajud; penhora deu negativa → penhora_negativa; " +
+      "vamos redirecionar → redirecionamento; dinheiro em juízo → deposito_judicial; saiu/" +
+      "pedimos alvará → expedicao_alvara; alvará aguardando assinatura → " +
+      "alvara_pendente_assinatura; acabou → encerrada. Ao entrar em expedicao_alvara nasce " +
+      "sozinha a pendência do alvará — pode dizer isso ao usuário.",
+  },
+  EXECUCAO_CONSULTA: {
+    tool: "consultar_execucoes", gate: null,
+    recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
+    stage: "consultando as execuções", path: "objeto_execucao_consulta",
+  },
+  EXECUCAO_REVISAO: {
+    tool: "remarcar_revisao_execucao", gate: null,
+    support: ["consultar_processo", "consultar_execucoes"],
+    recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
+    stage: "remarcando a revisão da execução", path: "objeto_execucao_revisao",
+    guidance:
+      "REVISÃO DE EXECUÇÃO — converta o prazo falado em DIAS (\"semana que vem\" ≈ 7, " +
+      "\"amanhã\" = 1, \"em duas semanas\" = 14), entre 1 e 90. Só informe " +
+      "intervalo_recorrente quando o usuário pedir repetição (\"a cada 15 dias\"). Esta tool " +
+      "FECHA a pendência de revisão aberta e agenda a próxima — não muda a fase.",
+  },
+  EVENTO_PROCESSUAL: {
+    tool: "registrar_evento_processual", gate: null,
+    support: ["consultar_processo"],
+    recusa: "Registrar evento processual e abrir prazos é do jurídico (advogado/sócio).",
+    stage: "abrindo os prazos do evento", path: "objeto_evento_processual",
+    guidance:
+      "EVENTO PROCESSUAL — só dois eventos: sentenca_procedente (gera 5 e 10 dias úteis) e " +
+      "execucao_ajuizada (gera 15 dias úteis e move o pipeline para prazo_pagamento). " +
+      "A data do evento é o marco da contagem: se o usuário disser \"saiu ontem\", informe " +
+      "data_evento. OBRIGATÓRIO na sua resposta: diga as datas dos prazos criados E repasse " +
+      "o aviso de que os dias úteis foram contados SEM feriados, pedindo conferência do " +
+      "calendário forense. Omitir esse aviso é entregar prazo processual com risco de perda.",
+  },
+
+  // ─── Motor 2 · Card 7: fila de credenciais gov.br ───────────────────────────
+  FILA_GOV: {
+    tool: "fila_credenciais_gov", gate: null,
+    recusa: "", stage: "montando a fila de contas gov.br", path: "objeto_fila_gov",
+    guidance:
+      "FILA GOV.BR — escolha o estado: bronze/prata/ouro (nível), 2fa, invalido, bloqueado, " +
+      "sem_senha (temos credencial mas não a senha) ou sem_credencial (nada guardado). " +
+      "A fila NUNCA traz senha, só `tem_senha` (sim/não) — jamais peça ou escreva senha.",
+  },
+  CREDENCIAL_GOV_STATUS: {
+    tool: "atualizar_status_credencial_gov", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "atualizando a situação da conta gov.br", path: "objeto_credencial_gov_status",
+    guidance:
+      "SITUAÇÃO DA CONTA GOV.BR — \"a senha está errada / não funciona\" → status invalido " +
+      "(nasce pendência de recuperação). \"bloqueada\" → bloqueado. \"consegui entrar\" → " +
+      "valido. NÃO peça a senha e NÃO a escreva: aqui só se registra a situação. Se o usuário " +
+      "INFORMAR uma senha nova, o objeto é outro (guardar no cofre) — use registrar_credencial_gov.",
+  },
+  CONVERSAO_GOV: {
+    tool: "agendar_conversao_gov", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "abrindo a pendência de conversão da conta", path: "objeto_conversao_gov",
+    guidance:
+      "CONVERSÃO DA CONTA GOV.BR — abre a PENDÊNCIA de acompanhamento (conta bronze exige " +
+      "vinda presencial para reconhecimento facial). Se o usuário der prazo, informe `ate`. " +
+      "O atendimento em si NÃO é marcado aqui: se ele também quiser agendar a vinda, diga que " +
+      "isso é o agendamento normal — não afirme que o atendimento ficou marcado.",
+  },
 };
 
 // Acha o agente que PORTA a tool (allowed_tools é sincronizado por trigger a partir
@@ -2435,6 +2551,77 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       if (args.tem_2fa === true) extras.push("com verificação em 2 fatores");
       if (args.status_acesso && args.status_acesso !== "pendente") extras.push(`situação: ${args.status_acesso}`);
       return `Guardar a credencial GOV.BR${quem} no cofre cifrado${extras.length ? ` (${extras.join(", ")})` : ""}.`;
+    }
+
+    /* ══ Motores 2 e 3 ═══════════════════════════════════════════════════════ */
+    case "registrar_reclamacao": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const ORGAO: Record<string, string> = {
+        procon: "Procon", bacen: "Banco Central", inss: "INSS",
+        consumidor_gov: "consumidor.gov", ouvidoria_banco: "ouvidoria do banco",
+        email_banco: "e-mail ao banco", outro: "outro órgão",
+      };
+      const org = ORGAO[String(args.orgao ?? "")] ?? String(args.orgao ?? "órgão");
+      const det: string[] = [];
+      if (args.tese) det.push(String(args.tese));
+      if (args.protocolo) det.push(`protocolo ${args.protocolo}`);
+      if (args.prazo_resposta) det.push(`prazo de resposta ${args.prazo_resposta}`);
+      // O prazo FATAL é o que vira data fatal da pendência — destacado no cartão.
+      if (args.prazo_fatal) det.push(`PRAZO FATAL ${args.prazo_fatal}`);
+      return `Registrar reclamação no ${org} para ${quem}${det.length ? ` — ${det.join(" · ")}` : ""}. Os prazos viram pendência no dashboard.`;
+    }
+    case "registrar_resposta_reclamacao": {
+      const DESF: Record<string, string> = {
+        atendida: "ATENDIDA", negada: "NEGADA", sem_resposta: "SEM RESPOSTA",
+      };
+      const d = DESF[String(args.desfecho ?? "")] ?? String(args.desfecho ?? "");
+      const prova = args.desfecho === "negada" || args.desfecho === "sem_resposta"
+        ? " (serve de prova do interesse de agir)" : "";
+      return `Registrar que a reclamação foi ${d}${args.resposta_em ? ` em ${args.resposta_em}` : ""}${prova}.`;
+    }
+    case "iniciar_execucao": {
+      const proc = args.processo_numero ?? "o processo informado";
+      const det: string[] = [];
+      if (args.reu_nome) det.push(`réu ${args.reu_nome}${args.reu_tipo ? ` (${String(args.reu_tipo).replace(/_/g, " ")})` : ""}`);
+      if (args.responsavel_nome) det.push(`responsável ${args.responsavel_nome}`);
+      if (typeof args.valor === "number") det.push(`valor R$ ${args.valor}`);
+      return `Iniciar o acompanhamento da execução do processo ${proc} na fase ${String(args.fase ?? "ajuizada").replace(/_/g, " ")}${det.length ? ` — ${det.join(" · ")}` : ""}.`;
+    }
+    case "atualizar_fase_execucao": {
+      const proc = args.processo_numero ?? "o processo informado";
+      const fase = String(args.fase ?? "").replace(/_/g, " ");
+      const extra = args.fase === "expedicao_alvara" ? " Nasce a pendência do alvará." : "";
+      return `Mover a execução do processo ${proc} para a fase "${fase}"${args.observacao ? ` — ${args.observacao}` : ""}.${extra}`;
+    }
+    case "remarcar_revisao_execucao": {
+      const proc = args.processo_numero ?? "o processo informado";
+      const rec = args.intervalo_recorrente
+        ? ` e repetir a cada ${args.intervalo_recorrente} dia(s)` : "";
+      return `Fechar a revisão aberta da execução do processo ${proc} e reagendar para daqui a ${args.dias} dia(s)${rec}.`;
+    }
+    case "registrar_evento_processual": {
+      const proc = args.processo_numero ?? "o processo informado";
+      const quando = args.data_evento ? ` (evento em ${args.data_evento})` : "";
+      // O cartão já ANTECIPA o aviso dos feriados: ele é parte da ação, não
+      // rodapé — um prazo contado sem feriado pode custar o direito.
+      const prazos = args.evento === "sentenca_procedente"
+        ? "abre os prazos de embargos (5 dias úteis) e recurso (10 dias úteis)"
+        : "abre o prazo de pagamento (15 dias úteis) e move a execução para prazo de pagamento";
+      return `Registrar "${String(args.evento ?? "").replace(/_/g, " ")}" no processo ${proc}${quando} — ${prazos}. Atenção: dias úteis contados SEM feriados; confira o calendário forense.`;
+    }
+    case "atualizar_status_credencial_gov": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const S: Record<string, string> = {
+        valido: "válido", invalido: "INVÁLIDO", bloqueado: "BLOQUEADO", pendente: "pendente",
+      };
+      const s = S[String(args.status ?? "")] ?? String(args.status ?? "");
+      const extra = args.status === "invalido" ? " Nasce a pendência de recuperação de senha." : "";
+      // Sem senha no texto, por construção: esta tool não recebe senha.
+      return `Marcar o acesso gov.br de ${quem} como ${s}${args.observacao ? ` — ${args.observacao}` : ""}.${extra}`;
+    }
+    case "agendar_conversao_gov": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      return `Abrir a pendência de conversão da conta gov.br de ${quem}${args.ate ? `, com prazo até ${args.ate}` : ""} (a conta bronze exige vinda presencial). O atendimento em si é marcado pelo agendamento normal.`;
     }
     case "definir_permissao_menu": {
       const a = String(args.acao ?? "");

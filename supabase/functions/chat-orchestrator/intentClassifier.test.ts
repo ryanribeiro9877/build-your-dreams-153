@@ -489,3 +489,49 @@ Deno.test("isOndaAcaoRequest: palavras com CAUDA ACENTUADA acionam", () => {
   assertEquals(isOndaAcaoRequest("esse áudio é a autorização da dona Maria"), true);
   assertEquals(isOndaAcaoRequest("anexa a gravação da autorização do Ivan"), true);
 });
+
+/* ══ Motores 2 e 3 (Cards 6/7/8/9/10) ══════════════════════════════════════ */
+
+Deno.test("normalizeRouteObject: objetos dos Motores 2 e 3 + sinônimos", () => {
+  assertEquals(normalizeRouteObject("RECLAMACAO_ADMIN"), "RECLAMACAO_ADMIN");
+  assertEquals(normalizeRouteObject("reclamação"), "RECLAMACAO_ADMIN");
+  assertEquals(normalizeRouteObject("RECLAMACAO_RESPOSTA"), "RECLAMACAO_RESPOSTA");
+  assertEquals(normalizeRouteObject("RECLAMACAO_CONSULTA"), "RECLAMACAO_CONSULTA");
+  assertEquals(normalizeRouteObject("EXECUCAO_INICIAR"), "EXECUCAO_INICIAR");
+  assertEquals(normalizeRouteObject("execução"), "EXECUCAO_INICIAR");
+  assertEquals(normalizeRouteObject("EXECUCAO_FASE"), "EXECUCAO_FASE");
+  assertEquals(normalizeRouteObject("EXECUCAO_CONSULTA"), "EXECUCAO_CONSULTA");
+  assertEquals(normalizeRouteObject("EXECUCAO_REVISAO"), "EXECUCAO_REVISAO");
+  assertEquals(normalizeRouteObject("tickler"), "EXECUCAO_REVISAO");
+  assertEquals(normalizeRouteObject("EVENTO_PROCESSUAL"), "EVENTO_PROCESSUAL");
+  assertEquals(normalizeRouteObject("sentença"), "EVENTO_PROCESSUAL");
+  assertEquals(normalizeRouteObject("FILA_GOV"), "FILA_GOV");
+  assertEquals(normalizeRouteObject("CREDENCIAL_GOV_STATUS"), "CREDENCIAL_GOV_STATUS");
+  assertEquals(normalizeRouteObject("CONVERSAO_GOV"), "CONVERSAO_GOV");
+  // CREDENCIAL_GOV (guardar senha no cofre) NÃO virou status por engano.
+  assertEquals(normalizeRouteObject("CREDENCIAL_GOV"), "CREDENCIAL_GOV");
+});
+
+// As frases são as dos ACEITES do briefing de 29/07, ao pé da letra: se o hint
+// não casar, o classificador de objeto nem é chamado e o pedido cai no fluxo
+// genérico (foi essa a causa-raiz do A6 no reteste v170).
+Deno.test("isOndaAcaoRequest: frases dos aceites dos Motores 2 e 3", () => {
+  assertEquals(isOndaAcaoRequest("registra reclamação no Bacen pra ABIGAIL, tarifa indevida, protocolo BCB-123, prazo fatal 13/08"), true);
+  assertEquals(isOndaAcaoRequest("quais reclamações vencem essa semana?"), true);
+  assertEquals(isOndaAcaoRequest("sentença procedente no processo 0801234-56.2025.8.05.0001"), true);
+  assertEquals(isOndaAcaoRequest("execução ajuizada no processo X"), true);
+  assertEquals(isOndaAcaoRequest("o réu pagou, pede alvará"), true);
+  assertEquals(isOndaAcaoRequest("quais clientes são bronze?"), true);
+  assertEquals(isOndaAcaoRequest("a senha da ABIGAIL tá errada"), true);
+  assertEquals(isOndaAcaoRequest("olhei a execução, volta em 10 dias"), true);
+  assertEquals(isOndaAcaoRequest("entrou o Sisbajud no processo do Ivan"), true);
+  assertEquals(isOndaAcaoRequest("a penhora deu negativa"), true);
+  assertEquals(isOndaAcaoRequest("abri um Procon pro Adalberto"), true);
+  assertEquals(isOndaAcaoRequest("a dona Maria é bronze, precisa vir converter a conta"), true);
+});
+
+Deno.test("isOndaAcaoRequest: Motores 2 e 3 não viraram gatilho amplo demais", () => {
+  assertEquals(isOndaAcaoRequest("bom dia, tudo bem?"), false);
+  assertEquals(isOndaAcaoRequest("valeu, era isso"), false);
+  assertEquals(isOndaAcaoRequest("me explica o que é penhora"), true);   // cita penhora: hint solta, o LLM decide
+});

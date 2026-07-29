@@ -105,6 +105,52 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
         encontrado: r.fonte !== "faixa" && !!r.localidade,
       };
     }
+    // ─── Motores 2 e 3: consultas ─────────────────────────────────────────────
+    // As três RPCs re-checam o papel via auth.uid(), então DEPENDEM do `client`
+    // com JWT. `consultar_execucoes`/`fila_credenciais_gov` levantam 42501 para
+    // quem não tem acesso: o erro é devolvido como texto para o especialista
+    // dizer "você não tem acesso a isso", nunca como lista vazia (vazio mentiria
+    // que não há execuções).
+    case "consultar_reclamacoes": {
+      const rpcArgs: Record<string, unknown> = {};
+      if (args.client_id) rpcArgs.p_client_id = args.client_id;
+      const nome = nomeCliente(args);
+      if (nome) rpcArgs.p_cliente_nome = nome;
+      if (args.vencendo_ate) rpcArgs.p_vencendo_ate = args.vencendo_ate;
+      const { data, error } = await client.rpc("consultar_reclamacoes", rpcArgs);
+      if (error) return { erro: error.message };
+      const r = (data ?? {}) as Record<string, unknown>;
+      // Esta RPC devolve `ambiguo` SEM lista de candidatos (diferente das do
+      // Motor 1) — a mensagem tem de funcionar sem candidatos.
+      if (r.ok === false) return { erro: erroClienteRpc(r, "não listei nada") };
+      return r;
+    }
+    case "consultar_execucoes": {
+      const rpcArgs: Record<string, unknown> = {};
+      if (args.fase) rpcArgs.p_fase = args.fase;
+      if (args.responsavel) rpcArgs.p_responsavel = args.responsavel;
+      if (args.processo_numero) rpcArgs.p_processo_numero = args.processo_numero;
+      const { data, error } = await client.rpc("consultar_execucoes", rpcArgs);
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "acompanhamento de execução é restrito a advogado/sócio — você não tem acesso a esse dado." }
+          : { erro: error.message };
+      }
+      return data ?? {};
+    }
+    case "fila_credenciais_gov": {
+      // A RPC devolve `tem_senha` booleano e NUNCA a senha. Repassamos como veio:
+      // qualquer transformação aqui é oportunidade de vazar credencial no texto.
+      const { data, error } = await client.rpc("fila_credenciais_gov", {
+        p_estado: String(args.estado ?? "").trim(),
+      });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "a fila de credenciais gov.br é restrita a recepção/sócio — você não tem acesso." }
+          : { erro: error.message };
+      }
+      return data ?? {};
+    }
     case "get_revisao_peca_context": {
       // Contexto da revisão (peça + metadados). RPC SECURITY DEFINER; roda sob a
       // identidade do usuário (o `client` carrega o JWT).
@@ -147,6 +193,35 @@ function erroClienteRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): st
     return base || "Resultado inválido: use atendeu, não atendeu, número errado, pediu retorno, recusou ou caixa postal.";
   }
   return `${base || "não consegui concluir"} — ${oQueNaoFoiFeito}`;
+}
+
+/**
+ * Traduz o ok:false das RPCs dos Motores 2/3 que resolvem PROCESSO por número.
+ * `_resolver_processo` devolve NULL tanto para "não achei" quanto para "achei
+ * vários" — a mensagem tem de pedir o número exato nos dois casos, sem afirmar
+ * qual dos dois foi (o banco não distingue).
+ */
+function erroProcessoRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): string {
+  const motivo = String(r.motivo ?? "");
+  const base = String(r.mensagem ?? "");
+  if (motivo === "processo_nao_encontrado_ou_ambiguo") {
+    return `não localizei um único processo com esse número (pode não existir ou haver mais de um parecido). Me passe o número exato — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "evento_invalido" || motivo === "fase_invalida" || motivo === "estado_invalido"
+      || motivo === "status_invalido" || motivo === "desfecho_invalido" || motivo === "dias_invalido") {
+    return base || `valor inválido — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "sem_execucao" || motivo === "execucao_nao_encontrada") {
+    return `${base || "esse processo ainda não tem execução em acompanhamento."} Inicie a execução primeiro — ${oQueNaoFoiFeito}`;
+  }
+  if (motivo === "execucao_ja_existe") {
+    return base || "esse processo já tem uma execução em acompanhamento (é uma por processo). Use a mudança de fase.";
+  }
+  if (motivo === "reclamacao_nao_encontrada") {
+    return `não encontrei essa reclamação. Liste as reclamações do cliente primeiro — ${oQueNaoFoiFeito}`;
+  }
+  // Cai aqui também o `ambiguo`/`cliente_nao_encontrado` das RPCs que resolvem CLIENTE.
+  return erroClienteRpc(r, oQueNaoFoiFeito);
 }
 
 /**
@@ -498,7 +573,9 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
       case "criar_campanha": {
         const filtro = montarFiltroCampanha(args);
         if (Object.keys(filtro).length === 0) {
-          return { ok: false, error: "preciso de pelo menos um critério para montar a fila (ex.: banco onde recebe, banco do consignado, cidade, nível GOV)." };
+          // Sem "nível GOV" na lista: esse filtro NÃO existe em search_clients
+          // (`gov` é booleano) e sugeri-lo levava o usuário a pedir algo impossível.
+          return { ok: false, error: "preciso de pelo menos um critério para montar a fila (ex.: banco onde recebe, banco do consignado, banco cujo extrato já temos, cidade, UF ou status)." };
         }
         const { data, error } = await userClient.rpc("criar_campanha", {
           // O objetivo passa pelo normalizador: o CHECK do banco só aceita 7 valores e
@@ -617,6 +694,162 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
             substituiu_anterior: r.substituiu_anterior, aviso: r.aviso,
           },
         };
+      }
+      /* ══ MOTOR 2 · Card 6 — reclamações administrativas ═════════════════════ */
+      case "registrar_reclamacao": {
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é essa reclamação? Me diga o nome (nada foi registrado)." };
+        }
+        const { data, error } = await userClient.rpc("registrar_reclamacao", {
+          p_orgao: args.orgao,
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
+          p_tese: args.tese ?? null,
+          p_data_reclamacao: args.data_reclamacao ?? null,   // null = default hoje na RPC
+          p_protocolo: args.protocolo ?? null,
+          p_prazo_resposta: args.prazo_resposta ?? null,
+          p_prazo_fatal: args.prazo_fatal ?? null,
+          p_process_id: args.process_id ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a reclamação NÃO foi registrada") };
+        return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
+      }
+      case "registrar_resposta_reclamacao": {
+        if (!args.reclamacao_id) {
+          return { ok: false, error: "preciso saber de qual reclamação (liste as do cliente primeiro) — nada foi registrado." };
+        }
+        const { data, error } = await userClient.rpc("registrar_resposta_reclamacao", {
+          p_reclamacao_id: args.reclamacao_id,
+          p_desfecho: args.desfecho,
+          p_resposta_texto: args.resposta_texto ?? null,
+          p_resposta_em: args.resposta_em ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a resposta NÃO foi registrada") };
+        return { ok: true, result: r };
+      }
+
+      /* ══ MOTOR 3 · Card 8 — pipeline de execução ═════════════════════════════ */
+      case "iniciar_execucao": {
+        if (!args.process_id && !args.processo_numero) {
+          return { ok: false, error: "de qual processo é a execução? Me passe o número (nada foi iniciado)." };
+        }
+        const { data, error } = await userClient.rpc("iniciar_execucao", {
+          p_process_id: args.process_id ?? null,
+          p_processo_numero: args.processo_numero ?? null,
+          p_reu_nome: args.reu_nome ?? null,
+          p_reu_tipo: args.reu_tipo ?? null,
+          p_responsavel_nome: args.responsavel_nome ?? null,
+          p_valor: typeof args.valor === "number" ? args.valor : null,
+          p_fase: args.fase ?? null,                          // null = default ajuizada
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a execução NÃO foi iniciada") };
+        return { ok: true, result: r };
+      }
+      case "atualizar_fase_execucao": {
+        if (!args.process_id && !args.processo_numero) {
+          return { ok: false, error: "de qual processo é a execução? Me passe o número (a fase NÃO foi alterada)." };
+        }
+        const { data, error } = await userClient.rpc("atualizar_fase_execucao", {
+          p_fase: args.fase,
+          p_process_id: args.process_id ?? null,
+          p_processo_numero: args.processo_numero ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a fase NÃO foi alterada") };
+        return { ok: true, result: r };
+      }
+
+      /* ══ MOTOR 3 · Card 9 — tickler de revisão ═══════════════════════════════ */
+      case "remarcar_revisao_execucao": {
+        if (!args.process_id && !args.processo_numero) {
+          return { ok: false, error: "de qual processo é a execução? Me passe o número (a revisão NÃO foi remarcada)." };
+        }
+        const dias = typeof args.dias === "number" ? args.dias : Number(args.dias);
+        if (!Number.isFinite(dias) || dias < 1 || dias > 90) {
+          return { ok: false, error: "em quantos dias devo remarcar a revisão? Aceito de 1 a 90 (nada foi remarcado)." };
+        }
+        const rec = args.intervalo_recorrente === undefined || args.intervalo_recorrente === null
+          ? null : Number(args.intervalo_recorrente);
+        const { data, error } = await userClient.rpc("remarcar_revisao_execucao", {
+          p_dias: Math.trunc(dias),
+          p_process_id: args.process_id ?? null,
+          p_processo_numero: args.processo_numero ?? null,
+          p_intervalo_recorrente: rec !== null && Number.isFinite(rec) ? Math.trunc(rec) : null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a revisão NÃO foi remarcada") };
+        return { ok: true, result: r };
+      }
+
+      /* ══ MOTOR 3 · Card 10 — prazos automáticos pós-evento ═══════════════════ */
+      case "registrar_evento_processual": {
+        if (!args.process_id && !args.processo_numero) {
+          return { ok: false, error: "de qual processo é o evento? Me passe o número (nenhum prazo foi criado)." };
+        }
+        const { data, error } = await userClient.rpc("registrar_evento_processual", {
+          p_evento: args.evento,
+          p_process_id: args.process_id ?? null,
+          p_processo_numero: args.processo_numero ?? null,
+          p_data_evento: args.data_evento ?? null,            // null = default hoje
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "nenhum prazo foi criado") };
+        // O `aviso` (dias úteis sem feriados) sobe no result: o humanSummary o
+        // exibe no cartão e a instrução da tool obriga o especialista a repeti-lo.
+        // Um prazo processual errado por feriado é dano real — não é rodapé.
+        return { ok: true, result: r };
+      }
+
+      /* ══ MOTOR 2 · Card 7 — credenciais gov.br ═══════════════════════════════
+         NUNCA ecoar senha: estas duas tools não recebem nem devolvem senha. */
+      case "atualizar_status_credencial_gov": {
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é a conta gov.br? Me diga o nome (nada foi alterado)." };
+        }
+        const { data, error } = await userClient.rpc("atualizar_status_credencial_gov", {
+          p_status: args.status,
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a situação NÃO foi alterada") };
+        return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
+      }
+      case "agendar_conversao_gov": {
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é a conversão da conta? Me diga o nome (nada foi agendado)." };
+        }
+        const { data, error } = await userClient.rpc("agendar_conversao_gov", {
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
+          p_ate: args.ate ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: error.message };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a conversão NÃO foi agendada") };
+        return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
       }
       case "registrar_protocolo": {
         // Gate = update_user_task_status (assignee/assigner/master) + trigger 8.5

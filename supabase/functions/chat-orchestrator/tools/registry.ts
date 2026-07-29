@@ -11,6 +11,10 @@ export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
   "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias", "resumo_do_dia",
   "listar_permissoes_menu", "kpi_ligacoes",
+  // Motores 2 e 3 (Cards 6/8/7). Cada RPC re-checa o papel internamente: as de
+  // execução exigem advogado/sócio/admin (recepção leva 42501), então a tool ser
+  // "de leitura" não afrouxa nada.
+  "consultar_reclamacoes", "consultar_execucoes", "fila_credenciais_gov",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -362,7 +366,11 @@ export const TOOLS: Record<string, ToolDef> = {
       cidade: str("Filtro: cidade."),
       uf: str("Filtro: UF (2 letras)."),
       status: str("Filtro: status do cliente (ex.: ativo)."),
-      gov: { type: "string", enum: ["ouro", "prata", "bronze"], description: "Filtro: nível da conta GOV.BR." },
+      // `gov` em search_clients é BOOLEANO (tem conta gov.br cadastrada), NÃO o nível.
+      // O schema anunciava enum ouro/prata/bronze: o LLM mandava "bronze", que virava
+      // ('bronze')::boolean → 22P02 e matava a criação (medido em 29/07). Filtrar por
+      // NÍVEL não existe na RPC — converter_conta_bronze é objetivo, não filtro.
+      gov: { type: "boolean", description: "Filtro: só clientes COM conta GOV.BR cadastrada (ou sem, se false). Não filtra nível (bronze/prata/ouro) — isso a base não oferece." },
       origem: str("Filtro: origem do cadastro (ex.: planilha)."),
       tem_pendencia: { type: "boolean", description: "Filtro: só clientes com pendência aberta." },
       docs_completos: { type: "boolean", description: "Filtro: só clientes com documentação completa (ou incompleta, se false)." },
@@ -459,6 +467,137 @@ export const TOOLS: Record<string, ToolDef> = {
       observacoes: str("o que corrigir (obrigatório ao devolver; opcional ao aprovar)"),
       aceite: { type: "boolean", description: "true confirma o aceite de responsabilidade (obrigatório para aprovar)" },
     }, required: ["task_id", "decisao"] },
+  }},
+
+  /* ══ MOTOR 2 · Card 6 — reclamações administrativas ═══════════════════════
+     Os enums abaixo são os CHECKs reais das colunas (lidos do banco em 29/07):
+     valor fora da lista derruba a gravação com 23514, então o enum protege o LLM
+     de inventar "PROCON-BA" ou "atendido". */
+  registrar_reclamacao: { type: "function", function: {
+    name: "registrar_reclamacao",
+    description: "Registra uma reclamação administrativa de um cliente (Procon, Bacen, INSS, consumidor.gov, ouvidoria do banco, e-mail ao banco), com protocolo e prazos. O prazo de resposta/fatal vira pendência automática no dashboard de prazos. Use em \"registra reclamação no Bacen pra dona Abigail, tarifa indevida, protocolo BCB-123, prazo fatal 13/08\". A reclamação negada ou sem resposta é pré-requisito de ação em várias teses (interesse de agir).",
+    parameters: { type: "object", properties: {
+      orgao: { type: "string", enum: ["procon", "bacen", "inss", "consumidor_gov", "ouvidoria_banco", "email_banco", "outro"], description: "Onde a reclamação foi feita." },
+      cliente_nome: str("Nome do cliente como o usuário falou. Basta o nome; se houver mais de um, os candidatos voltam para você perguntar."),
+      client_id: str("ID do cliente, se já resolvido com consultar_cliente. Opcional — NUNCA peça UUID."),
+      tese: str("Assunto/tese da reclamação (ex.: \"tarifa indevida\", \"desconto não autorizado\")."),
+      data_reclamacao: str("Data da reclamação, AAAA-MM-DD. Default hoje."),
+      protocolo: str("Número de protocolo dado pelo órgão."),
+      prazo_resposta: str("Prazo esperado de resposta, AAAA-MM-DD."),
+      prazo_fatal: str("Prazo FATAL, AAAA-MM-DD — vira a data fatal da pendência."),
+      process_id: str("ID do processo vinculado, se houver."),
+      observacao: str("Observação curta."),
+    }, required: ["orgao"] },
+  }},
+  registrar_resposta_reclamacao: { type: "function", function: {
+    name: "registrar_resposta_reclamacao",
+    description: "Registra a resposta/desfecho de uma reclamação administrativa JÁ registrada. Localize a reclamação antes com consultar_reclamacoes (o retorno traz o id); NUNCA peça UUID ao usuário. Negada ou sem resposta serve de prova do interesse de agir — diga isso ao usuário quando for o caso.",
+    parameters: { type: "object", properties: {
+      reclamacao_id: str("ID da reclamação, obtido em consultar_reclamacoes."),
+      desfecho: { type: "string", enum: ["atendida", "negada", "sem_resposta"], description: "Como terminou." },
+      resposta_texto: str("Resumo do que o órgão/banco respondeu."),
+      resposta_em: str("Data da resposta, AAAA-MM-DD. Default hoje."),
+    }, required: ["reclamacao_id", "desfecho"] },
+  }},
+  consultar_reclamacoes: { type: "function", function: {
+    name: "consultar_reclamacoes",
+    description: "Lista reclamações administrativas: de um cliente, todas, ou só as PENDENTES que vencem até uma data (\"quais reclamações vencem essa semana?\" → informe vencendo_ate com a data de sábado). Resposta direta, sem confirmação.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente, se a pergunta é sobre um cliente específico."),
+      client_id: str("ID do cliente, se já resolvido."),
+      vencendo_ate: str("AAAA-MM-DD — só pendentes com prazo até esta data."),
+    }, required: [] },
+  }},
+
+  /* ══ MOTOR 3 · Card 8 — pipeline de execução ══════════════════════════════ */
+  iniciar_execucao: { type: "function", function: {
+    name: "iniciar_execucao",
+    description: "Inicia o acompanhamento da EXECUÇÃO de um processo: fase, réu/parte contrária, quem toca e valor. Um processo tem no máximo uma execução. Identifique o processo pelo NÚMERO (processo_numero) — se houver mais de um parecido, a tool devolve que está ambíguo e você pede o número exato.",
+    parameters: { type: "object", properties: {
+      processo_numero: str("Número do processo como o usuário falou (resolve se for único)."),
+      process_id: str("ID do processo, se já resolvido com consultar_processo."),
+      reu_nome: str("Nome do réu / parte contrária (ex.: \"Sindicato dos Rurais\", \"Banco BMG\")."),
+      reu_tipo: { type: "string", enum: ["sindicato", "banco", "empresa", "pessoa_fisica", "outro"], description: "Natureza do réu." },
+      responsavel_nome: str("Quem toca a execução (ex.: Daiane, Rodrigo). Texto livre."),
+      valor: { type: "number", description: "Valor da execução, em reais." },
+      fase: { type: "string", enum: ["ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa", "redirecionamento", "pago", "deposito_judicial", "expedicao_alvara", "alvara_pendente_assinatura", "encerrada"], description: "Fase inicial. Default ajuizada." },
+      observacao: str("Observação curta."),
+    }, required: [] },
+  }},
+  atualizar_fase_execucao: { type: "function", function: {
+    name: "atualizar_fase_execucao",
+    description: "Move a execução de um processo para outra FASE e registra o evento na linha do tempo. Use em \"o réu pagou no processo X\", \"pedimos penhora\", \"saiu o alvará\". Ao entrar em expedicao_alvara nasce sozinha a pendência do alvará.",
+    parameters: { type: "object", properties: {
+      fase: { type: "string", enum: ["ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa", "redirecionamento", "pago", "deposito_judicial", "expedicao_alvara", "alvara_pendente_assinatura", "encerrada"], description: "Nova fase." },
+      processo_numero: str("Número do processo como o usuário falou."),
+      process_id: str("ID do processo, se já resolvido."),
+      observacao: str("O que aconteceu, em uma frase — vai para a linha do tempo."),
+    }, required: ["fase"] },
+  }},
+  consultar_execucoes: { type: "function", function: {
+    name: "consultar_execucoes",
+    description: "Lista as execuções em andamento: por fase (\"quais estão em penhora?\"), por responsável (\"execuções da Daiane\") ou por processo. Resposta direta, sem confirmação. Exclusiva de advogado/sócio/admin — a recepção não tem acesso a este dado.",
+    parameters: { type: "object", properties: {
+      fase: str("Filtro por fase (ex.: sisbajud)."),
+      responsavel: str("Filtro por responsável (busca parcial no nome)."),
+      processo_numero: str("Filtro por número do processo (busca parcial)."),
+    }, required: [] },
+  }},
+
+  /* ══ MOTOR 3 · Card 9 — tickler de revisão ════════════════════════════════ */
+  remarcar_revisao_execucao: { type: "function", function: {
+    name: "remarcar_revisao_execucao",
+    description: "Depois de olhar uma execução: fecha a pendência de revisão aberta e agenda a próxima para daqui a N dias. Use em \"olhei a execução do processo X, volta em 10 dias\". Informe intervalo_recorrente se o usuário quiser que se repita sozinho (\"me lembra a cada 15 dias\").",
+    parameters: { type: "object", properties: {
+      dias: { type: "integer", description: "Daqui a quantos dias revisar de novo (1 a 90)." },
+      processo_numero: str("Número do processo como o usuário falou."),
+      process_id: str("ID do processo, se já resolvido."),
+      intervalo_recorrente: { type: "integer", description: "Se informado, toda revisão futura se re-agenda a cada N dias (1 a 90)." },
+    }, required: ["dias"] },
+  }},
+
+  /* ══ MOTOR 3 · Card 10 — prazos automáticos pós-evento ════════════════════ */
+  registrar_evento_processual: { type: "function", function: {
+    name: "registrar_evento_processual",
+    description: "Registra um evento do processo e deixa o sistema criar os prazos: sentenca_procedente → prazos de 5 dias úteis (embargos) e 10 (recurso); execucao_ajuizada → prazo de 15 dias úteis (pagamento) e o pipeline de execução já entra em prazo_pagamento. Use em \"saiu sentença procedente no processo X\", \"protocolei a execução do processo Y\". OBRIGATÓRIO: ao responder, repasse o aviso de que os dias úteis foram contados SEM feriados e o calendário forense precisa ser conferido.",
+    parameters: { type: "object", properties: {
+      evento: { type: "string", enum: ["sentenca_procedente", "execucao_ajuizada"], description: "Qual evento aconteceu." },
+      processo_numero: str("Número do processo como o usuário falou."),
+      process_id: str("ID do processo, se já resolvido."),
+      data_evento: str("Data do evento, AAAA-MM-DD. Default hoje — a contagem dos prazos parte dela."),
+      observacao: str("Observação curta."),
+    }, required: ["evento"] },
+  }},
+
+  /* ══ MOTOR 2 · Card 7 — fila de credenciais gov.br ════════════════════════
+     NUNCA pedir nem repetir senha no chat. A fila devolve apenas `tem_senha`
+     (booleano) — não existe caminho que traga a senha para o texto. */
+  fila_credenciais_gov: { type: "function", function: {
+    name: "fila_credenciais_gov",
+    description: "Fila de trabalho das contas gov.br: lista clientes por estado da credencial. Use em \"quais clientes são bronze?\", \"quem está com senha inválida?\", \"quem tem 2FA?\", \"de quem não temos senha?\". Devolve nome, nível e situação — NUNCA a senha. Resposta direta, sem confirmação.",
+    parameters: { type: "object", properties: {
+      estado: { type: "string", enum: ["bronze", "prata", "ouro", "2fa", "invalido", "bloqueado", "sem_senha", "sem_credencial"], description: "Recorte da fila: nível da conta, 2FA, situação do acesso, sem senha guardada ou sem credencial nenhuma." },
+    }, required: ["estado"] },
+  }},
+  atualizar_status_credencial_gov: { type: "function", function: {
+    name: "atualizar_status_credencial_gov",
+    description: "Atualiza a SITUAÇÃO do acesso gov.br de um cliente. Use em \"a senha da dona Elza está errada\" (status invalido → nasce pendência de recuperação), \"a conta do Ivan foi bloqueada\", \"consegui entrar, tá valendo\". NUNCA peça a senha nem a repita: aqui só se registra a situação.",
+    parameters: { type: "object", properties: {
+      status: { type: "string", enum: ["valido", "invalido", "bloqueado", "pendente"], description: "Situação do acesso." },
+      cliente_nome: str("Nome do cliente como o usuário falou."),
+      client_id: str("ID do cliente, se já resolvido."),
+      observacao: str("Contexto curto (ex.: \"deu erro no login em 29/07\")."),
+    }, required: ["status"] },
+  }},
+  agendar_conversao_gov: { type: "function", function: {
+    name: "agendar_conversao_gov",
+    description: "Abre a pendência de CONVERSÃO da conta gov.br de um cliente (conta bronze exige vinda presencial para reconhecimento facial). Use em \"a dona Maria é bronze, precisa vir converter\", \"agenda a conversão do Ivan até dia 15\". A pendência acompanha até o nível subir; o atendimento em si é marcado pelo fluxo normal de agendamento.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente como o usuário falou."),
+      client_id: str("ID do cliente, se já resolvido."),
+      ate: str("Data-limite AAAA-MM-DD, se o usuário der prazo — vira a data fatal da pendência."),
+      observacao: str("Observação curta."),
+    }, required: [] },
   }},
 };
 
