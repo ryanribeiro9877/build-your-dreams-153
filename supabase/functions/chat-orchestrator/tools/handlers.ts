@@ -1,8 +1,8 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCep } from "../cep.ts";
 import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
-import { montarFiltroCampanha } from "./campanhaFiltro.ts";
-export { montarFiltroCampanha, CAMPANHA_FILTRO_KEYS } from "./campanhaFiltro.ts";
+import { montarFiltroCampanha, normalizarObjetivoCampanha } from "./campanhaFiltro.ts";
+export { montarFiltroCampanha, normalizarObjetivoCampanha, CAMPANHA_FILTRO_KEYS } from "./campanhaFiltro.ts";
 
 // READ — recebe um SupabaseClient (client) e o user_id para escopar.
 // IMPORTANTE (Correção A): para consultar_cliente o `client` DEVE carregar a
@@ -464,22 +464,22 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
       }
       // ─── Card 3: relação bancária ─────────────────────────────────────────
       case "registrar_relacao_bancaria": {
-        // A RPC só aceita client_id (não resolve nome), então a resolução 0/1/N do
-        // item 0 é feita AQUI, com o JWT do usuário.
-        let clienteId = typeof args.client_id === "string" ? args.client_id : "";
-        let clienteNome = nomeCliente(args) ?? "";
-        if (!clienteId) {
-          if (!clienteNome) return { ok: false, error: "de qual cliente é esse dado bancário? Me diga o nome." };
-          const res = await resolverClientePorNome(userClient, clienteNome);
-          if (res.erro) return { ok: false, error: `${res.erro} (nada foi registrado)` };
-          clienteId = res.id!; clienteNome = res.nome ?? clienteNome;
+        // A RPC ganhou p_cliente_nome em 29/07 e resolve o cliente ela mesma (mesmos
+        // motivos 0/1/N das outras). Deixamos a resolução com ela: manter uma segunda
+        // resolução aqui (via agent_consultar_cliente) duplicava a regra e podia
+        // divergir do que a RPC decide.
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é esse dado bancário? Me diga o nome." };
         }
         const temProduto = !!(args.banco && args.tipo_relacao);
         if (!temProduto && !args.banco_beneficio) {
           return { ok: false, error: "me diga onde o cliente recebe o benefício e/ou com qual banco ele tem consignado/seguro." };
         }
         const { data, error } = await userClient.rpc("registrar_relacao_bancaria", {
-          p_client_id: clienteId,
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
           p_banco: temProduto ? args.banco : null,
           p_tipo_relacao: temProduto ? args.tipo_relacao : null,
           p_reconhece: typeof args.reconhece === "boolean" ? args.reconhece : null,
@@ -501,7 +501,9 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           return { ok: false, error: "preciso de pelo menos um critério para montar a fila (ex.: banco onde recebe, banco do consignado, cidade, nível GOV)." };
         }
         const { data, error } = await userClient.rpc("criar_campanha", {
-          p_nome: args.nome, p_objetivo: args.objetivo, p_filtro: filtro,
+          // O objetivo passa pelo normalizador: o CHECK do banco só aceita 7 valores e
+          // nomes curtos ("agendar") derrubariam a criação com 23514.
+          p_nome: args.nome, p_objetivo: normalizarObjetivoCampanha(args.objetivo), p_filtro: filtro,
         });
         if (error) return { ok: false, error: error.message };
         const r = (data ?? {}) as Record<string, unknown>;

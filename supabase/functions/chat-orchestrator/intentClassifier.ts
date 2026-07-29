@@ -377,7 +377,8 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "CREDENCIAL_GOV" || s === "CREDENCIAL" || s === "SENHA_GOV") return "CREDENCIAL_GOV";
   // Motor 1 (Cards 3/4/5) + sinônimos tolerados do LLM.
   if (s === "RELACAO_BANCARIA" || s === "RELACAO" || s === "BANCO") return "RELACAO_BANCARIA";
-  if (s === "CAMPANHA" || s === "CAMPANHA_LIGACAO") return "CAMPANHA";
+  // CAMPANHA_LIGACAO é o nome usado na documentação de 29/07; mesmo objeto.
+  if (s === "CAMPANHA" || s === "CAMPANHA_LIGACAO" || s === "CAMPANHA_DE_LIGACAO") return "CAMPANHA";
   if (s === "LIGACAO" || s === "LIGAÇÃO" || s === "CHAMADA") return "LIGACAO";
   if (s === "KPI_LIGACOES" || s === "KPI" || s === "PRODUTIVIDADE") return "KPI_LIGACOES";
   if (s === "AUDIO_AUTORIZACAO" || s === "AUDIO" || s === "AUTORIZACAO") return "AUDIO_AUTORIZACAO";
