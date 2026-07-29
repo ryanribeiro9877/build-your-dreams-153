@@ -17,6 +17,7 @@ import {
 } from "@/components/clients/tabs/relationalTabs";
 import { PecasTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
 import { BancosTab } from "@/components/clients/tabs/bancosTab";
+import { ReclamacoesTab } from "@/components/clients/tabs/reclamacoesTab";
 import { HistoricoTab } from "@/components/clients/tabs/historicoTab";
 import { AudienciasTab } from "@/components/clients/tabs/audienciasTab";
 
@@ -41,6 +42,9 @@ const TABS: { key: string; label: string; Comp: ComponentType<{ client: ClientFu
   { key: "reunioes", label: "Reuniões", Comp: ReunioesTab },
   { key: "audiencias", label: "Audiências", Comp: AudienciasTab },
   { key: "processos", label: "Processos/Ações", Comp: ProcessosTab },
+  // Reclamações (Motor 2 · Card 6) fica ao lado de Processos: é a via
+  // ADMINISTRATIVA do mesmo conflito, e muitas vezes o pré-requisito da judicial.
+  { key: "reclamacoes", label: "Reclamações", Comp: ReclamacoesTab },
   { key: "pecas", label: "Peças", Comp: PecasTab },
   { key: "protocolos", label: "Protocolos", Comp: ProtocolosTab },
   { key: "historico", label: "Histórico", Comp: HistoricoTab },

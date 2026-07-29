@@ -7,7 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAgents } from "@/hooks/useAgents";
 import { useInboxCount, createChatTask } from "@/hooks/useUserTasks";
 import { useMyWorkspace, STAGE_LABELS, AREA_LABELS, type WorkspaceAgent } from "@/hooks/useMyWorkspace";
-import { isDashboardRole, isSocioRole, isRecepcaoRole, isTechRole } from "@/components/DashboardRoute";
+import { isDashboardRole, isSocioRole, isRecepcaoRole, isTechRole, isSocioOuAdvogadoRole } from "@/components/DashboardRoute";
 import { isPecaAuthor } from "@/lib/pecaAccess";
 import { useChatOrchestrator, friendlyError } from "@/hooks/useChatOrchestrator";
 import { cancelRun } from "@/hooks/useActionConfirm";
@@ -21,7 +21,7 @@ import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
   Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
-  ListTodo, LayoutGrid, ShieldCheck, PhoneCall,
+  ListTodo, LayoutGrid, ShieldCheck, PhoneCall, Gavel,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMenuAccess } from "@/hooks/useMenuAccess";
@@ -1190,6 +1190,9 @@ export default function JurisCloudOS() {
     // EXATAMENTE a condição do RecepcaoOuSocioRoute, que por sua vez espelha o
     // gate das RPCs (is_recepcao_or_socio OR admin). Link e rota 1:1.
     { id: "campanhas", label: "Campanhas", icon: PhoneCall, color: ACCENT, action: () => navigate("/campanhas"), show: isRecepcao || isSocioRole(workspace?.role_template?.code) || hasRole("admin") },
+    // Execuções (Motor 3 · Card 8): mesma condição do JuridicoRoute, que espelha a
+    // RLS da tabela (advogado/sócio/admin). A recepção NÃO vê o link nem a rota.
+    { id: "execucoes", label: "Execuções", icon: Gavel, color: ACCENT, action: () => navigate("/execucoes"), show: isSocioOuAdvogadoRole(workspace?.role_template?.code) || hasRole("admin") },
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
     { id: "tarefas", label: "Tarefas", icon: ListTodo, color: ACCENT, action: () => navigate("/sistema/tarefas"), show: canSeeMenu("tarefas") },

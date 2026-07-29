@@ -8,6 +8,7 @@ import {
   CAMPANHA_OBJETIVO_LABELS, CAMPANHA_OBJETIVO_OPTIONS, CAMPANHA_STATUS_META,
   CAMPANHA_ITEM_STATUS_META, LIGACAO_RESULTADO_META, LIGACAO_RESULTADO_OPTIONS,
 } from "@/lib/motor1";
+import { FILA_GOV_ESTADOS, STATUS_ACESSO_META, STATUS_ACESSO_OPTIONS } from "@/lib/motores23";
 
 /* ============================================================
    Card 4 — Campanhas de ligação + KPI
@@ -535,6 +536,190 @@ function ListaCampanhas({ recarregar, onAbrir }: { recarregar: number; onAbrir: 
   );
 }
 
+/* ============================================================
+   Card 7 — Fila de trabalho das contas gov.br
+   ============================================================
+   Mora AQUI, e não na aba Gov.br da ficha, porque é uma fila ENTRE clientes: a
+   aba da ficha é o cofre de UM cliente. E o gate desta tela
+   (RecepcaoOuSocioRoute) é exatamente o da RPC `fila_credenciais_gov`
+   (is_recepcao_or_socio OR admin), então nada de novo precisa ser guardado.
+
+   SEGURANÇA: a RPC devolve `tem_senha` BOOLEANO e nunca a senha — não existe
+   caminho aqui que traga senha para a tela. O cofre segue sendo o único lugar que
+   revela senha, com log de auditoria (aba Gov.br da ficha).
+
+   LIMITAÇÃO REAL: a fila devolve o NOME do cliente, não o id. As ações por linha
+   mandam `cliente_nome`, e a própria RPC resolve — se o nome for ambíguo ela
+   recusa e a tela diz isso, em vez de agir no cliente errado.
+============================================================ */
+
+interface FilaGovItem {
+  cliente: string;
+  nivel: string | null;
+  tem_2fa: boolean | null;
+  status_acesso: string | null;
+  tem_senha: boolean | null;
+}
+
+function AcoesGov({ item, onFeito }: { item: FilaGovItem; onFeito: () => void }) {
+  const [modo, setModo] = useState<"" | "status" | "conversao">("");
+  const [status, setStatus] = useState(STATUS_ACESSO_OPTIONS[0].value);
+  const [ate, setAte] = useState("");
+  const [obs, setObs] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function traduzFalha(d: { ok?: boolean; motivo?: string; mensagem?: string } | null,
+                       e: { message?: string } | null, oQue: string): string | null {
+    if (e) return `${oQue}: ${e.message ?? "erro"}`;
+    if (!d) return `${oQue}: sem resposta.`;
+    if (d.ok) return null;
+    if (d.motivo === "ambiguo") return `${oQue}: há mais de um cliente com o nome "${item.cliente}". Resolva pela ficha do cliente.`;
+    if (d.motivo === "cliente_nao_encontrado") return `${oQue}: cliente não encontrado.`;
+    return `${oQue}: ${d.mensagem ?? d.motivo ?? "erro"}`;
+  }
+
+  async function salvarStatus() {
+    setBusy(true);
+    const { data, error } = await rpc<{ ok?: boolean; motivo?: string; mensagem?: string }>(
+      "atualizar_status_credencial_gov",
+      { p_status: status, p_client_id: null, p_cliente_nome: item.cliente, p_observacao: obs.trim() || null },
+    );
+    const err = traduzFalha(data, error, "Situação NÃO alterada");
+    setBusy(false);
+    if (err) { toast.error(err); return; }
+    toast.success(status === "invalido"
+      ? "Marcado como inválido — pendência de recuperação criada."
+      : "Situação atualizada.");
+    setModo(""); setObs("");
+    onFeito();
+  }
+
+  async function salvarConversao() {
+    setBusy(true);
+    const { data, error } = await rpc<{ ok?: boolean; motivo?: string; mensagem?: string }>(
+      "agendar_conversao_gov",
+      { p_client_id: null, p_cliente_nome: item.cliente, p_ate: ate || null, p_observacao: obs.trim() || null },
+    );
+    const err = traduzFalha(data, error, "Conversão NÃO agendada");
+    setBusy(false);
+    if (err) { toast.error(err); return; }
+    toast.success("Pendência de conversão aberta. O atendimento presencial é marcado pelo agendamento normal.");
+    setModo(""); setAte(""); setObs("");
+    onFeito();
+  }
+
+  if (!modo) {
+    return (
+      <span style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button className="cli-btn sm" onClick={() => setModo("conversao")}>Agendar conversão</button>
+        <button className="cli-btn sm ghost" onClick={() => setModo("status")}>Marcar situação</button>
+      </span>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end", width: "100%", marginTop: 8 }}>
+      {modo === "status" ? (
+        <div style={{ flex: "0 1 170px" }}>
+          <label className="cli-label">Situação do acesso</label>
+          <select className="cli-select" value={status} onChange={e => setStatus(e.target.value)}>
+            {STATUS_ACESSO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      ) : (
+        <div style={{ flex: "0 1 170px" }}>
+          <label className="cli-label">Converter até</label>
+          <input className="cli-input" type="date" value={ate} onChange={e => setAte(e.target.value)} />
+        </div>
+      )}
+      <div style={{ flex: "1 1 200px" }}>
+        <label className="cli-label">Observação</label>
+        <input className="cli-input" value={obs} onChange={e => setObs(e.target.value)} placeholder="opcional" />
+      </div>
+      <button className="cli-btn sm" disabled={busy}
+        onClick={() => void (modo === "status" ? salvarStatus() : salvarConversao())}>
+        {busy ? "Salvando…" : "Salvar"}
+      </button>
+      <button className="cli-btn sm ghost" disabled={busy} onClick={() => setModo("")}>Cancelar</button>
+      {modo === "status" && status === "invalido" && (
+        <div style={{ flexBasis: "100%", fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>
+          Marcar como inválido abre a pendência de recuperação de senha no Kanban.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilaGovCard() {
+  const [estado, setEstado] = useState(FILA_GOV_ESTADOS[0].value);
+  const [reload, setReload] = useState(0);
+  const [payload, setPayload] = useState<{ total: number; clientes: FilaGovItem[] } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setPayload(null); setErro(null);
+      const { data, error } = await rpc<{ ok?: boolean; motivo?: string; mensagem?: string; total?: number; clientes?: FilaGovItem[] }>(
+        "fila_credenciais_gov", { p_estado: estado });
+      if (cancelled) return;
+      if (error) {
+        setErro(error.code === "42501"
+          ? "A fila de contas gov.br é restrita a recepção/sócio."
+          : (error.message ?? "erro"));
+        return;
+      }
+      if (data?.ok === false) { setErro(data.mensagem ?? data.motivo ?? "erro"); return; }
+      setPayload({ total: data?.total ?? 0, clientes: data?.clientes ?? [] });
+    })();
+    return () => { cancelled = true; };
+  }, [estado, reload]);
+
+  const hint = FILA_GOV_ESTADOS.find(e => e.value === estado)?.hint ?? "";
+
+  return (
+    <div className="cli-card lift" style={{ padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div className="cli-sec-title" style={{ padding: "2px 4px 0", flex: 1 }}>Fila de contas gov.br</div>
+        <div style={{ flex: "0 1 210px" }}>
+          <label className="cli-label">Recorte</label>
+          <select className="cli-select" value={estado} onChange={e => setEstado(e.target.value)}>
+            {FILA_GOV_ESTADOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        {payload && <span className="cli-chip n">{payload.total} cliente{payload.total !== 1 ? "s" : ""}</span>}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 500, marginBottom: 10 }}>
+        {hint} · Esta lista nunca mostra senha — só se o escritório tem uma guardada.
+      </div>
+
+      {erro ? <EmptyState icon="⚠" title="Fila indisponível" hint={erro} />
+        : payload === null ? <div className="cli-loading">Carregando…</div>
+        : payload.clientes.length === 0 ? (
+          <EmptyState icon="◇" title="Ninguém neste recorte"
+            hint="Troque o recorte acima — bronze, 2FA, senha inválida, sem credencial…" />
+        ) : payload.clientes.map((c, i) => {
+          const st = c.status_acesso ? (STATUS_ACESSO_META[c.status_acesso] ?? { label: c.status_acesso, cls: "n" }) : null;
+          return (
+            <div key={`${c.cliente}-${i}`} style={{ borderBottom: "1px solid var(--cli-line, rgba(0,0,0,.06))", padding: "10px 4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "var(--cli-ink)" }}>{c.cliente}</div>
+                  <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>
+                    {c.nivel ? `conta ${c.nivel}` : "nível não informado"}
+                    {c.tem_2fa ? " · 2FA" : ""}
+                    {` · ${c.tem_senha ? "senha guardada" : "sem senha guardada"}`}
+                  </div>
+                </div>
+                {st && <span className={`cli-chip ${st.cls}`}>{st.label}</span>}
+                <AcoesGov item={c} onFeito={() => setReload(k => k + 1)} />
+              </div>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
 /* ---------- Página ---------- */
 
 export default function Campanhas() {
@@ -584,6 +769,7 @@ export default function Campanhas() {
 
         <div style={{ display: "grid", gap: 14 }}>
           <KpiPanel />
+          <FilaGovCard />
           <NovaCampanhaCard onCriada={() => setRecarregar(k => k + 1)} />
           {aberta
             ? <FilaCampanha campanha={aberta} onFechar={() => { setAberta(null); setRecarregar(k => k + 1); }} />

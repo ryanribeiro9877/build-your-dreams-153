@@ -124,6 +124,47 @@ export function RecepcaoRoute({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Papéis que a função `is_socio_or_advogado()` do banco cobre: sócio + qualquer
+ * template cujo code começa com `adv_` (adv_previdenciario, adv_confeccao_geral,
+ * adv_protocolo, adv_audiencia_execucao). `audiencia_externa` NÃO entra — o code
+ * não é adv_*, e o banco também o deixa de fora.
+ */
+export function isSocioOuAdvogadoRole(code: string | null | undefined): boolean {
+  const c = code ?? "";
+  return c === "socio" || c.startsWith("adv_");
+}
+
+/**
+ * Route guard da tela de Execuções (Motor 3 · Card 8).
+ *
+ * Espelha o gate REAL das tabelas e RPCs que a tela consome — a RLS de
+ * `execucoes`/`execucao_eventos` e as RPCs iniciar_execucao/atualizar_fase_execucao/
+ * consultar_execucoes/registrar_evento_processual exigem:
+ *     is_socio_or_advogado() OR has_role(auth.uid(),'admin')
+ * A RECEPÇÃO é deliberadamente barrada (o banco devolve 42501 — provado em
+ * dry-run), então o link também fica escondido para ela: rota e menu 1:1.
+ */
+export function JuridicoRoute({ children }: { children: ReactNode }) {
+  const { user, userRoles, loading: authLoading } = useAuth();
+  const { workspace, loading: wsLoading } = useMyWorkspace();
+
+  if (authLoading) return <HexagonLoader variant="fullscreen" />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (wsLoading) return <HexagonLoader variant="fullscreen" />;
+
+  const liberado = isSocioOuAdvogadoRole(workspace?.role_template?.code)
+    || userRoles.includes("admin");
+  if (!liberado) return <Navigate to="/sistema" replace />;
+
+  return (
+    <RequireActivation>
+      <PlatformPresenceSync />
+      {children}
+    </RequireActivation>
+  );
+}
+
+/**
  * Route guard das telas do Motor 1 (Campanhas de ligação).
  *
  * Espelha EXATAMENTE o gate das RPCs que a tela consome (criar_campanha,
