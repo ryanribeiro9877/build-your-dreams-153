@@ -116,7 +116,22 @@ export default function DefinePassword() {
       body: { token: captchaToken }
     });
     if (turnstileError || !turnstileResult?.ok) {
-      toast.error("Verificação de segurança falhou. Tente novamente.");
+      // `functions.invoke` trata 4xx como ERRO: `data` vem null e o corpo fica em
+      // `error.context`, que é a Response. Sem ler dali, o `motivo` que a edge
+      // passou a devolver nunca chegaria à tela — e a pessoa veria de novo só
+      // "falhou", que foi o que obrigou a deduzir a causa em 30/07.
+      let motivo: string | undefined;
+      let codes: string[] = [];
+      try {
+        const ctx = (turnstileError as unknown as { context?: Response } | null)?.context;
+        const body = ctx && typeof ctx.json === "function"
+          ? await ctx.json()
+          : (turnstileResult as { motivo?: string; error_codes?: string[] } | null);
+        motivo = body?.motivo;
+        codes = Array.isArray(body?.error_codes) ? body.error_codes : [];
+      } catch { /* corpo ilegível: cai na mensagem genérica abaixo */ }
+      if (codes.length) console.error("[turnstile] error-codes:", codes.join(", "));
+      toast.error(motivo ?? "Verificação de segurança falhou. Tente novamente.");
       setSubmitting(false);
       return;
     }
