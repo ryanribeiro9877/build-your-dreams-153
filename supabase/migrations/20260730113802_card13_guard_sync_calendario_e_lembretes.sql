@@ -69,7 +69,13 @@ CREATE POLICY "lembretes read" ON public.audiencia_lembretes
   USING (public.can_view_clients() OR public.is_socio_or_advogado());
 
 -- ===== IMPORTADOR EM MASSA =====
--- item: {"cliente":"PEDRO JACINTO","parte_contraria":"AMBEC",
+-- ⚠️ ÚNICA LINHA DESTE ESPELHO QUE NÃO É VERBATIM (redigida por Claude Code em 30/07):
+-- o exemplo original trazia o NOME REAL de um cliente do escritório, a parte contrária,
+-- o tipo de ação e a data da audiência dele. Conferido: o nome casava com 1 registro em
+-- clients_decrypted. Este repositório é PÚBLICO, então o exemplo foi trocado por dados
+-- FICTÍCIOS. Nada além destas 3 linhas foi alterado; o resto bate byte a byte com
+-- statements[1]. Não recolocar dado de cliente em comentário de migração.
+-- item: {"cliente":"FULANO DE TAL","parte_contraria":"BANCO EXEMPLO S.A.",
 --        "data_hora":"2026-08-04T09:00:00-03:00","tipo_acao":"Empréstimo Pessoal",
 --        "processo_numero":null,"observacao":"ONLINE","origem":"Tabela de audiências / Agosto"}
 -- dry_run=true é o DEFAULT (lição do importador de telefones: contagem antes de gravar).
