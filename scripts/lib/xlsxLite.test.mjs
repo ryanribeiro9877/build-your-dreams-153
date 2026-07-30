@@ -140,3 +140,39 @@ test("maxCol descarta colunas além do teto (planilha formatada até XFD)", asyn
   assert.equal(s.rows[0][0], "perto");
   assert.equal(s.rows[0].length, 1);          // ZZ (702) ficou fora
 });
+
+/* ── Dual-ambiente (30/07) ────────────────────────────────────────────────────
+   O leitor passou a servir também o NAVEGADOR (importação de audiências pela
+   tela): aceita bytes/Blob além de caminho, e o `node:fs/promises` virou import
+   dinâmico dentro do ramo do caminho — no topo, o Vite tentaria resolver
+   `node:fs` em tempo de build e o bundle do front quebraria. */
+
+async function bytesDeXlsx() {
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", "<Types/>");
+  zip.file("_rels/.rels", "<Relationships/>");
+  zip.file("xl/workbook.xml",
+    '<workbook><sheets><sheet xmlns:r="http://x" name="Agosto" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  zip.file("xl/_rels/workbook.xml.rels",
+    '<Relationships><Relationship Id="rId1" Type="http://x/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+  zip.file("xl/sharedStrings.xml", "<sst><si><t>MARIA x BANCO BMG</t></si></sst>");
+  zip.file("xl/worksheets/sheet1.xml",
+    '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>');
+  return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+}
+
+test("readWorkbook aceita Uint8Array (caminho do navegador)", async () => {
+  const [s] = await readWorkbook(await bytesDeXlsx());
+  assert.equal(s.name, "Agosto");
+  assert.deepEqual(s.rows[0], ["MARIA x BANCO BMG"]);
+});
+
+test("readWorkbook aceita Blob (o que <input type=file> entrega)", async () => {
+  const blob = new Blob([await bytesDeXlsx()]);
+  const [s] = await readWorkbook(blob);
+  assert.deepEqual(s.rows[0], ["MARIA x BANCO BMG"]);
+});
+
+test("readWorkbook recusa entrada que não é caminho nem bytes", async () => {
+  await assert.rejects(() => readWorkbook(42), /caminho \(Node\) ou bytes/);
+});

@@ -18,8 +18,28 @@
 //      travado.
 // Resultado: as duas planilhas em poucos segundos.
 
-import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
+
+/**
+ * Entrada do workbook nos DOIS ambientes: caminho (Node, o importador em lote) ou
+ * bytes/Blob/File (navegador, a importação de audiências pela tela).
+ *
+ * O `node:fs/promises` é importado DINAMICAMENTE e só no ramo do caminho: um
+ * `import` dele no topo faz o Vite tentar resolver `node:fs` em tempo de build e
+ * quebra o bundle do front. JSZip roda nos dois lados (já é dependência do front,
+ * usada pelo motor de .docx), então o resto do módulo é neutro.
+ */
+async function lerBytes(entrada) {
+  if (typeof entrada === "string") {
+    const { readFile } = await import("node:fs/promises");
+    return readFile(entrada);
+  }
+  if (entrada instanceof Uint8Array || entrada instanceof ArrayBuffer) return entrada;
+  if (typeof Blob !== "undefined" && entrada instanceof Blob) {
+    return new Uint8Array(await entrada.arrayBuffer());
+  }
+  throw new TypeError("readWorkbook: informe um caminho (Node) ou bytes/Blob/File (navegador).");
+}
 
 const AMP = /&(?:lt|gt|quot|apos|amp|#\d+);/;
 function unesc(s) {
@@ -167,7 +187,7 @@ const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "")
 
 /**
  * Lê a planilha.
- * @param {string} path
+ * @param {string|Uint8Array|ArrayBuffer|Blob} path caminho (Node) ou bytes/Blob/File (navegador)
  * @param {object} [opts]
  * @param {string[]} [opts.onlySheets] prefixos de nome de aba a ler (o resto é
  *        listado mas vem com rows=[]) — economiza o parse do que não interessa.
@@ -177,7 +197,7 @@ const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "")
  */
 export async function readWorkbook(path, opts = {}) {
   const { onlySheets = null, maxCol = 64, onSheet = null } = opts;
-  const zip = await JSZip.loadAsync(await readFile(path));
+  const zip = await JSZip.loadAsync(await lerBytes(path));
 
   const ssFile = zip.file("xl/sharedStrings.xml");
   const shared = ssFile ? parseSharedStrings(await ssFile.async("string")) : [];
