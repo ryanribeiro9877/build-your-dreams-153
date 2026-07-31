@@ -900,6 +900,142 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
       "O atendimento em si NÃO é marcado aqui: se ele também quiser agendar a vinda, diga que " +
       "isso é o agendamento normal — não afirme que o atendimento ficou marcado.",
   },
+
+  // ─── P2 · Card 11: diligências ──────────────────────────────────────────────
+  // gate=null de propósito nas três: as RPCs aceitam is_socio_or_advogado OU
+  // admin, e pré-checar só is_socio_or_advogado barraria um admin que tem direito
+  // (fail-open é o certo — a RPC continua sendo a barreira).
+  DILIGENCIA_REGISTRAR: {
+    tool: "registrar_diligencia", gate: null,
+    support: ["consultar_processo"],
+    recusa: "Registrar diligência é do jurídico (advogado/sócio).",
+    stage: "registrando a diligência", path: "objeto_diligencia_registrar",
+    guidance:
+      "DILIGÊNCIA — a diligência SEMPRE pertence a um processo: identifique-o pelo número. " +
+      "Traduza o pedido para o tipo: balcão virtual → balcao_virtual; colocar concluso → " +
+      "concluso_analise; diligenciar/pedir alvará → expedicao_alvara; juntar petição → peticao; " +
+      "carta precatória → carta_precatoria. O `prazo` é o que cria a pendência que COBRA a " +
+      "diligência: sem prazo, nada cobra — e nesse caso diga isso ao usuário. Se a tool avisar " +
+      "que o processo não está cadastrado e a diligência ficou guardada pelo NÚMERO, repasse " +
+      "esse aviso: não afirme que ela ficou vinculada ao processo.",
+  },
+  DILIGENCIA_CUMPRIR: {
+    tool: "cumprir_diligencia", gate: null,
+    support: ["consultar_diligencias", "consultar_processo"],
+    recusa: "Cumprir diligência é do jurídico (advogado/sócio).",
+    stage: "registrando o cumprimento da diligência", path: "objeto_diligencia_cumprir",
+    guidance:
+      "CUMPRIR DILIGÊNCIA — localize a diligência com consultar_diligencias e use o id de lá; " +
+      "se houver mais de uma pendente no mesmo processo, PERGUNTE qual. O protocolo é " +
+      "RECOMENDADO no balcão virtual mas NÃO é obrigatório: nunca exija protocolo para " +
+      "concluir e nunca trate a falta dele como impedimento — apenas repasse o aviso da tool, " +
+      "se ela mandar um. Se o usuário pedir para diligenciar de novo em outra data, informe " +
+      "rediligenciar_em (nasce uma diligência NOVA ligada a esta).",
+  },
+  DILIGENCIA_CONSULTA: {
+    tool: "consultar_diligencias", gate: null,
+    recusa: "Diligências são do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
+    stage: "consultando as diligências", path: "objeto_diligencia_consulta",
+    guidance:
+      "CONSULTA DE DILIGÊNCIAS — \"vencem essa semana\" / \"até sexta\": calcule a data e passe " +
+      "em vencendo_ate (AAAA-MM-DD). O recorte é pendente (default), cumprida, prejudicada ou " +
+      "todas — não invente outro valor. Ao responder, destaque as VENCIDAS e diga quantas " +
+      "estão sem prazo (essas não têm pendência cobrando).",
+  },
+
+  // ─── P2 · Card 13: audiência — preparo e lembrete ao cliente ────────────────
+  AUDIENCIA_PREPARO: {
+    tool: "preparar_audiencia", gate: null,
+    support: ["consultar_audiencias", "consultar_cliente"],
+    recusa: "", stage: "montando o preparo da audiência", path: "objeto_audiencia_preparo",
+    guidance:
+      "PREPARO DE AUDIÊNCIA — pegue o id com consultar_audiencias; se houver mais de uma, " +
+      "PERGUNTE qual. Na resposta: diga data/hora, local ou link, o que falta de documento e a " +
+      "régua de lembretes, e REPASSE a limitação que a tool devolve. Se a tool disser que a " +
+      "TESE não foi resolvida, avise que a lista de documentos veio SÓ com a procuração e que " +
+      "o parecer está incompleto até cadastrarem o apelido do tipo de ação — não apresente essa " +
+      "lista curta como se fosse tudo o que a tese exige.",
+  },
+  LEMBRETE_AUDIENCIA: {
+    tool: "registrar_lembrete_audiencia", gate: null,
+    support: ["preparar_audiencia", "consultar_audiencias"],
+    recusa: "", stage: "registrando o lembrete da audiência", path: "objeto_lembrete_audiencia",
+    guidance:
+      "LEMBRETE DE AUDIÊNCIA — o id do lembrete vem de preparar_audiencia ou do card da " +
+      "pendência. Status: feito (falei/avisei), nao_atendeu, cancelado. NUNCA assuma \"feito\" " +
+      "sem o usuário dizer. ATENÇÃO: nao_atendeu MANTÉM a pendência ABERTA para nova " +
+      "tentativa — ao confirmar, diga explicitamente que o lembrete continua na fila e é " +
+      "preciso tentar ligar de novo. Só feito e cancelado encerram a pendência.",
+  },
+
+  // ─── P2 · Card 14: apólices de seguro (SUSEP) ───────────────────────────────
+  APOLICE_REGISTRAR: {
+    tool: "registrar_apolice", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "registrando a apólice de seguro", path: "objeto_apolice_registrar",
+    guidance:
+      "APÓLICE — `reconhecida` tem TRÊS situações e você não pode confundi-las: true (o cliente " +
+      "confirma que contratou), false (ele NEGA — é o insumo da tese de seguro não autorizado) " +
+      "e OMITIDO (ninguém perguntou). Nunca mande false por não ter perguntado. " +
+      "premio_periodicidade: o total de prêmio mensal do escritório soma SÓ o que for `mensal`, " +
+      "então periodicidade errada faz o valor desaparecer do total. origem_desconto: " +
+      "extrato_inss, conta_bancaria, contracheque ou outro. Se o cliente tiver VÁRIAS apólices, " +
+      "chame a tool uma vez POR apólice.",
+  },
+  APOLICE_UPDATE: {
+    tool: "atualizar_apolice", gate: null,
+    support: ["consultar_apolices", "consultar_cliente"],
+    recusa: "", stage: "atualizando a apólice", path: "objeto_apolice_update",
+    guidance:
+      "ATUALIZAR APÓLICE — localize a apólice com consultar_apolices e use o id de lá; se o " +
+      "cliente tiver mais de uma, PERGUNTE qual. Informe ao menos um campo (reconhecida, " +
+      "cancelada_em, restituicao_valor ou observacao): sem campo nenhum nada muda. " +
+      "A observação é ACRESCENTADA às notas da apólice, não substitui as antigas.",
+  },
+  APOLICE_CONSULTA: {
+    tool: "consultar_apolices", gate: null,
+    recusa: "", stage: "consultando as apólices", path: "objeto_apolice_consulta",
+    guidance:
+      "CONSULTA DE APÓLICES — use apenas_nao_reconhecidas SÓ quando o usuário pedir as que o " +
+      "cliente não reconhece. A soma que a tool devolve é de prêmios MENSAIS: se ela vier vazia, " +
+      "isso NÃO significa prêmio zero — significa que nenhuma apólice da lista é mensal, e você " +
+      "deve dizer isso. Sem cliente e sem seguradora a consulta traz a base inteira: avise o " +
+      "usuário quando for esse o caso.",
+  },
+
+  // ─── P2 · Card 15: procuração — vigência, renovação e campanha ──────────────
+  PROCURACAO_REGISTRAR: {
+    tool: "registrar_procuracao", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "registrando a procuração", path: "objeto_procuracao_registrar",
+    guidance:
+      "PROCURAÇÃO — a data que importa é a da ASSINATURA (é ela que define a vigência), NUNCA " +
+      "a data do upload nem \"hoje\" por padrão: se o usuário não disser, PERGUNTE. Tipo: " +
+      "ad_judicia (default), ad_judicia_et_extra, especifica, outro; validade em meses (padrão " +
+      "12). Ao confirmar, repasse: se substituiu uma procuração anterior, qual era a situação " +
+      "dela (se estava VENCIDA, diga que o cliente ficou descoberto nesse intervalo), se a " +
+      "pendência de renovação foi encerrada e o aviso de vencimento, quando houver.",
+  },
+  PROCURACAO_CONSULTA: {
+    tool: "consultar_procuracoes", gate: null,
+    recusa: "", stage: "consultando as procurações", path: "objeto_procuracao_consulta",
+    guidance:
+      "CONSULTA DE PROCURAÇÕES — \"vencem esse mês\" → vencendo_em_dias 30. A janela INCLUI as " +
+      "já vencidas, e é isso que interessa primeiro: procuração vencida significa escritório SEM " +
+      "poderes até renovar — diga isso. incluir_historico só quando pedirem as já renovadas/" +
+      "revogadas. Sem cliente e sem janela a consulta traz a base inteira: avise nesse caso.",
+  },
+  CAMPANHA_PROCURACAO: {
+    tool: "gerar_campanha_renovacao_procuracao", gate: null,
+    support: ["consultar_procuracoes"],
+    recusa: "", stage: "montando a campanha de renovação de procuração", path: "objeto_campanha_procuracao",
+    guidance:
+      "CAMPANHA DE RENOVAÇÃO — janela em dias (padrão 30). A fila não repete cliente que já " +
+      "está em campanha aberta do mesmo objetivo, então ela pode sair VAZIA mesmo com a " +
+      "campanha criada: se a fila vier com 0 clientes, diga explicitamente que não há ninguém " +
+      "para ligar nessa campanha. Repasse também quantos clientes estão SEM TELEFONE — essa " +
+      "parte da fila é inacionável.",
+  },
 };
 
 // Acha o agente que PORTA a tool (allowed_tools é sincronizado por trigger a partir
@@ -2622,6 +2758,98 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
     case "agendar_conversao_gov": {
       const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
       return `Abrir a pendência de conversão da conta gov.br de ${quem}${args.ate ? `, com prazo até ${args.ate}` : ""} (a conta bronze exige vinda presencial). O atendimento em si é marcado pelo agendamento normal.`;
+    }
+    /* ══ P2 · Cards 11/13/14/15 ══════════════════════════════════════════════ */
+    case "registrar_diligencia": {
+      const TIPO: Record<string, string> = {
+        balcao_virtual: "balcão virtual", concluso_analise: "colocar concluso para análise",
+        expedicao_alvara: "diligenciar expedição de alvará", peticao: "juntar petição",
+        carta_precatoria: "carta precatória", outro: "outro",
+      };
+      const t = TIPO[String(args.tipo ?? "balcao_virtual")] ?? String(args.tipo ?? "");
+      const proc = args.processo_numero ?? "o processo informado";
+      const det: string[] = [];
+      if (args.vara) det.push(String(args.vara));
+      if (args.responsavel_nome) det.push(`responsável ${args.responsavel_nome}`);
+      // Sem prazo NÃO nasce pendência: o cartão já diz que ninguém vai cobrar.
+      const prazo = args.prazo
+        ? ` Prazo ${args.prazo} — nasce a pendência que cobra a diligência.`
+        : " Sem prazo informado: NÃO nasce pendência de cobrança no Kanban.";
+      return `Registrar diligência (${t}) no processo ${proc}: "${args.descricao ?? ""}"${det.length ? ` — ${det.join(" · ")}` : ""}.${prazo}`;
+    }
+    case "cumprir_diligencia": {
+      const alvo = args.diligencia_desc ? `"${args.diligencia_desc}"` : "a diligência";
+      const partes: string[] = [];
+      // Protocolo NÃO é obrigatório (decisão de 30/07): o cartão diz que a falta
+      // não impede, para o usuário não achar que precisa buscar o número antes.
+      partes.push(args.protocolo ? `protocolo ${args.protocolo}` : "sem número de protocolo (não é obrigatório)");
+      if (args.resultado) partes.push(`resultado: "${args.resultado}"`);
+      const redil = args.rediligenciar_em
+        ? ` Agendar rediligência para ${args.rediligenciar_em} (nasce uma diligência NOVA ligada a esta).`
+        : "";
+      // "Encerra a pendência de prazo" era afirmação incondicional, mas
+      // cumprir_diligencia só fecha quando pendencia_task_id existe — e diligência
+      // registrada SEM prazo não tem pendência nenhuma. O cartão (que é exibido ANTES
+      // de executar) não sabe qual é o caso, então promete condicionalmente; a nota do
+      // resultado é que confirma.
+      return `Marcar ${alvo} como CUMPRIDA — ${partes.join(" · ")}. Se houver pendência de prazo vinculada, ela é encerrada.${redil}`;
+    }
+    case "registrar_lembrete_audiencia": {
+      const alvo = args.audiencia_desc ? ` da audiência de ${args.audiencia_desc}` : " da audiência";
+      const S: Record<string, string> = {
+        feito: "FEITO (cliente avisado)", nao_atendeu: "NÃO ATENDEU", cancelado: "CANCELADO",
+      };
+      const s = S[String(args.status ?? "")] ?? String(args.status ?? "");
+      // nao_atendeu não encerra: o cartão precisa dizer isso ANTES de confirmar.
+      const efeito = args.status === "nao_atendeu"
+        ? " A pendência PERMANECE ABERTA para nova tentativa."
+        : " Encerra a pendência do lembrete.";
+      return `Registrar o lembrete${alvo} como ${s}${args.observacao ? ` — "${args.observacao}"` : ""}.${efeito}`;
+    }
+    case "registrar_apolice": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const det: string[] = [];
+      if (args.produto) det.push(String(args.produto));
+      if (args.numero_apolice) det.push(`apólice ${args.numero_apolice}`);
+      if (typeof args.premio_valor === "number") {
+        const per = args.premio_periodicidade ? ` (${String(args.premio_periodicidade).replace(/_/g, " ")})` : "";
+        det.push(`prêmio R$ ${args.premio_valor}${per}`);
+      }
+      if (args.origem_desconto) det.push(`desconto em ${String(args.origem_desconto).replace(/_/g, " ")}`);
+      // Os TRÊS estados de `reconhecida` aparecem distintos no cartão.
+      const rec = args.reconhecida === false
+        ? " Cliente NÃO reconhece — insumo da tese de seguro não autorizado (SUSEP)."
+        : args.reconhecida === true
+          ? " Cliente reconhece ter contratado."
+          : " Não informado se o cliente reconhece (perguntar na próxima ligação).";
+      return `Registrar apólice da ${args.seguradora ?? "seguradora"} para ${quem}${det.length ? ` — ${det.join(" · ")}` : ""}.${rec}`;
+    }
+    case "atualizar_apolice": {
+      const alvo = args.apolice_desc ? `a apólice ${args.apolice_desc}` : "a apólice";
+      const partes: string[] = [];
+      if (args.reconhecida === true) partes.push("cliente RECONHECE");
+      if (args.reconhecida === false) partes.push("cliente NÃO reconhece");
+      if (args.cancelada_em) partes.push(`cancelada em ${args.cancelada_em}`);
+      if (typeof args.restituicao_valor === "number") partes.push(`restituição R$ ${args.restituicao_valor}`);
+      if (args.observacao) partes.push(`observação: "${args.observacao}"`);
+      return `Atualizar ${alvo}: ${partes.join("; ") || "sem alterações"}.`;
+    }
+    case "registrar_procuracao": {
+      const quem = args.cliente_nome ?? args.client_nome ?? "o cliente";
+      const TIPO: Record<string, string> = {
+        ad_judicia: "ad judicia", ad_judicia_et_extra: "ad judicia et extra",
+        especifica: "específica", outro: "outro",
+      };
+      const t = TIPO[String(args.tipo ?? "ad_judicia")] ?? String(args.tipo ?? "");
+      const meses = typeof args.validade_meses === "number" ? args.validade_meses : 12;
+      const pdf = args.client_document_id ? " Vinculada ao PDF já anexado ao dossiê." : "";
+      // Deixa explícito QUAL data está sendo usada: a do upload gera vigência errada.
+      return `Registrar procuração ${t} de ${quem}, ASSINADA em ${args.data_assinatura ?? "?"}, validade ${meses} mês(es). Se já houver procuração anterior, ela é marcada como renovada e a pendência de renovação é encerrada.${pdf}`;
+    }
+    case "gerar_campanha_renovacao_procuracao": {
+      const janela = typeof args.janela_dias === "number" ? args.janela_dias : 30;
+      const nome = args.nome ? ` "${args.nome}"` : "";
+      return `Criar a campanha de renovação de procuração${nome} com os clientes cuja procuração vence nos próximos ${janela} dia(s). Quem já está em campanha aberta de renovação não entra de novo — a fila pode sair vazia.`;
     }
     case "definir_permissao_menu": {
       const a = String(args.acao ?? "");

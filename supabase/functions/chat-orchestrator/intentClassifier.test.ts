@@ -535,3 +535,96 @@ Deno.test("isOndaAcaoRequest: Motores 2 e 3 não viraram gatilho amplo demais", 
   assertEquals(isOndaAcaoRequest("valeu, era isso"), false);
   assertEquals(isOndaAcaoRequest("me explica o que é penhora"), true);   // cita penhora: hint solta, o LLM decide
 });
+
+/* ══ P2 (Cards 11/13/14/15): diligência, audiência, apólice, procuração ══════ */
+
+Deno.test("normalizeRouteObject: objetos do P2 + sinônimos", () => {
+  assertEquals(normalizeRouteObject("DILIGENCIA_REGISTRAR"), "DILIGENCIA_REGISTRAR");
+  assertEquals(normalizeRouteObject("diligência"), "DILIGENCIA_REGISTRAR");
+  assertEquals(normalizeRouteObject("DILIGENCIA_CUMPRIR"), "DILIGENCIA_CUMPRIR");
+  assertEquals(normalizeRouteObject("cumprir_diligencia"), "DILIGENCIA_CUMPRIR");
+  assertEquals(normalizeRouteObject("DILIGENCIA_CONSULTA"), "DILIGENCIA_CONSULTA");
+  assertEquals(normalizeRouteObject("diligencias"), "DILIGENCIA_CONSULTA");
+  assertEquals(normalizeRouteObject("AUDIENCIA_PREPARO"), "AUDIENCIA_PREPARO");
+  assertEquals(normalizeRouteObject("preparar_audiencia"), "AUDIENCIA_PREPARO");
+  assertEquals(normalizeRouteObject("LEMBRETE_AUDIENCIA"), "LEMBRETE_AUDIENCIA");
+  assertEquals(normalizeRouteObject("lembrete"), "LEMBRETE_AUDIENCIA");
+  assertEquals(normalizeRouteObject("APOLICE_REGISTRAR"), "APOLICE_REGISTRAR");
+  assertEquals(normalizeRouteObject("apólice"), "APOLICE_REGISTRAR");
+  assertEquals(normalizeRouteObject("susep"), "APOLICE_REGISTRAR");
+  assertEquals(normalizeRouteObject("APOLICE_UPDATE"), "APOLICE_UPDATE");
+  assertEquals(normalizeRouteObject("APOLICE_CONSULTA"), "APOLICE_CONSULTA");
+  assertEquals(normalizeRouteObject("apolices"), "APOLICE_CONSULTA");
+  assertEquals(normalizeRouteObject("PROCURACAO_REGISTRAR"), "PROCURACAO_REGISTRAR");
+  assertEquals(normalizeRouteObject("procuração"), "PROCURACAO_REGISTRAR");
+  assertEquals(normalizeRouteObject("PROCURACAO_CONSULTA"), "PROCURACAO_CONSULTA");
+  assertEquals(normalizeRouteObject("procurações"), "PROCURACAO_CONSULTA");
+  assertEquals(normalizeRouteObject("CAMPANHA_PROCURACAO"), "CAMPANHA_PROCURACAO");
+  assertEquals(normalizeRouteObject("campanha_renovacao"), "CAMPANHA_PROCURACAO");
+});
+
+// A ORDEM importa: "CAMPANHA_PROCURACAO" contém "PROCURACAO" e "DILIGENCIA_
+// CONSULTA" contém "DILIGENCIA" — o prefixo comum não pode sequestrar o objeto.
+Deno.test("normalizeRouteObject: prefixo comum não sequestra o objeto do P2", () => {
+  assertEquals(normalizeRouteObject("CAMPANHA_RENOVACAO_PROCURACAO"), "CAMPANHA_PROCURACAO");
+  assertEquals(normalizeRouteObject("CAMPANHA"), "CAMPANHA");          // a do Motor 1 segue
+  assertEquals(normalizeRouteObject("AUDIENCIA"), "AUDIENCIA");        // marcar/consultar audiência
+  assertEquals(normalizeRouteObject("PROTOCOLO"), "PROTOCOLO");        // não virou diligência
+});
+
+// Sem HINT o classificador de objeto NEM É CHAMADO: estas frases não têm verbo
+// da lista genérica ("faz", "assinada", "avisei" não estão em ONDA_VERBO_RE).
+Deno.test("isOndaAcaoRequest: diligências (Card 11)", () => {
+  assertEquals(isOndaAcaoRequest("faz um balcão virtual no processo 0801234-56.2026.8.05.0001 pedindo agilidade na análise, prazo 24/08"), true);
+  assertEquals(isOndaAcaoRequest("coloca concluso para análise"), true);
+  assertEquals(isOndaAcaoRequest("precisa diligenciar a expedição de alvará"), true);
+  assertEquals(isOndaAcaoRequest("fiz a diligência, protocolo 123"), true);
+  assertEquals(isOndaAcaoRequest("quais diligências vencem essa semana?"), true);
+  assertEquals(isOndaAcaoRequest("junta essa petição no processo"), true);
+  assertEquals(isOndaAcaoRequest("carta precatória expedida"), true);
+});
+
+Deno.test("isOndaAcaoRequest: apólices de seguro (Card 14)", () => {
+  assertEquals(isOndaAcaoRequest("a apólice da seguradora EXEMPLO está descontando 43,90 por mês"), true);
+  assertEquals(isOndaAcaoRequest("ele tem um prestamista descontando no extrato"), true);
+  assertEquals(isOndaAcaoRequest("esse número de processo SUSEP consta na proposta"), true);
+  assertEquals(isOndaAcaoRequest("tem 3 seguros que ele nunca contratou"), true);
+  assertEquals(isOndaAcaoRequest("quanto de prêmio mensal a gente tem mapeado?"), true);
+  assertEquals(isOndaAcaoRequest("aquele seguro foi cancelado e restituíram"), true);
+});
+
+Deno.test("isOndaAcaoRequest: procuração e campanha de renovação (Card 15)", () => {
+  assertEquals(isOndaAcaoRequest("a procuração de FULANO DE TAL foi assinada em 03/03"), true);
+  assertEquals(isOndaAcaoRequest("procuração ad judicia, validade 24 meses"), true);
+  assertEquals(isOndaAcaoRequest("quais procurações vencem esse mês?"), true);
+  assertEquals(isOndaAcaoRequest("monta a campanha de renovação de procuração"), true);
+  assertEquals(isOndaAcaoRequest("quem está com procuração vencida?"), true);
+});
+
+Deno.test("isOndaAcaoRequest: preparo e lembrete de audiência (Card 13)", () => {
+  assertEquals(isOndaAcaoRequest("avisei FULANO DE TAL da audiência"), true);
+  assertEquals(isOndaAcaoRequest("liguei pra lembrar da audiência e não atendeu"), true);
+  assertEquals(isOndaAcaoRequest("o que falta para a audiência de amanhã?"), true);
+  assertEquals(isOndaAcaoRequest("confirmei a audiência com o cliente"), true);
+  assertEquals(isOndaAcaoRequest("quais documentos a audiência exige?"), true);
+});
+
+// GOTCHA pt-BR (o mesmo do Motor 1): `\w` é ASCII, então `dilig\w*` casa só
+// "dilig" e o lookahead (?![\wÀ-ÿ]) REPROVA no "ê" de "diligência". Estas três
+// palavras — diligência, procuração, apólice — são exatamente as que reprovariam.
+Deno.test("isOndaAcaoRequest: cauda acentuada do P2 aciona (diligência/procuração/apólice)", () => {
+  assertEquals(isOndaAcaoRequest("diligência"), true);
+  assertEquals(isOndaAcaoRequest("diligências"), true);
+  assertEquals(isOndaAcaoRequest("procuração"), true);
+  assertEquals(isOndaAcaoRequest("procurações"), true);
+  assertEquals(isOndaAcaoRequest("apólice"), true);
+  assertEquals(isOndaAcaoRequest("apólices"), true);
+});
+
+Deno.test("isOndaAcaoRequest: P2 não criou gatilho amplo demais", () => {
+  assertEquals(isOndaAcaoRequest("bom dia, tudo bem?"), false);
+  assertEquals(isOndaAcaoRequest("obrigado, era isso mesmo"), false);
+  // "seguro" como ADJETIVO não aciona: só com contratação/desconto/reconhecimento perto.
+  assertEquals(isOndaAcaoRequest("esse caminho é mais seguro"), false);
+  assertEquals(isOndaAcaoRequest("fica seguro que eu resolvo"), false);
+});

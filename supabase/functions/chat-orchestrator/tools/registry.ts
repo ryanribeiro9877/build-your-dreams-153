@@ -15,6 +15,9 @@ export const READ_TOOL_NAMES: string[] = [
   // execução exigem advogado/sócio/admin (recepção leva 42501), então a tool ser
   // "de leitura" não afrouxa nada.
   "consultar_reclamacoes", "consultar_execucoes", "fila_credenciais_gov",
+  // P2 (Cards 11/13/14/15). `preparar_audiencia` é LEITURA apesar do verbo:
+  // ela só MONTA o parecer do que falta (nenhum INSERT/UPDATE no corpo da RPC).
+  "consultar_diligencias", "consultar_apolices", "consultar_procuracoes", "preparar_audiencia",
 ];
 const READ_TOOLS = new Set(READ_TOOL_NAMES);
 
@@ -597,6 +600,143 @@ export const TOOLS: Record<string, ToolDef> = {
       client_id: str("ID do cliente, se já resolvido."),
       ate: str("Data-limite AAAA-MM-DD, se o usuário der prazo — vira a data fatal da pendência."),
       observacao: str("Observação curta."),
+    }, required: [] },
+  }},
+
+  /* ══ P2 · Card 11 — diligências ════════════════════════════════════════════
+     Enums = CHECKs reais (diligencias_tipo_check / diligencias_status_check),
+     lidos do banco em 30/07. Valor fora da lista de TIPO derruba a gravação; e
+     valor fora da lista de STATUS é COAGIDO para "pendente" em silêncio pela RPC
+     de consulta — por isso o enum aqui protege a RESPOSTA, não só a gravação.
+     Protocolo NÃO é obrigatório (decisão de 30/07): a tool nunca o exige. */
+  registrar_diligencia: { type: "function", function: {
+    name: "registrar_diligencia",
+    description: "Registra uma DILIGÊNCIA a ser feita num processo: balcão virtual, colocar concluso para análise, diligenciar expedição de alvará, juntar petição, carta precatória. Use em \"faz um balcão virtual no processo X pedindo agilidade na análise, prazo 24/07\", \"coloca concluso o processo Y\", \"precisa diligenciar o alvará do processo Z\". Se você informar `prazo`, nasce sozinha a pendência no Kanban que cobra a diligência — SEM prazo nada cobra, e você deve dizer isso ao usuário. Se o processo ainda não estiver cadastrado, a diligência é guardada pelo NÚMERO e a tool avisa: repasse esse aviso.",
+    parameters: { type: "object", properties: {
+      descricao: str("O que precisa ser feito, em uma frase (ex.: \"balcão virtual pedindo agilidade na análise\")."),
+      tipo: { type: "string", enum: ["balcao_virtual", "concluso_analise", "expedicao_alvara", "peticao", "carta_precatoria", "outro"], description: "Natureza da diligência. Default balcao_virtual." },
+      processo_numero: str("Número do processo como o usuário falou. A diligência SEMPRE pertence a um processo."),
+      process_id: str("ID do processo, se já resolvido com consultar_processo."),
+      vara: str("Vara/comarca (ex.: \"10ª Vara de Família de Salvador\")."),
+      prazo: str("Prazo AAAA-MM-DD. É o que cria a pendência de cobrança — informe sempre que o usuário der uma data."),
+      responsavel_nome: str("Quem faz a diligência. Texto livre (não é usuário do sistema)."),
+      observacao: str("Observação curta."),
+    }, required: ["descricao"] },
+  }},
+  cumprir_diligencia: { type: "function", function: {
+    name: "cumprir_diligencia",
+    description: "Registra que uma diligência JÁ REGISTRADA foi cumprida: guarda o protocolo (recomendado no balcão virtual, mas NÃO é obrigatório — nunca exija nem cobre protocolo do usuário), o que o juízo respondeu, e encerra a pendência de prazo. Se precisar diligenciar de novo, informe `rediligenciar_em`: nasce uma diligência NOVA ligada a esta, com pendência própria. Localize a diligência antes com consultar_diligencias (o retorno traz o id); NUNCA peça UUID ao usuário. Só diligência PENDENTE pode ser cumprida.",
+    parameters: { type: "object", properties: {
+      diligencia_id: str("ID da diligência, obtido em consultar_diligencias."),
+      diligencia_desc: str("Descrição curta da diligência, apenas para exibição no cartão de confirmação."),
+      protocolo: str("Número do protocolo do balcão virtual/petição, se houver. Opcional."),
+      resultado: str("O que o cartório/juízo respondeu, em uma frase."),
+      rediligenciar_em: str("AAAA-MM-DD — só quando o usuário pedir para diligenciar novamente nessa data."),
+    }, required: ["diligencia_id"] },
+  }},
+  consultar_diligencias: { type: "function", function: {
+    name: "consultar_diligencias",
+    description: "Lista diligências: pendentes (default), cumpridas, prejudicadas ou todas; pode filtrar por vara, por processo ou pelas que vencem até uma data (\"quais diligências vencem essa semana?\" → informe vencendo_ate com a data de sábado). Marca as VENCIDAS. Resposta direta, sem confirmação. Exclusiva de advogado/sócio/admin.",
+    parameters: { type: "object", properties: {
+      status: { type: "string", enum: ["pendente", "cumprida", "prejudicada", "todas"], description: "Recorte da lista. Default pendente." },
+      vara: str("Filtro por vara/comarca (busca parcial)."),
+      vencendo_ate: str("AAAA-MM-DD — só as com prazo até esta data."),
+      processo_numero: str("Filtro por número do processo (busca parcial)."),
+    }, required: [] },
+  }},
+
+  /* ══ P2 · Card 13 — audiência: lembrete ao cliente e preparo ═══════════════ */
+  registrar_lembrete_audiencia: { type: "function", function: {
+    name: "registrar_lembrete_audiencia",
+    description: "Registra o RESULTADO da ligação de lembrete de audiência ao cliente. Use em \"avisei a dona Fulana da audiência\", \"liguei pra lembrar da audiência e não atendeu\", \"cancela esse lembrete\". ATENÇÃO: \"feito\" e \"cancelado\" encerram a pendência; \"nao_atendeu\" MANTÉM a pendência ABERTA para nova tentativa — quando for nao_atendeu, diga ao usuário que é preciso tentar ligar de novo. O id do lembrete vem de preparar_audiencia ou do card da pendência; NUNCA peça UUID ao usuário.",
+    parameters: { type: "object", properties: {
+      lembrete_id: str("ID do lembrete, obtido em preparar_audiencia ou no card da pendência."),
+      status: { type: "string", enum: ["feito", "nao_atendeu", "cancelado"], description: "Como terminou a tentativa de aviso. Informe SEMPRE — não deixe o sistema assumir \"feito\"." },
+      observacao: str("O que o cliente disse, em uma frase."),
+      audiencia_desc: str("Cliente/data da audiência, apenas para exibição no cartão de confirmação."),
+    }, required: ["lembrete_id"] },
+  }},
+  preparar_audiencia: { type: "function", function: {
+    name: "preparar_audiencia",
+    description: "Parecer de PREPARO de uma audiência: data/hora, tipo de ação, parte contrária, local ou link, quais documentos a tese exige (âncora do §24.1 + procuração), quais o cliente já tem, quais faltam e a régua de lembretes. Use em \"o que falta para a audiência do cliente X?\", \"prepara a audiência de amanhã\". Resposta direta, sem confirmação. O id vem de consultar_audiencias. IMPORTANTE ao responder: repasse a limitação que a tool devolve e, se ela disser que a TESE não casou, avise que a lista de documentos veio incompleta.",
+    parameters: { type: "object", properties: {
+      audiencia_id: str("ID da audiência, obtido em consultar_audiencias."),
+      audiencia_desc: str("Cliente/data da audiência, apenas para exibição."),
+    }, required: ["audiencia_id"] },
+  }},
+
+  /* ══ P2 · Card 14 — apólices de seguro (SUSEP) ═════════════════════════════ */
+  registrar_apolice: { type: "function", function: {
+    name: "registrar_apolice",
+    description: "Registra de forma estruturada uma APÓLICE DE SEGURO do cliente (substitui a anotação livre \"tem 7 seguros\"): seguradora, produto, número, prêmio, onde aparece o desconto e se o cliente RECONHECE ter contratado. Use em \"a dona Fulana tem um prestamista da SEGURADORA EXEMPLO descontando 43,90 por mês no extrato do INSS e ela não reconhece\". O campo `reconhecida` é o que separa seguro contratado de desconto não autorizado: informe false quando o cliente NEGA, e OMITA quando ninguém perguntou (são três situações diferentes, não invente).",
+    parameters: { type: "object", properties: {
+      seguradora: str("Nome da seguradora."),
+      cliente_nome: str("Nome do cliente como o usuário falou. Basta o nome; se houver mais de um, os candidatos voltam para você perguntar."),
+      client_id: str("ID do cliente, se já resolvido com consultar_cliente. Opcional — NUNCA peça UUID."),
+      produto: str("Produto/tipo do seguro (ex.: prestamista, vida, capitalização)."),
+      numero_apolice: str("Número da apólice, se constar."),
+      numero_processo_susep: str("Número do processo SUSEP do produto, se constar."),
+      premio_valor: { type: "number", description: "Valor do prêmio descontado, em reais." },
+      premio_periodicidade: { type: "string", enum: ["mensal", "unico", "anual", "outro"], description: "Periodicidade do prêmio. ATENÇÃO: o total de prêmio mensal do escritório soma SÓ o que for `mensal` — periodicidade errada faz o valor desaparecer do total." },
+      origem_desconto: { type: "string", enum: ["extrato_inss", "conta_bancaria", "contracheque", "outro"], description: "Onde o desconto aparece." },
+      reconhecida: { type: "boolean", description: "true = o cliente reconhece ter contratado; false = NÃO reconhece (insumo da tese). OMITA se ninguém perguntou." },
+      vigencia_inicio: str("Início da vigência, AAAA-MM-DD."),
+      observacao: str("Observação curta."),
+    }, required: ["seguradora"] },
+  }},
+  atualizar_apolice: { type: "function", function: {
+    name: "atualizar_apolice",
+    description: "Atualiza uma apólice JÁ REGISTRADA: se o cliente reconhece (depois da ligação de confirmação), a data de cancelamento e o valor restituído. Use em \"a dona Fulana confirmou que contratou aquele seguro\", \"aquela apólice foi cancelada em 12/07 e restituíram 430 reais\". Localize a apólice antes com consultar_apolices (o retorno traz o id); NUNCA peça UUID. Informe ao menos um campo para alterar.",
+    parameters: { type: "object", properties: {
+      apolice_id: str("ID da apólice, obtido em consultar_apolices."),
+      apolice_desc: str("Seguradora/produto da apólice, apenas para exibição no cartão de confirmação."),
+      reconhecida: { type: "boolean", description: "true = o cliente confirmou que contratou; false = NÃO reconhece." },
+      cancelada_em: str("Data do cancelamento, AAAA-MM-DD."),
+      restituicao_valor: { type: "number", description: "Valor restituído ao cliente, em reais." },
+      observacao: str("Observação curta — é ACRESCENTADA às observações da apólice (não substitui)."),
+    }, required: ["apolice_id"] },
+  }},
+  consultar_apolices: { type: "function", function: {
+    name: "consultar_apolices",
+    description: "Lista apólices de seguro: de um cliente, de uma seguradora, ou só as que o cliente NÃO reconhece (candidatas à tese SUSEP). Devolve também a soma dos prêmios MENSAIS — ela considera apenas periodicidade mensal, então não é o total geral de prêmios. Resposta direta, sem confirmação. Informe pelo menos um filtro quando a pergunta for sobre um cliente ou uma seguradora: sem filtro nenhum a consulta traz a base inteira.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente, se a pergunta é sobre um cliente específico."),
+      client_id: str("ID do cliente, se já resolvido."),
+      seguradora: str("Filtro por seguradora (busca parcial)."),
+      apenas_nao_reconhecidas: { type: "boolean", description: "true SÓ quando o usuário pedir as não reconhecidas pelo cliente." },
+    }, required: [] },
+  }},
+
+  /* ══ P2 · Card 15 — procuração: vigência, renovação e campanha ═════════════ */
+  registrar_procuracao: { type: "function", function: {
+    name: "registrar_procuracao",
+    description: "Registra a PROCURAÇÃO de um cliente com a data em que ela foi ASSINADA (nunca a data do upload — é a assinatura que define a vigência) e a validade em meses (padrão 12). Use em \"a procuração da dona Fulana foi assinada em 03/03, ad judicia\", \"anexei a procuração nova do Fulano, assinada ontem\". Se o cliente já tinha procuração, ela é marcada como renovada e a pendência de renovação aberta é encerrada — repasse ao usuário se a anterior estava VENCIDA (nesse intervalo o escritório estava sem poderes) e o aviso de vencimento, quando houver.",
+    parameters: { type: "object", properties: {
+      data_assinatura: str("Data em que a procuração foi ASSINADA, AAAA-MM-DD. Não use a data do upload nem a de hoje por padrão — pergunte se não souber."),
+      cliente_nome: str("Nome do cliente como o usuário falou. Basta o nome; se houver mais de um, os candidatos voltam para você perguntar."),
+      client_id: str("ID do cliente, se já resolvido com consultar_cliente. Opcional — NUNCA peça UUID."),
+      tipo: { type: "string", enum: ["ad_judicia", "ad_judicia_et_extra", "especifica", "outro"], description: "Tipo de poderes. Default ad_judicia." },
+      validade_meses: { type: "integer", description: "Validade em meses, de 1 a 120. Default 12." },
+      client_document_id: str("ID do PDF da procuração já anexado ao dossiê, se houver."),
+      observacao: str("Observação curta."),
+    }, required: ["data_assinatura"] },
+  }},
+  consultar_procuracoes: { type: "function", function: {
+    name: "consultar_procuracoes",
+    description: "Lista procurações: de um cliente, ou todas as que vencem nos próximos N dias (\"quais procurações vencem esse mês?\" → vencendo_em_dias 30). Mostra dias para vencer, marca as VENCIDAS (nesses casos o escritório está sem poderes) e diz quais não têm PDF no dossiê. Resposta direta, sem confirmação. Informe um filtro quando a pergunta for sobre um cliente ou uma janela: sem filtro nenhum a consulta traz a base inteira.",
+    parameters: { type: "object", properties: {
+      cliente_nome: str("Nome do cliente, se a pergunta é sobre um cliente específico."),
+      client_id: str("ID do cliente, se já resolvido."),
+      vencendo_em_dias: { type: "integer", description: "Janela em dias (ex.: 30 para \"esse mês\"). A janela INCLUI as já vencidas — quem venceu é mais urgente." },
+      incluir_historico: { type: "boolean", description: "true para ver também as já renovadas/revogadas." },
+    }, required: [] },
+  }},
+  gerar_campanha_renovacao_procuracao: { type: "function", function: {
+    name: "gerar_campanha_renovacao_procuracao",
+    description: "Cria uma CAMPANHA de ligação (objetivo renovar procuração) com todos os clientes cuja procuração vence na janela informada (padrão 30 dias). Use em \"monta a campanha de renovação de procuração\", \"quero ligar para quem tem procuração vencendo esse mês\". Não repete cliente que já está em campanha aberta do mesmo objetivo — por isso a fila pode sair VAZIA mesmo dando certo, e nesse caso você DEVE dizer que não há ninguém para ligar. Repasse também quantos clientes da fila estão SEM TELEFONE.",
+    parameters: { type: "object", properties: {
+      janela_dias: { type: "integer", description: "Quantos dias à frente considerar (1 a 365). Default 30." },
+      nome: str("Nome da campanha. Se omitido, o sistema gera um descritivo."),
     }, required: [] },
   }},
 };

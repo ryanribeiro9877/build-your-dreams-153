@@ -21,7 +21,7 @@ import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
   Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
-  ListTodo, LayoutGrid, ShieldCheck, PhoneCall, Gavel,
+  ListTodo, LayoutGrid, ShieldCheck, PhoneCall, Gavel, ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMenuAccess } from "@/hooks/useMenuAccess";
@@ -1193,6 +1193,9 @@ export default function JurisCloudOS() {
     // Execuções (Motor 3 · Card 8): mesma condição do JuridicoRoute, que espelha a
     // RLS da tabela (advogado/sócio/admin). A recepção NÃO vê o link nem a rota.
     { id: "execucoes", label: "Execuções", icon: Gavel, color: ACCENT, action: () => navigate("/execucoes"), show: isSocioOuAdvogadoRole(workspace?.role_template?.code) || hasRole("admin") },
+    // Diligências (Card 11): mesma condição do JuridicoRoute, que espelha a RLS da
+    // tabela. Recepção não vê link nem rota — link e rota 1:1.
+    { id: "diligencias", label: "Diligências", icon: ClipboardList, color: ACCENT, action: () => navigate("/diligencias"), show: isSocioOuAdvogadoRole(workspace?.role_template?.code) || hasRole("admin") },
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
     { id: "tarefas", label: "Tarefas", icon: ListTodo, color: ACCENT, action: () => navigate("/sistema/tarefas"), show: canSeeMenu("tarefas") },

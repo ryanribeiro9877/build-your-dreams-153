@@ -91,8 +91,11 @@ export function reconhecidaMeta(v: Reconhecida): { label: string; cls: string; i
 /* ─── Card 15: procurações ────────────────────────────────────────────────── */
 
 /** CHECK procuracoes_tipo_check.
- *  Tipo inválido NÃO é recusado pela RPC: é coagido para `ad_judicia` em silêncio.
- *  Daí o seletor fechado. */
+ *  Tipo inválido NÃO é recusado pela RPC: o CASE do corpo cai em `ELSE 'outro'`, ou
+ *  seja, é coagido para **outro** em silêncio. `ad_judicia` é o default de OUTRO caso:
+ *  quando `p_tipo` chega NULL (o coalesce). Daí o seletor fechado — e daí este
+ *  comentário estar corrigido: a versão anterior dizia ad_judicia e mandaria a próxima
+ *  tela para o default errado. */
 export const PROCURACAO_TIPO_LABELS: Record<string, string> = {
   ad_judicia: "Ad judicia",
   ad_judicia_et_extra: "Ad judicia et extra",

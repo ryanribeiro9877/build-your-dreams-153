@@ -9,6 +9,7 @@ import {
   CAMPANHA_ITEM_STATUS_META, LIGACAO_RESULTADO_META, LIGACAO_RESULTADO_OPTIONS,
 } from "@/lib/motor1";
 import { FILA_GOV_ESTADOS, STATUS_ACESSO_META, STATUS_ACESSO_OPTIONS } from "@/lib/motores23";
+import { PainelRenovacao } from "@/components/procuracoes/PainelRenovacao";
 
 /* ============================================================
    Card 4 — Campanhas de ligação + KPI
@@ -769,6 +770,10 @@ export default function Campanhas() {
 
         <div style={{ display: "grid", gap: 14 }}>
           <KpiPanel />
+          {/* Card 15 · 5.2 — painel de renovação de procuração. Mora aqui pelo mesmo
+              motivo da fila gov.br: é fila de trabalho ENTRE clientes, e o gate desta
+              tela (recepção/sócio/admin) é o da RPC que gera a campanha. */}
+          <PainelRenovacao />
           <FilaGovCard />
           <NovaCampanhaCard onCriada={() => setRecarregar(k => k + 1)} />
           {aberta

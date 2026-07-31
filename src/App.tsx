@@ -70,6 +70,7 @@ const ClientEdit = lazyWithRetry(() => import("./pages/ClientEdit.tsx"));
 const ClientDetails = lazyWithRetry(() => import("./pages/ClientDetails.tsx"));
 const Campanhas = lazyWithRetry(() => import("./pages/Campanhas.tsx"));
 const Execucoes = lazyWithRetry(() => import("./pages/Execucoes.tsx"));
+const Diligencias = lazyWithRetry(() => import("./pages/Diligencias.tsx"));
 const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const Profile = lazyWithRetry(() => import("./pages/Profile.tsx"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
@@ -201,6 +202,9 @@ const App = () => (
               {/* Motor 3 · Card 8 — guard espelha a RLS de `execucoes` (advogado/sócio/
                   admin). A recepção leva 42501 no banco, então nem enxerga a rota. */}
               <Route path="/execucoes" element={<JuridicoRoute><Execucoes /></JuridicoRoute>} />
+              {/* Card 11 — mesmo guard das execuções: a RLS de `diligencias` é
+                  advogado/sócio/admin e a recepção leva 42501 (decisão do Rodrigo 4.4). */}
+              <Route path="/diligencias" element={<JuridicoRoute><Diligencias /></JuridicoRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<MenuRoute menuKey="dashboard"><Dashboard /></MenuRoute>} />

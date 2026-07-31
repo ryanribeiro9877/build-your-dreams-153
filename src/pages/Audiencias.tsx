@@ -7,6 +7,8 @@ import {
   AUDIENCIA_STATUS_OPTIONS, AUDIENCIA_STATUS_COLOR, audienciaStatusLabel, type AudienciaStatus,
 } from "@/lib/audiencias";
 import { AudienciaFormModal } from "@/components/audiencias/AudienciaFormModal";
+import { AudienciaImportModal } from "@/components/audiencias/AudienciaImportModal";
+import { PainelPreparacao } from "@/components/audiencias/PainelPreparacao";
 
 // Ícones SVG inline (o app esconde os ícones do lucide-react globalmente).
 type IconProps = { size?: number; className?: string };
@@ -21,6 +23,8 @@ const IcPlus = (p: IconProps) => <Svg {...p}><path d="M5 12h14M12 5v14" /></Svg>
 const IcArrowLeft = (p: IconProps) => <Svg {...p}><path d="M19 12H5M12 19l-7-7 7-7" /></Svg>;
 const IcChevronDown = (p: IconProps) => <Svg {...p}><path d="m6 9 6 6 6-6" /></Svg>;
 const IcMapPin = (p: IconProps) => <Svg {...p}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></Svg>;
+const IcUpload = (p: IconProps) => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></Svg>;
+const IcClipboard = (p: IconProps) => <Svg {...p}><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h4" /></Svg>;
 
 // Papéis (role_templates.code) que enxergam TODAS as agendas e agendam por todos.
 // Mesmo critério da Agenda de Reuniões. O RLS de audiencias já libera leitura a
@@ -61,6 +65,10 @@ const CSS = `
   background:var(--aud-grad);color:#0a0a12;font:inherit;font-weight:700;font-size:14px;cursor:pointer;
   box-shadow:0 6px 18px -6px rgba(232,201,106,.5);transition:.16s}
 .aud-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -6px rgba(232,201,106,.6)}
+.aud-second{display:inline-flex;align-items:center;gap:8px;flex-shrink:0;padding:10px 16px;border-radius:11px;
+  border:1px solid var(--aud-g1);background:transparent;color:var(--aud-g2);font:inherit;font-weight:600;font-size:14px;
+  cursor:pointer;transition:.16s;white-space:nowrap}
+.aud-second:hover{background:var(--aud-gsoft)}
 .aud-controls{display:flex;align-items:flex-end;gap:14px 20px;flex-wrap:wrap;background:hsl(var(--card));
   border:1px solid hsl(var(--border));border-radius:14px;padding:14px 18px;margin-bottom:18px}
 .aud-tabs{display:inline-flex;gap:2px;background:hsl(var(--muted));border:1px solid hsl(var(--border));border-radius:11px;padding:4px}
@@ -82,10 +90,18 @@ const CSS = `
 .aud-daycount{font-size:11px;font-weight:700;min-width:20px;height:20px;padding:0 6px;border-radius:10px;display:grid;place-items:center;
   background:var(--aud-gsoft);color:var(--aud-g2)}
 .aud-list{display:grid;gap:10px}
-.aud-card{text-align:left;width:100%;display:flex;gap:14px;align-items:flex-start;border:1px solid hsl(var(--border));
-  background:hsl(var(--card));border-radius:12px;padding:14px 16px;cursor:pointer;transition:.15s;position:relative;overflow:hidden;font:inherit;color:inherit}
+.aud-card{width:100%;display:flex;gap:14px;align-items:flex-start;border:1px solid hsl(var(--border));
+  background:hsl(var(--card));border-radius:12px;padding:14px 16px;transition:.15s;position:relative;overflow:hidden;color:inherit}
 .aud-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--aud-sc);opacity:.9}
 .aud-card:hover{transform:translateY(-2px);border-color:var(--aud-g1)}
+/* A linha tem DUAS ações (abrir e preparar); botão dentro de botão é HTML
+   inválido, então a área principal é o botão e "Preparar" fica ao lado. */
+.aud-cardmain{flex:1;min-width:0;display:flex;gap:14px;align-items:flex-start;text-align:left;
+  background:transparent;border:none;padding:0;font:inherit;color:inherit;cursor:pointer}
+.aud-prep{flex-shrink:0;align-self:center;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:9px;
+  border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--muted-foreground));
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.aud-prep:hover{color:var(--aud-g2);border-color:var(--aud-g1)}
 .aud-time{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;min-width:56px;line-height:1.1}
 .aud-body{flex:1;min-width:0}
 .aud-client{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -98,7 +114,7 @@ const CSS = `
 .aud-empty{text-align:center;padding:60px 20px;color:hsl(var(--muted-foreground))}
 .aud-empty svg{opacity:.4;margin-bottom:12px}
 .aud-err{color:hsl(var(--destructive));margin-bottom:12px;font-size:13px}
-@media(max-width:560px){.aud-controls{align-items:stretch}.aud-spacer{display:none}.aud-select select{min-width:0;width:100%}.aud-field{flex:1 1 100%}}
+@media(max-width:560px){.aud-card{flex-wrap:wrap}.aud-prep{align-self:flex-start}.aud-controls{align-items:stretch}.aud-spacer{display:none}.aud-select select{min-width:0;width:100%}.aud-field{flex:1 1 100%}}
 @media(prefers-reduced-motion:reduce){.aud-root *{transition:none!important}}
 `;
 
@@ -116,6 +132,9 @@ export default function Audiencias() {
   const [status, setStatus] = useState<AudienciaStatus | "">("");
   const [selected, setSelected] = useState<AudienciaRow | null>(null);
   const [creating, setCreating] = useState(false);
+  // Card 13: importação em massa (3.1) e painel de preparação (3.3).
+  const [importando, setImportando] = useState(false);
+  const [preparandoId, setPreparandoId] = useState<string | null>(null);
 
   const now = new Date();
   const { from, to } = useMemo(() => {
@@ -170,6 +189,9 @@ export default function Audiencias() {
           <span className="aud-title-ico"><IcScale size={19} /></span>
           <h1>Agenda de Audiências</h1>
         </div>
+        <button type="button" className="aud-second" onClick={() => setImportando(true)}>
+          <IcUpload size={15} /> Importar planilha
+        </button>
         <button type="button" className="aud-primary" onClick={() => { setSelected(null); setCreating(true); }}>
           <IcPlus size={16} /> Nova audiência
         </button>
@@ -229,24 +251,31 @@ export default function Audiencias() {
               {items.map((a) => {
                 const adv = advLabel(a);
                 return (
-                  <button key={a.id} type="button" className="aud-card"
-                    style={{ ["--aud-sc" as string]: AUDIENCIA_STATUS_COLOR[a.status] }}
-                    onClick={() => { setCreating(false); setSelected(a); }}>
-                    <div className="aud-time">{timeLabel(a.data_hora)}</div>
-                    <div className="aud-body">
-                      <div className="aud-client">{a.client_name ?? "Cliente não informado"}</div>
-                      <div className="aud-sub">
-                        {a.tipo_acao ? a.tipo_acao : "Audiência"}
-                        {a.parte_contraria ? ` · contra ${a.parte_contraria}` : ""}
-                        {a.process_number ? ` · Proc. ${a.process_number}` : ""}
+                  <div key={a.id} className="aud-card"
+                    style={{ ["--aud-sc" as string]: AUDIENCIA_STATUS_COLOR[a.status] }}>
+                    <button type="button" className="aud-cardmain"
+                      onClick={() => { setCreating(false); setSelected(a); }}>
+                      <div className="aud-time">{timeLabel(a.data_hora)}</div>
+                      <div className="aud-body">
+                        <div className="aud-client">{a.client_name ?? "Cliente não informado"}</div>
+                        <div className="aud-sub">
+                          {a.tipo_acao ? a.tipo_acao : "Audiência"}
+                          {a.parte_contraria ? ` · contra ${a.parte_contraria}` : ""}
+                          {a.process_number ? ` · Proc. ${a.process_number}` : ""}
+                        </div>
+                        <div className="aud-meta">
+                          <span className="aud-chip"><span className="aud-dot" style={{ background: AUDIENCIA_STATUS_COLOR[a.status] }} />{audienciaStatusLabel(a.status)}</span>
+                          {adv ? <span className="aud-chip">{adv}</span> : null}
+                          {a.link_local ? <span className="aud-local"><IcMapPin size={13} /> {a.link_local}</span> : null}
+                        </div>
                       </div>
-                      <div className="aud-meta">
-                        <span className="aud-chip"><span className="aud-dot" style={{ background: AUDIENCIA_STATUS_COLOR[a.status] }} />{audienciaStatusLabel(a.status)}</span>
-                        {adv ? <span className="aud-chip">{adv}</span> : null}
-                        {a.link_local ? <span className="aud-local"><IcMapPin size={13} /> {a.link_local}</span> : null}
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    <button type="button" className="aud-prep"
+                      onClick={() => setPreparandoId(a.id)}
+                      title="Documentos esperados, tese e régua de lembretes desta audiência">
+                      <IcClipboard size={14} /> Preparar
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -260,6 +289,17 @@ export default function Audiencias() {
           onClose={() => { setSelected(null); setCreating(false); }}
           onSaved={() => { setSelected(null); setCreating(false); refresh(); }}
         />
+      )}
+
+      {importando && (
+        <AudienciaImportModal
+          onClose={() => setImportando(false)}
+          onImportado={() => refresh()}
+        />
+      )}
+
+      {preparandoId && (
+        <PainelPreparacao audienciaId={preparandoId} onClose={() => setPreparandoId(null)} />
       )}
     </div>
   );

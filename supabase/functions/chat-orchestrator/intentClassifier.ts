@@ -330,6 +330,12 @@ export type RouteObject =
   | "RECLAMACAO_ADMIN" | "RECLAMACAO_RESPOSTA" | "RECLAMACAO_CONSULTA"
   | "EXECUCAO_INICIAR" | "EXECUCAO_FASE" | "EXECUCAO_CONSULTA" | "EXECUCAO_REVISAO"
   | "EVENTO_PROCESSUAL" | "FILA_GOV" | "CREDENCIAL_GOV_STATUS" | "CONVERSAO_GOV"
+  // P2 (Cards 11/13/14/15): diligências, preparo/lembrete de audiência,
+  // apólices SUSEP e procuração (vigência, renovação e campanha).
+  | "DILIGENCIA_REGISTRAR" | "DILIGENCIA_CUMPRIR" | "DILIGENCIA_CONSULTA"
+  | "AUDIENCIA_PREPARO" | "LEMBRETE_AUDIENCIA"
+  | "APOLICE_REGISTRAR" | "APOLICE_UPDATE" | "APOLICE_CONSULTA"
+  | "PROCURACAO_REGISTRAR" | "PROCURACAO_CONSULTA" | "CAMPANHA_PROCURACAO"
   | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
@@ -367,7 +373,20 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "FILA_GOV": o objeto é a FILA DE TRABALHO das contas gov.br — listar clientes por estado da credencial. Ex.: "quais clientes são bronze?", "quem está com senha inválida?", "quem tem 2FA?", "de quem a gente não tem senha?". É leitura e NUNCA revela senha.
 - "CREDENCIAL_GOV_STATUS": o objeto é a SITUAÇÃO do acesso gov.br de um cliente, sem informar senha nova. Ex.: "a senha da dona Elza está errada", "a conta do Ivan foi bloqueada", "consegui entrar na conta dela, tá valendo". Distinto de CREDENCIAL_GOV, que é quando o usuário INFORMA a senha para guardar no cofre.
 - "CONVERSAO_GOV": o objeto é a CONVERSÃO da conta gov.br de um cliente (bronze precisa vir presencialmente para reconhecimento facial). Ex.: "a dona Maria é bronze, precisa vir converter", "agenda a conversão da conta do Ivan até dia 15".
+- "DILIGENCIA_REGISTRAR": o objeto é uma DILIGÊNCIA a ser feita num processo — balcão virtual, colocar concluso para análise, diligenciar expedição de alvará, juntar petição, carta precatória. Ex.: "faz um balcão virtual no processo X pedindo agilidade na análise, prazo 24/07", "coloca concluso o processo do Fulano", "precisa diligenciar o alvará do processo Y", "junta essa petição no processo Z". É a TAREFA JUNTO AO JUÍZO/CARTÓRIO — distinta de tarefa interna do escritório (TAREFA_INTERNA), de andamento genérico (PROCESSO_UPDATE) e de protocolar a peça (PROTOCOLO).
+- "DILIGENCIA_CUMPRIR": o objeto é o CUMPRIMENTO de uma diligência que já estava registrada. Ex.: "fiz o balcão virtual do processo X, protocolo 123", "já coloquei concluso", "a diligência do alvará foi feita, o cartório mandou aguardar", "fiz a diligência e preciso diligenciar de novo dia 20". ATENÇÃO: o protocolo NÃO é obrigatório — "fiz a diligência" sem número continua sendo DILIGENCIA_CUMPRIR.
+- "DILIGENCIA_CONSULTA": o objeto é a LISTA de diligências. Ex.: "quais diligências estão pendentes?", "que diligências vencem essa semana?", "as diligências da 10ª Vara", "tem diligência atrasada?". É leitura.
+- "AUDIENCIA_PREPARO": o objeto é o PREPARO de uma audiência já marcada — o que falta para ela (documentos, lembretes, local/link). Ex.: "o que falta para a audiência do cliente X?", "prepara a audiência de amanhã", "quais documentos a audiência do Fulano exige?". É leitura de parecer — distinta de MARCAR/consultar a audiência na agenda (AUDIENCIA).
+- "LEMBRETE_AUDIENCIA": o objeto é a LIGAÇÃO DE LEMBRETE da audiência ao cliente. Ex.: "avisei a dona Fulana da audiência", "liguei pra lembrar da audiência e não atendeu", "cancela o lembrete daquela audiência", "confirmei com o cliente a audiência de quinta". É o resultado do aviso — não é registrar uma ligação comum (LIGACAO) nem remarcar a audiência (AUDIENCIA).
+- "APOLICE_REGISTRAR": o objeto é uma APÓLICE DE SEGURO do cliente — seguradora, produto (prestamista, vida, capitalização), número, prêmio descontado, onde aparece o desconto, e se o cliente RECONHECE ter contratado. Ex.: "a dona Fulana tem um prestamista da SEGURADORA EXEMPLO descontando 43,90 por mês no extrato do INSS e ela não reconhece", "esse cliente tem 3 seguros que ele nunca contratou", "anota a apólice da vida dele". Distinta do vínculo bancário (RELACAO_BANCARIA): aqui o objeto é o SEGURO/APÓLICE, com seguradora e prêmio.
+- "APOLICE_UPDATE": o objeto é uma apólice JÁ registrada: o cliente confirmou/negou depois da ligação, a apólice foi cancelada, houve restituição. Ex.: "a dona Fulana confirmou que contratou aquele seguro", "aquela apólice foi cancelada em 12/07 e restituíram 430 reais", "ele nega essa apólice, corrige lá".
+- "APOLICE_CONSULTA": o objeto é a LISTA de apólices. Ex.: "quais seguros a dona Fulana tem?", "quais apólices os clientes não reconhecem?", "quanto de prêmio mensal a gente tem mapeado?", "as apólices da SEGURADORA EXEMPLO". É leitura.
+- "PROCURACAO_REGISTRAR": o objeto é a PROCURAÇÃO de um cliente, com a data em que foi ASSINADA e a validade. Ex.: "a procuração da dona Fulana foi assinada em 03/03, ad judicia", "anexei a procuração nova do Fulano, assinada ontem, validade 24 meses", "registra a procuração dele". ATENÇÃO: é o REGISTRO DA VIGÊNCIA de uma procuração assinada — não é GERAR os documentos do cliente (KIT_DOCUMENTAL, que produz a minuta para assinar) nem redigir peça (OUTRO).
+- "PROCURACAO_CONSULTA": o objeto é a LISTA de procurações e seus vencimentos. Ex.: "quais procurações vencem esse mês?", "a procuração da dona Fulana está vigente?", "quem está com procuração vencida?", "quais procurações não têm PDF no dossiê?". É leitura.
+- "CAMPANHA_PROCURACAO": o objeto é a CAMPANHA de ligação para RENOVAR PROCURAÇÃO — montar a fila de quem tem procuração vencendo. Ex.: "monta a campanha de renovação de procuração", "quero ligar para todos que têm procuração vencendo esse mês", "cria a fila de renovação de procuração dos próximos 60 dias". É a campanha ESPECÍFICA de procuração (fila montada pelo vencimento), distinta da campanha por filtro bancário/cadastral (CAMPANHA).
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
+
+Separe também os pares do P2: a diligência junto ao juízo (DILIGENCIA_*) · o preparo e o lembrete da audiência (AUDIENCIA_PREPARO/LEMBRETE_AUDIENCIA) · a apólice de seguro (APOLICE_*) · a procuração assinada e sua renovação (PROCURACAO_*/CAMPANHA_PROCURACAO).
 
 Regra de ouro: o verbo NUNCA decide; o OBJETO decide. Separe: o cliente (CADASTRO/CLIENTE_UPDATE) · o atendimento do cliente (AGENDA_CLIENTE/AGENDA_UPDATE/AGENDA_CONSULTA) · a tarefa/pendência interna (TAREFA_INTERNA/TAREFA_UPDATE) · o processo (PROCESSO_CREATE/PROCESSO_UPDATE) · os documentos padrão do cliente (KIT_DOCUMENTAL) · a audiência (AUDIENCIA) · o protocolo (PROTOCOLO) · o dia do usuário (RESUMO_DIA) · o acesso a menu (PERMISSAO_MENU). Redigir peça sob medida e distribuir caso = OUTRO.`;
 
@@ -417,6 +436,34 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "CREDENCIAL_GOV_STATUS" || s === "STATUS_CREDENCIAL"
       || s === "STATUS_GOV") return "CREDENCIAL_GOV_STATUS";
   if (s === "CONVERSAO_GOV" || s === "CONVERSAO" || s === "CONVERSÃO") return "CONVERSAO_GOV";
+  // P2 (Cards 11/13/14/15) + sinônimos tolerados do LLM. ATENÇÃO à ORDEM: os
+  // pares registrar/cumprir/consultar têm prefixo comum, então o valor genérico
+  // ("DILIGENCIA", "APOLICE", "PROCURACAO") cai no REGISTRO, que é a ação mais
+  // comum — e o plural cai na CONSULTA.
+  if (s === "DILIGENCIA_CUMPRIR" || s === "CUMPRIR_DILIGENCIA"
+      || s === "DILIGENCIA_CUMPRIDA") return "DILIGENCIA_CUMPRIR";
+  if (s === "DILIGENCIA_CONSULTA" || s === "CONSULTA_DILIGENCIA"
+      || s === "DILIGENCIAS" || s === "DILIGÊNCIAS") return "DILIGENCIA_CONSULTA";
+  if (s === "DILIGENCIA_REGISTRAR" || s === "DILIGENCIA" || s === "DILIGÊNCIA"
+      || s === "REGISTRAR_DILIGENCIA") return "DILIGENCIA_REGISTRAR";
+  if (s === "AUDIENCIA_PREPARO" || s === "PREPARO_AUDIENCIA"
+      || s === "PREPARAR_AUDIENCIA") return "AUDIENCIA_PREPARO";
+  if (s === "LEMBRETE_AUDIENCIA" || s === "LEMBRETE"
+      || s === "AVISO_AUDIENCIA") return "LEMBRETE_AUDIENCIA";
+  if (s === "APOLICE_UPDATE" || s === "ATUALIZAR_APOLICE") return "APOLICE_UPDATE";
+  if (s === "APOLICE_CONSULTA" || s === "CONSULTA_APOLICE"
+      || s === "APOLICES" || s === "APÓLICES") return "APOLICE_CONSULTA";
+  if (s === "APOLICE_REGISTRAR" || s === "APOLICE" || s === "APÓLICE"
+      || s === "SEGURO" || s === "SUSEP") return "APOLICE_REGISTRAR";
+  // A campanha de procuração vem ANTES do par registrar/consultar: "CAMPANHA_
+  // PROCURACAO" contém "PROCURACAO" e não pode ser lida como registro.
+  if (s === "CAMPANHA_PROCURACAO" || s === "CAMPANHA_RENOVACAO"
+      || s === "CAMPANHA_RENOVACAO_PROCURACAO"
+      || s === "RENOVACAO_PROCURACAO") return "CAMPANHA_PROCURACAO";
+  if (s === "PROCURACAO_CONSULTA" || s === "CONSULTA_PROCURACAO"
+      || s === "PROCURACOES" || s === "PROCURAÇÕES") return "PROCURACAO_CONSULTA";
+  if (s === "PROCURACAO_REGISTRAR" || s === "PROCURACAO" || s === "PROCURAÇÃO"
+      || s === "REGISTRAR_PROCURACAO") return "PROCURACAO_REGISTRAR";
   return "OUTRO";
 }
 
@@ -520,6 +567,30 @@ const FILA_GOV_RE =
 const REVISAO_EXECUCAO_RE =
   /(?<![\wÀ-ÿ])((?:olhei|revisei|conferi|verifiquei)[\s\S]{0,40}?(?:volta|revis[\wÀ-ÿ]*|de novo|daqui)|me lembr[\wÀ-ÿ]*\s+(?:disso|dessa|desse)[\s\S]{0,20}?dias|a cada \d+ dias)(?![\wÀ-ÿ])/i;
 
+// ─── P2 (Cards 11/13/14/15) ──────────────────────────────────────────────────
+// Mesma razão dos padrões acima: "faz um balcão virtual no processo X" e "a
+// procuração dela foi assinada em 03/03" não têm verbo da lista genérica ("faz",
+// "assinada" e "foi" não estão em ONDA_VERBO_RE), então sem padrão próprio o
+// classificador de objeto NEM É CHAMADO e o pedido cai no fluxo genérico.
+// GOTCHA pt-BR: `\w` é ASCII, então `dilig\w*` casa só "dilig" e o lookahead
+// (?![\wÀ-ÿ]) REJEITA por causa do "ê" de "diligência" — o mesmo vale para
+// "procuração" (ç) e "apólice" (ó). Cauda de palavra SEMPRE [\wÀ-ÿ]*.
+const DILIGENCIA_RE =
+  /(?<![\wÀ-ÿ])(dilig[\wÀ-ÿ]*|rediligenc[\wÀ-ÿ]*|balc[ãa]o virtual|conclus[oa][\wÀ-ÿ]*|carta precat[\wÀ-ÿ]*|junt[\wÀ-ÿ]*[\s\S]{0,20}?peti[\wÀ-ÿ]*|expedi[çc][\wÀ-ÿ]*\s+de\s+alvar[áa][\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+const APOLICE_RE =
+  /(?<![\wÀ-ÿ])(ap[óo]lice[\wÀ-ÿ]*|seguradora[\wÀ-ÿ]*|prestamista[\wÀ-ÿ]*|susep|capitaliza[\wÀ-ÿ]*|pr[êe]mio[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+// "seguro"/"seguros" SOZINHO não aciona: é adjetivo comum em pt-BR ("é seguro",
+// "lugar seguro"). Exige vizinhança de contratação/desconto/reconhecimento, nas
+// duas ordens ("tem 3 seguros que nunca contratou" / "nunca contratou esses seguros").
+const SEGURO_QUALIFICADO_RE =
+  /(?<![\wÀ-ÿ])(seguros?(?![\wÀ-ÿ])[\s\S]{0,50}?(?:contrat[\wÀ-ÿ]*|descont[\wÀ-ÿ]*|reconhec[\wÀ-ÿ]*|cancel[\wÀ-ÿ]*|restitu[\wÀ-ÿ]*|mensal[\wÀ-ÿ]*|seguradora[\wÀ-ÿ]*|vida)|(?:contrat[\wÀ-ÿ]*|descont[\wÀ-ÿ]*|reconhec[\wÀ-ÿ]*|cancel[\wÀ-ÿ]*|restitu[\wÀ-ÿ]*)[\s\S]{0,50}?seguros?)(?![\wÀ-ÿ])/i;
+const PROCURACAO_RE =
+  /(?<![\wÀ-ÿ])(procura[çc][\wÀ-ÿ]*|ad judicia[\wÀ-ÿ]*|renova[çc][\wÀ-ÿ]*\s+de\s+procura[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+// Lembrete/preparo de audiência: a palavra "audiência" perto de avisar/lembrar/
+// confirmar/faltar. "audiência" sozinha já é alvo em ONDA_ALVO_RE (com verbo).
+const AUDIENCIA_P2_RE =
+  /(?<![\wÀ-ÿ])((?:lembr[\wÀ-ÿ]*|avis[\wÀ-ÿ]*|confirm[\wÀ-ÿ]*|falt[\wÀ-ÿ]*|prepar[\wÀ-ÿ]*)[\s\S]{0,60}?audi[êe]nci[\wÀ-ÿ]*|audi[êe]nci[\wÀ-ÿ]*[\s\S]{0,60}?(?:lembr[\wÀ-ÿ]*|avis[\wÀ-ÿ]*|confirm[\wÀ-ÿ]*|falt[\wÀ-ÿ]*|documento[\wÀ-ÿ]*))(?![\wÀ-ÿ])/i;
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
@@ -528,6 +599,8 @@ export function isOndaAcaoRequest(message: string): boolean {
       || KPI_LIGACOES_RE.test(m) || AUDIO_AUTORIZACAO_RE.test(m)) return true;
   if (RECLAMACAO_RE.test(m) || EXECUCAO_RE.test(m) || EVENTO_PROCESSUAL_RE.test(m)
       || FILA_GOV_RE.test(m) || REVISAO_EXECUCAO_RE.test(m)) return true;
+  if (DILIGENCIA_RE.test(m) || APOLICE_RE.test(m) || SEGURO_QUALIFICADO_RE.test(m)
+      || PROCURACAO_RE.test(m) || AUDIENCIA_P2_RE.test(m)) return true;
   return ONDA_ALVO_RE.test(m) && ONDA_VERBO_RE.test(m);
 }
 

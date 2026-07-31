@@ -18,6 +18,8 @@ import {
 import { PecasTab, AudiosTab } from "@/components/clients/tabs/chatTabs";
 import { BancosTab } from "@/components/clients/tabs/bancosTab";
 import { ReclamacoesTab } from "@/components/clients/tabs/reclamacoesTab";
+import { ApolicesTab } from "@/components/clients/tabs/apolicesTab";
+import { ProcuracoesTab } from "@/components/clients/tabs/procuracoesTab";
 import { HistoricoTab } from "@/components/clients/tabs/historicoTab";
 import { AudienciasTab } from "@/components/clients/tabs/audienciasTab";
 
@@ -36,6 +38,12 @@ const TABS: { key: string; label: string; Comp: ComponentType<{ client: ClientFu
   { key: "contatos", label: "Contatos", Comp: ContatosTab },
   { key: "endereco", label: "Endereço", Comp: EnderecoTab },
   { key: "bancos", label: "Bancos", Comp: BancosTab },
+  // Apólices (Card 14) ao lado de Bancos: as duas são a fotografia financeira do
+  // cliente, e o seguro descontado costuma sair do mesmo extrato do consignado.
+  { key: "apolices", label: "Apólices", Comp: ApolicesTab },
+  // Procurações (Card 15) antes de Documentos: é o documento que HABILITA agir, e a
+  // vigência dele é gate de distribuição — não é um anexo qualquer.
+  { key: "procuracoes", label: "Procuração", Comp: ProcuracoesTab },
   { key: "documentos", label: "Documentos", Comp: DocumentosTab },
   { key: "pendencias", label: "Pendências", Comp: PendenciasTab },
   { key: "tarefas", label: "Tarefas", Comp: TarefasTab },

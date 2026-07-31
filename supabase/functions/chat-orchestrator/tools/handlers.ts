@@ -3,6 +3,14 @@ import { resolveCep } from "../cep.ts";
 import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
 import { montarFiltroCampanha, normalizarObjetivoCampanha } from "./campanhaFiltro.ts";
 export { montarFiltroCampanha, normalizarObjetivoCampanha, CAMPANHA_FILTRO_KEYS } from "./campanhaFiltro.ts";
+import {
+  dataOuNull, intOuNull, mensagemMotivoP2,
+  normalizarStatusDiligencia, normalizarStatusLembrete,
+  notasApolices, notasApoliceRegistrada, notasCampanhaRenovacao,
+  notasDiligenciaCumprida, notasDiligenciaRegistrada, notasLembreteAudiencia,
+  notasPreparoAudiencia, notasProcuracaoRegistrada, notasProcuracoes,
+  resumoDiligencias,
+} from "./p2.ts";
 
 // READ — recebe um SupabaseClient (client) e o user_id para escopar.
 // IMPORTANTE (Correção A): para consultar_cliente o `client` DEVE carregar a
@@ -151,6 +159,100 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       }
       return data ?? {};
     }
+    /* ══ P2 · Cards 11/13/14/15: consultas ═══════════════════════════════════
+       As quatro RPCs re-checam o papel via auth.uid() e levantam 42501 — o erro
+       vira TEXTO de "você não tem acesso", nunca lista vazia (vazio mentiria que
+       não existe diligência/apólice/procuração nenhuma).
+
+       ORDEM DAS CHAVES IMPORTA: o resultado da tool é truncado antes de voltar
+       ao modelo (8000 chars na leitura, 2000 na escrita). Um dump global de
+       apólices estoura esse teto, então `notas` vai NA FRENTE do payload — no
+       fim da string ela seria cortada exatamente nos casos em que mais importa. */
+    case "consultar_diligencias": {
+      // A RPC coage status desconhecido para 'pendente' em SILÊNCIO: perguntar
+      // pelas "cumpridas" devolveria as pendentes e o usuário acreditaria.
+      const st = normalizarStatusDiligencia(args.status);
+      if (st.erro) return { erro: st.erro };
+      const venc = dataOuNull(args.vencendo_ate);
+      if (venc.invalida) return { erro: `não entendi a data "${venc.invalida}" — use AAAA-MM-DD.` };
+      const rpcArgs: Record<string, unknown> = {};
+      if (st.valor) rpcArgs.p_status = st.valor;            // omitir = default 'pendente'
+      if (args.vara) rpcArgs.p_vara = args.vara;
+      if (venc.valor) rpcArgs.p_vencendo_ate = venc.valor;
+      if (args.processo_numero) rpcArgs.p_processo_numero = args.processo_numero;
+      const { data, error } = await client.rpc("consultar_diligencias", rpcArgs);
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "diligências são do jurídico (advogado/sócio) — você não tem acesso a esse dado." }
+          : { erro: error.message };
+      }
+      const r = (data ?? {}) as Record<string, unknown>;
+      // Semáforo (vencidas / sem prazo / guardadas só pelo número) é nosso: a RPC
+      // devolve o campo por item, mas ninguém soma — e é a soma que gera ação.
+      return { ...resumoDiligencias(r), ...r };
+    }
+    case "consultar_apolices": {
+      // p_apenas_nao_reconhecidas: NULL se comporta como TRUE (o predicado é
+      // `NOT p_apenas... OR reconhecida IS FALSE`, e NOT NULL = NULL descarta a
+      // linha). Mandamos FALSE EXPLÍCITO quando o usuário não pediu o filtro,
+      // senão a lista "de todas as apólices" viria só com as não reconhecidas.
+      const nome = nomeCliente(args);
+      const soNaoReconhecidas = args.apenas_nao_reconhecidas === true;
+      const comFiltro = !!(args.client_id || nome || args.seguradora || soNaoReconhecidas);
+      const { data, error } = await client.rpc("consultar_apolices", {
+        p_client_id: args.client_id ?? null,
+        p_cliente_nome: nome ?? null,
+        p_apenas_nao_reconhecidas: soNaoReconhecidas,
+        p_seguradora: args.seguradora ?? null,
+      });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "as apólices de seguro são restritas a recepção/advogado/sócio — você não tem acesso." }
+          : { erro: error.message };
+      }
+      const r = (data ?? {}) as Record<string, unknown>;
+      // Esta RPC devolve `ambiguo` SEM candidatos (só o motivo).
+      if (r.ok === false) return { erro: erroClienteRpc(r, "não listei nada") };
+      return { notas: notasApolices(r, comFiltro), ...r };
+    }
+    case "consultar_procuracoes": {
+      const nome = nomeCliente(args);
+      const dias = intOuNull(args.vencendo_em_dias, 1, 3650);
+      if (dias.invalido) return { erro: `janela inválida ("${dias.invalido}") — informe os dias em número (ex.: 30).` };
+      const comFiltro = !!(args.client_id || nome || dias.valor);
+      const { data, error } = await client.rpc("consultar_procuracoes", {
+        p_client_id: args.client_id ?? null,
+        p_cliente_nome: nome ?? null,
+        p_vencendo_em_dias: dias.valor,
+        p_incluir_historico: args.incluir_historico === true,
+      });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "as procurações são restritas a recepção/advogado/sócio — você não tem acesso." }
+          : { erro: error.message };
+      }
+      const r = (data ?? {}) as Record<string, unknown>;
+      if (r.ok === false) return { erro: erroClienteRpc(r, "não listei nada") };
+      return { notas: notasProcuracoes(r, comFiltro), ...r };
+    }
+    case "preparar_audiencia": {
+      const audId = String(args.audiencia_id ?? "").trim();
+      if (!audId) return { erro: "de qual audiência? Liste as audiências primeiro para eu pegar o id." };
+      const { data, error } = await client.rpc("preparar_audiencia", { p_audiencia_id: audId });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "o preparo de audiência é restrito a recepção/advogado/sócio — você não tem acesso." }
+          : { erro: error.message };
+      }
+      const r = (data ?? {}) as Record<string, unknown>;
+      if (r.ok === false) {
+        return { erro: mensagemMotivoP2(r, "não montei o preparo") ?? erroClienteRpc(r, "não montei o preparo") };
+      }
+      // `limitacao` é texto FIXO da RPC (sempre presente): repassamos SEMPRE, mas
+      // ele não é sinal de problema. O sinal real é tese_resolvida=false, que faz
+      // a lista de documentos vir só com [procuracao].
+      return { notas: notasPreparoAudiencia(r), ...r };
+    }
     case "get_revisao_peca_context": {
       // Contexto da revisão (peça + metadados). RPC SECURITY DEFINER; roda sob a
       // identidade do usuário (o `client` carrega o JWT).
@@ -204,12 +306,18 @@ function erroClienteRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): st
 function erroProcessoRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): string {
   const motivo = String(r.motivo ?? "");
   const base = String(r.mensagem ?? "");
+  // P2 (Cards 11/13/14/15): 12 motivos próprios, e só 6 das RPCs devolvem
+  // `mensagem` — o texto pt-BR dos outros vive em tools/p2.ts (testável).
+  const p2 = mensagemMotivoP2(r, oQueNaoFoiFeito);
+  if (p2) return p2;
   if (motivo === "processo_nao_encontrado_ou_ambiguo") {
     return `não localizei um único processo com esse número (pode não existir ou haver mais de um parecido). Me passe o número exato — ${oQueNaoFoiFeito}`;
   }
   if (motivo === "evento_invalido" || motivo === "fase_invalida" || motivo === "estado_invalido"
       || motivo === "status_invalido" || motivo === "desfecho_invalido" || motivo === "dias_invalido") {
-    return base || `valor inválido — ${oQueNaoFoiFeito}`;
+    // A `mensagem` da RPC lista os valores aceitos, mas NÃO diz o que deixou de
+    // acontecer — e a regra da casa é que toda falha diga isso. Concatenamos sempre.
+    return base ? `${base} — ${oQueNaoFoiFeito}` : `valor inválido — ${oQueNaoFoiFeito}`;
   }
   // `execucao_nao_iniciada` é o que remarcar_revisao_execucao devolve quando o
   // processo existe mas não tem execução (visto no espelho da migração do Card 9).
@@ -225,6 +333,19 @@ function erroProcessoRpc(r: Record<string, unknown>, oQueNaoFoiFeito: string): s
   }
   // Cai aqui também o `ambiguo`/`cliente_nao_encontrado` das RPCs que resolvem CLIENTE.
   return erroClienteRpc(r, oQueNaoFoiFeito);
+}
+
+/**
+ * Erro CRU do PostgREST numa escrita. 42501 é o gate da RPC (SECURITY DEFINER):
+ * vira "você não tem acesso" com quem pode fazer, nunca a mensagem técnica.
+ */
+function erroEscritaRpc(
+  error: { code?: string; message?: string }, quemPode: string, oQueNaoFoiFeito: string,
+): string {
+  if (error.code === "42501") {
+    return `você não tem acesso a esta ação (${quemPode}) — ${oQueNaoFoiFeito}.`;
+  }
+  return `${error.message ?? "erro"} — ${oQueNaoFoiFeito}.`;
 }
 
 /**
@@ -854,6 +975,209 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a conversão NÃO foi agendada") };
         return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
       }
+      /* ══ P2 · Card 11 — diligências ════════════════════════════════════════ */
+      case "registrar_diligencia": {
+        const desc = String(args.descricao ?? "").trim();
+        if (!desc) {
+          return { ok: false, error: "o que precisa ser feito na diligência? Me diga em uma frase (nada foi registrado)." };
+        }
+        if (!args.process_id && !String(args.processo_numero ?? "").trim()) {
+          // A diligência SEMPRE pertence a um processo (CHECK diligencia_precisa_processo).
+          return { ok: false, error: "de qual processo é a diligência? Me passe o número (nada foi registrado)." };
+        }
+        const prazo = dataOuNull(args.prazo);
+        if (prazo.invalida) {
+          return { ok: false, error: `não entendi o prazo "${prazo.invalida}" — me passe a data em AAAA-MM-DD (nada foi registrado).` };
+        }
+        const { data, error } = await userClient.rpc("registrar_diligencia", {
+          p_descricao: desc,
+          p_tipo: args.tipo ?? null,                        // null = default balcao_virtual
+          p_process_id: args.process_id ?? null,
+          p_processo_numero: args.processo_numero ?? null,
+          p_vara: args.vara ?? null,
+          p_prazo: prazo.valor,                             // "" viraria 22007 na coluna date
+          p_responsavel_nome: args.responsavel_nome ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "diligência é do advogado/sócio", "a diligência NÃO foi registrada") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a diligência NÃO foi registrada") };
+        // `processo_vinculado:false` é o caminho PONTE (guardou pelo número): o aviso
+        // da RPC TEM de chegar ao usuário, senão ele acha que ficou no processo.
+        // Prazo no passado a RPC aceita sem dizer nada — o alerta é nosso.
+        return { ok: true, result: { notas: notasDiligenciaRegistrada(r, prazo.valor), ...r } };
+      }
+      case "cumprir_diligencia": {
+        if (!args.diligencia_id) {
+          return { ok: false, error: "preciso saber qual diligência (liste as diligências primeiro) — nada foi registrado." };
+        }
+        const redil = dataOuNull(args.rediligenciar_em);
+        if (redil.invalida) {
+          return { ok: false, error: `não entendi a data da rediligência "${redil.invalida}" — use AAAA-MM-DD (nada foi registrado).` };
+        }
+        const { data, error } = await userClient.rpc("cumprir_diligencia", {
+          p_diligencia_id: args.diligencia_id,
+          // Protocolo NÃO é obrigatório (decisão de 30/07): a ausência é declarada
+          // no retorno, nunca cobrada como pré-requisito.
+          p_protocolo: args.protocolo ?? null,
+          p_resultado: args.resultado ?? null,
+          p_rediligenciar_em: redil.valor,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "diligência é do advogado/sócio", "a diligência NÃO foi marcada como cumprida") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a diligência NÃO foi marcada como cumprida") };
+        return { ok: true, result: { notas: notasDiligenciaCumprida(r), ...r } };
+      }
+
+      /* ══ P2 · Card 13 — lembrete de audiência ══════════════════════════════ */
+      case "registrar_lembrete_audiencia": {
+        if (!args.lembrete_id) {
+          return { ok: false, error: "preciso saber qual lembrete (ele vem do preparo da audiência ou do card da pendência) — nada foi registrado." };
+        }
+        // Default da RPC é 'feito': assumir isso sem o usuário dizer registraria um
+        // aviso ao cliente que nunca aconteceu. Valor não reconhecido = pergunta.
+        const st = normalizarStatusLembrete(args.status);
+        if (st.erro) return { ok: false, error: `${st.erro} (nada foi registrado)` };
+        if (!st.valor) {
+          return { ok: false, error: "o lembrete foi feito, o cliente não atendeu, ou o lembrete foi cancelado? (nada foi registrado)" };
+        }
+        const { data, error } = await userClient.rpc("registrar_lembrete_audiencia", {
+          p_lembrete_id: args.lembrete_id,
+          p_status: st.valor,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "é da recepção/advogado/sócio", "o lembrete NÃO foi registrado") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "o lembrete NÃO foi registrado") };
+        // nao_atendeu MANTÉM a pendência aberta: sem dizer isso, o usuário sai
+        // achando que o aviso está resolvido e ninguém liga de novo.
+        return { ok: true, result: { notas: notasLembreteAudiencia(r), ...r } };
+      }
+
+      /* ══ P2 · Card 14 — apólices de seguro (SUSEP) ═════════════════════════ */
+      case "registrar_apolice": {
+        const seguradora = String(args.seguradora ?? "").trim();
+        if (!seguradora) {
+          return { ok: false, error: "de qual seguradora é a apólice? (nada foi registrado)" };
+        }
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é essa apólice? Me diga o nome (nada foi registrado)." };
+        }
+        const vig = dataOuNull(args.vigencia_inicio);
+        if (vig.invalida) {
+          return { ok: false, error: `não entendi o início da vigência "${vig.invalida}" — use AAAA-MM-DD (nada foi registrado).` };
+        }
+        const { data, error } = await userClient.rpc("registrar_apolice", {
+          p_seguradora: seguradora,
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
+          p_produto: args.produto ?? null,
+          p_numero_apolice: args.numero_apolice ?? null,
+          p_premio_valor: typeof args.premio_valor === "number" ? args.premio_valor : null,
+          p_premio_periodicidade: args.premio_periodicidade ?? null,
+          p_origem_desconto: args.origem_desconto ?? null,
+          // TRÊS estados: true reconhece, false nega (insumo da tese), null não
+          // perguntaram. Coagir null para false inventaria uma negativa do cliente.
+          p_reconhecida: typeof args.reconhecida === "boolean" ? args.reconhecida : null,
+          p_vigencia_inicio: vig.valor,
+          p_numero_processo_susep: args.numero_processo_susep ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "é da recepção/advogado/sócio", "a apólice NÃO foi registrada") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a apólice NÃO foi registrada") };
+        return {
+          ok: true,
+          result: { notas: notasApoliceRegistrada(r), ...r, cliente: clienteNome || r.cliente },
+        };
+      }
+      case "atualizar_apolice": {
+        if (!args.apolice_id) {
+          return { ok: false, error: "preciso saber qual apólice (liste as apólices do cliente primeiro) — nada foi alterado." };
+        }
+        const cancel = dataOuNull(args.cancelada_em);
+        if (cancel.invalida) {
+          return { ok: false, error: `não entendi a data de cancelamento "${cancel.invalida}" — use AAAA-MM-DD (nada foi alterado).` };
+        }
+        const temReconhecida = typeof args.reconhecida === "boolean";
+        const temRestituicao = typeof args.restituicao_valor === "number";
+        const temObs = !!String(args.observacao ?? "").trim();
+        // A RPC faz COALESCE campo por campo: chamada só com o id devolve ok:true
+        // sem ter mudado nada. Um "pronto, atualizei" para um no-op é justamente a
+        // resposta de sucesso sem execução que queremos impedir.
+        if (!temReconhecida && !cancel.valor && !temRestituicao && !temObs) {
+          return { ok: false, error: "o que devo atualizar nessa apólice? (se o cliente reconhece, data de cancelamento, valor restituído ou uma observação) — nada foi alterado." };
+        }
+        const { data, error } = await userClient.rpc("atualizar_apolice", {
+          p_apolice_id: args.apolice_id,
+          p_reconhecida: temReconhecida ? args.reconhecida : null,
+          p_cancelada_em: cancel.valor,
+          p_restituicao_valor: temRestituicao ? args.restituicao_valor : null,
+          p_observacao: temObs ? args.observacao : null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "é da recepção/advogado/sócio", "a apólice NÃO foi alterada") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a apólice NÃO foi alterada") };
+        return { ok: true, result: r };
+      }
+
+      /* ══ P2 · Card 15 — procuração e campanha de renovação ═════════════════ */
+      case "registrar_procuracao": {
+        const assin = dataOuNull(args.data_assinatura);
+        if (assin.invalida) {
+          return { ok: false, error: `não entendi a data de assinatura "${assin.invalida}" — use AAAA-MM-DD, com a data em que a procuração foi ASSINADA (não a do upload). Nada foi registrado.` };
+        }
+        if (!assin.valor) {
+          // Mesmo texto do motivo data_assinatura_obrigatoria: é a assinatura que
+          // define a vigência, então a data do upload gera vencimento errado.
+          return { ok: false, error: "em que data a procuração foi ASSINADA? A vigência conta dessa data — não use a data do upload (nada foi registrado)." };
+        }
+        const clienteId = typeof args.client_id === "string" ? args.client_id : "";
+        const clienteNome = nomeCliente(args) ?? "";
+        if (!clienteId && !clienteNome) {
+          return { ok: false, error: "de qual cliente é a procuração? Me diga o nome (nada foi registrado)." };
+        }
+        const meses = intOuNull(args.validade_meses, 1, 120);
+        if (meses.invalido) {
+          return { ok: false, error: `validade inválida ("${meses.invalido}") — informe de 1 a 120 meses (nada foi registrado).` };
+        }
+        const { data, error } = await userClient.rpc("registrar_procuracao", {
+          p_data_assinatura: assin.valor,
+          p_client_id: clienteId || null,
+          p_cliente_nome: clienteNome || null,
+          p_tipo: args.tipo ?? null,                        // null = default ad_judicia
+          p_validade_meses: meses.valor,                    // null = default 12
+          p_client_document_id: args.client_document_id ?? null,
+          p_observacao: args.observacao ?? null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "é da recepção/advogado/sócio", "a procuração NÃO foi registrada") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a procuração NÃO foi registrada") };
+        return {
+          ok: true,
+          result: { notas: notasProcuracaoRegistrada(r), ...r, cliente: clienteNome || r.cliente },
+        };
+      }
+      case "gerar_campanha_renovacao_procuracao": {
+        const janela = intOuNull(args.janela_dias, 1, 365);
+        if (janela.invalido) {
+          return { ok: false, error: `janela inválida ("${janela.invalido}") — informe de 1 a 365 dias (nenhuma campanha foi criada).` };
+        }
+        const { data, error } = await userClient.rpc("gerar_campanha_renovacao_procuracao", {
+          p_janela_dias: janela.valor ?? 30,                // default explícito (a RPC também usa 30)
+          p_nome: args.nome ?? null,
+        });
+        if (error) return { ok: false, error: erroEscritaRpc(error, "criar campanha é da recepção/sócio", "nenhuma campanha foi criada") };
+        const r = (data ?? {}) as Record<string, unknown>;
+        if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "nenhuma campanha foi criada") };
+        // clientes_na_fila = 0 COM ok:true = campanha criada VAZIA (todos já estavam
+        // em campanha aberta do mesmo objetivo). Sem dizer isso, o usuário acha que
+        // tem fila para ligar. `sem_telefone` também sobe: fila inacionável.
+        return { ok: true, result: { notas: notasCampanhaRenovacao(r), ...r } };
+      }
+
       case "registrar_protocolo": {
         // Gate = update_user_task_status (assignee/assigner/master) + trigger 8.5
         // (2 docs), tudo dentro da RPC. Ela devolve ok:false amigável quando o gate
