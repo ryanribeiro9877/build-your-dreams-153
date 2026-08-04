@@ -1,6 +1,6 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { chavesDeArgs, erroCru, traceToolsEnviadas, traceChamadaTool } from "./trace.ts";
+import { chavesDeArgs, erroCru, traceToolsEnviadas, traceChamadaTool, formaDoRetorno, previaDoRetorno } from "./trace.ts";
 
 /* Fake do client: guarda o que foi inserido em agent_traces. Um espião basta —
    o que interessa provar é O QUE vai na linha, não que o supabase-js funciona. */
@@ -135,4 +135,67 @@ Deno.test("falha ao gravar o trace NÃO propaga — observabilidade não derruba
   // Se isto lançasse, um trace com problema derrubaria o chat inteiro.
   await traceToolsEnviadas(quebrado, CTX, { operacao: "x", permitidas: [], enviadas: [] });
   await traceChamadaTool(quebrado, CTX, { tool: "y", ok: true });
+});
+
+
+/* ─── Retorno da tool no trace ──────────────────────────────────────────────
+   Com `status: ok` e nada mais, sabia-se que a tool executou mas não o que ela
+   devolveu — a peça que faltava para fechar o diagnóstico sem inferir. */
+
+Deno.test("formaDoRetorno distingue VAZIO de cheio — a peça que faltava", () => {
+  // O caso real: consultar_audiencias devolve `[]` (rodou e não achou), e o
+  // agente disse "não tenho a ferramenta".
+  assertEquals(formaDoRetorno([]), "array(0) VAZIO");
+  assertEquals(formaDoRetorno([{ id: 1 }, { id: 2 }]), "array(2)");
+  assertEquals(formaDoRetorno({}), "objeto{} VAZIO");
+  assertEquals(formaDoRetorno(null), "nulo");
+  assertEquals(formaDoRetorno(undefined), "nulo");
+  assertEquals(formaDoRetorno(""), "texto(0) VAZIO");
+});
+
+Deno.test("formaDoRetorno mostra as CHAVES — diz se veio erro ou payload", () => {
+  assertEquals(formaDoRetorno({ erro: "x", __erro_cru: "code=42501" }), "objeto{erro,__erro_cru}");
+  assert(formaDoRetorno({ audiencias: [], total: 0 }).includes("audiencias"));
+});
+
+Deno.test("previaDoRetorno mascara senha/CPF/CNPJ por NOME de campo", () => {
+  const previa = previaDoRetorno([
+    { cliente: "Fulano de Teste", quando: "12/09 14:30", cpf: "111.222.333-44", senha: "admin123" },
+  ]);
+  // O que diagnostica fica:
+  assert(previa.includes("Fulano de Teste"));
+  assert(previa.includes("12/09 14:30"));
+  // O que não ajuda em nada e é o pior de registrar, sai:
+  assert(!previa.includes("111.222.333-44"));
+  assert(!previa.includes("admin123"));
+  assertEquals(previa.split("[omitido]").length - 1, 2);
+});
+
+Deno.test("previaDoRetorno mascara em profundidade e trunca", () => {
+  const fundo = previaDoRetorno({ a: { b: { c: { senha: "admin123" } } } });
+  assert(!fundo.includes("admin123"));
+  const grande = previaDoRetorno({ txt: "x".repeat(5000) }, 200);
+  assert(grande.length < 260);
+  assert(grande.includes("[+"));
+});
+
+Deno.test("traceChamadaTool grava forma, bytes e prévia do retorno", async () => {
+  const { client, linhas } = fakeAdmin();
+  await traceChamadaTool(client, CTX, {
+    tool: "consultar_audiencias", args: { de: "2026-08-04", ate: "2027-08-04", cliente_nome: "Fulana" },
+    ok: true, retorno: [],
+  });
+  const md = linhas[0].metadata as Record<string, unknown>;
+  assertEquals(md.retorno_forma, "array(0) VAZIO");
+  assertEquals(md.retorno_previa, "[]");
+  assertEquals(md.retorno_bytes, 2);
+  // A forma aparece no output_summary, sem precisar abrir o metadata.
+  assertEquals(linhas[0].output_summary, "ok · retorno=array(0) VAZIO");
+});
+
+Deno.test("traceChamadaTool sem retorno informado não inventa forma", async () => {
+  const { client, linhas } = fakeAdmin();
+  await traceChamadaTool(client, CTX, { tool: "x", ok: true });
+  assertEquals(linhas[0].output_summary, "ok");
+  assertEquals((linhas[0].metadata as Record<string, unknown>).retorno_forma, null);
 });

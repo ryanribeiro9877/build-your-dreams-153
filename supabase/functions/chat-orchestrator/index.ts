@@ -2293,6 +2293,18 @@ function buildUniversalGuardrails(): string {
     "acontece e o usuário fica sem resposta. Se o pedido exigir uma ferramenta que você NÃO tem, diga " +
     "apenas, em uma frase, o que o usuário precisa fazer ou pedir a quem — sem prometer nenhuma ação sua. " +
     "Se você TEM a ferramenta, use-a (regra F) em vez de descrever escopo/atuação.\n" +
+    "F-quinquies. PROIBIDO ALEGAR FALTA DE FERRAMENTA DEPOIS DE TÊ-LA CHAMADO: se você chamou uma " +
+    "ferramenta neste turno, ela EXISTE e foi executada — é PROIBIDO responder 'não tenho essa " +
+    "ferramenta', 'não tenho acesso a esse recurso' ou 'essa consulta não está disponível para mim'. " +
+    "Retorno VAZIO não é ausência de ferramenta: `[]`, `{}` ou lista sem o item procurado querem dizer " +
+    "que a consulta RODOU e não achou. Nesses casos a resposta honesta descreve o que foi consultado, " +
+    "de forma que o usuário possa contestar: 'consultei as audiências de 04/08/2026 a 04/08/2027 " +
+    "filtrando por \"Fulana\" e não encontrei nenhuma' — e então ofereça o próximo passo (ampliar o " +
+    "intervalo, conferir a grafia do nome, verificar se foi cadastrada). Se o retorno trouxe `erro`, " +
+    "diga que a consulta FALHOU e repasse o motivo em uma frase — falha não é ausência, e não é vazio. " +
+    "Alegar falta de ferramenta manda quem investiga para o lugar errado: já custou três hipóteses " +
+    "gastas em encanamento que estava íntegro. Só diga que NÃO tem a ferramenta se você realmente não " +
+    "a chamou por ela não constar entre as suas.\n" +
     "G. TEXTO INTERNO DE ORQUESTRAÇÃO — JAMAIS NA PEÇA: observações/críticas do validador ou revisor, as " +
     "instruções de correção que você recebeu, marcadores internos ([REVISAR], [ORIENTAÇÃO INTERNA], [TESTE ...], " +
     "\"VIOLAÇÕES DETECTADAS\", \"observações do validador\" e afins) e qualquer meta-comentário sobre o processo de " +
@@ -2493,7 +2505,7 @@ async function runEntryConsulta(
       const t0 = Date.now();
       const data = await runReadTool(jwtClient, userId, c.function.name, argsRead);
       await traceChamadaTool(admin, traceCtxEntry, {
-        tool: c.function.name, args: argsRead, durationMs: Date.now() - t0,
+        tool: c.function.name, args: argsRead, durationMs: Date.now() - t0, retorno: data,
         ok: !(data as { erro?: unknown } | null)?.erro,
         erro: (data as { __erro_cru?: string } | null)?.__erro_cru ?? null,
         motivo: (data as { erro?: string } | null)?.erro ?? null,
@@ -4170,7 +4182,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // As tools de leitura devolvem a falha dentro do payload (`erro`), não por
       // exceção, então é de lá que o motivo sai.
       await traceChamadaTool(admin, traceCtx, {
-        tool: name, args, durationMs: Date.now() - t0Read,
+        tool: name, args, durationMs: Date.now() - t0Read, retorno: toolResult,
         ok: !(toolResult as { erro?: unknown } | null)?.erro,
         erro: (toolResult as { __erro_cru?: string } | null)?.__erro_cru ?? null,
         motivo: (toolResult as { erro?: string } | null)?.erro ?? null,
@@ -4468,7 +4480,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               const t0Curta = Date.now();
               const data = await runReadTool(readClient, run.user_id, c.function.name, argsCurta);
               await traceChamadaTool(admin, traceCtxCurta, {
-                tool: c.function.name, args: argsCurta, durationMs: Date.now() - t0Curta,
+                tool: c.function.name, args: argsCurta, durationMs: Date.now() - t0Curta, retorno: data,
                 ok: !(data as { erro?: unknown } | null)?.erro,
                 erro: (data as { __erro_cru?: string } | null)?.__erro_cru ?? null,
                 motivo: (data as { erro?: string } | null)?.erro ?? null,
@@ -4870,7 +4882,7 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
       traceId: body.runId ?? action.id, userId: user.id,
       sessionId: action.session_id, agentId: action.agent_id ?? null, runId: body.runId ?? null,
     }, {
-      tool: action.tool, args: action.args, ok: exec.ok,
+      tool: action.tool, args: action.args, ok: exec.ok, retorno: exec.result,
       // `erroCru` vem do handler com o code da RPC; `error` é o texto limpo que o
       // usuário lê. O trace guarda os dois: um responde "por quê", o outro "o que a
       // pessoa viu".

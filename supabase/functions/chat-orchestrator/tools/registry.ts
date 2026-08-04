@@ -307,10 +307,12 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   consultar_audiencias: { type: "function", function: {
     name: "consultar_audiencias",
-    description: "Consulta audiências num intervalo de datas. Escopo por papel (advogado vê as suas; sócio/admin/recepção todas). Cada item traz `id`, `cliente`, `quando`, `tipo` e `processo`. PARA ACHAR A AUDIÊNCIA DE UM CLIENTE: chame com um intervalo de datas amplo (ex.: hoje até +12 meses) e procure o nome no campo `cliente` do retorno. NÃO passe pelo processo: as audiências importadas da planilha têm processo VAZIO (nenhuma das 179 tem vínculo), então filtrar por processo não acha NADA e faria você concluir que a audiência não existe. `process_id` é filtro opcional, nunca o caminho. Use o `id` do item para chamar preparar_audiencia.",
+    description: "Consulta audiências num intervalo de datas. Escopo por papel (advogado vê as suas; sócio/admin/recepção todas). Cada item traz `id`, `cliente`, `quando`, `tipo` e `processo`. PARA ACHAR A AUDIÊNCIA DE UM CLIENTE: passe `cliente_nome` junto com uma janela ampla (ex.: hoje até +12 meses) — o filtro de nome é feito NO BANCO e devolve só as audiências desse cliente, em vez da lista inteira do intervalo. NÃO passe pelo processo: as audiências importadas da planilha têm processo VAZIO (nenhuma das 179 tem vínculo), então filtrar por processo não acha NADA e faria você concluir que a audiência não existe. `process_id` é filtro opcional, nunca o caminho. RETORNO VAZIO (`[]`) SIGNIFICA QUE A CONSULTA RODOU E NÃO ACHOU — nunca que a ferramenta falta; diga o intervalo e o nome que você consultou. Use o `id` do item para chamar preparar_audiencia.",
     parameters: { type: "object", properties: {
       de: str("data inicial AAAA-MM-DD"),
       ate: str("data final AAAA-MM-DD — para procurar a audiência de um cliente, use uma janela ampla (ex.: +12 meses)"),
+      cliente_nome: str("nome do cliente para filtrar (opcional, mas É O CAMINHO para 'a audiência do cliente X'). Casa por trecho, ignorando acento e maiúsculas — 'fulana' acha 'Fulâna de Teste'. Prefira o primeiro nome se não tiver certeza do sobrenome. É o filtro CONFIÁVEL: todas as audiências têm nome preenchido."),
+      client_id: str("UUID do cliente (opcional). Use APENAS para desempatar homônimos, junto ou em vez do nome — NÃO é o filtro preferencial: 38 das 179 audiências não têm cliente vinculado por id (só por nome), então filtrar por client_id pode devolver vazio para um cliente que TEM audiência."),
       process_id: str("filtrar por um processo (opcional). ATENÇÃO: audiência importada tem processo vazio; usar este filtro para procurar por cliente devolve lista vazia por construção."),
     }, required: ["de", "ate"] },
   }},

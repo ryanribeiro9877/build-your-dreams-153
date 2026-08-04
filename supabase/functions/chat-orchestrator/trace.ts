@@ -87,6 +87,53 @@ export function erroCru(error: unknown): string | null {
   return partes.length ? partes.join(" · ") : String(error).slice(0, 300);
 }
 
+/**
+ * Campos cujo VALOR nunca entra no trace, por nome. A prévia do retorno precisa
+ * mostrar nome de cliente e data (é o que torna a linha diagnosticável), mas senha
+ * e documento não ajudam em NADA a diagnosticar e são o pior de registrar.
+ */
+const CAMPOS_MASCARADOS = /^(senha|password|pass|pwd|cpf|cnpj|rg|token|secret|api_key|credencial|chave_pix)$/i;
+
+/** Mascara por NOME de campo, em profundidade. Preserva a forma do objeto. */
+function mascararSensiveis(v: unknown, nivel = 0): unknown {
+  if (nivel > 6 || v === null || typeof v !== "object") return v;
+  if (Array.isArray(v)) return v.slice(0, 20).map((x) => mascararSensiveis(x, nivel + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    out[k] = CAMPOS_MASCARADOS.test(k) ? "[omitido]" : mascararSensiveis(val, nivel + 1);
+  }
+  return out;
+}
+
+/**
+ * FORMA do retorno em uma linha: é o que separa "rodou e voltou vazio" de "rodou e
+ * voltou 165 linhas". Com `status: ok` e nada mais, sabia-se que executou e não o
+ * que voltou — e era a peça que faltava para fechar o diagnóstico sem inferir.
+ */
+export function formaDoRetorno(result: unknown): string {
+  if (result === null || result === undefined) return "nulo";
+  if (Array.isArray(result)) return result.length === 0 ? "array(0) VAZIO" : `array(${result.length})`;
+  if (typeof result === "string") return result.length === 0 ? "texto(0) VAZIO" : `texto(${result.length})`;
+  if (typeof result === "object") {
+    const chaves = Object.keys(result as Record<string, unknown>);
+    if (chaves.length === 0) return "objeto{} VAZIO";
+    // Nomes de chave são seguros e são o que diz se veio `erro` ou payload.
+    return `objeto{${chaves.slice(0, 12).join(",")}}`;
+  }
+  return typeof result;
+}
+
+/** Prévia truncada do retorno, já mascarada. `limite` em caracteres. */
+export function previaDoRetorno(result: unknown, limite = 600): string {
+  let texto: string;
+  try {
+    texto = JSON.stringify(mascararSensiveis(result)) ?? "null";
+  } catch {
+    texto = "[não serializável]";
+  }
+  return texto.length <= limite ? texto : texto.slice(0, limite) + `…[+${texto.length - limite} chars]`;
+}
+
 async function inserirSpan(
   admin: SupabaseClient, ctx: TraceCtx,
   span: {
@@ -189,14 +236,23 @@ export async function traceChamadaTool(
   dados: {
     tool: string; args?: unknown; ok: boolean;
     erro?: unknown; motivo?: string | null; durationMs?: number | null;
+    /** O que a tool devolveu. Vai como TAMANHO + FORMA + prévia mascarada. */
+    retorno?: unknown;
   },
 ): Promise<void> {
   const cru = dados.ok ? null : erroCru(dados.erro);
+  const temRetorno = "retorno" in dados;
+  const forma = temRetorno ? formaDoRetorno(dados.retorno) : null;
+  const previa = temRetorno ? previaDoRetorno(dados.retorno) : null;
+  const bytes = temRetorno ? (previaDoRetorno(dados.retorno, 1_000_000)).length : null;
   await inserirSpan(admin, ctx, {
     kind: "tool", operation: `tool:${dados.tool}`,
     status: dados.ok ? "ok" : "error",
     input: `args: ${chavesDeArgs(dados.args).join(", ") || "(nenhum)"}`,
-    output: dados.ok ? "ok" : null,
+    // `ok` sozinho dizia que executou e não O QUE voltou. Agora a forma vem no
+    // próprio output_summary: "array(0) VAZIO" e "array(165)" se distinguem em
+    // um olhar, sem abrir o metadata.
+    output: dados.ok ? (forma ? `ok · retorno=${forma}` : "ok") : null,
     error: cru ?? (dados.motivo ? `motivo=${dados.motivo}` : null),
     durationMs: dados.durationMs ?? null,
     metadata: {
@@ -205,9 +261,19 @@ export async function traceChamadaTool(
       motivo: dados.motivo ?? null,
       // `erro_cru` também no metadata para poder filtrar por code no SQL.
       erro_cru: cru,
+      retorno_forma: forma,
+      retorno_bytes: bytes,
+      // Prévia com senha/CPF/CNPJ mascarados por nome de campo (ver
+      // CAMPOS_MASCARADOS): nome de cliente e data ficam, porque são o que torna
+      // a linha diagnosticável; documento e credencial não ajudam em nada aqui.
+      retorno_previa: previa,
     },
   });
   if (!dados.ok) {
     console.error(`[tool] ${dados.tool} FALHOU — ${cru ?? dados.motivo ?? "sem detalhe"} | args: ${chavesDeArgs(dados.args).join(", ")}`);
+  } else if (forma && forma.endsWith("VAZIO")) {
+    // Alto valor: "rodou e não achou" é a resposta honesta que o agente deve dar
+    // (guardrail F-quinquies) e a linha que confirma que ele podia dá-la.
+    console.log(`[tool] ${dados.tool} ok mas retorno VAZIO | args: ${chavesDeArgs(dados.args).join(", ")}`);
   }
 }

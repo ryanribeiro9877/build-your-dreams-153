@@ -31,7 +31,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       // exata); texto -> full_name. Devolve o CPF já decifrado. Não lê mais a
       // coluna de texto sensível diretamente.
       const q = String(args.busca ?? "").trim();
-      const { data } = await client.rpc("agent_consultar_cliente", { p_busca: q });
+      const { data, error } = await client.rpc("agent_consultar_cliente", { p_busca: q });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "a consulta de clientes é restrita a recepção/sócio — você não tem acesso." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? [];
     }
     case "consultar_usuario": {
@@ -42,7 +47,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       // sócio" caía em 0 e o agente pedia o nome). Re-checa is_recepcao_or_socio()
       // via auth.uid(), então usa o `client` com JWT (igual a consultar_cliente).
       const q = String(args.busca ?? "").trim();
-      const { data } = await client.rpc("agent_consultar_usuario", { p_busca: q });
+      const { data, error } = await client.rpc("agent_consultar_usuario", { p_busca: q });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "a consulta de usuários é restrita a recepção/sócio — você não tem acesso." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? [];
     }
     case "minha_agenda": {
@@ -50,17 +60,38 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       const rpcArgs: Record<string, unknown> = {};
       if (args.de) rpcArgs.p_de = args.de;
       if (args.ate) rpcArgs.p_ate = args.ate;
-      const { data } = await client.rpc("minha_agenda", rpcArgs);
+      const { data, error } = await client.rpc("minha_agenda", rpcArgs);
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "você não tem acesso a essa agenda." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? {};
     }
     case "consultar_audiencias": {
-      const { data } = await client.rpc("consultar_audiencias", {
+      // p_cliente_nome casa por txt_fold(client_name) LIKE %...% (parcial, sem
+      // acento, sem caixa) DENTRO da RPC — é o filtro que faz a chamada devolver
+      // 1 linha em vez das 165 do intervalo. A RPC já trata string vazia como
+      // NULL, mas mandamos NULL explícito para não poluir o filtro.
+      const nomeAud = String(args.cliente_nome ?? "").trim();
+      const { data, error } = await client.rpc("consultar_audiencias", {
         p_de: args.de, p_ate: args.ate, p_processo: args.process_id ?? null,
+        p_client_id: args.client_id ?? null, p_cliente_nome: nomeAud || null,
       });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "você não tem acesso à agenda de audiências." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? [];
     }
     case "resumo_do_dia": {
-      const { data } = await client.rpc("resumo_do_dia");
+      const { data, error } = await client.rpc("resumo_do_dia");
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "o resumo do dia é restrito — você não tem acesso." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? {};
     }
     case "kpi_ligacoes": {
@@ -68,12 +99,22 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       const rpcArgs: Record<string, unknown> = {};
       if (args.de) rpcArgs.p_de = args.de;
       if (args.ate) rpcArgs.p_ate = args.ate;
-      const { data } = await client.rpc("kpi_ligacoes", rpcArgs);
+      const { data, error } = await client.rpc("kpi_ligacoes", rpcArgs);
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "os indicadores de ligações são restritos — você não tem acesso." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? {};
     }
     case "listar_permissoes_menu": {
       // Gate has_role(admin) DENTRO da RPC (42501 para não-admin). Client com JWT.
-      const { data } = await client.rpc("admin_list_menu_permissions");
+      const { data, error } = await client.rpc("admin_list_menu_permissions");
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "a matriz de permissões de menu é restrita a admin." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? [];
     }
     case "consultar_tarefas": {
@@ -94,7 +135,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       // coluna inexistente (a real é process_number) e não casava número limpo.
       // Re-checa papel via auth.uid(), então usa o `client` com JWT.
       const q = String(args.busca ?? "").trim();
-      const { data } = await client.rpc("agent_consultar_processo", { p_busca: q });
+      const { data, error } = await client.rpc("agent_consultar_processo", { p_busca: q });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "a consulta de processos é restrita — você não tem acesso." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? [];
     }
     case "consultar_documentos": {
@@ -288,7 +334,12 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
     case "get_revisao_peca_context": {
       // Contexto da revisão (peça + metadados). RPC SECURITY DEFINER; roda sob a
       // identidade do usuário (o `client` carrega o JWT).
-      const { data } = await client.rpc("get_revisao_peca_context", { p_task_id: String(args.task_id) });
+      const { data, error } = await client.rpc("get_revisao_peca_context", { p_task_id: String(args.task_id) });
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "você não tem acesso ao contexto dessa revisão." }
+          : { erro: error.message, __erro_cru: erroCru(error) };
+      }
       return data ?? {};
     }
     default:
