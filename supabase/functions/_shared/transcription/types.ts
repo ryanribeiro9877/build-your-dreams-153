@@ -15,8 +15,13 @@
 export interface TranscriberInput {
   /** Binário do áudio (um bloco de gravação). */
   bytes: Uint8Array;
-  /** MIME (ex.: "audio/webm"); opcional, define a extensão enviada ao Whisper. */
+  /** MIME (ex.: "audio/webm"); opcional. NÃO é confiável para decidir a extensão:
+   *  `.ogg` anexado à mão chega com file.type vazio. Ver fileName. */
   mimeType?: string;
+  /** Nome original do arquivo, quando houver. TEM PRIORIDADE sobre o mimeType para
+   *  escolher a extensão enviada ao Whisper — bytes OGG rotulados "webm" não
+   *  decodificam, e era assim que o áudio anexado falhava em silêncio. */
+  fileName?: string;
   /** Idioma (ISO-639-1, ex.: "pt") — melhora a acurácia. Opcional. */
   language?: string;
 }

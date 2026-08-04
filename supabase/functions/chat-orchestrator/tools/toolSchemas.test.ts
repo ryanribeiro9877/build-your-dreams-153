@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { TOOLS, toolsFor, isWriteTool, READ_TOOL_NAMES } from "./registry.ts";
+import { TOOLS, toolsFor, isWriteTool, isKnownTool, READ_TOOL_NAMES } from "./registry.ts";
 
 Deno.test("toolsFor filtra pelo allowed_tools do agente", () => {
   const t = toolsFor(["consultar_cliente", "cadastrar_cliente"]);
@@ -100,6 +100,35 @@ Deno.test("registry: enums do P2 são os CHECKs reais do banco", () => {
     ["ad_judicia", "ad_judicia_et_extra", "especifica", "outro"]);
 });
 
+// Este teste não existia e por isso o defeito passou: o enum de `fase` ficou com as
+// 11 fases antigas enquanto a RPC e a tela já trabalhavam com 15, e mover para
+// pago_parcial/arquivada/suspensa/extinta era impossível PELO CHAT — sem nada falhar.
+// As 15 estão na ordem do CHECK execucoes_fase_check (banco, 04/08/2026).
+Deno.test("registry: fase de atualizar_fase_execucao tem as 15 do CHECK", () => {
+  const props = (TOOLS["atualizar_fase_execucao"].function.parameters as {
+    properties: Record<string, { enum?: string[] }>;
+  }).properties;
+  assertEquals(props.fase.enum, [
+    "ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa",
+    "redirecionamento", "pago", "pago_parcial", "deposito_judicial", "expedicao_alvara",
+    "alvara_pendente_assinatura", "arquivada", "suspensa", "extinta", "encerrada",
+  ]);
+});
+
+// iniciar_execucao é o OPOSTO e de propósito: a RPC valida contra 11 fases e cai
+// CALADA em 'ajuizada' para qualquer outra. Oferecer as 15 aqui faria o chat criar
+// execução "arquivada" que nasce "ajuizada" sem avisar ninguém.
+Deno.test("registry: fase INICIAL de iniciar_execucao fica com as 11 que a RPC valida", () => {
+  const props = (TOOLS["iniciar_execucao"].function.parameters as {
+    properties: Record<string, { enum?: string[] }>;
+  }).properties;
+  const fases = props.fase.enum ?? [];
+  assertEquals(fases.length, 11);
+  for (const fora of ["pago_parcial", "arquivada", "suspensa", "extinta"]) {
+    assertEquals(fases.includes(fora), false, `${fora} não pode ser fase inicial`);
+  }
+});
+
 Deno.test("registry: obrigatórios do P2 batem com o que a RPC exige", () => {
   const req = (tool: string) => (TOOLS[tool].function.parameters as { required: string[] }).required;
   assertEquals(req("registrar_diligencia"), ["descricao"]);
@@ -122,4 +151,18 @@ Deno.test("registry: cumprir_diligencia NÃO exige protocolo", () => {
   assertEquals(p.required.includes("protocolo"), false);
   assert(/NÃO é obrigatório/.test(TOOLS["cumprir_diligencia"].function.description),
     "a descrição precisa dizer que o protocolo não é obrigatório");
+});
+
+// A.6 (I-04/I-05): as duas tools que existem em tool_catalog (banco) e por isso
+// aparecem em allowed_tools de 10 agentes, mas NÃO estão implementadas neste edge.
+// Enquanto isso valer, a recusa desses objetos tem de sair pela REGRA DE PAPEL
+// (ROUTE_OBJECT_ACTIONS.regraPapel), nunca por "o agente não tem essa ferramenta".
+// Se um dia elas forem implementadas aqui, este teste falha DE PROPÓSITO: é o
+// sinal para remover o regraPapel e deixar o fluxo normal executar.
+Deno.test("isKnownTool distingue 'não existe aqui' de 'ninguém porta'", () => {
+  assertEquals(isKnownTool("registrar_diligencia"), true);
+  assertEquals(isKnownTool("consultar_cliente"), true);
+  assertEquals(isKnownTool("decidir_lancamento_extrato"), false);
+  assertEquals(isKnownTool("importar_matriz_documentos"), false);
+  assertEquals(isKnownTool("tool_que_nao_existe"), false);
 });

@@ -1019,8 +1019,34 @@ export default function JurisCloudOS() {
           }]);
         }
 
+        // A.8 (validação 03-04/08, teste A-05): aviso de ÁUDIO. Áudio NUNCA bloqueia
+        // e NUNCA é tratado como documento textual — ele tem pipeline próprio
+        // (transcribe-audio) e destino próprio (anexar_audio_autorizacao, o Card 5).
+        // Antes o .ogg caía em failedExtraction e o gate abaixo respondia "anexos não
+        // ingeridos — use PDF/DOCX/TXT pesquisável", deixando o Card 5 inalcançável.
+        if (ing.audio.length > 0) {
+          const nomes = ing.audio.join(", ");
+          const plural = ing.audio.length > 1;
+          const semTexto = ing.audioWithoutText.length > 0;
+          setMessages(prev => [...prev, {
+            id: `local_audio_notice_${Date.now()}`, role: "assistant", agent: "Sistema",
+            content:
+              `🎧 Recebi ${plural ? "seus áudios" : "seu áudio"} **${nomes}**. ` +
+              (semTexto
+                // Meia-execução tem de ser relatada: o arquivo está lá, o texto não.
+                ? `A transcrição automática **não ficou pronta** (${ing.audioWithoutText.join(", ")}) — ` +
+                  `o áudio está anexado à conversa, mas eu ainda não consigo ler o conteúdo dele. ` +
+                  `Se for a autorização de um cliente, me diga de quem é que eu guardo no dossiê; ` +
+                  `se o conteúdo for importante para a peça, me conte por texto.`
+                : `Transcrevi o conteúdo. Se ${plural ? "esses áudios são" : "esse áudio é"} a ` +
+                  `**autorização de um cliente**, me diga de quem é que eu guardo no dossiê dele ` +
+                  `com a transcrição.`),
+            timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          }]);
+        }
+
         // GATE (documentos textuais apenas): só bloqueia por upload falho ou por
-        // documento textual sem texto legível. Imagens NÃO entram aqui.
+        // documento textual sem texto legível. Imagens e ÁUDIOS NÃO entram aqui.
         const failedAll = [...ing.failedUpload, ...ing.failedExtraction];
         if (failedAll.length > 0) {
           await refundTokens(cost, requestId, "Estorno automatico: anexos falharam — geração bloqueada");
@@ -1216,6 +1242,13 @@ export default function JurisCloudOS() {
     { id: "sair", label: "Sair", icon: LogOut, color: "#FEFCE8", action: () => signOut(), show: canSeeMenuItem("sair") },
   ];
 
+  // A.9 — a busca do topo da sidebar é busca de CLIENTE, então usa EXATAMENTE o
+  // mesmo gate do item de menu "Clientes" e da tela /clientes (canSeeMenu é a
+  // fonte única; admin chave-mestra vê tudo). Sem isso o campo aceitava texto e
+  // devolvia silêncio para quem não enxerga `clients` no banco — pior que não
+  // ter campo. Ficando 1:1 com o menu, front e backend não divergem (bug B10).
+  const canSearchClients = canSeeMenu("clientes");
+
   // Tooltip overlay state
   const [openTooltipCount, setOpenTooltipCount] = useState(0);
   const [tooltipOverlay] = useState<boolean>(() => {
@@ -1273,6 +1306,7 @@ export default function JurisCloudOS() {
           sidebarCollapsed={sidebarCollapsed}
           sidebarSearch={sidebarSearch}
           setSidebarSearch={setSidebarSearch}
+          canSearchClients={canSearchClients}
           activeDept={activeDept}
           setActiveDept={setActiveDept}
           visibleDepts={visibleDepts}

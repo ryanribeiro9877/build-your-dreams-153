@@ -41,14 +41,53 @@ export const RECLAMACAO_DESFECHO_OPTIONS = ["atendida", "negada", "sem_resposta"
 
 /* ─── Card 8: pipeline de execução ────────────────────────────────────────── */
 
-/** CHECK execucoes_fase_check — NA ORDEM do pipeline (é assim que a tela desenha
- *  a trilha horizontal). `redirecionamento` e `penhora_negativa` são desvios, não
- *  etapas finais, mas ficam na sequência por serem o caminho comum após Sisbajud. */
+/** CHECK execucoes_fase_check — as 15 fases, na ORDEM EXATA do array do CHECK
+ *  (lido do banco em 04/08/2026). Esta é a lista COMPLETA: serve ao filtro de fase
+ *  e ao seletor "mover para a fase". Antes daqui só existiam 11 — as quatro que
+ *  faltavam (pago_parcial, arquivada, suspensa, extinta) já tinham dado em produção
+ *  (import de 30/07: 8 arquivada, 2 suspensa, 1 pago_parcial, 1 extinta em 300) e
+ *  eram invisíveis/inalcançáveis pela tela.
+ *  ATENÇÃO: esta ordem NÃO é a trilha desenhada na tela — ver EXECUCAO_TRILHA. */
 export const EXECUCAO_FASES = [
+  "ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa",
+  "redirecionamento", "pago", "pago_parcial", "deposito_judicial", "expedicao_alvara",
+  "alvara_pendente_assinatura", "arquivada", "suspensa", "extinta", "encerrada",
+] as const;
+
+/** A ESPINHA do pipeline — o que a trilha horizontal desenha, um traço por etapa.
+ *  São só as 11 etapas PROCESSUAIS, em sequência. `redirecionamento` e
+ *  `penhora_negativa` são desvios, não etapas finais, mas ficam na sequência por
+ *  serem o caminho comum após Sisbajud.
+ *  POR QUE as 4 novas não entram como traço 12/13/14/15:
+ *   - arquivada/suspensa/extinta são ESTADOS que podem cair sobre a execução a
+ *     partir de QUALQUER etapa (o import tem execução arquivada que nunca passou
+ *     por penhora). Pintá-las como etapa 12+ faria a trilha afirmar que penhora,
+ *     depósito e alvará aconteceram — mentira desenhada. Ficam fora da trilha
+ *     (posição null) e só aparecem no chip.
+ *   - pago_parcial não é etapa nova: é a MESMA etapa do pagamento, cumprida em
+ *     parte (a própria RPC diz que a execução segue viva para o saldo). Divide o
+ *     traço de `pago` — ver EXECUCAO_FASE_TRILHA_POS. */
+export const EXECUCAO_TRILHA = [
   "ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa",
   "redirecionamento", "pago", "deposito_judicial", "expedicao_alvara",
   "alvara_pendente_assinatura", "encerrada",
 ] as const;
+
+/** Onde cada uma das 15 fases cai na trilha. `null` = fora da trilha. */
+export const EXECUCAO_FASE_TRILHA_POS: Record<string, number | null> = {
+  ...Object.fromEntries(EXECUCAO_TRILHA.map((f, i) => [f, i])),
+  pago_parcial: EXECUCAO_TRILHA.indexOf("pago"),
+  arquivada: null,
+  suspensa: null,
+  extinta: null,
+};
+
+/** Posição na trilha; `null` tanto para fase fora da trilha quanto para código
+ *  desconhecido (fase nova no banco antes de chegar aqui) — nos dois casos a tela
+ *  não tem como afirmar até onde o processo andou. */
+export function posNaTrilha(fase: string): number | null {
+  return EXECUCAO_FASE_TRILHA_POS[fase] ?? null;
+}
 
 export const EXECUCAO_FASE_LABELS: Record<string, string> = {
   ajuizada: "Ajuizada",
@@ -58,17 +97,32 @@ export const EXECUCAO_FASE_LABELS: Record<string, string> = {
   penhora_negativa: "Penhora negativa",
   redirecionamento: "Redirecionamento",
   pago: "Pago",
+  pago_parcial: "Pago em parte",
   deposito_judicial: "Depósito judicial",
   expedicao_alvara: "Expedição de alvará",
   alvara_pendente_assinatura: "Alvará p/ assinatura",
+  arquivada: "Arquivada",
+  suspensa: "Suspensa",
+  extinta: "Extinta",
   encerrada: "Encerrada",
 };
 
 export const EXECUCAO_FASE_OPTIONS = EXECUCAO_FASES
   .map(value => ({ value, label: EXECUCAO_FASE_LABELS[value] }));
 
-/** Cor do chip por natureza da fase: dinheiro entrando = verde, desvio = vermelho,
- *  espera = amarelo, andamento = neutro. */
+/** Fase INICIAL de uma execução nova. É um subconjunto de propósito: a RPC
+ *  `iniciar_execucao` valida contra 11 fases e, para qualquer coisa fora dessa
+ *  lista, CAI CALADA em 'ajuizada' (não devolve erro). Oferecer "Arquivada" aqui
+ *  gravaria "Ajuizada" sem avisar ninguém. Quem precisa dessas quatro usa
+ *  "mover para a fase" depois — `atualizar_fase_execucao` aceita as 15. */
+export const EXECUCAO_FASE_INICIAL_OPTIONS = EXECUCAO_TRILHA
+  .map(value => ({ value: value as string, label: EXECUCAO_FASE_LABELS[value] }));
+
+/** Cor do chip por natureza da fase: dinheiro entrando = verde, desvio/desfecho
+ *  ruim = vermelho, espera = amarelo, andamento = neutro.
+ *  pago_parcial é AMARELO (não verde): entrou parte, ainda falta o saldo.
+ *  extinta é VERMELHO: execução morreu sem receber. arquivada/suspensa são
+ *  neutro/amarelo — processo parado, não processo resolvido. */
 export const EXECUCAO_FASE_CLS: Record<string, string> = {
   ajuizada: "n",
   prazo_pagamento: "p",
@@ -77,11 +131,73 @@ export const EXECUCAO_FASE_CLS: Record<string, string> = {
   penhora_negativa: "d",
   redirecionamento: "d",
   pago: "ok",
+  pago_parcial: "p",
   deposito_judicial: "ok",
   expedicao_alvara: "ok",
   alvara_pendente_assinatura: "p",
+  arquivada: "n",
+  suspensa: "p",
+  extinta: "d",
   encerrada: "n",
 };
+
+/** Só `encerrada` tira a execução do tickler: o cron
+ *  `gerar_pendencias_revisao_execucao` filtra `fase <> 'encerrada'` e nada mais
+ *  (lido do banco em 04/08/2026). Logo arquivada, suspensa, extinta e pago_parcial
+ *  CONTINUAM gerando pendência de revisão — desde que `proxima_revisao` esteja
+ *  marcada. Sem isso a tela parece bugada quando a revisão volta num processo
+ *  "arquivado". */
+export const EXECUCAO_FASE_TERMINAL = "encerrada";
+export function faseMantemTickler(fase: string): boolean {
+  return fase !== EXECUCAO_FASE_TERMINAL;
+}
+
+/** Fases que PARECEM fim de linha mas não são — a tela precisa dizer isso em voz
+ *  alta. Texto de UI (estático, mostrado antes e depois de mover); a nota oficial
+ *  de cada mudança vem no campo `nota` de `atualizar_fase_execucao` e é exibida
+ *  literalmente. A RPC dá nota para pago_parcial, arquivada e suspensa — NÃO dá
+ *  para extinta, embora o tickler também siga vigiando extinta; por isso o texto
+ *  de `extinta` aqui é nosso, não da RPC. */
+const NAO_ENCERRA: Record<string, string> = {
+  pago_parcial: "Pagou só parte: a execução segue viva para cobrar o saldo.",
+  arquivada: "Arquivada NÃO encerra a execução.",
+  suspensa: "Suspensa NÃO encerra a execução.",
+  extinta: "Extinta NÃO tira do tickler: só a fase “Encerrada” faz isso.",
+};
+
+/**
+ * O aviso é CONDICIONAL, e isso não é detalhe: o cron
+ * `gerar_pendencias_revisao_execucao` exige `proxima_revisao IS NOT NULL AND
+ * <= current_date`. Medido em 04/08: das 300 execuções, **1** tem revisão marcada —
+ * e das 12 nas quatro fases novas, **nenhuma**. A primeira versão deste texto
+ * afirmava "o lembrete de revisão continua vindo" sem condição, o que era falso
+ * para 100% das linhas dessas fases. Prometer vigilância que não existe é pior que
+ * não avisar: o usuário arquiva achando que alguém volta a olhar.
+ *
+ * `temRevisaoMarcada` = execucoes.proxima_revisao não nula.
+ */
+export function avisoFaseNaoTerminal(fase: string, temRevisaoMarcada: boolean): string | undefined {
+  const base = NAO_ENCERRA[fase];
+  if (!base) return undefined;
+  return temRevisaoMarcada
+    ? `${base} O lembrete de revisão continua vindo, porque há próxima revisão marcada.`
+    : `${base} Mas NÃO há próxima revisão marcada: ninguém vai ser lembrado disso. Use "Remarcar revisão" se quiser que volte.`;
+}
+
+/** A fase merece o selo "não encerra"? Só isso — sem afirmar nada sobre o tickler,
+ *  que depende de `proxima_revisao` e por isso vive em avisoFaseNaoTerminal(). */
+export function faseNaoEncerra(fase: string): boolean {
+  return NAO_ENCERRA[fase] !== undefined;
+}
+
+/** Contador de cabeçalho que ACOMPANHA o filtro. O defeito que isto corrige é de
+ *  confiança: a tela mostrava "· 300" com 128 linhas na frente do usuário, e aí o
+ *  número deixa de ser informação e passa a parecer erro. Com filtro ativo diz
+ *  "128 de 300" — o visível primeiro, o total ainda visível para não perder a
+ *  noção do tamanho da base. */
+export function contadorComFiltro(visiveis: number, total: number): string {
+  return visiveis === total ? String(total) : `${visiveis} de ${total}`;
+}
 
 /** CHECK execucoes_reu_tipo_check */
 export const REU_TIPO_LABELS: Record<string, string> = {

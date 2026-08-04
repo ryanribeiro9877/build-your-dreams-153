@@ -529,9 +529,13 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   atualizar_fase_execucao: { type: "function", function: {
     name: "atualizar_fase_execucao",
-    description: "Move a execução de um processo para outra FASE e registra o evento na linha do tempo. Use em \"o réu pagou no processo X\", \"pedimos penhora\", \"saiu o alvará\". Ao entrar em expedicao_alvara nasce sozinha a pendência do alvará.",
+    description: "Move a execução de um processo para outra FASE e registra o evento na linha do tempo. Use em \"o réu pagou no processo X\", \"pedimos penhora\", \"saiu o alvará\", \"pagou só uma parte\", \"o processo foi arquivado/suspenso\", \"a execução foi extinta\". Ao entrar em expedicao_alvara nasce sozinha a pendência do alvará. ATENÇÃO: pago_parcial, arquivada e suspensa NÃO encerram a execução — a RPC devolve nota explicando, e essa nota tem de ser repassada ao usuário.",
     parameters: { type: "object", properties: {
-      fase: { type: "string", enum: ["ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa", "redirecionamento", "pago", "deposito_judicial", "expedicao_alvara", "alvara_pendente_assinatura", "encerrada"], description: "Nova fase." },
+      // As 15 do CHECK execucoes_fase_check. Faltavam pago_parcial/arquivada/
+      // suspensa/extinta: a tela já as oferecia e a RPC já as aceitava, mas pelo
+      // chat era IMPOSSÍVEL mover para elas — o enum barrava antes. O teste de
+      // enums não cobria esta tool, então nada falhava (corrigido junto).
+      fase: { type: "string", enum: ["ajuizada", "prazo_pagamento", "pedido_penhora", "sisbajud", "penhora_negativa", "redirecionamento", "pago", "pago_parcial", "deposito_judicial", "expedicao_alvara", "alvara_pendente_assinatura", "arquivada", "suspensa", "extinta", "encerrada"], description: "Nova fase." },
       processo_numero: str("Número do processo como o usuário falou."),
       process_id: str("ID do processo, se já resolvido."),
       observacao: str("O que aconteceu, em uma frase — vai para a linha do tempo."),
@@ -744,4 +748,16 @@ export const TOOLS: Record<string, ToolDef> = {
 export function toolsFor(allowed: string[] | null | undefined): ToolDef[] {
   if (!allowed || allowed.length === 0) return [];
   return allowed.filter((n) => TOOLS[n]).map((n) => TOOLS[n]);
+}
+
+/**
+ * A tool EXISTE neste runtime? `agents.allowed_tools` é sincronizado de
+ * `tool_catalog` (banco) por trigger e pode listar tools que este edge NÃO
+ * implementa — `toolsFor` as filtra em silêncio, então o LLM nunca as vê e o
+ * agente responde "não tenho essa ferramenta". Quem precisa recusar por outro
+ * motivo (ex.: regra de papel) tem de poder distinguir "não existe aqui" de
+ * "existe e ninguém porta". Ver A.6 da validação de 03-04/08 (I-04/I-05).
+ */
+export function isKnownTool(name: string): boolean {
+  return !!TOOLS[name];
 }

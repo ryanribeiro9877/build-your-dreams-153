@@ -33,15 +33,42 @@ export function assertOpenAiDirect(model: string): void {
   }
 }
 
-/** Extensão de arquivo a partir do MIME (Whisper usa a extensão para decodificar). */
-function extFromMime(mime?: string): string {
+/**
+ * Extensão do arquivo para o Whisper (ele usa a extensão para decodificar).
+ *
+ * O MIME NÃO é confiável: um `.ogg` anexado à mão chega com `file.type` vazio no
+ * navegador, o front grava `mime_type = null` e aqui o fallback devolvia "webm" —
+ * ou seja, bytes OGG rotulados como WebM, que é o caminho de falha que a correção
+ * do áudio (A.8) existia para consertar. Por isso a extensão do NOME DO ARQUIVO tem
+ * prioridade sobre o MIME, e o fallback "webm" só vale quando não há nenhum dos dois
+ * (o áudio do microfone, que é sempre WebM de verdade).
+ */
+function extDoAudio(mime?: string, fileName?: string): string {
+  const peloNome = /\.([a-z0-9]{2,5})$/i.exec((fileName ?? "").trim())?.[1]?.toLowerCase();
+  const CONHECIDAS: Record<string, string> = {
+    ogg: "ogg", oga: "ogg", opus: "ogg", webm: "webm",
+    m4a: "m4a", mp4: "m4a", mp3: "mp3", mpga: "mp3", mpeg: "mp3",
+    wav: "wav", flac: "flac",
+  };
+  if (peloNome && CONHECIDAS[peloNome]) return CONHECIDAS[peloNome];
+
   const m = (mime ?? "").toLowerCase();
   if (m.includes("webm")) return "webm";
-  if (m.includes("ogg")) return "ogg";
+  if (m.includes("ogg") || m.includes("opus")) return "ogg";
   if (m.includes("mp4") || m.includes("m4a")) return "m4a";
   if (m.includes("mpeg") || m.includes("mp3")) return "mp3";
   if (m.includes("wav")) return "wav";
+  if (m.includes("flac")) return "flac";
   return "webm";
+}
+
+/** MIME coerente com a extensão escolhida — o Blob não pode contradizer o nome. */
+function mimeDaExt(ext: string): string {
+  const MAPA: Record<string, string> = {
+    ogg: "audio/ogg", webm: "audio/webm", m4a: "audio/mp4",
+    mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac",
+  };
+  return MAPA[ext] ?? "audio/webm";
 }
 
 interface OpenAiWhisperDeps {
@@ -67,11 +94,14 @@ export function createOpenAiWhisper(deps: OpenAiWhisperDeps): Transcriber {
   return {
     engine: OPENAI_WHISPER_ENGINE,
     async transcribe(input: TranscriberInput): Promise<TranscriptionResult> {
-      const ext = extFromMime(input.mimeType);
+      const ext = extDoAudio(input.mimeType, input.fileName);
       // Cast puramente de tipo (runtime inalterado): sob libs de TS mais estritas,
       // Uint8Array<ArrayBufferLike> não casa com BlobPart (que exige ArrayBuffer,
       // não SharedArrayBuffer). Os bytes vêm sempre de um ArrayBuffer comum.
-      const blob = new Blob([input.bytes as unknown as BlobPart], { type: input.mimeType || "audio/webm" });
+      // O type do Blob segue a EXTENSÃO escolhida, não o mimeType cru: se o nome diz
+      // .ogg e o mime veio vazio, mandar "audio/webm" contradiz o nome do arquivo e o
+      // Whisper falha na decodificação.
+      const blob = new Blob([input.bytes as unknown as BlobPart], { type: mimeDaExt(ext) });
       const form = new FormData();
       // Nome com extensão reconhecível é obrigatório para o Whisper decodificar.
       form.append("file", blob, `audio.${ext}`);

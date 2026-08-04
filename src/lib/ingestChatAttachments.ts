@@ -10,6 +10,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { extractFileText, sanitizeExtractedText } from "@/lib/extractFileText";
+// A.8: o áudio anexado à mão passa pela MESMA edge do microfone. Reusar a flag
+// evita dois interruptores para o mesmo pipeline.
+import { TRANSCRIPTION_ENABLED } from "@/lib/transcribeVoiceMessage";
 
 // Limite de tamanho do bucket `chat-attachments` (15 MiB). DEVE bater com o
 // file_size_limit do bucket no Supabase Storage — se um lado mudar sem o outro,
@@ -29,6 +32,10 @@ export const OCR_ENABLED =
 // para imagesWithoutText (comportamento de aviso, não bloqueia).
 const OCR_INVOKE_TIMEOUT_MS = 15_000;
 
+// Timeout do invoke da transcrição. Maior que o do OCR: o Whisper pode levar alguns
+// segundos por minuto de áudio (mesmo valor de transcribeVoiceMessage).
+const TRANSCRIBE_INVOKE_TIMEOUT_MS = 20_000;
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error("ocr_timeout")), ms);
@@ -45,6 +52,8 @@ export interface IngestResult {
   failedUpload: string[];     // arquivos que nem subiram (erro de upload ou acima do limite)
   skipped: string[];          // arquivos já anexados nesta sessão (dedup) — não reanexados
   imagesWithoutText: string[]; // IMAGENS anexadas (sem texto extraível): NÃO bloqueiam — só avisam (OCR é fase 2)
+  audio: string[];             // ÁUDIOS anexados: vão para TRANSCRIÇÃO, nunca para o ingestor de peça
+  audioWithoutText: string[];  // ÁUDIOS cuja transcrição não ficou pronta (flag off / erro / timeout)
 }
 
 // Uma imagem NUNCA tem texto extraível hoje (OCR é Track externo, fase 2). Por isso
@@ -54,6 +63,29 @@ export interface IngestResult {
 function isImageAttachment(file: File): boolean {
   if ((file.type || "").toLowerCase().startsWith("image/")) return true;
   return /\.(png|jpe?g|webp|gif|bmp|heic|heif|avif)$/i.test(file.name);
+}
+
+// A.8 (validação 03-04/08, teste A-05): ÁUDIO NÃO É DOCUMENTO TEXTUAL.
+//
+// Sequência medida: o microfone transcrevia para TEXTO (sem gerar anexo de áudio);
+// o agente então pedia "envie o áudio como anexo"; ao anexar o .ogg, este ingestor
+// tentava extrair texto, falhava, jogava o arquivo em `failedExtraction` e o gate
+// da tela bloqueava com "anexos não ingeridos — use PDF/DOCX/TXT pesquisável".
+// Resultado: o Card 5 (áudio de autorização) era INALCANÇÁVEL pela tela.
+//
+// Áudio tem pipeline próprio (edge `transcribe-audio` → `extracted_text`) e destino
+// próprio (tool `anexar_audio_autorizacao`). Classificar ANTES da extração é o que
+// desvia o arquivo do ingestor de peça.
+//
+// MANTER EM SINCRONIA com o espelho do edge (supabase/functions/chat-orchestrator/
+// caseDocFilter.ts): se as listas divergirem, o áudio volta a ser tratado como peça.
+// `.webm` entra porque é o que o MediaRecorder produz; `.oga`/`.opus` porque é o que
+// WhatsApp/Telegram exportam.
+const AUDIO_EXT_RE = /\.(ogg|oga|opus|webm|m4a|mp3|wav|aac|amr|mp4a)$/i;
+
+export function isAudioAttachment(file: Pick<File, "type" | "name">): boolean {
+  if ((file.type || "").toLowerCase().startsWith("audio/")) return true;
+  return AUDIO_EXT_RE.test(file.name || "");
 }
 
 function sanitizeName(name: string): string {
@@ -84,7 +116,10 @@ export async function ingestChatAttachments(
   userId: string,
   files: File[],
 ): Promise<IngestResult> {
-  const result: IngestResult = { uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [], imagesWithoutText: [] };
+  const result: IngestResult = {
+    uploaded: 0, failedExtraction: [], failedUpload: [], skipped: [],
+    imagesWithoutText: [], audio: [], audioWithoutText: [],
+  };
 
   for (const file of files) {
     // Trava anti-duplicação: se o mesmo arquivo já está anexado e ativo NESTA sessão
@@ -117,8 +152,14 @@ export async function ingestChatAttachments(
       continue;
     }
 
+    const isAudio = isAudioAttachment(file);
+    // A.8: extrair texto de áudio nunca faz sentido (é binário comprimido) e a
+    // tentativa era o que enchia `failedExtraction` e bloqueava a geração. Áudio
+    // pula a extração inteira: quem produz o texto dele é a edge transcribe-audio.
     let text: string | null = null;
-    try { text = await extractWithFallback(file); } catch { text = null; }
+    if (!isAudio) {
+      try { text = await extractWithFallback(file); } catch { text = null; }
+    }
     // Defensivo: re-sanitiza no ponto do insert. Garante que nenhum texto cru
     // (byte 0 / surrogate solto) chegue ao Postgres mesmo se um caminho novo de
     // extração esquecer de sanitizar. Sem isto o insert volta a dar 400.
@@ -128,7 +169,8 @@ export async function ingestChatAttachments(
     // ali o texto era esperado. Para IMAGEM a decisão fica ADIADA: se o OCR
     // estiver ligado, tentamos extrair no servidor antes de marcá-la como
     // "sem texto" (só cai em imagesWithoutText se o OCR falhar/vier vazio).
-    if (!safeText && !isImage) {
+    // ÁUDIO nunca entra aqui: o texto dele não era esperado neste ponto.
+    if (!safeText && !isImage && !isAudio) {
       result.failedExtraction.push(file.name);
     }
 
@@ -148,6 +190,30 @@ export async function ingestChatAttachments(
 
     if (insErr || !inserted) { result.failedUpload.push(file.name); continue; }
     result.uploaded++;
+
+    // A.8 — ÁUDIO: pipeline de TRANSCRIÇÃO (edge transcribe-audio), o mesmo que o
+    // microfone usa. A transcrição fica em chat_attachments.extracted_text, de onde
+    // a tool anexar_audio_autorizacao a lê ao guardar o áudio no dossiê. Nunca
+    // bloqueia: se a flag está off ou o Whisper falha, o ÁUDIO continua anexado e
+    // o usuário é avisado de que só o texto não ficou pronto (meia-execução relatada).
+    if (isAudio) {
+      result.audio.push(file.name);
+      let temTexto = false;
+      if (TRANSCRIPTION_ENABLED) {
+        try {
+          const { data } = await withTimeout(
+            supabase.functions.invoke("transcribe-audio", { body: { attachmentId: inserted.id } }),
+            TRANSCRIBE_INVOKE_TIMEOUT_MS,
+          );
+          const d = data as { ok?: boolean; text?: string } | null;
+          if (d?.ok && typeof d.text === "string" && d.text.trim()) temTexto = true;
+        } catch {
+          temTexto = false; // rede/timeout → degrade seguro
+        }
+      }
+      if (!temTexto) result.audioWithoutText.push(file.name);
+      continue; // áudio não passa por OCR nem por gate de texto legível
+    }
 
     // OCR (Briefing 1) — só para IMAGEM sem texto extraível no cliente.
     if (isImage && !safeText) {

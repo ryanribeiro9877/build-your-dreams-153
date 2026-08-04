@@ -68,6 +68,12 @@ describe("Sidebar responsive behavior", () => {
     localStorage.clear();
   });
 
+  // Timeout explícito de 15s: este é o único teste da suíte que monta o
+  // JurisCloudOS INTEIRO (import dinâmico + render da árvore completa) e consome
+  // ~4,3s dos 5s do default já isolado. Rodando junto com a suíte toda ele tomba por
+  // TEMPO, não por asserção — em 04/08 isso produziu dois falsos alarmes de
+  // "regressão" que custaram investigação (isolado: 17/17 verdes, duas rodadas).
+  // O relógio ganhou folga; nenhuma asserção foi afrouxada.
   it("Ctrl+B keyboard shortcut toggles the sidebar collapsed state", async () => {
     setViewport(1280);
     // Lazy import after mocks are set up
@@ -85,7 +91,7 @@ describe("Sidebar responsive behavior", () => {
     const after = container.querySelector("#jc-sidebar");
     const nowCollapsed = after!.classList.contains("collapsed");
     expect(nowCollapsed).toBe(!initiallyCollapsed);
-  });
+  }, 15000);
 
   it("Escape on tooltip closes it without losing focus on trigger", async () => {
     setViewport(1280);

@@ -140,7 +140,9 @@ serve(async (req) => {
 
     const { data: att, error: attErr } = await callerClient
       .from("chat_attachments")
-      .select("id, storage_path, mime_type")
+      // file_name entra porque a extensão dele decide como o Whisper decodifica
+      // quando o mime_type vem nulo (.ogg anexado à mão).
+      .select("id, storage_path, mime_type, file_name")
       .eq("id", attachmentId)
       .maybeSingle();
 
@@ -182,6 +184,11 @@ serve(async (req) => {
     const res = await transcriber.transcribe({
       bytes,
       mimeType: att.mime_type || undefined,
+      // O NOME importa mais que o mime: `.ogg` anexado à mão chega com mime_type
+      // nulo (file.type vazio no navegador) e, sem o nome, a extensão caía no
+      // fallback "webm" — bytes OGG rotulados WebM, que o Whisper não decodifica.
+      // Era exatamente o caso do áudio de autorização anexado pela tela.
+      fileName: att.file_name || undefined,
       language: "pt",
     });
     const text = (res.text || "").trim();

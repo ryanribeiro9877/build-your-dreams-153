@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EmptyState, formatDateBR } from "@/components/clients/shared";
 import {
-  EXECUCAO_FASES, EXECUCAO_FASE_LABELS, EXECUCAO_FASE_CLS, EXECUCAO_FASE_OPTIONS,
-  REU_TIPO_LABELS, REU_TIPO_OPTIONS,
+  EXECUCAO_TRILHA, EXECUCAO_FASE_LABELS, EXECUCAO_FASE_CLS, EXECUCAO_FASE_OPTIONS,
+  EXECUCAO_FASE_INICIAL_OPTIONS, avisoFaseNaoTerminal, faseNaoEncerra, posNaTrilha,
+  contadorComFiltro, REU_TIPO_LABELS, REU_TIPO_OPTIONS,
 } from "@/lib/motores23";
 
 /* ============================================================
@@ -19,6 +20,12 @@ import {
    `responsavel_nome` é TEXTO LIVRE de propósito: Daiane e Robson ainda não têm
    usuário no sistema (Card 2). O filtro por responsável — requisito do card, para
    separar sindicatos/Daiane de outros/Rodrigo — é feito sobre esse texto.
+
+   A LISTA NÃO FILTRA `execucoes.is_test` (a coluna existe, DEFAULT false). Hoje as
+   300 linhas de produção estão todas com is_test=false, então filtrar não mudaria
+   nada — e esconder linha por essa coluna sem combinar antes correria o risco de
+   sumir com dado real marcado errado. Decisão deliberada: fica sem filtro,
+   registrado aqui para não parecer esquecimento.
 ============================================================ */
 
 interface ExecucaoRow {
@@ -43,7 +50,14 @@ interface EventoRow {
   created_at: string;
 }
 
-type RpcRes = { ok?: boolean; motivo?: string; mensagem?: string; pendencia_alvara_criada?: boolean; proxima_revisao?: string };
+/** `nota` é campo de retorno de `atualizar_fase_execucao`: a RPC explica ali por que
+ *  a fase escolhida não fez o que parece (pago em parte segue viva; arquivada e
+ *  suspensa não são terminais). A tela mostrava só `pendencia_alvara_criada` e
+ *  engolia a nota — o texto exibido é o da RPC, literal, sem reescrita nossa. */
+type RpcRes = {
+  ok?: boolean; motivo?: string; mensagem?: string;
+  pendencia_alvara_criada?: boolean; proxima_revisao?: string; nota?: string;
+};
 
 function rpc(fn: string, args: Record<string, unknown>) {
   // Cast: RPCs dos Motores 2/3 fora dos tipos gerados. Chamada ACOPLADA.
@@ -80,24 +94,41 @@ const brl = (v: number | null) =>
 /* ---------- Trilha de fases ---------- */
 
 function Pipeline({ fase }: { fase: string }) {
-  const idx = EXECUCAO_FASES.indexOf(fase as typeof EXECUCAO_FASES[number]);
+  // A trilha desenha só a espinha processual (EXECUCAO_TRILHA). Arquivada/suspensa/
+  // extinta ficam FORA dela: são estados que caem sobre a execução em qualquer
+  // ponto, então a trilha inteira fica apagada em vez de mentir que o processo
+  // chegou até a etapa 12. Quem conta a fase nesse caso é o chip.
+  const pos = posNaTrilha(fase);
+  const foraDaTrilha = pos === null;
+  const naoEncerra = faseNaoEncerra(fase);
   return (
     <div style={{ display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap" }}>
-      {EXECUCAO_FASES.map((f, i) => {
-        const passou = idx >= 0 && i <= idx;
-        const atual = i === idx;
-        return (
-          <span key={f} title={EXECUCAO_FASE_LABELS[f]}
-            style={{
-              width: atual ? 22 : 12, height: 6, borderRadius: 3,
-              background: atual ? "var(--cli-ink)" : passou ? "var(--cli-muted)" : "var(--cli-line, rgba(0,0,0,.12))",
-              flexShrink: 0,
-            }} />
-        );
-      })}
+      <span style={{ display: "flex", gap: 3, alignItems: "center", opacity: foraDaTrilha ? 0.4 : 1 }}
+        title={foraDaTrilha ? "Fase fora da trilha — não dá para afirmar até onde o processo andou." : undefined}>
+        {EXECUCAO_TRILHA.map((f, i) => {
+          const passou = !foraDaTrilha && i <= (pos as number);
+          const atual = !foraDaTrilha && i === pos;
+          return (
+            <span key={f} title={EXECUCAO_FASE_LABELS[f]}
+              style={{
+                width: atual ? 22 : 12, height: 6, borderRadius: 3,
+                background: atual ? "var(--cli-ink)" : passou ? "var(--cli-muted)" : "var(--cli-line, rgba(0,0,0,.12))",
+                flexShrink: 0,
+              }} />
+          );
+        })}
+      </span>
       <span className={`cli-chip ${EXECUCAO_FASE_CLS[fase] ?? "n"}`} style={{ marginLeft: 6 }}>
         {EXECUCAO_FASE_LABELS[fase] ?? fase}
       </span>
+      {naoEncerra && (
+        // Selo curto na LISTA. Só diz "não encerra" — o que é sempre verdade. O que
+        // depende de `proxima_revisao` (se alguém vai ser lembrado) fica no drawer,
+        // onde a linha da execução está em mão e o texto pode ser condicional.
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cli-muted)" }}>
+          não encerra
+        </span>
+      )}
     </div>
   );
 }
@@ -176,8 +207,11 @@ function NovaExecucaoCard({ onCriada }: { onCriada: () => void }) {
         </div>
         <div style={{ flex: "0 1 180px" }}>
           <label className="cli-label">Fase inicial</label>
+          {/* Lista CURTA de propósito: `iniciar_execucao` só valida 11 fases e cai
+              calada em 'ajuizada' para qualquer outra. Arquivada/suspensa/extinta/
+              pago em parte se alcançam depois, em "mover para a fase". */}
           <select className="cli-select" value={f.fase} onChange={set("fase")}>
-            {EXECUCAO_FASE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {EXECUCAO_FASE_INICIAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div style={{ flex: "1 1 200px" }}>
@@ -210,6 +244,10 @@ function ExecucaoDrawer({ exec, onFechar, onMudou }: {
   const [dias, setDias] = useState("");
   const [recorrente, setRecorrente] = useState("");
   const [busy, setBusy] = useState(false);
+  // Nota da última mudança de fase (texto da RPC). Fica na tela em vez de só no
+  // toast: é justamente a informação contraintuitiva ("arquivada não encerra") que
+  // o usuário precisa reler quando a pendência de revisão voltar.
+  const [notaRpc, setNotaRpc] = useState<string | null>(null);
 
   const numero = exec.processes?.process_number ?? "";
 
@@ -232,6 +270,9 @@ function ExecucaoDrawer({ exec, onFechar, onMudou }: {
 
   useEffect(() => { void loadEventos(); }, [loadEventos]);
   useEffect(() => { setNovaFase(exec.fase); }, [exec.fase]);
+  // Clicar em OUTRA execução não remonta o drawer (não há key): sem isto a nota da
+  // execução anterior ficaria pendurada na tela da nova, virando informação falsa.
+  useEffect(() => { setNotaRpc(null); }, [exec.id]);
 
   async function mudarFase() {
     if (novaFase === exec.fase) { toast.error("Escolha uma fase diferente da atual."); return; }
@@ -245,9 +286,14 @@ function ExecucaoDrawer({ exec, onFechar, onMudou }: {
     const err = falha(data, error, "Fase NÃO alterada");
     setBusy(false);
     if (err) { toast.error(err); return; }
-    toast.success(data?.pendencia_alvara_criada
-      ? "Fase atualizada — pendência do alvará criada."
-      : "Fase atualizada.");
+    // `nota` vem literal da RPC (pago em parte / arquivada / suspensa). Vai no toast
+    // E fica fixa no drawer — some junto com o drawer, não em 4 segundos.
+    const nota = data?.nota?.trim() || null;
+    setNotaRpc(nota);
+    toast.success(
+      data?.pendencia_alvara_criada ? "Fase atualizada — pendência do alvará criada." : "Fase atualizada.",
+      nota ? { description: nota, duration: 8000 } : undefined,
+    );
     setObsFase("");
     await loadEventos();
     onMudou();
@@ -290,6 +336,24 @@ function ExecucaoDrawer({ exec, onFechar, onMudou }: {
 
       <div style={{ marginBottom: 14 }}><Pipeline fase={exec.fase} /></div>
 
+      {/* Aviso FIXO da fase atual: sem isto, a pendência de revisão voltando num
+          processo "arquivado" parece bug do sistema em vez de regra do negócio. */}
+      {avisoFaseNaoTerminal(exec.fase, exec.proxima_revisao !== null) && (
+        <div style={{
+          marginBottom: 12, padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+          color: "var(--cli-ink)", background: "var(--cli-line, rgba(0,0,0,.05))",
+        }}>
+          ⚠ {avisoFaseNaoTerminal(exec.fase, exec.proxima_revisao !== null)}
+        </div>
+      )}
+
+      {/* Nota devolvida pela última chamada de atualizar_fase_execucao, literal. */}
+      {notaRpc && (
+        <div style={{ marginBottom: 12, fontSize: 12, fontWeight: 600, color: "var(--cli-muted)" }}>
+          {notaRpc}
+        </div>
+      )}
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginBottom: 14, fontSize: 13 }}>
         <div><span className="cli-label">Réu</span><div style={{ fontWeight: 700 }}>
           {exec.reu_nome ?? "—"}{exec.reu_tipo ? ` (${REU_TIPO_LABELS[exec.reu_tipo] ?? exec.reu_tipo})` : ""}
@@ -313,6 +377,13 @@ function ExecucaoDrawer({ exec, onFechar, onMudou }: {
             placeholder="vai para a linha do tempo" />
         </div>
         <button className="cli-btn sm" disabled={busy} onClick={() => void mudarFase()}>Mudar fase</button>
+        {/* Avisa ANTES de mover, não só depois: quem escolhe "Arquivada" precisa
+            saber que a execução continua no tickler. */}
+        {novaFase !== exec.fase && avisoFaseNaoTerminal(novaFase, exec.proxima_revisao !== null) && (
+          <div style={{ flexBasis: "100%", fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>
+            {avisoFaseNaoTerminal(novaFase, exec.proxima_revisao !== null)}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginTop: 10 }}>
@@ -411,7 +482,13 @@ export default function Execucoes() {
   ), [rows, fFase, fResp]);
 
   const execAberta = (rows ?? []).find(r => r.id === aberta) ?? null;
-  const semResponsavel = (rows ?? []).filter(r => !(r.responsavel_nome ?? "").trim()).length;
+  const total = (rows ?? []).length;
+  const filtroAtivo = Boolean(fFase || fResp);
+  const semResp = (lista: ExecucaoRow[]) => lista.filter(r => !(r.responsavel_nome ?? "").trim()).length;
+  // Os DOIS contadores de "sem responsável" (no que está na tela e no total) porque
+  // este aviso também mentia com filtro ativo: dizia 8 tendo 0 na frente do usuário.
+  const semResponsavelVisivel = semResp(filtradas);
+  const semResponsavelTotal = semResp(rows ?? []);
 
   return (
     <div className="cli-root">
@@ -419,7 +496,7 @@ export default function Execucoes() {
         <div className="cli-top">
           <button className="cli-back" onClick={() => navigate("/sistema")}>← Voltar</button>
           <span className="cli-title">Execuções</span>
-          {rows !== null && <span className="cli-count">{filtradas.length} de {rows.length}</span>}
+          {rows !== null && <span className="cli-count">{contadorComFiltro(filtradas.length, total)}</span>}
           <span className="cli-spacer" />
         </div>
 
@@ -448,12 +525,12 @@ export default function Execucoes() {
                   {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
-              {(fFase || fResp) && (
+              {filtroAtivo && (
                 <button className="cli-btn ghost sm" onClick={() => { setFFase(""); setFResp(""); }}>Limpar</button>
               )}
-              {semResponsavel > 0 && (
+              {semResponsavelTotal > 0 && (
                 <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginLeft: "auto" }}>
-                  {semResponsavel} execução(ões) sem responsável definido
+                  {contadorComFiltro(semResponsavelVisivel, semResponsavelTotal)} execução(ões) sem responsável definido
                 </div>
               )}
             </div>
@@ -463,12 +540,15 @@ export default function Execucoes() {
             )}
 
             <div className="cli-card lift" style={{ padding: 18 }}>
+              {/* Contador ACOMPANHA o filtro: mostrava "· 300" com 128 linhas na
+                  tela, o que faz o usuário duvidar da lista (C-02). Com filtro
+                  ativo vira "128 de 300" — o visível na frente, o total ao lado. */}
               <div className="cli-sec-title" style={{ padding: "2px 4px 10px" }}>
-                Em acompanhamento{rows.length > 0 ? ` · ${rows.length}` : ""}
+                Em acompanhamento{total > 0 ? ` · ${contadorComFiltro(filtradas.length, total)}` : ""}
               </div>
               {filtradas.length === 0 ? (
-                <EmptyState icon="⚙" title={rows.length === 0 ? "Nenhuma execução em acompanhamento" : "Nada com esses filtros"}
-                  hint={rows.length === 0
+                <EmptyState icon="⚙" title={total === 0 ? "Nenhuma execução em acompanhamento" : "Nada com esses filtros"}
+                  hint={total === 0
                     ? "Inicie pelo botão acima, ou pelo chat: “execução ajuizada no processo X”."
                     : "Ajuste a fase ou o responsável."} />
               ) : filtradas.map(r => (

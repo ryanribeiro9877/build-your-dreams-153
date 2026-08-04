@@ -28,6 +28,7 @@ const baseProps = {
   sidebarCollapsed: false,
   sidebarSearch: "",
   setSidebarSearch: vi.fn(),
+  canSearchClients: true,
   activeDept: "assistente",
   setActiveDept: vi.fn(),
   visibleDepts: [],

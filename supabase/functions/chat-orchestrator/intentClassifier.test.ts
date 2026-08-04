@@ -628,3 +628,35 @@ Deno.test("isOndaAcaoRequest: P2 não criou gatilho amplo demais", () => {
   assertEquals(isOndaAcaoRequest("esse caminho é mais seguro"), false);
   assertEquals(isOndaAcaoRequest("fica seguro que eu resolvo"), false);
 });
+
+/* ─── A.6 (I-04/I-05): objetos SEM tool no chat, para a recusa sair pela regra ─ */
+
+Deno.test("normalizeRouteObject: EXTRATO_DECISAO e MATRIZ_DOCUMENTOS (+ sinônimos)", () => {
+  assertEquals(normalizeRouteObject("EXTRATO_DECISAO"), "EXTRATO_DECISAO");
+  assertEquals(normalizeRouteObject("LANCAMENTO_EXTRATO"), "EXTRATO_DECISAO");
+  assertEquals(normalizeRouteObject("decidir_lancamento_extrato"), "EXTRATO_DECISAO");
+  assertEquals(normalizeRouteObject("MATRIZ_DOCUMENTOS"), "MATRIZ_DOCUMENTOS");
+  assertEquals(normalizeRouteObject("matriz"), "MATRIZ_DOCUMENTOS");
+  assertEquals(normalizeRouteObject("MATRIZ_DOCUMENTAL"), "MATRIZ_DOCUMENTOS");
+});
+
+Deno.test("isOndaAcaoRequest: decisão de lançamento de extrato aciona", () => {
+  assertEquals(isOndaAcaoRequest("confirma esse lançamento do extrato"), true);
+  assertEquals(isOndaAcaoRequest("rejeita o lançamento da análise do extrato"), true);
+  assertEquals(isOndaAcaoRequest("esses lançamentos podem ser confirmados"), true);
+});
+
+Deno.test("isOndaAcaoRequest: matriz de documentos aciona", () => {
+  assertEquals(isOndaAcaoRequest("importa a matriz de documentos das teses"), true);
+  assertEquals(isOndaAcaoRequest("substitui a matriz documental"), true);
+});
+
+// O gatilho do extrato NÃO pode roubar as frases de vínculo bancário do Card 3:
+// "já temos o extrato do banco X" continua sendo RELACAO_BANCARIA (o hint ainda
+// aciona, mas por outro padrão — o que importa é não passar a casar por decisão).
+Deno.test("A.6: 'matriz' e 'extrato' isolados não viram os novos objetos", () => {
+  assertEquals(normalizeRouteObject("EXTRATO"), "OUTRO");
+  assertEquals(normalizeRouteObject("DOCUMENTOS"), "KIT_DOCUMENTAL");
+  // Frase sem nenhum dos dois temas continua fora do gatilho.
+  assertEquals(isOndaAcaoRequest("a matriz do prédio é bonita"), false);
+});

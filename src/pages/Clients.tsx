@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMyWorkspace } from "@/hooks/useMyWorkspace";
 import { toast } from "sonner";
@@ -20,12 +20,19 @@ export default function Clients() {
   const { workspace } = useMyWorkspace();
   const { canSeeMenu } = useMenuAccess();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [clients, setClients] = useState<SearchClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [errored, setErrored] = useState(false);
-  const [filters, setFilters] = useState<ClientFilters>(EMPTY_FILTERS);
+  // A.9 — a busca da sidebar manda o termo em ?nome=. Semeamos só no estado
+  // INICIAL (não em efeito) para que digitar/limpar aqui continue mandando: o
+  // filtro é o dono do que a tela mostra, a querystring é apenas o ponto de
+  // entrada. `nome` cai no filtro homônimo de search_clients (ILIKE parcial).
+  const [filters, setFilters] = useState<ClientFilters>(
+    () => ({ ...EMPTY_FILTERS, nome: (searchParams.get("nome") ?? "").trim() }),
+  );
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [page, setPage] = useState(1);
 

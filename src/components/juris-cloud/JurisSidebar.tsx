@@ -57,6 +57,18 @@ export interface JurisSidebarProps {
   sidebarCollapsed: boolean;
   sidebarSearch: string;
   setSidebarSearch: (val: string) => void;
+  /**
+   * A.9 — a busca do topo da sidebar é busca de CLIENTE. Ela só é renderizada
+   * para quem passa no MESMO gate da tela/menu de Clientes; o pai calcula com
+   * useMenuAccess().canSeeMenu("clientes"), que é a fonte única (chave-mestra
+   * do admin + overrides de user_menu_permissions).
+   * O gate de DADOS que a busca acaba tocando é o da RPC search_clients:
+   *   is_recepcao() OR has_role(uid,'admin') OR has_menu_grant(uid,'clientes')
+   * (a RLS de `clients` usa can_view_clients(), que além disso aceita sócio).
+   * Ou seja: quem não passa aqui receberia 42501 lá — campo que aceita texto e
+   * devolve silêncio é pior que campo ausente, então some.
+   */
+  canSearchClients: boolean;
   activeDept: string;
   setActiveDept: (dept: string) => void;
   visibleDepts: SidebarItem[];
@@ -79,6 +91,7 @@ export default function JurisSidebar({
   sidebarCollapsed,
   sidebarSearch,
   setSidebarSearch,
+  canSearchClients,
   activeDept,
   setActiveDept,
   visibleDepts,
@@ -96,6 +109,25 @@ export default function JurisSidebar({
 }: JurisSidebarProps) {
   const navigate = useNavigate();
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
+
+  // A.9 — a busca deixou de ser inerte: leva o termo para a tela de Clientes,
+  // que já sabe semear o filtro `nome` a partir da querystring (Clients.tsx lê
+  // ?nome=). O filtro `nome` de search_clients é ILIKE parcial, então o termo
+  // digitado vale como busca por parte do nome. Termo vazio não navega (não há
+  // o que buscar) — o resto do fluxo é do próprio /clientes.
+  const submitSearch = (source: "click" | "keyboard") => {
+    const termo = sidebarSearch.trim();
+    if (!termo) return;
+    trackUiEvent("nav_click", {
+      surface: "left_sidebar",
+      target_id: "search_clientes",
+      target_label: "Buscar cliente",
+      source,
+      collapsed: sidebarCollapsed,
+    });
+    setSidebarOpen(false);
+    navigate(`/clientes?nome=${encodeURIComponent(termo)}`);
+  };
 
   const withTooltip = (
     label: string,
@@ -148,15 +180,41 @@ export default function JurisSidebar({
           </div>
         </div>
 
-        <div className="jc-search">
-          <Search size={14} style={{ color: "var(--text3)", flexShrink: 0 }} />
-          <input
-            placeholder="Buscar processo, cliente..."
-            value={sidebarSearch}
-            onChange={e => setSidebarSearch(e.target.value)}
-            aria-label="Buscar processo ou cliente"
-          />
-        </div>
+        {/* A.9 — busca de cliente. Escondida (não desabilitada, não vazia) para
+            quem não passa no gate de Clientes: aceitar digitação e devolver
+            silêncio é pior que não ter campo. O placeholder promete só o que a
+            busca entrega hoje (nome de cliente) — não havia, e não há, destino
+            para busca por número de processo aqui. */}
+        {canSearchClients && (
+          <div className="jc-search" role="search">
+            <button
+              type="button"
+              onClick={() => submitSearch("click")}
+              aria-label="Buscar cliente"
+              title="Buscar cliente"
+              style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                background: "none", border: "none", padding: 0, cursor: "pointer",
+                color: "var(--text3)", flexShrink: 0,
+              }}
+            >
+              <Search size={14} style={{ color: "var(--text3)", flexShrink: 0 }} />
+            </button>
+            <input
+              placeholder="Buscar cliente por nome…"
+              value={sidebarSearch}
+              onChange={e => setSidebarSearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitSearch("keyboard");
+                }
+              }}
+              aria-label="Buscar cliente por nome"
+              enterKeyHint="search"
+            />
+          </div>
+        )}
 
         <nav className="jc-nav" aria-label="Departamentos e sistema">
           <div className="jc-section-label">Departamentos</div>

@@ -152,6 +152,13 @@
   .jc-notif-bell svg.lucide { display: inline-block !important; }
   button.jc-notif-bell[aria-label]::after { content: none !important; }
 
+  /* Lupa da busca na sidebar — MESMO caso do sino: é um <button> cujo único filho é
+     um svg.lucide com aria-label, então a regra acima o transformaria nas palavras
+     "Buscar cliente" dentro da caixa de busca. jsdom não carrega CSS, então nenhum
+     teste pegaria isso; foi revisão de código que pegou. */
+  .jc-search button svg.lucide { display: inline-block !important; }
+  .jc-search button[aria-label]::after { content: none !important; }
+
   button.lf-header-back-btn[aria-label]::after,
   a.lf-header-back-btn[aria-label]::after {
     content: none !important;

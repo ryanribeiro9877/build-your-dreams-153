@@ -30,7 +30,7 @@ import {
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
 import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
 import { reportError, flushSentry } from "./sentry.ts";
-import { toolsFor, isWriteTool, isDelegateTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
+import { toolsFor, isWriteTool, isDelegateTool, isKnownTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
 import { pickAgentForTool } from "./tools/pickAgent.ts";
 import { montarFiltroCampanha } from "./tools/campanhaFiltro.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -40,7 +40,14 @@ import {
   pushChild, popWithResult, buildDelegationContextBlock, materiaToConfeccaoCode,
 } from "./delegation.ts";
 import { decideActionRoute } from "./tools/rbac.ts";
-import { isCaseDocumentAttachment } from "./caseDocFilter.ts";
+import { isCaseDocumentAttachment, isAudioAttachment } from "./caseDocFilter.ts";
+// A.2/A.3 (validação 03-04/08): notas do resultado + resumo do efeito real.
+import { montarMensagemSucesso, serializarResultadoLeitura } from "./resultadoDaAcao.ts";
+// A.4 (validação 03-04/08): desambiguação de cliente ANTES do cartão.
+import {
+  TOOLS_QUE_RESOLVEM_CLIENTE, montarPerguntaCliente, escolherCandidato,
+  nomeClienteDosArgs, podeGuardarArgs, type CandidatoCliente,
+} from "./clientePreflight.ts";
 import { buildOcrDocContext } from "./ocrDocContext.ts";
 import { findIdentityDocId, isIdentityDoc, parseOcrFields, fieldsForCadastro, computeMissingFields, buildPendenciaDescricao } from "./ocrApplyGlue.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
@@ -641,6 +648,19 @@ interface RouteObjectAction {
   gate: string | null;
   /** Mensagem de recusa quando o gate reprova (PT-BR, diz a quem pedir). */
   recusa: string;
+  /**
+   * A.6 (validação 03-04/08, testes I-04/I-05): REGRA DE PAPEL do banco, em PT-BR.
+   *
+   * Nada foi gravado nesses testes (correto), mas a justificativa dada ao usuário
+   * foi "o Especialista Lembretes não tem essa ferramenta" — encanamento, e ensina
+   * o usuário errado (ele passa a achar que é problema de configuração de agente,
+   * não de permissão). Quando NENHUM agente porta a tool da ação e a ação tem
+   * regra de PAPEL no banco, o texto exibido é ESTE — nunca o de falta de tool.
+   *
+   * O texto sai do `IF NOT (...) RAISE EXCEPTION` da própria RPC (lido em
+   * pg_get_functiondef), então bate com a barreira real.
+   */
+  regraPapel?: string;
   /** Rótulo do estágio ("X está …") e do chain[0].path. */
   stage: string;
   path: string;
@@ -1025,6 +1045,35 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
       "poderes até renovar — diga isso. incluir_historico só quando pedirem as já renovadas/" +
       "revogadas. Sem cliente e sem janela a consulta traz a base inteira: avise nesse caso.",
   },
+  // ─── A.6: ações que EXISTEM no banco mas nenhum agente porta ────────────────
+  // Estas duas RPCs existem em produção (decidir_lancamento_extrato e
+  // importar_matriz_documentos) e têm gate de PAPEL, mas nenhuma delas está no
+  // registry de tools do chat. Sem entrada aqui, o pedido caía no fluxo genérico e
+  // o especialista da vez respondia "não tenho essa ferramenta" (I-04/I-05).
+  // gate=null nas duas: decidir_lancamento_extrato aceita advogado/sócio OU admin e
+  // importar_matriz_documentos exige admin — e NÃO existe RPC booleana sem
+  // argumentos para "é admin" (só is_socio*/is_recepcao*/meetings_*/audiencias_*),
+  // então pré-checar barraria quem tem direito. A recusa por PAPEL vem do
+  // regraPapel, que é o caminho real destes dois objetos hoje.
+  EXTRATO_DECISAO: {
+    tool: "decidir_lancamento_extrato", gate: null,
+    recusa: "", stage: "decidindo o lançamento do extrato", path: "objeto_extrato_decisao",
+    // Texto do RAISE: 'somente advogado/sócio decide sobre lançamento de extrato'
+    // (a RPC também aceita admin).
+    // "(ou administrador)" porque o IF NOT real é
+    // `is_socio_or_advogado() OR has_role(uid,'admin')`: omitir o admin fazia a
+    // recusa enunciar uma regra que não é a dele.
+    regraPapel: "Só advogado, sócio ou administrador decide sobre lançamento de extrato — essa confirmação não é da recepção. "
+      + "Pelo chat essa decisão ainda não está disponível: peça ao advogado responsável (ou ao sócio) "
+      + "para confirmar/rejeitar os lançamentos na tela de análise de extrato. Nada foi alterado.",
+  },
+  MATRIZ_DOCUMENTOS: {
+    tool: "importar_matriz_documentos", gate: null,
+    recusa: "", stage: "importando a matriz de documentos", path: "objeto_matriz_documentos",
+    // Texto do RAISE: 'somente admin importa a matriz de documentos'.
+    regraPapel: "Só o administrador importa a matriz de documentos das teses — não é ação de advogado, sócio nem recepção. "
+      + "Pelo chat essa importação não está disponível: peça ao administrador do sistema. Nada foi importado.",
+  },
   CAMPANHA_PROCURACAO: {
     tool: "gerar_campanha_renovacao_procuracao", gate: null,
     support: ["consultar_procuracoes"],
@@ -1225,6 +1274,34 @@ async function preflightCriarProcesso(
       ? `Atenção: este cliente já tem ${total} processo(s) ativo(s) — confirme se este é realmente um caso novo.`
       : undefined,
   };
+}
+
+// ─── A.4: pré-voo do CLIENTE (candidatos por NOME, com o JWT do usuário) ─────
+// agent_consultar_cliente é a MESMA RPC que o resolvedor determinístico usa: ela
+// re-checa o papel via auth.uid(), então precisa do JWT (sob service-role não
+// valeria a RLS). Devolve null quando NÃO foi possível consultar — o chamador
+// então segue o fluxo antigo (fail-open: a RPC da tool continua sendo a barreira).
+// Nunca lança.
+async function buscarCandidatosCliente(
+  supabaseUrl: string, userToken: string, nome: string, limite = 5,
+): Promise<CandidatoCliente[] | null> {
+  try {
+    const anonK = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!anonK) return null;
+    const jwt = createClient(supabaseUrl, anonK, { global: { headers: { Authorization: `Bearer ${userToken}` } } });
+    const { data, error } = await jwt.rpc("agent_consultar_cliente", { p_busca: nome });
+    if (error) {
+      console.warn(`[cliente-preflight] agent_consultar_cliente falhou: ${error.message}`);
+      return null;
+    }
+    const rows = (Array.isArray(data) ? data : []) as Array<{ id?: string; full_name?: string; nome?: string }>;
+    return rows.slice(0, limite)
+      .map((r) => ({ id: String(r.id ?? ""), nome: String(r.full_name ?? r.nome ?? "").trim() }))
+      .filter((c) => c.id && c.nome);
+  } catch (e) {
+    console.warn(`[cliente-preflight] falhou: ${(e as Error)?.message}`);
+    return null;
+  }
 }
 
 // ─── memória de sessão (histórico por session_id + resumo rolante) ───────────
@@ -1545,7 +1622,9 @@ async function loadCaseDocuments(admin: SupabaseClient, sessionId: string): Prom
     .order("created_at", { ascending: true });
   return (((data as { id: string; file_name: string; mime_type: string | null; extracted_text: string; summary: string | null; summary_generated_at: string | null; ocr_fields: unknown; ocr_confidence: number | null }[]) || [])
     // Voz é comando, não prova: anexo audio/* transcrito fica fora dos docs de caso.
-    .filter((d) => isCaseDocumentAttachment(d.mime_type) && d.extracted_text && d.extracted_text.trim().length > 0)
+    // A.8: o mime também pode vir vazio (.ogg anexado à mão), então o file_name entra
+    // na decisão — senão o áudio voltava a ser tratado como insumo de PEÇA.
+    .filter((d) => isCaseDocumentAttachment(d.mime_type, d.file_name) && d.extracted_text && d.extracted_text.trim().length > 0)
     .map((d) => ({ id: d.id, file_name: d.file_name, raw: d.extracted_text, summary: d.summary, summaryAt: d.summary_generated_at, ocrFields: d.ocr_fields, ocrConfidence: d.ocr_confidence })));
 }
 
@@ -2168,6 +2247,15 @@ function buildUniversalGuardrails(): string {
     "encaminhar algo a esse usuário (ex.: 'atribua isso para mim', 'crie a pendência comigo'), " +
     "chame consultar_usuario('mim') — a ferramenta resolve o próprio usuário da sessão. É " +
     "PROIBIDO pedir ao usuário o próprio nome para se autoidentificar.\n" +
+    // A.7 (validação 03-04/08, teste E-03): o agente afirmou "SLA interno de 3 dias
+    // úteis" — verificado que não existe em nenhum lugar do banco. Política inventada
+    // soa autoritativa e o usuário planeja em cima dela. Regra curta de propósito:
+    // regra longa dilui.
+    "J. PRAZO/SLA/POLÍTICA INTERNA — SÓ COM LASTRO DE FERRAMENTA: número de dias, prazo, SLA, " +
+    "política do escritório, percentual ou valor só podem ser AFIRMADOS se vierem do RETORNO de " +
+    "uma ferramenta nesta conversa (ou de prazo LEGAL, citando o artigo). Não existe \"SLA interno\", " +
+    "\"prazo padrão\" ou \"política da casa\" que você não tenha lido de uma ferramenta. Sem esse " +
+    "lastro: diga que não sabe e ofereça consultar — nunca estime, nunca arredonde, nunca ilustre.\n" +
     "═══ FIM DAS DIRETRIZES INVIOLÁVEIS ═══\n";
 }
 
@@ -2327,7 +2415,7 @@ async function runEntryConsulta(
       const data = await runReadTool(jwtClient, userId, c.function.name, safeJson(c.function.arguments));
       toolsUsed.push(c.function.name);
       toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
-      toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: JSON.stringify(data).slice(0, 8000) });
+      toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: serializarResultadoLeitura(data) });
     }
   }
   // Estourou o teto de iterações: pede a resposta final SEM tools (usa o que já leu).
@@ -2635,7 +2723,11 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       return `Atualizar${alvo}: ${partes.join("; ") || "sem alterações"}.`;
     }
     case "gerar_kit_documental":
-      return `Gerar o kit documental${args.client_name ? ` de ${args.client_name}` : " do cliente"} (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral) e salvar no dossiê aguardando assinatura.`;
+      // A.5: a edge gerar-kit-documental é IDEMPOTENTE (documento já gerado não é
+      // duplicado — devolve `ja_existiam`). O cartão prometia gerar os quatro
+      // incondicionalmente; agora a promessa é condicional e o resumo do efeito
+      // (resultadoDaAcao.ts) informa quantos nasceram agora e quantos já existiam.
+      return `Gerar o kit documental${args.client_name ? ` de ${args.client_name}` : " do cliente"} (procuração, contrato de honorários, declaração de hipossuficiência e ficha cadastral) e salvar no dossiê aguardando assinatura. Documento que já estiver gerado NÃO é duplicado — só nasce o que faltar.`;
     case "registrar_protocolo":
       return `Registrar o protocolo (concluir a tarefa)${args.task_titulo ? ` — ${args.task_titulo}` : ""}${args.observacao ? `. Obs.: ${args.observacao}` : ""}. Exige Reclame Aqui + Sentença Procedente anexados ao cliente.`;
     case "registrar_relacao_bancaria": {
@@ -2751,7 +2843,18 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
         valido: "válido", invalido: "INVÁLIDO", bloqueado: "BLOQUEADO", pendente: "pendente",
       };
       const s = S[String(args.status ?? "")] ?? String(args.status ?? "");
-      const extra = args.status === "invalido" ? " Nasce a pendência de recuperação de senha." : "";
+      // A.5 (B-05/B-06): a RPC DEDUPLICA a pendência (IF NOT EXISTS sobre user_tasks
+      // pendencia_tipo='recuperacao_senha_gov' aberta do cliente — lido em
+      // pg_get_functiondef 04/08/2026). Repetindo "a senha da X tá errada", o cartão
+      // prometia "Nasce a pendência" e a segunda NÃO nascia: o resultado corrigia, o
+      // texto do cartão não. O cartão é exibido ANTES de executar e não sabe se já
+      // existe uma aberta, então a promessa passa a ser CONDICIONAL — o resumo do
+      // efeito (resultadoDaAcao.ts) é que diz o que de fato aconteceu.
+      // `bloqueado` também gera pendência na RPC (não só `invalido`).
+      const geraPendencia = args.status === "invalido" || args.status === "bloqueado";
+      const extra = geraPendencia
+        ? " Se ainda não houver uma pendência de recuperação de senha aberta para este cliente, ela nasce; se já houver, nenhuma segunda é criada."
+        : "";
       // Sem senha no texto, por construção: esta tool não recebe senha.
       return `Marcar o acesso gov.br de ${quem} como ${s}${args.observacao ? ` — ${args.observacao}` : ""}.${extra}`;
     }
@@ -2924,6 +3027,41 @@ const ANEXO_DOSSIE_GUIDANCE = [
   "3. Ao final, confirme por NOME o que foi anexado e o que deu baixa (ex.: \"Anexei a procuração ao dossiê de Marina — deu baixa no checklist\"). NUNCA invente documentos: só os anexados nesta conversa.",
 ].join("\n");
 
+// ─── A.8 (validação 03-04/08, teste A-05): o ÁUDIO tem caminho ───────────────
+// Sequência medida: o microfone transcrevia para TEXTO (sem gerar anexo de áudio),
+// o agente pedia "envie o áudio como anexo" e o INGESTOR DE PEÇA barrava o .ogg
+// ("anexos não ingeridos — use PDF/DOCX/TXT pesquisável"). Resultado: o Card 5
+// (áudio de autorização) era inalcançável pela tela.
+//
+// Aqui garantimos o outro lado do conserto: quando a conversa TEM anexo de áudio,
+// o especialista recebe a instrução de tratá-lo como áudio (transcrição +
+// anexar_audio_autorizacao), NUNCA como insumo de peça. A exclusão do áudio dos
+// documentos de caso (caseDocFilter) já impede que ele vire "prova"; sem esta
+// guia, porém, o agente ficava sem saber que existe um caminho para o arquivo.
+const AUDIO_ANEXADO_GUIDANCE = [
+  "ÁUDIO ANEXADO NESTA CONVERSA: os arquivos de áudio listados abaixo estão na conversa e NÃO são insumo de peça — áudio não é documento textual e nunca deve ser tratado como tal.",
+  "1. Se o áudio é a AUTORIZAÇÃO/anuência de um cliente, proponha anexar_audio_autorizacao via ActionCard: resolva o cliente (consultar_cliente; com mais de um candidato, PERGUNTE qual) e guarde o áudio no dossiê com a transcrição.",
+  "2. Se o áudio ainda NÃO tem transcrição, avise que o arquivo foi guardado mas o texto não ficou pronto — é PROIBIDO afirmar que as duas coisas foram feitas.",
+  "3. NUNCA peça ao usuário para reenviar o áudio em PDF/DOCX/TXT, e NUNCA diga que não consegue ler anexos de áudio: o caminho existe e é este.",
+  "4. Se o usuário não disser de qual cliente é o áudio, PERGUNTE — não chute.",
+].join("\n");
+
+/** Anexos de ÁUDIO ativos da sessão (mime OU extensão), mais recentes primeiro. */
+async function loadAudioAttachments(
+  admin: SupabaseClient, sessionId: string,
+): Promise<Array<{ id: string; file_name: string; temTranscricao: boolean }>> {
+  const { data } = await admin.from("chat_attachments")
+    .select("id, file_name, mime_type, extracted_text")
+    .eq("session_id", sessionId).eq("is_active", true)
+    .order("created_at", { ascending: false }).limit(20);
+  return ((data as Array<{ id: string; file_name: string; mime_type: string | null; extracted_text: string | null }> | null) ?? [])
+    .filter((a) => isAudioAttachment(a.mime_type, a.file_name))
+    .map((a) => ({
+      id: a.id, file_name: a.file_name,
+      temTranscricao: !!(a.extracted_text && a.extracted_text.trim()),
+    }));
+}
+
 // `userToken` (A6 do reteste v170): o pré-voo de duplicata chama uma RPC que EXIGE
 // auth.uid() — sob service-role ela lança 42501 e o pré-voo virava no-op silencioso
 // (o cartão saía e a barreira só atuava na confirmação). Por isso o JWT do usuário
@@ -2968,8 +3106,11 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
         .select("id, file_name, mime_type, created_at")
         .eq("session_id", run.session_id).eq("is_active", true)
         .order("created_at", { ascending: false }).limit(20);
+      // A.8: uma ÚNICA definição de "é áudio" (caseDocFilter) — a lista de extensões
+      // duplicada aqui não conhecia .oga/.opus/.amr e deixava de fora justamente os
+      // arquivos que o usuário anexa à mão.
       const rows = ((atts as Array<{ id: string; file_name: string; mime_type: string | null }> | null) ?? [])
-        .filter((a) => /^audio\//i.test(a.mime_type ?? "") || /\.(webm|mp3|m4a|ogg|wav|aac)$/i.test(a.file_name ?? ""));
+        .filter((a) => isAudioAttachment(a.mime_type, a.file_name));
       let picked = ref ? rows.find((a) => (a.file_name || "").toLowerCase().includes(ref)) : undefined;
       picked ??= rows[0];   // mais recente
       if (picked) args = { ...args, __attachment_id: picked.id, __file_name: picked.file_name };
@@ -3049,6 +3190,52 @@ async function proposeAction(admin: SupabaseClient, run: any, n3: any, calls: Ll
           const { data: cli } = await admin.from("clients").select("full_name").eq("id", args.client_id as string).maybeSingle();
           const nm = (cli as { full_name?: string } | null)?.full_name;
           if (nm) args = { ...args, __client_name: nm };
+        }
+      }
+    }
+    // ─── A.4 (validação 03-04/08, teste A-03): DESAMBIGUAR O CLIENTE ANTES ────
+    // A ambiguidade do nome era descoberta DEPOIS do Confirmar: o cartão saía, o
+    // usuário confirmava, e só então a RPC devolvia motivo:'ambiguo'. Aqui o
+    // mesmo padrão do pré-voo de criar_processo passa a valer para as tools que
+    // resolvem cliente por NOME: 0 ou N candidatos → PERGUNTA, sem cartão; 1
+    // candidato → carimba o client_id e segue (a RPC nem precisa resolver).
+    // O pendente vai no metadata para a resposta curta do próximo turno
+    // CONTINUAR a ação (defeito 2 do A-03) — nunca virar small talk.
+    // Fail-open: sem JWT ou com falha na RPC, segue como antes (a RPC é a barreira).
+    const naoFeito = TOOLS_QUE_RESOLVEM_CLIENTE[tool];
+    if (naoFeito && userToken && !String(args.client_id ?? "").trim()) {
+      const nomeBusca = nomeClienteDosArgs(args);
+      const cands = nomeBusca ? await buscarCandidatosCliente(supabaseUrl, userToken, nomeBusca) : null;
+      if (nomeBusca && cands) {
+        if (cands.length === 1) {
+          args = { ...args, client_id: cands[0].id, cliente_nome: cands[0].nome };
+        } else {
+          const podeRetomar = podeGuardarArgs(args);
+          const seqA = await nextSeq(admin, run.session_id);
+          await admin.from("chat_messages").insert({
+            session_id: run.session_id, user_id: run.user_id, role: "assistant",
+            sequence_number: seqA, agent_id: n3.id,
+            content: montarPerguntaCliente(nomeBusca, cands, naoFeito, { podeRetomar }),
+            metadata: {
+              kind: "text", intent: "ACAO_COM_TOOL", agent_name: n3.name,
+              // `offer` é o mesmo mecanismo do offered_process_id (A6.3): a próxima
+              // mensagem curta é lida como escolha, não como conversa nova.
+              ...(podeRetomar && cands.length > 1
+                ? {
+                    offer: "escolher_cliente",
+                    pending_tool: tool,
+                    // Sem segredo aqui: podeGuardarArgs() barra args com senha/token.
+                    pending_args: args,
+                    candidatos: cands,
+                  }
+                : {}),
+            },
+          });
+          await admin.from("orchestration_runs")
+            .update({ status: "done", pending_actions: null, updated_at: new Date().toISOString() })
+            .eq("id", run.id);
+          console.log(`[cliente-preflight] run=${run.id} tool=${tool} candidatos=${cands.length} → pergunta ANTES do cartão`);
+          return; // sem cartão: nada a confirmar enquanto o cliente não estiver resolvido
         }
       }
     }
@@ -3846,7 +4033,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // ── leitura: executa inline, realimenta e salta ───────────────────────────
       const toolResult: unknown = await runReadTool(readClient, run.user_id, name, args);
       await persistEntityCarryover(admin, run.session_id, name, toolResult);
-      const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: JSON.stringify(toolResult).slice(0, 8000) }];
+      const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: serializarResultadoLeitura(toolResult) }];
       await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "read" }] });
       return fireNextStep(runId, supabaseUrl, serviceKey, userToken);
 
@@ -3861,6 +4048,9 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
 
       // Contexto comum (estável → cacheável): resumos dos anexos + modelos + memória.
       const caseDocs = await loadCaseDocuments(admin, run.session_id);
+      // A.8: os áudios da conversa NÃO entram em caseDocs (voz ≠ prova), então
+      // precisam ser carregados à parte para a guia do áudio saber que existem.
+      const audioAtts = await loadAudioAttachments(admin, run.session_id);
       if (caseDocs.length > 0 && (!segment || blockIdx === 0)) {
         await insertStage(admin, run.session_id, run.user_id, `${n3.name} analisando os documentos do caso...`, acaoStage, n3);
         await ensureAllCaseSummaries(admin, caseDocs, baseCtx);
@@ -3919,6 +4109,13 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         // especialista carrega a tool (Cadastro/Documentação) — senão seria inócua.
         ((caseDocs.length > 0 && CHAT_TOOLS_ENABLED && (n3.allowed_tools ?? []).includes("anexar_documento_cliente"))
           ? "\n\n" + ANEXO_DOSSIE_GUIDANCE + "\n\n" : "") +
+        // A.8: guia do ÁUDIO. Só quando há áudio na conversa, a escrita está ligada e
+        // o especialista porta anexar_audio_autorizacao. Lista os arquivos por NOME e
+        // diz quais ainda não têm transcrição (meia-execução tem de ser relatada).
+        ((audioAtts.length > 0 && CHAT_TOOLS_ENABLED && (n3.allowed_tools ?? []).includes("anexar_audio_autorizacao"))
+          ? "\n\n" + AUDIO_ANEXADO_GUIDANCE + "\n" +
+            audioAtts.map((a) => `- ${a.file_name}${a.temTranscricao ? " (com transcrição)" : " (SEM transcrição)"}`).join("\n") + "\n\n"
+          : "") +
         buildCaseBlock(caseDocs, MAX_CASE_TOKENS);
 
       // FIX 1: contexto ENXUTO para o passo de correção. A peça já está escrita —
@@ -4119,7 +4316,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
               // carry-over da sessão para os próximos turnos ("esse cliente" etc.).
               await persistEntityCarryover(admin, run.session_id, c.function.name, data);
               toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
-              toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: JSON.stringify(data).slice(0, 8000) });
+              toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: serializarResultadoLeitura(data) });
             }
           }
           // Estourou o teto de leituras: cai no fluxo normal (sem ferramentas) abaixo.
@@ -4518,9 +4715,26 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
     result: exec.ok ? exec.result : { error: exec.error }, executed_at: new Date().toISOString(),
   }).eq("id", action.id);
   const seq = await nextSeq(admin, action.session_id);
+  // Itens A.2 e A.3 da validação de 03-04/08 — este é O ÚNICO ponto onde a
+  // mensagem de sucesso de uma ação é montada, então a regra fica aqui e vale
+  // para TODA tool (regra geral, não caso a caso):
+  //   A.2: os campos de aviso do RESULTADO da RPC (aviso/nota/nota_tipo/limitacao/
+  //        mensagem + o array `notas` dos handlers do P2) NUNCA são descartados.
+  //        No teste J-01 o aviso "processo ainda não cadastrado" existia no jsonb
+  //        e morria aqui, virando "Pronto — executada".
+  //   A.3: a frase de sucesso CITA o efeito lido do retorno (ids criados,
+  //        contadores, flags pendencia_*_criada, duplicado/idempotente) em vez do
+  //        opaco "ação executada com sucesso" — que em A-01 cobriu duas coisas
+  //        distintas sem contar nenhuma.
+  // Tool sem contrato conhecido cai na INTENÇÃO (humanSummary), não na frase seca.
+  const conteudoSucesso = route === "pendencia"
+    ? "Pendência encaminhada ao Admin para aprovação."
+    : montarMensagemSucesso(action.tool, exec.result, {
+        intencao: humanSummary(action.tool, action.args), sufixo: ocrGlueNote,
+      });
   await admin.from("chat_messages").insert({
     session_id: action.session_id, user_id: user.id, role: "assistant", sequence_number: seq,
-    content: exec.ok ? (isDryRun ? `🧪 Teste (dry-run): não gravei nada em produção. Em uso real eu faria — ${humanSummary(action.tool, action.args)}` : (route === "pendencia" ? "Pendência encaminhada ao Admin para aprovação." : "Pronto — ação executada com sucesso." + ocrGlueNote)) : `Não consegui executar: ${exec.error}`,
+    content: exec.ok ? (isDryRun ? `🧪 Teste (dry-run): não gravei nada em produção. Em uso real eu faria — ${humanSummary(action.tool, action.args)}` : conteudoSucesso) : `Não consegui executar: ${exec.error}`,
     metadata: { kind: isDryRun ? "action_dry_run" : "action_done", action_id: action.id, ok: exec.ok },
   });
   const { data: remaining } = await admin.from("agent_actions")
@@ -5048,6 +5262,58 @@ serve(async (req) => {
       }
     }
 
+    // ─── A.4 (2): a resposta que ESCOLHE o cliente CONTINUA a ação ───────────────
+    // Defeito medido no A-03: depois da pergunta de desambiguação, o usuário
+    // respondia o nome escolhido, o turno caía em small talk e NADA era registrado
+    // — e o usuário acreditava que tinha registrado. É o pior modo de falha.
+    // Mesmo mecanismo do offered_process_id: a pergunta gravou offer=escolher_cliente
+    // + pending_tool + pending_args + candidatos no metadata; aqui a escolha é casada
+    // de forma determinística (sem LLM) e a ação vai DIRETO ao cartão, com o
+    // client_id resolvido. Sem casamento inequívoco, nada acontece aqui: o turno
+    // segue o fluxo normal e a pergunta continua valendo (nunca chutamos).
+    // Guarda barata: só uma resposta CURTA pode ser escolha de candidato — assim
+    // não pagamos uma consulta extra em todo turno longo (mesmo teto do
+    // escolherCandidato, que rejeita > 160 chars).
+    if (body.message.trim().length > 0 && body.message.trim().length <= 160) {
+      const { data: lastAsstC } = await admin.from("chat_messages")
+        .select("metadata").eq("session_id", body.sessionId).eq("role", "assistant")
+        .order("sequence_number", { ascending: false }).limit(3);
+      const ofertaC = ((lastAsstC as Array<{
+        metadata?: {
+          offer?: string; pending_tool?: string;
+          pending_args?: Record<string, unknown>; candidatos?: CandidatoCliente[];
+        };
+      }> | null) ?? []).find((r) => r.metadata?.offer === "escolher_cliente"
+        && r.metadata?.pending_tool && Array.isArray(r.metadata?.candidatos));
+      const meta = ofertaC?.metadata;
+      const escolhido = meta ? escolherCandidato(body.message, meta.candidatos ?? []) : null;
+      if (meta && escolhido) {
+        const toolPend = String(meta.pending_tool);
+        const spec = await resolveSpecialistWithTool(admin, userId, toolPend, ["consultar_cliente"]);
+        if (spec) {
+          console.log(`[escolher-cliente] session=${body.sessionId} escolha resolvida → cartão de ${toolPend}`);
+          const argsPend = { ...(meta.pending_args ?? {}), client_id: escolhido.id, cliente_nome: escolhido.nome };
+          const { data: escRun, error: escErr } = await admin.from("orchestration_runs").insert({
+            session_id: body.sessionId, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "executing_n3", entry_agent_id: agent.id,
+            target_n3_id: spec.id, intent_category: "ACAO_COM_TOOL", route_path: "full",
+            chain: [{ level: 0, path: "escolha_cliente", intent: "ACAO_COM_TOOL", agent: spec.name, tool: toolPend }],
+          }).select("id").single();
+          if (escErr || !escRun) return errResp(500, "db_error", `Falha ao criar run: ${escErr?.message}`);
+          const escRunId = (escRun as { id: string }).id;
+          const { data: escRunFull } = await admin.from("orchestration_runs").select("*").eq("id", escRunId).maybeSingle();
+          // Cartão montado DIRETO (sem novo turno de LLM): os dados já foram
+          // coletados no turno anterior; só o cliente estava em aberto.
+          await proposeAction(admin, escRunFull, spec, [{
+            id: `escolha_${escRunId}`, type: "function",
+            function: { name: toolPend, arguments: JSON.stringify(argsPend) },
+          }], supabaseUrl, serviceKey, [], token);
+          return json(202, { runId: escRunId, sessionId: body.sessionId, status: "awaiting_confirmation", intent: "ACAO_COM_TOOL", path: "escolha_cliente" });
+        }
+        console.warn(`[escolher-cliente] session=${body.sessionId} sem especialista portador de ${toolPend} — segue fluxo normal`);
+      }
+    }
+
     // ─── A6.3: "sim, atualiza" reaproveita o processo OFERECIDO ──────────────────
     // O aviso de duplicata (pré-voo) oferece atualizar o processo existente e grava
     // offered_process_id no metadata daquele turno. Sem este bloco, a resposta curta
@@ -5152,6 +5418,41 @@ serve(async (req) => {
             status: "done", path: `${objAction.path}_sem_permissao`, intent: "ACAO_COM_TOOL",
           });
         }
+        // ─── A.6 (I-04/I-05): recusa pela REGRA DE PAPEL, não por falta de tool ──
+        // Publica o texto da regra do banco e encerra o turno. Duas situações caem
+        // aqui, ambas com NADA gravado (não há como gravar):
+        //   (a) a tool do objeto NÃO existe no registry do chat. Isso não é o mesmo
+        //       que allowed_tools vazio: tool_catalog já sincroniza
+        //       decidir_lancamento_extrato em 10 agentes (conferido no banco em
+        //       04/08), então resolveSpecialistWithTool ACHA um portador — mas
+        //       toolsFor filtra pelo registry, a tool nunca chega ao LLM e o agente
+        //       responde "não tenho essa ferramenta". Era exatamente o I-04/I-05.
+        //   (b) a tool existe no registry, mas nenhum agente do usuário a porta.
+        // sessionId em const: dentro do closure o TS perde o narrowing do body.
+        const sidRP: string = body.sessionId;
+        const recusaPorPapel = async (motivo: string) => {
+          console.log(`[objeto-onda] session=${sidRP} objeto=${routeObj} tool=${objAction.tool} (${motivo}) → recusa pela REGRA DE PAPEL`);
+          const { data: rpRun } = await admin.from("orchestration_runs").insert({
+            session_id: sidRP, user_id: userId, user_message_id: userMsgId,
+            original_message: body.message, status: "done", entry_agent_id: agent.id,
+            intent_category: "ACAO_COM_TOOL", route_path: "fast",
+            chain: [{ level: 0, path: `${objAction.path}_regra_papel`, intent: "ACAO_COM_TOOL", agent: agent.name, objeto: routeObj, motivo }],
+          }).select("id").single();
+          const rpSeq = await nextSeq(admin, sidRP);
+          await admin.from("chat_messages").insert({
+            session_id: sidRP, user_id: userId, role: "assistant", agent_id: agent.id,
+            content: objAction.regraPapel!, sequence_number: rpSeq,
+            metadata: { kind: "text", intent: "ACAO_COM_TOOL", agent_name: agent.name },
+          });
+          await admin.rpc("increment_session_counters", { p_session_id: sidRP, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
+          return json(202, {
+            runId: (rpRun as { id: string } | null)?.id ?? null, sessionId: sidRP,
+            status: "done", path: `${objAction.path}_regra_papel`, intent: "ACAO_COM_TOOL",
+          });
+        };
+        if (objAction.regraPapel && !isKnownTool(objAction.tool)) {
+          return await recusaPorPapel("tool_fora_do_registry");
+        }
         const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool, objAction.support ?? []);
         if (spec) {
           console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} → tool=${objAction.tool} → ${spec.name} (${spec.id})`);
@@ -5175,6 +5476,9 @@ serve(async (req) => {
           fireNextStep(objRunId, supabaseUrl, serviceKey, token); // propaga o JWT (RLS do N3)
           return json(202, { runId: objRunId, sessionId: body.sessionId, status: "processing", intent: "ACAO_COM_TOOL", path: objAction.path });
         }
+        // Nenhum agente porta a tool. Com regra de papel, é ela que o usuário ouve;
+        // sem ela, o comportamento é exatamente o de antes (fluxo normal).
+        if (objAction.regraPapel) return await recusaPorPapel("sem_portador");
         console.log(`[objeto-onda] session=${body.sessionId} objeto=${routeObj} sem especialista portador de ${objAction.tool} — segue fluxo normal`);
       }
     }

@@ -109,7 +109,10 @@ O usuário enviou uma mensagem TRIVIAL (saudação, cortesia ou small talk), SEM
 Responda de forma BREVE, calorosa e natural em português do Brasil (1 a 2 frases) e CONVIDE o
 usuário a dizer no que você pode ajudar juridicamente (ex.: elaborar uma peça, analisar um
 documento, tirar uma dúvida). NÃO invente informação jurídica, NÃO redija peça, NÃO peça dados
-sensíveis e NÃO faça perguntas investigativas. Apenas acolha e convide a informar a demanda.`;
+sensíveis e NÃO faça perguntas investigativas. Apenas acolha e convide a informar a demanda.
+A.7: NUNCA afirme prazo, SLA, política interna, percentual ou número de dias do escritório — esse
+caminho não consulta ferramenta nenhuma, então você não tem lastro para nada disso. Se perguntarem,
+diga que precisa consultar e convide a fazer o pedido; é PROIBIDO estimar ou dar exemplo numérico.`;
 
 // System prompt da resposta de PEDIR DADOS (NEGOCIO_SEM_INSUMO) — específica e amigável.
 export const NEED_INFO_SYSTEM = `Você é o assistente virtual de um escritório de advocacia (JurisAI).
@@ -117,7 +120,11 @@ O usuário pediu uma peça/trabalho jurídico, mas NÃO forneceu informação su
 Responda de forma BREVE e amigável em português do Brasil pedindo os dados de forma ESPECÍFICA:
 quem é o cliente, qual é o réu, os fatos e os valores envolvidos, e o tema/objeto da peça. Peça que
 ele envie por TEXTO. NÃO invente dados, NÃO produza a peça e NÃO rode nenhuma análise — apenas peça as
-informações necessárias, de maneira objetiva e acolhedora.`;
+informações necessárias, de maneira objetiva e acolhedora.
+
+PRAZO/SLA/POLÍTICA: este caminho NÃO chama ferramenta nenhuma, então você não tem lastro para
+nenhum número. NUNCA prometa prazo de entrega, SLA, dias úteis, percentual ou política interna
+("em 3 dias úteis eu entrego"). Se perguntarem, diga que não sabe e que pode consultar.`;
 
 // Adendo sobre OCR: só quando houver anexo (imagem) do qual o usuário pode estar
 // esperando que o sistema "leia" os dados — hoje isso ainda não acontece.
@@ -336,6 +343,11 @@ export type RouteObject =
   | "AUDIENCIA_PREPARO" | "LEMBRETE_AUDIENCIA"
   | "APOLICE_REGISTRAR" | "APOLICE_UPDATE" | "APOLICE_CONSULTA"
   | "PROCURACAO_REGISTRAR" | "PROCURACAO_CONSULTA" | "CAMPANHA_PROCURACAO"
+  // A.6 (validação 03-04/08): objetos cuja RPC existe em produção e tem gate de
+  // PAPEL, mas que NENHUM agente porta como tool. Sem objeto próprio, o pedido
+  // caía no fluxo genérico e a recusa saía como "o especialista não tem essa
+  // ferramenta" em vez da regra real (só advogado/sócio · só admin).
+  | "EXTRATO_DECISAO" | "MATRIZ_DOCUMENTOS"
   | "OUTRO";
 
 export const ACTION_OBJECT_RULES = `Você é um CLASSIFICADOR de OBJETO de pedidos operacionais de um escritório de advocacia. Decida qual é o OBJETO REAL do pedido, NUNCA pelo verbo isolado — verbos como "cadastrar", "adicionar", "incluir", "marcar", "criar", "atribuir" são AMBÍGUOS; o que decide é SOBRE O QUE eles agem.
@@ -384,6 +396,8 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "PROCURACAO_REGISTRAR": o objeto é a PROCURAÇÃO de um cliente, com a data em que foi ASSINADA e a validade. Ex.: "a procuração da dona Fulana foi assinada em 03/03, ad judicia", "anexei a procuração nova do Fulano, assinada ontem, validade 24 meses", "registra a procuração dele". ATENÇÃO: é o REGISTRO DA VIGÊNCIA de uma procuração assinada — não é GERAR os documentos do cliente (KIT_DOCUMENTAL, que produz a minuta para assinar) nem redigir peça (OUTRO).
 - "PROCURACAO_CONSULTA": o objeto é a LISTA de procurações e seus vencimentos. Ex.: "quais procurações vencem esse mês?", "a procuração da dona Fulana está vigente?", "quem está com procuração vencida?", "quais procurações não têm PDF no dossiê?". É leitura.
 - "CAMPANHA_PROCURACAO": o objeto é a CAMPANHA de ligação para RENOVAR PROCURAÇÃO — montar a fila de quem tem procuração vencendo. Ex.: "monta a campanha de renovação de procuração", "quero ligar para todos que têm procuração vencendo esse mês", "cria a fila de renovação de procuração dos próximos 60 dias". É a campanha ESPECÍFICA de procuração (fila montada pelo vencimento), distinta da campanha por filtro bancário/cadastral (CAMPANHA).
+- "EXTRATO_DECISAO": o objeto é a DECISÃO sobre um LANÇAMENTO da análise de extrato — confirmar ou rejeitar um desconto/lançamento que o sistema listou. Ex.: "confirma esse lançamento do extrato", "rejeita o desconto de 43,90 da análise", "esses lançamentos do extrato estão certos, confirma". É decidir sobre item de extrato JÁ analisado — não é registrar vínculo bancário (RELACAO_BANCARIA) nem apólice (APOLICE_REGISTRAR).
+- "MATRIZ_DOCUMENTOS": o objeto é a MATRIZ DE DOCUMENTOS das teses (a tabela que diz quais documentos cada tipo de ação exige) — importar/substituir esse de-para em lote. Ex.: "importa a matriz de documentos das teses", "sobe a lista de documentos por tese", "substitui a matriz documental". É configuração do catálogo — não é pedir documentos de um cliente (OUTRO) nem gerar o kit (KIT_DOCUMENTAL).
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
 Separe também os pares do P2: a diligência junto ao juízo (DILIGENCIA_*) · o preparo e o lembrete da audiência (AUDIENCIA_PREPARO/LEMBRETE_AUDIENCIA) · a apólice de seguro (APOLICE_*) · a procuração assinada e sua renovação (PROCURACAO_*/CAMPANHA_PROCURACAO).
@@ -464,6 +478,11 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
       || s === "PROCURACOES" || s === "PROCURAÇÕES") return "PROCURACAO_CONSULTA";
   if (s === "PROCURACAO_REGISTRAR" || s === "PROCURACAO" || s === "PROCURAÇÃO"
       || s === "REGISTRAR_PROCURACAO") return "PROCURACAO_REGISTRAR";
+  // A.6: objetos sem tool no chat — existem para a recusa sair pela REGRA DE PAPEL.
+  if (s === "EXTRATO_DECISAO" || s === "LANCAMENTO_EXTRATO"
+      || s === "DECIDIR_LANCAMENTO_EXTRATO") return "EXTRATO_DECISAO";
+  if (s === "MATRIZ_DOCUMENTOS" || s === "MATRIZ" || s === "MATRIZ_DOCUMENTAL"
+      || s === "IMPORTAR_MATRIZ_DOCUMENTOS") return "MATRIZ_DOCUMENTOS";
   return "OUTRO";
 }
 
@@ -591,9 +610,20 @@ const PROCURACAO_RE =
 const AUDIENCIA_P2_RE =
   /(?<![\wÀ-ÿ])((?:lembr[\wÀ-ÿ]*|avis[\wÀ-ÿ]*|confirm[\wÀ-ÿ]*|falt[\wÀ-ÿ]*|prepar[\wÀ-ÿ]*)[\s\S]{0,60}?audi[êe]nci[\wÀ-ÿ]*|audi[êe]nci[\wÀ-ÿ]*[\s\S]{0,60}?(?:lembr[\wÀ-ÿ]*|avis[\wÀ-ÿ]*|confirm[\wÀ-ÿ]*|falt[\wÀ-ÿ]*|documento[\wÀ-ÿ]*))(?![\wÀ-ÿ])/i;
 
+// A.6: gatilhos dos dois objetos sem tool no chat. "extrato" sozinho NÃO aciona
+// (ele já é alvo de RELACAO_BANCARIA: "já temos o extrato do banco X"), então
+// exige-se a vizinhança de DECIDIR sobre lançamento/desconto da análise. A matriz
+// exige "matriz" perto de documento/tese — "matriz" isolado é palavra comum.
+// Cauda de palavra SEMPRE [\wÀ-ÿ]* (`\w` é ASCII e reprovaria "lançamento").
+const EXTRATO_DECISAO_RE =
+  /(?<![\wÀ-ÿ])((confirm[\wÀ-ÿ]*|rejeit[\wÀ-ÿ]*|recus[\wÀ-ÿ]*|valid[\wÀ-ÿ]*|aprov[\wÀ-ÿ]*)[\s\S]{0,60}?(lan[çc]amento[\wÀ-ÿ]*|an[áa]lise do extrato|descontos? do extrato)|(lan[çc]amento[\wÀ-ÿ]*|an[áa]lise do extrato)[\s\S]{0,60}?(confirm[\wÀ-ÿ]*|rejeit[\wÀ-ÿ]*|recus[\wÀ-ÿ]*))(?![\wÀ-ÿ])/i;
+const MATRIZ_DOCUMENTOS_RE =
+  /(?<![\wÀ-ÿ])matriz(?![\wÀ-ÿ])[\s\S]{0,40}?(?<![\wÀ-ÿ])(documento[\wÀ-ÿ]*|documental|tese[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
+  if (EXTRATO_DECISAO_RE.test(m) || MATRIZ_DOCUMENTOS_RE.test(m)) return true;
   if (CREDENCIAL_RE.test(m) || CREDENCIAL_GOV_RE.test(m) || NIVEL_CONTA_RE.test(m)) return true;
   if (RELACAO_BANCARIA_RE.test(m) || CAMPANHA_RE.test(m) || LIGACAO_RE.test(m)
       || KPI_LIGACOES_RE.test(m) || AUDIO_AUTORIZACAO_RE.test(m)) return true;
