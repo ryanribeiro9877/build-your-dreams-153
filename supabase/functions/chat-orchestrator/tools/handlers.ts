@@ -119,6 +119,33 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
     // quem não tem acesso: o erro é devolvido como texto para o especialista
     // dizer "você não tem acesso a isso", nunca como lista vazia (vazio mentiria
     // que não há execuções).
+    case "consultar_documentos_obrigatorios": {
+      // Contrato do banco: (p_tese, p_client_id, p_cliente_nome). O `aviso` de
+      // matriz não cadastrada vem no retorno e o serializador de leitura o põe na
+      // FRENTE do payload — é o J-06, que só falhava porque a tool era invisível.
+      const rpcArgs: Record<string, unknown> = {};
+      if (args.tese) rpcArgs.p_tese = args.tese;
+      if (args.client_id) rpcArgs.p_client_id = args.client_id;
+      const nomeDoc = nomeCliente(args);
+      if (nomeDoc) rpcArgs.p_cliente_nome = nomeDoc;
+      const { data, error } = await client.rpc("consultar_documentos_obrigatorios", rpcArgs);
+      if (error) {
+        return error.code === "42501"
+          ? { erro: "você não tem acesso à matriz de documentos das teses." }
+          : { erro: error.message };
+      }
+      const r = (data ?? {}) as Record<string, unknown>;
+      if (r.ok === false) {
+        // `tese_nao_encontrada` é o caso comum: apelido que ainda não foi cadastrado
+        // em tipo_acao_apelidos. A mensagem tem de mandar o usuário para o lugar
+        // certo em vez de dizer só "não encontrei".
+        if (r.motivo === "tese_nao_encontrada") {
+          return { erro: `não achei essa tese na matriz${r.mensagem ? `: ${r.mensagem}` : ""}. Confirme o nome, ou cadastre o apelido dela para eu reconhecer daqui em diante.` };
+        }
+        return { erro: erroClienteRpc(r, "não consultei a matriz") };
+      }
+      return r;
+    }
     case "consultar_reclamacoes": {
       const rpcArgs: Record<string, unknown> = {};
       if (args.client_id) rpcArgs.p_client_id = args.client_id;

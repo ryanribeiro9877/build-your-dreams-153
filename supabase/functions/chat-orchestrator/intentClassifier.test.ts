@@ -660,3 +660,29 @@ Deno.test("A.6: 'matriz' e 'extrato' isolados não viram os novos objetos", () =
   // Frase sem nenhum dos dois temas continua fora do gatilho.
   assertEquals(isOndaAcaoRequest("a matriz do prédio é bonita"), false);
 });
+
+/* ── Correções do teste das 5 perguntas (04/08 14:57) ────────────────────────── */
+
+Deno.test("normalizeRouteObject: DOCUMENTOS_OBRIGATORIOS + sinônimos", () => {
+  assertEquals(normalizeRouteObject("DOCUMENTOS_OBRIGATORIOS"), "DOCUMENTOS_OBRIGATORIOS");
+  assertEquals(normalizeRouteObject("documentos_tese"), "DOCUMENTOS_OBRIGATORIOS");
+  assertEquals(normalizeRouteObject("checklist_tese"), "DOCUMENTOS_OBRIGATORIOS");
+});
+
+// A frase EXATA que falhou: virou questionário de peça ("quem é o cliente? quais os
+// fatos? quais os valores?") porque o hint não casava e o classificador de objeto
+// nunca era chamado.
+Deno.test("isOndaAcaoRequest: 'o que preciso pedir pro cliente' aciona o classificador", () => {
+  assertEquals(isOndaAcaoRequest("o que preciso pedir pro cliente na tese de RMC?"), true);
+  assertEquals(isOndaAcaoRequest("o que falta de documento do Fulano?"), true);
+  assertEquals(isOndaAcaoRequest("quais documentos a tese de fraude bancária exige?"), true);
+  assertEquals(isOndaAcaoRequest("que papelada eu preciso pedir pra SUSEP?"), true);
+  assertEquals(isOndaAcaoRequest("quais são os documentos obrigatórios dessa ação?"), true);
+});
+
+// "documento" solto tem de continuar indo para anexo/dossiê — o hint novo não pode
+// capturar o mundo inteiro.
+Deno.test("isOndaAcaoRequest: 'documento' solto NÃO vira consulta de matriz", () => {
+  assertEquals(isOndaAcaoRequest("bom dia, tudo bem?"), false);
+  assertEquals(isOndaAcaoRequest("valeu!"), false);
+});

@@ -337,6 +337,7 @@ export type RouteObject =
   | "RECLAMACAO_ADMIN" | "RECLAMACAO_RESPOSTA" | "RECLAMACAO_CONSULTA"
   | "EXECUCAO_INICIAR" | "EXECUCAO_FASE" | "EXECUCAO_CONSULTA" | "EXECUCAO_REVISAO"
   | "EVENTO_PROCESSUAL" | "FILA_GOV" | "CREDENCIAL_GOV_STATUS" | "CONVERSAO_GOV"
+  | "DOCUMENTOS_OBRIGATORIOS"
   // P2 (Cards 11/13/14/15): diligências, preparo/lembrete de audiência,
   // apólices SUSEP e procuração (vigência, renovação e campanha).
   | "DILIGENCIA_REGISTRAR" | "DILIGENCIA_CUMPRIR" | "DILIGENCIA_CONSULTA"
@@ -398,6 +399,7 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "CAMPANHA_PROCURACAO": o objeto é a CAMPANHA de ligação para RENOVAR PROCURAÇÃO — montar a fila de quem tem procuração vencendo. Ex.: "monta a campanha de renovação de procuração", "quero ligar para todos que têm procuração vencendo esse mês", "cria a fila de renovação de procuração dos próximos 60 dias". É a campanha ESPECÍFICA de procuração (fila montada pelo vencimento), distinta da campanha por filtro bancário/cadastral (CAMPANHA).
 - "EXTRATO_DECISAO": o objeto é a DECISÃO sobre um LANÇAMENTO da análise de extrato — confirmar ou rejeitar um desconto/lançamento que o sistema listou. Ex.: "confirma esse lançamento do extrato", "rejeita o desconto de 43,90 da análise", "esses lançamentos do extrato estão certos, confirma". É decidir sobre item de extrato JÁ analisado — não é registrar vínculo bancário (RELACAO_BANCARIA) nem apólice (APOLICE_REGISTRAR).
 - "MATRIZ_DOCUMENTOS": o objeto é a MATRIZ DE DOCUMENTOS das teses (a tabela que diz quais documentos cada tipo de ação exige) — importar/substituir esse de-para em lote. Ex.: "importa a matriz de documentos das teses", "sobe a lista de documentos por tese", "substitui a matriz documental". É configuração do catálogo — não é pedir documentos de um cliente (OUTRO) nem gerar o kit (KIT_DOCUMENTAL).
+- "DOCUMENTOS_OBRIGATORIOS": o objeto é a LISTA DE DOCUMENTOS que uma tese exige — o que pedir ao cliente, o que falta no dossiê. Ex.: "o que preciso pedir pro cliente na tese de RMC?", "o que falta de documento do Fulano?", "quais documentos a tese de fraude bancária exige?", "que papelada preciso pra SUSEP?". ATENÇÃO CRÍTICA: isto NÃO é pedido de peça. Perguntar o que pedir ao cliente é CONSULTA à matriz documental — não responda pedindo fatos, valores, réu ou objeto da peça. É o erro medido em 04/08: "o que preciso pedir pro cliente na tese de RMC?" virou questionário de petição.
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
 Separe também os pares do P2: a diligência junto ao juízo (DILIGENCIA_*) · o preparo e o lembrete da audiência (AUDIENCIA_PREPARO/LEMBRETE_AUDIENCIA) · a apólice de seguro (APOLICE_*) · a procuração assinada e sua renovação (PROCURACAO_*/CAMPANHA_PROCURACAO).
@@ -450,6 +452,8 @@ export function normalizeRouteObject(raw: unknown): RouteObject {
   if (s === "CREDENCIAL_GOV_STATUS" || s === "STATUS_CREDENCIAL"
       || s === "STATUS_GOV") return "CREDENCIAL_GOV_STATUS";
   if (s === "CONVERSAO_GOV" || s === "CONVERSAO" || s === "CONVERSÃO") return "CONVERSAO_GOV";
+  if (s === "DOCUMENTOS_OBRIGATORIOS" || s === "DOCUMENTOS_TESE" || s === "MATRIZ_DOCUMENTOS_CONSULTA"
+      || s === "CHECKLIST_TESE") return "DOCUMENTOS_OBRIGATORIOS";
   // P2 (Cards 11/13/14/15) + sinônimos tolerados do LLM. ATENÇÃO à ORDEM: os
   // pares registrar/cumprir/consultar têm prefixo comum, então o valor genérico
   // ("DILIGENCIA", "APOLICE", "PROCURACAO") cai no REGISTRO, que é a ação mais
@@ -620,6 +624,12 @@ const EXTRATO_DECISAO_RE =
 const MATRIZ_DOCUMENTOS_RE =
   /(?<![\wÀ-ÿ])matriz(?![\wÀ-ÿ])[\s\S]{0,40}?(?<![\wÀ-ÿ])(documento[\wÀ-ÿ]*|documental|tese[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
 
+// Card 12 / J-06 — "o que preciso pedir pro cliente". Sem este hint o classificador
+// de objeto não é chamado e a frase cai no fluxo de PEÇA (medido em 04/08). Exige um
+// VERBO de pedir/faltar perto de documento/papelada/tese, ou a menção explícita a
+// documento de tese — "documento" solto continua indo para anexo/dossiê.
+const DOCUMENTOS_OBRIGATORIOS_RE =
+  /(?:(?:o que|que)\s+(?:preciso|precisa|devo|deve|tenho que|falta|falt[\wÀ-ÿ]*)[\s\S]{0,40}?(?:pedir|solicitar|juntar|documento[\wÀ-ÿ]*|papelada)|(?:pedir|solicitar)[\s\S]{0,25}?(?:pro|para o|ao)\s+cliente|(?:quais|que)\s+documento[\wÀ-ÿ]*[\s\S]{0,40}?(?:tese|a[çc][ãa]o|exige|precisa)|documento[\wÀ-ÿ]*\s+(?:obrigat[\wÀ-ÿ]*|da tese|do kit)|matriz\s+documental)/i;
 export function isOndaAcaoRequest(message: string): boolean {
   const m = (message || "").trim();
   if (!m) return false;
@@ -627,6 +637,7 @@ export function isOndaAcaoRequest(message: string): boolean {
   if (CREDENCIAL_RE.test(m) || CREDENCIAL_GOV_RE.test(m) || NIVEL_CONTA_RE.test(m)) return true;
   if (RELACAO_BANCARIA_RE.test(m) || CAMPANHA_RE.test(m) || LIGACAO_RE.test(m)
       || KPI_LIGACOES_RE.test(m) || AUDIO_AUTORIZACAO_RE.test(m)) return true;
+  if (DOCUMENTOS_OBRIGATORIOS_RE.test(m)) return true;
   if (RECLAMACAO_RE.test(m) || EXECUCAO_RE.test(m) || EVENTO_PROCESSUAL_RE.test(m)
       || FILA_GOV_RE.test(m) || REVISAO_EXECUCAO_RE.test(m)) return true;
   if (DILIGENCIA_RE.test(m) || APOLICE_RE.test(m) || SEGURO_QUALIFICADO_RE.test(m)

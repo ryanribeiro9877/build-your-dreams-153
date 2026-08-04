@@ -49,3 +49,32 @@ describe("ActionCard", () => {
     expect(spy).toHaveBeenCalledWith("r1", "a1", "confirm");
   });
 });
+
+/* ── Card vencido (defeito grave de 04/08) ────────────────────────────────────
+   Sequência medida: pediu-se diligência → execução falhou por papel → na pergunta
+   SEGUINTE ("quais reclamações vencem essa semana?") o card da diligência reapareceu
+   e foi confirmado de novo. A causa era o "já resolvido" ser estado LOCAL do React:
+   ao remontar o histórico, o card voltava com estado limpo e parecia clicável.
+   Foi inofensivo só porque a recepção não tem permissão — com permissão, executaria
+   uma ação que ninguém pediu. */
+
+describe("ActionCard — proposta vencida", () => {
+  const p = { action_id: "a1", run_id: "r1", tool: "registrar_diligencia", args: {}, resumo: "Registrar diligência (balcão virtual).", route: "execute" as const };
+
+  it("vencida NÃO oferece botão de confirmar", () => {
+    render(<ActionCard proposal={p} vencida onDone={() => {}} confirmFn={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /confirmar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cancelar/i })).not.toBeInTheDocument();
+  });
+
+  it("vencida explica o que aconteceu e como retomar (não desaparece calada)", () => {
+    render(<ActionCard proposal={p} vencida onDone={() => {}} confirmFn={vi.fn()} />);
+    expect(screen.getByText(/não vale mais/i)).toBeInTheDocument();
+    expect(screen.getByText(/peça de novo/i)).toBeInTheDocument();
+  });
+
+  it("sem a flag, o card segue normal (não quebrou o caminho feliz)", () => {
+    render(<ActionCard proposal={p} onDone={() => {}} confirmFn={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /confirmar/i })).toBeInTheDocument();
+  });
+});

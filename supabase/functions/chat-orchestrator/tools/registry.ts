@@ -10,6 +10,7 @@ export interface ToolDef {
 export const READ_TOOL_NAMES: string[] = [
   "consultar_cliente", "consultar_usuario", "consultar_tarefas", "consultar_processo", "consultar_documentos",
   "consultar_cep", "get_revisao_peca_context", "minha_agenda", "consultar_audiencias", "resumo_do_dia",
+  "consultar_documentos_obrigatorios",
   "listar_permissoes_menu", "kpi_ligacoes",
   // Motores 2 e 3 (Cards 6/8/7). Cada RPC re-checa o papel internamente: as de
   // execução exigem advogado/sócio/admin (recepção leva 42501), então a tool ser
@@ -290,13 +291,27 @@ export const TOOLS: Record<string, ToolDef> = {
       notes: str("observações (opcional)"),
     }, required: ["process_id", "data", "hora", "tipo"] },
   }},
+  /* A tool existia no tool_catalog (ativa, 13 agentes) mas NÃO aqui — e `toolsFor`
+     filtra por TOOLS[n], então ela era descartada em silêncio e o LLM nunca a via.
+     Era essa a causa de "o que preciso pedir pro cliente na tese de RMC?" cair no
+     questionário de peça: não era classificação nem permissão, era ferramenta
+     invisível. Contrato lido do banco: (p_tese, p_client_id, p_cliente_nome). */
+  consultar_documentos_obrigatorios: { type: "function", function: {
+    name: "consultar_documentos_obrigatorios",
+    description: "Responde \"o que preciso pedir para o cliente nessa tese?\" / \"o que falta de documento?\" / \"quais documentos a tese X exige?\". Informe a tese (aceita apelidos como RMC, SUSEP, fraude bancária) e, se souber, o cliente — aí a resposta separa o que já está no dossiê do que falta. Sem tese, devolve quais teses já têm matriz cadastrada. NÃO é pedido de peça: nunca peça fatos, valores ou réu para responder isto. OBRIGATÓRIO: se `matriz_configurada` vier false, avise que a checagem usou só o documento âncora e NÃO garante o kit completo da tese.",
+    parameters: { type: "object", properties: {
+      tese: str("Nome ou apelido da tese (ex.: RMC, SUSEP, fraude bancária). Opcional: sem ela vem o panorama das teses com matriz."),
+      cliente_nome: str("Nome do cliente, para dizer o que já tem e o que falta no dossiê dele."),
+      client_id: str("ID do cliente, se já resolvido."),
+    }, required: [] },
+  }},
   consultar_audiencias: { type: "function", function: {
     name: "consultar_audiencias",
-    description: "Consulta audiências num intervalo de datas (todas, ou de um processo específico). Escopo por papel (advogado vê as suas; sócio/admin/recepção todas).",
+    description: "Consulta audiências num intervalo de datas. Escopo por papel (advogado vê as suas; sócio/admin/recepção todas). Cada item traz `id`, `cliente`, `quando`, `tipo` e `processo`. PARA ACHAR A AUDIÊNCIA DE UM CLIENTE: chame com um intervalo de datas amplo (ex.: hoje até +12 meses) e procure o nome no campo `cliente` do retorno. NÃO passe pelo processo: as audiências importadas da planilha têm processo VAZIO (nenhuma das 179 tem vínculo), então filtrar por processo não acha NADA e faria você concluir que a audiência não existe. `process_id` é filtro opcional, nunca o caminho. Use o `id` do item para chamar preparar_audiencia.",
     parameters: { type: "object", properties: {
       de: str("data inicial AAAA-MM-DD"),
-      ate: str("data final AAAA-MM-DD"),
-      process_id: str("filtrar por um processo (opcional)"),
+      ate: str("data final AAAA-MM-DD — para procurar a audiência de um cliente, use uma janela ampla (ex.: +12 meses)"),
+      process_id: str("filtrar por um processo (opcional). ATENÇÃO: audiência importada tem processo vazio; usar este filtro para procurar por cliente devolve lista vazia por construção."),
     }, required: ["de", "ate"] },
   }},
   criar_processo: { type: "function", function: {

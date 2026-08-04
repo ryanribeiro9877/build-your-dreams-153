@@ -646,6 +646,18 @@ interface RouteObjectAction {
   support?: string[];
   /** RPC booleana de gate (sem argumentos) chamada com o JWT do usuário. */
   gate: string | null;
+  /**
+   * Papéis (role_templates.code) que a RPC desta ação exige — `adv_*` cobre
+   * qualquer advogado. Checado ANTES de montar o cartão.
+   *
+   * Sem isto o edge só descobria a recusa NA EXECUÇÃO (a RPC levanta 42501), então o
+   * usuário lia uma proposta de ação, clicava em Confirmar e só então era negado.
+   * Medido em 04/08 (Q4, Kailane da recepção): cartão de diligência oferecido e
+   * recusado depois do clique. Convite seguido de negativa é pior que negativa
+   * direta — a pessoa acredita que pode, e a ação parece ter sido tentada por culpa
+   * dela. `admin` (app_role) sempre passa, como no banco.
+   */
+  papeisExigidos?: string[];
   /** Mensagem de recusa quando o gate reprova (PT-BR, diz a quem pedir). */
   recusa: string;
   /**
@@ -839,6 +851,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   // ─── Motor 3 · Cards 8/9/10: execução, revisão e prazos ─────────────────────
   EXECUCAO_INICIAR: {
     tool: "iniciar_execucao", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Acompanhamento de execução é do jurídico: só advogado, sócio ou administrador pode iniciar. Nada foi criado.",
     support: ["consultar_processo"],
     recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
     stage: "iniciando o acompanhamento da execução", path: "objeto_execucao_iniciar",
@@ -850,6 +866,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   EXECUCAO_FASE: {
     tool: "atualizar_fase_execucao", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Mover fase de execução é do jurídico: só advogado, sócio ou administrador pode. Nada foi alterado.",
     support: ["consultar_processo", "consultar_execucoes"],
     recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
     stage: "movendo a fase da execução", path: "objeto_execucao_fase",
@@ -863,11 +883,19 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   EXECUCAO_CONSULTA: {
     tool: "consultar_execucoes", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "A carteira de execuções é do jurídico: só advogado, sócio ou administrador enxerga. Nada foi consultado.",
     recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
     stage: "consultando as execuções", path: "objeto_execucao_consulta",
   },
   EXECUCAO_REVISAO: {
     tool: "remarcar_revisao_execucao", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Remarcar revisão de execução é do jurídico: só advogado, sócio ou administrador pode. Nada foi remarcado.",
     support: ["consultar_processo", "consultar_execucoes"],
     recusa: "Acompanhamento de execução é do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
     stage: "remarcando a revisão da execução", path: "objeto_execucao_revisao",
@@ -879,6 +907,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   EVENTO_PROCESSUAL: {
     tool: "registrar_evento_processual", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Registrar evento que abre prazo é do jurídico: só advogado, sócio ou administrador pode. Nenhum prazo foi criado.",
     support: ["consultar_processo"],
     recusa: "Registrar evento processual e abrir prazos é do jurídico (advogado/sócio).",
     stage: "abrindo os prazos do evento", path: "objeto_evento_processual",
@@ -927,6 +959,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   // (fail-open é o certo — a RPC continua sendo a barreira).
   DILIGENCIA_REGISTRAR: {
     tool: "registrar_diligencia", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Registrar diligência é do jurídico: só advogado, sócio ou administrador pode. Nada foi registrado — peça ao advogado responsável.",
     support: ["consultar_processo"],
     recusa: "Registrar diligência é do jurídico (advogado/sócio).",
     stage: "registrando a diligência", path: "objeto_diligencia_registrar",
@@ -941,6 +977,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   DILIGENCIA_CUMPRIR: {
     tool: "cumprir_diligencia", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "Dar baixa em diligência é do jurídico: só advogado, sócio ou administrador pode. Nada foi alterado — peça ao advogado responsável.",
     support: ["consultar_diligencias", "consultar_processo"],
     recusa: "Cumprir diligência é do jurídico (advogado/sócio).",
     stage: "registrando o cumprimento da diligência", path: "objeto_diligencia_cumprir",
@@ -954,6 +994,10 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
   DILIGENCIA_CONSULTA: {
     tool: "consultar_diligencias", gate: null,
+    // A RPC exige is_socio_or_advogado() OR admin — conferido no banco. Declarado
+    // aqui para o PAPEL ser checado ANTES do cartão (item 4 de 04/08).
+    papeisExigidos: ["socio", "adv_*"],
+    regraPapel: "A lista de diligências é do jurídico: só advogado, sócio ou administrador enxerga. Nada foi consultado.",
     recusa: "Diligências são do jurídico (advogado/sócio) — a recepção não tem acesso a esse dado.",
     stage: "consultando as diligências", path: "objeto_diligencia_consulta",
     guidance:
@@ -964,13 +1008,34 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
   },
 
   // ─── P2 · Card 13: audiência — preparo e lembrete ao cliente ────────────────
+  DOCUMENTOS_OBRIGATORIOS: {
+    tool: "consultar_documentos_obrigatorios", gate: null,
+    support: ["consultar_cliente"],
+    recusa: "", stage: "consultando a matriz de documentos da tese", path: "objeto_documentos_obrigatorios",
+    guidance:
+      "DOCUMENTOS DA TESE — isto é CONSULTA, não pedido de peça: NUNCA pergunte fatos, " +
+      "valores, réu ou objeto para responder. Chame a tool com a tese que o usuário citou " +
+      "(aceita apelido: RMC, SUSEP, fraude bancária) e, se ele nomeou um cliente, também com o " +
+      "nome — aí a resposta separa o que já está no dossiê do que falta. OBRIGATÓRIO: se o " +
+      "retorno trouxer `matriz_configurada` false ou o aviso de matriz não cadastrada, DIGA " +
+      "isso — a checagem usou só o documento âncora e NÃO garante o kit completo da tese. " +
+      "Apresentar a lista curta como se fosse tudo é o defeito que este aviso existe para " +
+      "evitar. Se a tese não for encontrada, diga qual nome você tentou.",
+  },
   AUDIENCIA_PREPARO: {
     tool: "preparar_audiencia", gate: null,
     support: ["consultar_audiencias", "consultar_cliente"],
     recusa: "", stage: "montando o preparo da audiência", path: "objeto_audiencia_preparo",
     guidance:
-      "PREPARO DE AUDIÊNCIA — pegue o id com consultar_audiencias; se houver mais de uma, " +
-      "PERGUNTE qual. Na resposta: diga data/hora, local ou link, o que falta de documento e a " +
+      "PREPARO DE AUDIÊNCIA — o CAMINHO é por CLIENTE, nunca por processo: chame " +
+      "consultar_audiencias com uma janela ampla (hoje até +12 meses) e ache o nome no campo " +
+      "`cliente` do retorno. NÃO procure os processos do cliente para depois filtrar por " +
+      "processo: as audiências importadas da planilha têm processo VAZIO (nenhuma das 179 tem " +
+      "vínculo), então esse caminho devolve lista vazia e faz você concluir que a audiência não " +
+      "existe — foi exatamente o erro medido em 04/08 com uma audiência que ESTAVA cadastrada. " +
+      "Se não achar, diga POR ONDE procurou (a janela de datas e o nome usado) antes de afirmar " +
+      "que não há audiência; e se houver mais de uma, PERGUNTE qual. Na resposta: diga " +
+      "data/hora, local ou link, o que falta de documento e a " +
       "régua de lembretes, e REPASSE a limitação que a tool devolve. Se a tool disser que a " +
       "TESE não foi resolvida, avise que a lista de documentos veio SÓ com a procuração e que " +
       "o parecer está incompleto até cadastrarem o apelido do tipo de ação — não apresente essa " +
@@ -2609,6 +2674,32 @@ async function insertStage(admin: SupabaseClient, sessionId: string, userId: str
 // ─── chat agêntico: permissões, proposta e resumo de ação ───────────────────
 // Permissões de AÇÃO do usuário: master (RPC) e poder de atribuir tarefa (matriz
 // de cargo). Lidas com o client `admin` (service-role) — leitura de metadados.
+/**
+ * O usuário atende a UM dos papéis exigidos? `adv_*` casa qualquer advogado (é o que
+ * `is_socio_or_advogado()` faz no banco: code='socio' OR code LIKE 'adv_%'), e quem
+ * tem app_role 'admin' passa sempre — igual às RPCs.
+ *
+ * Existe para checar papel ANTES do cartão. Fail-OPEN de propósito: se a leitura do
+ * perfil falhar, deixa seguir e a RPC decide — errar para o lado de barrar quem tem
+ * direito seria pior (foi o bug B10), e o gate do banco continua sendo a autoridade.
+ */
+async function usuarioTemPapel(admin: SupabaseClient, userId: string, exigidos: string[]): Promise<boolean> {
+  if (exigidos.length === 0) return true;
+  try {
+    const { data: adm } = await admin.from("user_roles")
+      .select("role").eq("user_id", userId).eq("role", "admin").limit(1);
+    if ((adm as unknown[] | null)?.length) return true;
+    const { data: prof } = await admin.from("profiles")
+      .select("role_templates!inner(code)").eq("user_id", userId).maybeSingle();
+    const code = (prof as { role_templates?: { code?: string } } | null)?.role_templates?.code ?? "";
+    if (!code) return true;
+    return exigidos.some((e) => e.endsWith("*") ? code.startsWith(e.slice(0, -1)) : code === e);
+  } catch (e) {
+    console.error("[papel] falha ao ler papel do usuário; deixando a RPC decidir", e);
+    return true;
+  }
+}
+
 async function loadActionPerms(admin: SupabaseClient, userId: string): Promise<{ isMaster: boolean; canAssignTask: boolean }> {
   const { data: m } = await admin.rpc("is_master_admin", { _user_id: userId });
   const { data: prof } = await admin.from("profiles").select("role_template_id").eq("user_id", userId).maybeSingle();
@@ -4652,7 +4743,33 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
   const admin = createClient(supabaseUrl, serviceKey);
   const { data: action } = await admin.from("agent_actions").select("*").eq("id", body.actionId).maybeSingle();
   if (!action || action.user_id !== user.id) return errResp(403, "forbidden", "Ação não encontrada");
-  if (action.status === "executed") return jsonResp({ ok: true, alreadyDone: true });
+  // GUARDA DE IDEMPOTÊNCIA — só uma ação AINDA PROPOSTA pode ser executada.
+  // Antes o curto-circuito olhava apenas `executed`, então uma ação `failed` (ou
+  // `cancelled`, ou já encaminhada como pendência) podia ser confirmada DE NOVO.
+  // Medido em 04/08: a recepção pediu diligência, a execução falhou por papel, e na
+  // mensagem seguinte o card reapareceu e foi confirmado outra vez. Com um usuário
+  // COM permissão, isso executaria uma ação que ninguém pediu — a família "ato não
+  // pedido". A verdade sobre o ciclo de vida da ação é esta coluna, não o estado
+  // local do cartão no navegador.
+  if (action.status !== "proposed") {
+    // `cancelled` cobre dois casos: o usuário clicou em Cancelar, ou o sistema
+    // descartou a proposta porque o assunto mudou (result.superseded). O texto
+    // distingue os dois para a pessoa não achar que o sistema perdeu o pedido dela.
+    const superseded = !!(action.result as { superseded?: boolean } | null)?.superseded;
+    const JA: Record<string, string> = {
+      executed: "já foi executada",
+      failed: "já foi tentada e falhou",
+      cancelled: superseded
+        ? "não vale mais: foi descartada quando você seguiu para outro assunto. Se ainda quiser, peça de novo"
+        : "foi cancelada",
+      confirmed: "já está em execução",
+      routed_pendencia: "já foi encaminhada ao Admin como pendência",
+    };
+    return jsonResp({
+      ok: true, alreadyDone: true, status: action.status,
+      mensagem: `Esta ação ${JA[action.status] ?? `não está mais pendente (${action.status})`} — nada foi feito agora.`,
+    });
+  }
   if (body.decision === "cancel") {
     await admin.from("agent_actions").update({ status: "cancelled" }).eq("id", action.id);
     const { data: remaining } = await admin.from("agent_actions")
@@ -4899,6 +5016,49 @@ serve(async (req) => {
     }
 
     const userMsgId = (userMsg as { id: string } | null)?.id ?? null;
+
+    // ─── A ação pendente MORRE quando o assunto muda ────────────────────────────
+    // Terceira das três situações de descarte (as outras duas — executar e recusar —
+    // já são cobertas pelo status da própria ação em handleConfirm): chegou mensagem
+    // NOVA, que não é confirmação nem cancelamento (esses vêm por mode=confirm, outro
+    // endpoint, e nem passam por aqui). Logo, qualquer proposta ainda aberta desta
+    // sessão perdeu validade.
+    //
+    // Sem isto, a proposta antiga continuava `proposed` e o cartão dela — que vive no
+    // histórico e é remontado a cada refetch — voltava a parecer clicável. Medido em
+    // 04/08: pediu-se diligência, a execução falhou por papel, e ao perguntar sobre
+    // reclamações o cartão da diligência reapareceu e foi confirmado de novo; a
+    // pergunta sobre reclamações nunca foi respondida. Foi inofensivo só porque a
+    // recepção não tem permissão — com permissão, executaria ação que ninguém pediu.
+    //
+    // O status é `cancelled` porque o CHECK de agent_actions.status aceita só
+    // proposed/confirmed/executed/failed/cancelled/routed_pendencia — conferido no
+    // banco. Um `superseded` inventado aqui levantaria 23514 e o try/catch abaixo
+    // engoliria o erro: o defeito continuaria vivo com cara de consertado. A
+    // distinção "o sistema descartou" vs "o usuário desistiu" vai em `result`, que
+    // já existe. Se um dia valer a pena, acrescentar 'superseded' ao CHECK é
+    // migração — e aí o status conta a história sozinho.
+    // best-effort: se falhar, o turno segue — a guarda de idempotência em
+    // handleConfirm é a rede de baixo.
+    try {
+      const { data: expiradas } = await admin.from("agent_actions")
+        .update({
+          status: "cancelled", executed_at: new Date().toISOString(),
+          result: { superseded: true, motivo: "assunto mudou: nova mensagem do usuário" },
+        })
+        .eq("session_id", body.sessionId).eq("status", "proposed")
+        .select("id, tool");
+      const nExp = (expiradas as Array<{ id: string; tool: string }> | null)?.length ?? 0;
+      if (nExp > 0) {
+        const tools = (expiradas as Array<{ tool: string }>).map((a) => a.tool).join(", ");
+        console.log(`[acao-pendente] session=${body.sessionId} descartadas ${nExp} proposta(s) por mudança de assunto: ${tools}`);
+        await admin.from("orchestration_runs")
+          .update({ status: "done", pending_actions: null, updated_at: new Date().toISOString() })
+          .eq("session_id", body.sessionId).eq("status", "awaiting_confirmation");
+      }
+    } catch (e) {
+      console.error("[acao-pendente] falha ao descartar propostas antigas", e);
+    }
 
     // Dashboard IA · custo por chamada: contexto-base das chamadas de LLM feitas no
     // handler de entrada (classificador, resposta curta, consulta, rascunhos de
@@ -5452,6 +5612,13 @@ serve(async (req) => {
         };
         if (objAction.regraPapel && !isKnownTool(objAction.tool)) {
           return await recusaPorPapel("tool_fora_do_registry");
+        }
+        // Item 4 de 04/08 — PAPEL checado ANTES do cartão. Se a RPC exige advogado/
+        // sócio e quem fala é a recepção, a resposta já é a recusa com a regra, em vez
+        // de um convite ("Confirmar ação…") seguido de negativa depois do clique.
+        if (objAction.papeisExigidos && objAction.regraPapel
+            && !(await usuarioTemPapel(admin, userId, objAction.papeisExigidos))) {
+          return await recusaPorPapel("papel_insuficiente_antes_do_cartao");
         }
         const spec = await resolveSpecialistWithTool(admin, userId, objAction.tool, objAction.support ?? []);
         if (spec) {

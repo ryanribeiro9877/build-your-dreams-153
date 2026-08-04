@@ -68,8 +68,13 @@ function ProcessListCard({ processes }: { processes: ProcessListRow[] }) {
   );
 }
 
-function MessageBubble({ msg, canAuthorPeca, onCadastrarCliente, onCadastrarClienteTask }: {
+function MessageBubble({ msg, canAuthorPeca, onCadastrarCliente, onCadastrarClienteTask, propostaVencida = false }: {
   msg: JcChatMessage;
+  /** A proposta desta bolha já NÃO vale: o usuário seguiu para outro assunto e o
+   *  servidor descartou a ação. Sem isto o cartão volta a parecer clicável a cada
+   *  refetch, porque "já resolvido" era estado LOCAL do React — foi assim que, em
+   *  04/08, o cartão de uma diligência reapareceu numa pergunta sobre reclamações. */
+  propostaVencida?: boolean;
   // Só advogado/sócio "geram" peça: abrir a peça completa (PecaModal) e o fluxo
   // de salvar/anexar são de autoria. Recepção só visualiza — vê a peça inteira
   // inline e os downloads, mas sem "Ver peça completa" nem PecaModal. Vem por
@@ -87,7 +92,7 @@ function MessageBubble({ msg, canAuthorPeca, onCadastrarCliente, onCadastrarClie
   // lugar do balao normal. A confirmacao chama o chat-orchestrator em mode=confirm;
   // a atualizacao da timeline volta via realtime/refetch.
   if (msg.kind === "action_proposal" && msg.proposal) {
-    return <ActionCard key={msg.id} proposal={msg.proposal} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
+    return <ActionCard key={msg.id} proposal={msg.proposal} vencida={propostaVencida} onDone={() => { /* realtime/refetch ja atualiza */ }} />;
   }
   // Alerta de tarefa (kind === 'task_alert') e avisos de reuniao da TRILHA B
   // (meeting_created/meeting_reminder/meeting_rescheduled): renderiza o
@@ -543,7 +548,7 @@ export default function JurisChatPanel({
         </div>
       ) : (
         <div className="jc-messages">
-          {messages.map(msg =>
+          {messages.map((msg, i) =>
             // CADASTRO-MODELO-A: quando o disparo chega (metadata.kind="cadastro_form"),
             // além da bolha de texto, monta o ClienteFormWizard inline. O envio grava
             // direto via save_client (cifrado) — a PII não trafega pelo chat.
@@ -560,7 +565,15 @@ export default function JurisChatPanel({
                 </div>
               </div>
             ) : (
-              <MessageBubble key={msg.id} msg={msg} canAuthorPeca={canAuthorPeca} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
+              // `propostaVencida`: existe mensagem do USUÁRIO depois desta proposta,
+              // logo o assunto mudou e o servidor já descartou a ação (status
+              // cancelled/superseded no agent_actions). Espelhamos a verdade do
+              // servidor em vez de deixar o cartão parecendo vivo — a decisão de
+              // execução continua sendo do servidor, isto é só honestidade visual.
+              <MessageBubble key={msg.id} msg={msg}
+                propostaVencida={msg.kind === "action_proposal"
+                  && messages.slice(i + 1).some(m => m.role === "user")}
+                canAuthorPeca={canAuthorPeca} onCadastrarCliente={onCadastrarClienteFromMeeting} onCadastrarClienteTask={onCadastrarClienteFromTask} />
             ),
           )}
           {thinking && <StatusIndicator agent={thinkingAgentName} liveStage={liveStage} thinkingStartedAt={thinkingStartedAt} />}

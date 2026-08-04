@@ -30,9 +30,16 @@ function parseResumo(resumo: string, isCadastro: boolean): { fields: Field[]; de
   return { fields, desc: fields.length ? null : (resumo?.trim() || null) };
 }
 
-export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm }: {
+export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm, vencida = false }: {
   proposal: ActionProposal; onDone: () => void;
   confirmFn?: (runId: string, actionId: string, d: "confirm" | "cancel") => Promise<unknown>;
+  /** A proposta não vale mais (o usuário seguiu para outro assunto e o servidor
+   *  descartou a ação). O `resolved` abaixo é estado LOCAL: ele se perde quando o
+   *  histórico é remontado, e era por isso que um cartão já morto voltava a parecer
+   *  clicável numa pergunta sobre outra coisa. Esta flag vem do histórico, sobrevive
+   *  ao remount, e o servidor recusa a execução de todo jeito (guarda de
+   *  idempotência em handleConfirm) — aqui é para a tela não convidar. */
+  vencida?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [resolved, setResolved] = useState<string | null>(null);
@@ -66,6 +73,15 @@ export function ActionCard({ proposal, onDone, confirmFn = defaultConfirm }: {
   };
 
   if (created) return <CooperadoChecklistCard clientId={created.id} clientName={created.name} />;
+  // Vencida ANTES de tudo: nem botão, nem promessa. Diz o que aconteceu e como
+  // retomar, em vez de sumir calado (sumir faria parecer que o pedido se perdeu).
+  if (vencida && !resolved) return (
+    <div className="action-card--done">
+      <X size={15} style={{ color: "#94A3B8", flexShrink: 0 }} />
+      Esta proposta não vale mais — você seguiu para outro assunto e ela foi descartada.
+      Se ainda quiser, peça de novo.
+    </div>
+  );
   if (resolved) return (
     <div className="action-card--done">
       {resolved === "confirm"
