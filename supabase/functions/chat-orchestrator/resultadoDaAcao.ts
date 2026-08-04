@@ -72,9 +72,24 @@ function textoLimpo(v: unknown): string | null {
  * garante que o aviso sobrevive mesmo quando os dados são truncados; a linha de corte
  * é declarada no texto para o modelo não tratar lista truncada como lista completa.
  */
+/**
+ * Remove as chaves `__` do payload antes de mandar ao LLM. Elas são de diagnóstico
+ * (`__erro_cru` traz code/details/hint da RPC) e servem ao trace, não ao modelo:
+ * `details`/`hint` do Postgres podem citar valor de linha, e nada disso deve entrar
+ * no contexto que vira resposta ao usuário.
+ */
+function semChavesInternas(result: unknown): unknown {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return result;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(result as Record<string, unknown>)) {
+    if (!k.startsWith("__")) out[k] = v;
+  }
+  return out;
+}
+
 export function serializarResultadoLeitura(result: unknown, limite = 8000): string {
   const notas = extrairNotasDoResultado(result);
-  const corpo = JSON.stringify(result ?? null);
+  const corpo = JSON.stringify(semChavesInternas(result) ?? null);
   if (notas.length === 0) {
     return corpo.length <= limite ? corpo : corpo.slice(0, limite) + '\n[RESULTADO TRUNCADO]';
   }

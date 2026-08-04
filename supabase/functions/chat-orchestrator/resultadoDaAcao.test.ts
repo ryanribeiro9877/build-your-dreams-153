@@ -239,3 +239,24 @@ Deno.test("serializarResultadoLeitura: resultado nulo não explode", () => {
   assertEquals(serializarResultadoLeitura(null), "null");
   assertEquals(serializarResultadoLeitura(undefined), "null");
 });
+
+Deno.test("serializarResultadoLeitura NÃO manda as chaves __ ao LLM", () => {
+  // `__erro_cru` é diagnóstico: vai para o trace, não para o contexto do modelo.
+  // `details`/`hint` do Postgres podem citar valor de linha, e o que entra aqui
+  // vira resposta ao usuário.
+  const out = serializarResultadoLeitura({
+    erro: "cliente_nao_encontrado",
+    __erro_cru: "code=42501 · message=permission denied · details=Failing row contains (Maria, 111.222.333-44)",
+  });
+  assert(!out.includes("__erro_cru"));
+  assert(!out.includes("42501"));
+  assert(!out.includes("111.222.333-44"));
+  // O motivo legível continua chegando — é dele que o agente monta a frase.
+  assert(out.includes("cliente_nao_encontrado"));
+});
+
+Deno.test("serializarResultadoLeitura preserva o payload normal", () => {
+  const out = serializarResultadoLeitura({ clientes: [{ id: "c1", nome: "Fulano" }], total: 1 });
+  assert(out.includes("Fulano"));
+  assert(out.includes('"total":1'));
+});

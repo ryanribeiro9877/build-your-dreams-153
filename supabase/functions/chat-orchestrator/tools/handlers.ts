@@ -2,6 +2,11 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCep } from "../cep.ts";
 import { mapDocumentoToTipo, buildPendenciaTitulo } from "./docChecklist.ts";
 import { montarFiltroCampanha, normalizarObjetivoCampanha } from "./campanhaFiltro.ts";
+// erroCru: achata code+message+details+hint do erro do supabase-js. O `code` é o que
+// distingue 42501 (papel) de 23514 (vocabulário) de 42883 (parâmetro inexistente) —
+// antes só `message` subia e as três falhas viravam o mesmo "não consegui".
+// Vai em campo SEPARADO: a mensagem ao usuário continua limpa, o trace recebe o cru.
+import { erroCru } from "../trace.ts";
 export { montarFiltroCampanha, normalizarObjetivoCampanha, CAMPANHA_FILTRO_KEYS } from "./campanhaFiltro.ts";
 import {
   dataOuNull, intOuNull, mensagemMotivoP2,
@@ -132,7 +137,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "você não tem acesso à matriz de documentos das teses." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
       if (r.ok === false) {
@@ -169,7 +174,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "acompanhamento de execução é restrito a advogado/sócio — você não tem acesso a esse dado." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       return data ?? {};
     }
@@ -182,7 +187,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "a fila de credenciais gov.br é restrita a recepção/sócio — você não tem acesso." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       return data ?? {};
     }
@@ -211,7 +216,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "diligências são do jurídico (advogado/sócio) — você não tem acesso a esse dado." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
       // Semáforo (vencidas / sem prazo / guardadas só pelo número) é nosso: a RPC
@@ -235,7 +240,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "as apólices de seguro são restritas a recepção/advogado/sócio — você não tem acesso." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
       // Esta RPC devolve `ambiguo` SEM candidatos (só o motivo).
@@ -256,7 +261,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "as procurações são restritas a recepção/advogado/sócio — você não tem acesso." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
       if (r.ok === false) return { erro: erroClienteRpc(r, "não listei nada") };
@@ -269,7 +274,7 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       if (error) {
         return error.code === "42501"
           ? { erro: "o preparo de audiência é restrito a recepção/advogado/sócio — você não tem acesso." }
-          : { erro: error.message };
+          : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
       if (r.ok === false) {
@@ -406,7 +411,7 @@ function sanitizeStorageName(name: string): string {
 // WRITE — recebe o client com JWT do usuário (userClient, p/ RLS/RBAC) e um
 // client service-role (admin) usado por tools que precisam do Storage (cópia de
 // binário entre buckets), que a RLS de storage não cobre de forma estável.
-export async function runWriteTool(userClient: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>, admin: SupabaseClient): Promise<{ ok: boolean; result?: unknown; error?: string }> {
+export async function runWriteTool(userClient: SupabaseClient, _userId: string, name: string, args: Record<string, unknown>, admin: SupabaseClient): Promise<{ ok: boolean; result?: unknown; error?: string; erroCru?: string | null }> {
   try {
     switch (name) {
       case "cadastrar_cliente": {
@@ -431,7 +436,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           if ((error as { code?: string }).code === "23505") {
             return { ok: false, error: "CPF já cadastrado no sistema." };
           }
-          return { ok: false, error: error.message };
+          return { ok: false, error: error.message, erroCru: erroCru(error) };
         }
         return { ok: true, result: { id: newId, full_name: args.full_name } };
       }
@@ -442,7 +447,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_priority: args.prioridade ?? "medium", p_deadline_at: args.deadline_at ?? null,
           p_area: args.area ?? null, p_payload: {}, p_external_kanban_ref: null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { task_id: data } };
       }
       case "solicitar_documentos": {
@@ -451,7 +456,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_payload: { client_id: args.client_id ?? null, documentos: args.documentos ?? [] },
           p_related_task_id: null, p_expires_in_hours: 72,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { request_id: data } };
       }
       case "pedir_acesso_arquivos": {
@@ -460,7 +465,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_payload: { descricao: args.descricao, motivo: args.motivo ?? null },
           p_related_task_id: null, p_expires_in_hours: 72,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { request_id: data } };
       }
       case "criar_pendencia": {
@@ -469,7 +474,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_descricao: args.descricao ?? null, p_responsavel_user_id: args.responsavel_user_id ?? null,
           p_prazo: args.prazo ?? null, p_data_fatal: args.data_fatal ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { task_id: data } };
       }
       case "transferir_pendencia": {
@@ -477,14 +482,14 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_id: args.pendencia_id, p_departamento_destino: args.departamento_destino ?? null,
           p_responsavel_destino: args.responsavel_destino ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { task_id: data } };
       }
       case "resolver_pendencia": {
         const { data, error } = await userClient.rpc("resolver_pendencia", {
           p_id: args.pendencia_id, p_resolucao: args.resolucao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { task_id: data } };
       }
       case "distribuir_caso": {
@@ -497,7 +502,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           // ele, a RPC cai no responsável do processo e depois no da área.
           p_responsible_lawyer_user_id: args.responsible_lawyer_user_id ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { task_id: data } };
       }
       case "agendar_atendimento": {
@@ -517,7 +522,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_lawyer_user_id: args.lawyer_user_id ?? null,
           p_summary: args.summary ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         // create_task encadeia create_meeting_task(meeting_id). Falha na tarefa NÃO
         // desfaz o agendamento (a reunião já está criada) — sinaliza como aviso.
         let taskId: string | null = null;
@@ -560,7 +565,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_observacoes: args.observacoes ?? null,
           p_aceite: args.aceite === true,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { status: data } };
       }
       case "anexar_documento_cliente": {
@@ -606,7 +611,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_prioridade: args.prioridade ?? null,
           p_titulo: args.novo_titulo ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "comentar_card": {
@@ -614,7 +619,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         const { data, error } = await userClient.rpc("add_task_comment", {
           p_task_id: args.task_id, p_body: args.comentario,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "atualizar_cliente": {
@@ -626,21 +631,21 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           if (v !== undefined && v !== null && String(v).trim() !== "") fields[k] = v;
         }
         const { data, error } = await userClient.rpc("atualizar_cliente", { p_client_id: args.client_id, p_fields: fields });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "reagendar_atendimento": {
         const { data, error } = await userClient.rpc("reagendar_atendimento", {
           p_id: args.meeting_id, p_nova_data: args.nova_data, p_nova_hora: args.nova_hora,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "cancelar_atendimento": {
         const { data, error } = await userClient.rpc("cancelar_atendimento", {
           p_id: args.meeting_id, p_motivo: args.motivo ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "criar_audiencia": {
@@ -648,7 +653,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_process_id: args.process_id, p_data: args.data, p_hora: args.hora,
           p_tipo: args.tipo, p_local: args.local ?? null, p_notes: args.notes ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "criar_processo": {
@@ -657,7 +662,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_client_id: args.client_id, p_tipo_acao: args.tipo_acao ?? null,
           p_numero: args.numero ?? null, p_reu: args.reu ?? null, p_notes: args.notes ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         // Duplicata / tipo não resolvido: a RPC devolve ok:false + message.
         const r = data as { ok?: boolean; message?: string } | null;
         if (r && r.ok === false) return { ok: false, error: r.message ?? "Já existe um processo com esse número." };
@@ -670,7 +675,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           if (v !== undefined && v !== null && String(v).trim() !== "") fields[k] = v;
         }
         const { data, error } = await userClient.rpc("atualizar_processo", { p_process_id: args.process_id, p_fields: fields });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: data };
       }
       case "definir_permissao_menu": {
@@ -685,7 +690,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         else if (acao === "revogar") ({ error } = await userClient.rpc("admin_set_user_menu", { p_user_id: args.user_id, p_menu_key: menuKey, p_granted: false }));
         else if (acao === "padrao") ({ error } = await userClient.rpc("admin_clear_user_menu", { p_user_id: args.user_id, p_menu_key: menuKey }));
         else return { ok: false, error: `ação inválida: ${acao} (use conceder, revogar ou padrao).` };
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         return { ok: true, result: { user_id: args.user_id, menu_key: menuKey, acao } };
       }
       // ─── Card 3: relação bancária ─────────────────────────────────────────
@@ -715,7 +720,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_notes: args.notes ?? null,
           p_banco_beneficio: args.banco_beneficio ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "nada foi registrado") };
         return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
@@ -733,7 +738,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           // nomes curtos ("agendar") derrubariam a criação com 23514.
           p_nome: args.nome, p_objetivo: normalizarObjetivoCampanha(args.objetivo), p_filtro: filtro,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "a campanha não foi criada") };
         // Fila vazia é resultado honesto, não erro: a campanha existe mas não há quem ligar.
@@ -748,7 +753,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_campanha_id: args.campanha_id ?? null,
           p_retornar_em: args.retornar_em ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroClienteRpc(r, "a ligação não foi registrada") };
         return { ok: true, result: r };
@@ -789,7 +794,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         });
         if (error) {
           await admin.storage.from("client-documents").remove([novoPath]).then(() => {}, () => {}); // sem órfão
-          return { ok: false, error: error.message };
+          return { ok: false, error: error.message, erroCru: erroCru(error) };
         }
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) {
@@ -825,7 +830,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_tem_2fa: args.tem_2fa === true,
           p_status_acesso: args.status_acesso ?? "pendente",
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) {
           const motivo = String(r.motivo ?? "");
@@ -865,7 +870,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_process_id: args.process_id ?? null,
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a reclamação NÃO foi registrada") };
         return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
@@ -880,7 +885,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_resposta_texto: args.resposta_texto ?? null,
           p_resposta_em: args.resposta_em ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a resposta NÃO foi registrada") };
         return { ok: true, result: r };
@@ -901,7 +906,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_fase: args.fase ?? null,                          // null = default ajuizada
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a execução NÃO foi iniciada") };
         return { ok: true, result: r };
@@ -916,7 +921,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_processo_numero: args.processo_numero ?? null,
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a fase NÃO foi alterada") };
         return { ok: true, result: r };
@@ -939,7 +944,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_processo_numero: args.processo_numero ?? null,
           p_intervalo_recorrente: rec !== null && Number.isFinite(rec) ? Math.trunc(rec) : null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a revisão NÃO foi remarcada") };
         return { ok: true, result: r };
@@ -957,7 +962,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_data_evento: args.data_evento ?? null,            // null = default hoje
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "nenhum prazo foi criado") };
         // O `aviso` (dias úteis sem feriados) sobe no result: o humanSummary o
@@ -980,7 +985,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_cliente_nome: clienteNome || null,
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a situação NÃO foi alterada") };
         return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
@@ -997,7 +1002,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
           p_ate: args.ate ?? null,
           p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = (data ?? {}) as Record<string, unknown>;
         if (r.ok === false) return { ok: false, error: erroProcessoRpc(r, "a conversão NÃO foi agendada") };
         return { ok: true, result: { ...r, cliente: clienteNome || r.cliente } };
@@ -1212,7 +1217,7 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         const { data, error } = await userClient.rpc("registrar_protocolo", {
           p_task_id: args.task_id, p_observacao: args.observacao ?? null,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
         const r = data as { ok?: boolean; bloqueado?: boolean; faltam?: string[]; erro?: string } | null;
         if (r && r.ok === false) {
           if (r.bloqueado) return { ok: false, error: `Protocolo bloqueado — faltam os documentos: ${(r.faltam ?? []).join(", ")}. Anexe-os ao cliente antes de protocolar.` };
@@ -1245,11 +1250,11 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
 }
 
 // Encaminha como pendência quando o usuário não tem permissão para a ação.
-export async function routeAsPendencia(userClient: SupabaseClient, adminUserId: string, tool: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
+export async function routeAsPendencia(userClient: SupabaseClient, adminUserId: string, tool: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string; erroCru?: string | null }> {
   const { data, error } = await userClient.rpc("create_inter_assistant_request", {
     p_to_user_id: adminUserId, p_request_type: "aprovar_acao_chat",
     p_payload: { tool, args }, p_related_task_id: null, p_expires_in_hours: 72,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
   return { ok: true, result: { request_id: data, routed: true } };
 }

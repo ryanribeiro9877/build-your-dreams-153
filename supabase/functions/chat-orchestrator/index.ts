@@ -43,6 +43,7 @@ import { decideActionRoute } from "./tools/rbac.ts";
 import { isCaseDocumentAttachment, isAudioAttachment } from "./caseDocFilter.ts";
 // A.2/A.3 (validação 03-04/08): notas do resultado + resumo do efeito real.
 import { montarMensagemSucesso, serializarResultadoLeitura } from "./resultadoDaAcao.ts";
+import { traceToolsEnviadas, traceRespostaLlm, traceChamadaTool, novoTraceId, type TraceCtx } from "./trace.ts";
 // A.4 (validação 03-04/08): desambiguação de cliente ANTES do cartão.
 import {
   TOOLS_QUE_RESOLVEM_CLIENTE, montarPerguntaCliente, escolherCandidato,
@@ -2455,6 +2456,17 @@ async function runEntryConsulta(
 ): Promise<{ answer: string; tools: string[] } | null> {
   const readDefs = toolsFor(READ_TOOL_NAMES);
   if (readDefs.length === 0) return null;
+  // Trace do ponto de ENTRADA: aqui o conjunto é READ_TOOL_NAMES (não allowed_tools),
+  // então `nao_registradas` denuncia nome listado em READ_TOOL_NAMES que não existe em
+  // TOOLS — o descasamento que deixou `consultar_documentos_obrigatorios` invisível.
+  const traceCtxEntry: TraceCtx = {
+    traceId: novoTraceId(), userId, sessionId: ctx?.sessionId ?? null,
+    agentId: agent.id, runId: ctx?.runId ?? null,
+  };
+  await traceToolsEnviadas(admin, traceCtxEntry, {
+    operacao: "entry_consulta:tools_enviadas", agenteNome: agent.name, modelo: agent.model,
+    permitidas: [...READ_TOOL_NAMES], enviadas: readDefs.map((d) => d.function.name),
+  });
   const system = (agent.system_prompt || "") + buildUniversalGuardrails() + CONSULTA_TOOL_GUIDANCE;
   // Correção C: senso de tempo no bloco VOLÁTIL (o `system` estável segue cacheável).
   const nowAnchor = buildNowAnchor();
@@ -2477,7 +2489,15 @@ async function runEntryConsulta(
       return { answer: (r.content || "").trim(), tools: toolsUsed };
     }
     for (const c of readCalls) {
-      const data = await runReadTool(jwtClient, userId, c.function.name, safeJson(c.function.arguments));
+      const argsRead = safeJson(c.function.arguments);
+      const t0 = Date.now();
+      const data = await runReadTool(jwtClient, userId, c.function.name, argsRead);
+      await traceChamadaTool(admin, traceCtxEntry, {
+        tool: c.function.name, args: argsRead, durationMs: Date.now() - t0,
+        ok: !(data as { erro?: unknown } | null)?.erro,
+        erro: (data as { __erro_cru?: string } | null)?.__erro_cru ?? null,
+        motivo: (data as { erro?: string } | null)?.erro ?? null,
+      });
       toolsUsed.push(c.function.name);
       toolMsgs.push({ role: "assistant", content: "", tool_calls: [c] });
       toolMsgs.push({ role: "tool", tool_call_id: c.id, name: c.function.name, content: serializarResultadoLeitura(data) });
@@ -4019,6 +4039,20 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         : CHAT_READ_TOOLS_ENABLED);
       // Item 8: enum de tipos de ação (lido do banco) no schema de criar_processo.
       const toolDefs = withTiposAcaoEnum(toolsFor(gated), await loadTiposAcao(admin));
+      // OBSERVABILIDADE: registra o que o LLM RECEBEU como ferramenta e, sobretudo,
+      // o que ficou pelo caminho — tool em allowed_tools que o registry do edge não
+      // conhece é descartada por `toolsFor` SEM ERRO. Sem este span, isso chega ao
+      // usuário como "não tenho essa ferramenta", indistinguível de "o LLM não usou"
+      // e de "a RPC falhou". Foi o que custou três hipóteses erradas no caso do
+      // consultar_documentos_obrigatorios.
+      const traceCtx: TraceCtx = {
+        traceId: run.id, userId: run.user_id, sessionId: run.session_id,
+        agentId: agent.id, runId: run.id,
+      };
+      await traceToolsEnviadas(admin, traceCtx, {
+        operacao: "n3:tools_enviadas", agenteNome: agent.name, modelo: agent.model,
+        permitidas: gated, enviadas: toolDefs.map((d) => d.function.name),
+      });
       const readClient = (userToken && anonKey)
         ? createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${userToken}` } } })
         : admin;
@@ -4034,6 +4068,14 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         temperature: agent.temperature, top_p: agent.top_p, maxTokens: agent.max_tokens ?? 4000,
         timeoutMs: LLM_N3_TIMEOUT_MS, tools: toolDefs, toolChoice: "auto", parallelToolCalls: false, cancelPoll,
         ctx: { ...baseCtx, agentId: agent.id, stage: "delegating" },
+      });
+
+      // Segundo span: o LLM CHAMOU ferramenta ou respondeu texto? É o que separa
+      // "não foi enviada" (span acima) de "foi enviada e não usou" (este).
+      await traceRespostaLlm(admin, traceCtx, {
+        operacao: "n3", modelo: r.rawModel,
+        toolCalls: (r.toolCalls ?? []).map((c) => c.function.name),
+        temTexto: !!(r.content || "").trim(),
       });
 
       // Persiste o topo com as mensagens atualizadas (sem mudar o resto da pilha).
@@ -4122,7 +4164,17 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       }
 
       // ── leitura: executa inline, realimenta e salta ───────────────────────────
+      const t0Read = Date.now();
       const toolResult: unknown = await runReadTool(readClient, run.user_id, name, args);
+      // Terceiro span: a tool FOI chamada — deu certo ou falhou, e com que erro CRU.
+      // As tools de leitura devolvem a falha dentro do payload (`erro`), não por
+      // exceção, então é de lá que o motivo sai.
+      await traceChamadaTool(admin, traceCtx, {
+        tool: name, args, durationMs: Date.now() - t0Read,
+        ok: !(toolResult as { erro?: unknown } | null)?.erro,
+        erro: (toolResult as { __erro_cru?: string } | null)?.__erro_cru ?? null,
+        motivo: (toolResult as { erro?: string } | null)?.erro ?? null,
+      });
       await persistEntityCarryover(admin, run.session_id, name, toolResult);
       const m = [...msgs, assistantMsg, { role: "tool", tool_call_id: call.id, name, content: serializarResultadoLeitura(toolResult) }];
       await upd({ status: "delegating", delegation_stack: persistTop(m) as unknown as Record<string, unknown>, chain: [...(run.chain || []), { level: frame.depth, agent: agent.name, action: "read" }] });
@@ -4335,6 +4387,16 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
           ? gatedToolNames.filter((n: string) => !isDelegateTool(n))
           : gatedToolNames;
         const toolDefs = withTiposAcaoEnum(toolsFor(gatedSemRoteamento), await loadTiposAcao(admin));
+        // Neste ramo o agente é o `n3`; o trace é do mesmo TURNO, então o trace_id
+        // continua sendo o id da run — os spans deste passo e do N3 se amarram.
+        const traceCtxCurta: TraceCtx = {
+          traceId: run.id, userId: run.user_id, sessionId: run.session_id,
+          agentId: n3.id, runId: run.id,
+        };
+        await traceToolsEnviadas(admin, traceCtxCurta, {
+          operacao: "resposta_curta:tools_enviadas", agenteNome: n3.name, modelo: n3.model,
+          permitidas: gatedSemRoteamento, enviadas: toolDefs.map((d) => d.function.name),
+        });
         if (toolDefs.length > 0) {
           // Correção A: as leituras RLS-gated (consultar_cliente re-checa
           // is_recepcao_or_socio via auth.uid()) rodam sob a IDENTIDADE do usuário.
@@ -4402,7 +4464,15 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
             // Só LEITURA: executa cada uma e realimenta o histórico do loop.
             for (const c of r.toolCalls) {
               if (isDelegateTool(c.function.name)) continue; // roteamento: nunca executa aqui
-              const data = await runReadTool(readClient, run.user_id, c.function.name, safeJson(c.function.arguments));
+              const argsCurta = safeJson(c.function.arguments);
+              const t0Curta = Date.now();
+              const data = await runReadTool(readClient, run.user_id, c.function.name, argsCurta);
+              await traceChamadaTool(admin, traceCtxCurta, {
+                tool: c.function.name, args: argsCurta, durationMs: Date.now() - t0Curta,
+                ok: !(data as { erro?: unknown } | null)?.erro,
+                erro: (data as { __erro_cru?: string } | null)?.__erro_cru ?? null,
+                motivo: (data as { erro?: string } | null)?.erro ?? null,
+              });
               // E2: se a leitura resolveu UMA entidade sem ambiguidade, guarda como
               // carry-over da sessão para os próximos turnos ("esse cliente" etc.).
               await persistEntityCarryover(admin, run.session_id, c.function.name, data);
@@ -4790,7 +4860,23 @@ async function handleConfirm(req: Request, body: { runId: string; actionId: stri
     const adminUserId = await firstAdminUserId(admin);
     exec = adminUserId ? await routeAsPendencia(userClient, adminUserId, action.tool, action.args) : { ok: false, error: "nenhum admin encontrado" };
   } else {
+    const t0Write = Date.now();
     exec = await runWriteTool(userClient, user.id, action.tool, action.args, admin);
+    // A ESCRITA é o caminho onde "não consegui executar" mais dói: o usuário
+    // confirmou. O span guarda o erro CRU da RPC (com o `code`: 42501 de papel,
+    // 23514 de vocabulário, 42883 de parâmetro que não existe) e as CHAVES dos args —
+    // nunca os valores, porque args carrega nome de cliente e senha do gov.br.
+    await traceChamadaTool(admin, {
+      traceId: body.runId ?? action.id, userId: user.id,
+      sessionId: action.session_id, agentId: action.agent_id ?? null, runId: body.runId ?? null,
+    }, {
+      tool: action.tool, args: action.args, ok: exec.ok,
+      // `erroCru` vem do handler com o code da RPC; `error` é o texto limpo que o
+      // usuário lê. O trace guarda os dois: um responde "por quê", o outro "o que a
+      // pessoa viu".
+      erro: (exec as { erroCru?: string | null }).erroCru ?? null,
+      motivo: exec.ok ? null : (exec.error ?? null), durationMs: Date.now() - t0Write,
+    });
   }
   // Trilho B — glue determinístico do cadastro por documento (OCR). Após um
   // cadastrar_cliente REAL bem-sucedido carimbado com __ocr_attachment_id:
