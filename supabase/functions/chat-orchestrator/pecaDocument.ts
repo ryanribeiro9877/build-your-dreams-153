@@ -6,7 +6,10 @@ import {
   Packer,
   Paragraph,
   TextRun,
-} from "https://esm.sh/docx@9.7.1?target=denonext";
+} from "https://esm.sh/docx@9.7.1?target=denonext&no-dts";
+// `no-dts` é deliberado: os tipos publicados por docx referenciam @types/node,
+// que não existe no runtime/CI isolado da Edge. A API usada abaixo é mínima e o
+// OOXML produzido é aberto e verificado em pecaDocument.test.ts.
 
 export const PECA_DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -57,8 +60,8 @@ export function nomeDaPeca(
   return nome.slice(0, 200);
 }
 
-function inlineRuns(text: string): TextRun[] {
-  const runs: TextRun[] = [];
+function inlineRuns(text: string) {
+  const runs = [];
   const token = /(\*\*|__)(.+?)\1|(\*|_)(.+?)\3|`([^`]+)`/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -81,7 +84,7 @@ function inlineRuns(text: string): TextRun[] {
   return runs.length ? runs : [new TextRun("")];
 }
 
-function paragraphFromLine(raw: string, inCode: boolean): Paragraph | null {
+function paragraphFromLine(raw: string, inCode: boolean) {
   const line = raw.trim();
   if (!line) return new Paragraph({ text: "", spacing: { after: 120 } });
   if (/^[-*_]{3,}$/.test(line)) return null;
@@ -133,7 +136,7 @@ function paragraphFromLine(raw: string, inCode: boolean): Paragraph | null {
  * Arial 12 e corpo justificado com espaçamento 1,5.
  */
 export async function materializarPecaDocx(markdown: string): Promise<Blob> {
-  const children: Paragraph[] = [];
+  const children = [];
   let inCode = false;
   for (const raw of markdown.replace(/\r\n/g, "\n").split("\n")) {
     if (/^\s*```/.test(raw)) {
