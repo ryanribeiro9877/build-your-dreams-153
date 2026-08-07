@@ -54,6 +54,7 @@ import {
 } from "./clientePreflight.ts";
 import { buildOcrDocContext } from "./ocrDocContext.ts";
 import { findIdentityDocId, isIdentityDoc, parseOcrFields, fieldsForCadastro, computeMissingFields, buildPendenciaDescricao } from "./ocrApplyGlue.ts";
+import { materializarPecaDocx, nomeDaPeca, PECA_DOCX_MIME } from "./pecaDocument.ts";
 import { isAgendarAtendimentoRequest, isReuniaoAcaoRequest } from "./agendaDetect.ts";
 import { normalizeMeetingDraft, buildMeetingDraftPrompt, parseReuniaoAcao, buildAcaoPrompt, validDate, validTime } from "./meetingDraft.ts";
 import {
@@ -3552,7 +3553,7 @@ CLASSIFICAÇÃO DO TIPO DE AÇÃO (acao_tipo) — escolha exatamente UM:
 - "seguro_atrelado": seguro embutido/venda casada em contrato de crédito.
 - "outro": qualquer outro caso (ou quando a solicitação não é confecção de peça).`;
 
-// ─── Glue da salvar_peca (multi-hop): texto → Storage → RPC ──────────────────
+// ─── Glue da salvar_peca: texto → DOCX → Storage → RPC ───────────────────────
 // Resolve/cria a task de confecção para que a DEVOLUÇÃO reabra algo (critério 3).
 // Cria uma user_tasks de confecção por área, atribuída ao redator (auth via userClient).
 async function ensureConfeccaoTask(
@@ -3573,32 +3574,138 @@ async function ensureConfeccaoTask(
   } catch (e) { console.warn(`[salvar_peca] confecção erro: ${(e as Error)?.message}`); return null; }
 }
 
+async function resolvePecaTarget(
+  admin: SupabaseClient, sessionId: string, userId: string,
+): Promise<{ clientId: string | null; clientName: string | null; processId: string | null }> {
+  const ctx = await loadSessionContext(admin, sessionId, userId);
+  const { data: session } = await admin.from("chat_sessions")
+    .select("client_id").eq("id", sessionId).maybeSingle();
+  let clientId = String(session?.client_id ?? ctx.entities.client?.id ?? "").trim() || null;
+  let clientName = String(ctx.entities.client?.name ?? "").trim() || null;
+  let processId = String(ctx.entities.process?.id ?? "").trim() || null;
+
+  // O processo pode ser a única entidade carregada. Nesse caso, ele fornece o
+  // cliente; se conflitar com o cliente da sessão, não vincula a peça ao processo.
+  if (processId) {
+    const { data: process } = await admin.from("processes")
+      .select("client_id, client_name").eq("id", processId).maybeSingle();
+    const processClientId = String(process?.client_id ?? "").trim() || null;
+    if (!clientId) clientId = processClientId;
+    if (!clientName) clientName = String(process?.client_name ?? "").trim() || null;
+    if (clientId && processClientId && clientId !== processClientId) processId = null;
+  }
+  if (clientId && !clientName) {
+    const { data: client } = await admin.from("clients")
+      .select("full_name").eq("id", clientId).maybeSingle();
+    clientName = String(client?.full_name ?? "").trim() || null;
+  }
+  return { clientId, clientName, processId };
+}
+
+async function reviewerForPeca(admin: SupabaseClient): Promise<string | null> {
+  const { data: socio } = await admin.from("profiles")
+    .select("user_id, role_templates!inner(code)")
+    .eq("role_templates.code", "socio").limit(1);
+  if (socio?.length) return (socio[0] as { user_id: string }).user_id;
+  return await firstAdminUserId(admin);
+}
+
+interface SavedPecaResult {
+  client_document_id: string;
+  revisar_peca_task_id: string;
+  reviewer_user_id: string;
+  file_path: string;
+  already_saved?: boolean;
+}
+
+async function findSavedPeca(
+  admin: SupabaseClient, path: string,
+): Promise<{ result: SavedPecaResult | null; error: string | null }> {
+  const { data: doc, error: docError } = await admin.from("client_documents")
+    .select("id").eq("file_path", path).limit(1).maybeSingle();
+  if (docError) return { result: null, error: docError.message };
+  if (!doc?.id) return { result: null, error: null };
+  const { data: review, error: reviewError } = await admin.from("user_tasks")
+    .select("id, assignee_user_id")
+    .contains("payload", { client_document_id: doc.id })
+    .limit(1).maybeSingle();
+  if (reviewError) return { result: null, error: reviewError.message };
+  if (!review?.id) {
+    return {
+      result: null,
+      error: "a peça já está no dossiê, mas a tarefa de revisão vinculada não foi encontrada",
+    };
+  }
+  return {
+    result: {
+      client_document_id: doc.id,
+      revisar_peca_task_id: review.id,
+      reviewer_user_id: review.assignee_user_id,
+      file_path: path,
+      already_saved: true,
+    },
+    error: null,
+  };
+}
+
 // Glue: conteudo (texto) → arquivo no bucket client-documents → RPC salvar_peca.
 async function handleSalvarPeca(
   admin: SupabaseClient, userClient: SupabaseClient,
-  run: { original_message: string; user_id: string }, agent: AgentRow,
+  run: { id: string; original_message: string; user_id: string }, agent: AgentRow,
   args: Record<string, unknown>, frame: { delegation_context: DelegationContext | null },
-): Promise<{ ok: boolean; result?: { client_document_id: string; revisar_peca_task_id: string; reviewer_user_id: string }; error?: string }> {
+): Promise<{
+  ok: boolean;
+  result?: SavedPecaResult;
+  error?: string;
+}> {
+  let uploadedPath: string | null = null;
+  let confeccaoTaskId: string | null = null;
   try {
     const clientId = String(args.client_id ?? frame.delegation_context?.client_id ?? "");
     const processId = (args.process_id as string) ?? frame.delegation_context?.process_id ?? null;
     const conteudo = String(args.conteudo ?? "");
-    const documentName = String(args.document_name ?? "Peça").slice(0, 200);
+    const documentName = String(args.document_name ?? "Peça jurídica").slice(0, 200);
     const documentType = String(args.document_type ?? "peca");
     if (!clientId) return { ok: false, error: "salvar_peca: client_id ausente (resolva o cliente antes)." };
     if (!conteudo.trim()) return { ok: false, error: "salvar_peca: conteúdo vazio." };
 
-    // Reviewer = dono da árvore (o sócio). Nunca cai no autor por omissão.
-    const reviewerUserId = agent.owner_user_id ?? null;
+    // Reviewer humano: admin/diretor ou sócio do escritório. Só cai no autor quando
+    // ele próprio é a única liderança encontrada (instalação/bootstrap incompleto).
+    const reviewerUserId = await reviewerForPeca(admin) ?? agent.owner_user_id ?? run.user_id;
 
-    // 1) grava a peça no Storage (bucket client-documents; leitura segue RLS de client_documents)
-    const path = `pecas/${processId ?? clientId}/${crypto.randomUUID()}.md`;
+    // Path determinístico por run: se a invocação for repetida após o COMMIT da RPC,
+    // devolve o documento já salvo em vez de criar peça e revisão duplicadas.
+    const path = `pecas/${processId ?? clientId}/${run.id}.docx`;
+    const existing = await findSavedPeca(admin, path);
+    if (existing.error) {
+      console.error(`[salvar_peca] falha ao checar idempotência de ${path}: ${existing.error}`);
+      return { ok: false, error: "não foi possível confirmar se esta peça já havia sido arquivada." };
+    }
+    if (existing.result) return { ok: true, result: existing.result };
+
+    // Limpa somente um objeto sem dono deixado por tentativa anterior desta MESMA
+    // run. Nunca remove objeto que tenha linha em client_documents (checado acima).
+    await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
+
+    // 1) materializa DOCX editável e grava no Storage.
+    const docx = await materializarPecaDocx(conteudo);
     const { error: upErr } = await admin.storage.from("client-documents")
-      .upload(path, new Blob([conteudo], { type: "text/markdown" }), { upsert: false, contentType: "text/markdown" });
-    if (upErr) return { ok: false, error: `falha no upload da peça: ${upErr.message}` };
+      .upload(path, docx, { upsert: false, contentType: PECA_DOCX_MIME });
+    if (upErr) {
+      console.error(`[salvar_peca] upload ${path} falhou: ${upErr.message}`);
+      const concurrent = await findSavedPeca(admin, path);
+      if (concurrent.result) return { ok: true, result: concurrent.result };
+      return { ok: false, error: "não foi possível enviar o arquivo DOCX ao armazenamento." };
+    }
+    uploadedPath = path;
 
     // 2) task de confecção (para a devolução reabrir algo)
-    const confeccaoTaskId = await ensureConfeccaoTask(userClient, run, clientId);
+    confeccaoTaskId = await ensureConfeccaoTask(userClient, run, clientId);
+    if (!confeccaoTaskId) {
+      await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
+      uploadedPath = null;
+      return { ok: false, error: "não consegui criar a tarefa de confecção vinculada; a peça não foi arquivada." };
+    }
 
     // 3) RPC salvar_peca sob o JWT do usuário (created_by/assigner corretos)
     const { data, error } = await userClient.rpc("salvar_peca", {
@@ -3607,15 +3714,69 @@ async function handleSalvarPeca(
       p_file_path: path,
       p_process_id: processId,
       p_document_type: documentType,
-      p_mime_type: "text/markdown",
+      p_mime_type: PECA_DOCX_MIME,
       p_reviewer_user_id: reviewerUserId,
       p_confeccao_task_id: confeccaoTaskId,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      console.error(`[salvar_peca] RPC recusou run=${run.id} path=${path}: ${error.message}`);
+      // Um erro de transporte pode chegar depois do COMMIT. Antes de compensar,
+      // relê pela chave idempotente; se a linha nasceu, preserva arquivo + tarefas.
+      const committed = await findSavedPeca(admin, path);
+      if (committed.result) {
+        uploadedPath = null;
+        return { ok: true, result: committed.result };
+      }
+      if (committed.error) {
+        console.error(
+          `[salvar_peca] estado pós-RPC incerto em ${path}: ${committed.error}; ` +
+          "arquivo preservado para retry/reconciliação",
+        );
+        uploadedPath = null;
+        return { ok: false, error: "não foi possível confirmar se o arquivamento foi concluído." };
+      }
+      await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
+      uploadedPath = null;
+      await userClient.rpc("update_user_task_status", {
+        p_task_id: confeccaoTaskId, p_new_status: "cancelled",
+        p_notes: "Arquivamento da peça falhou; tarefa cancelada automaticamente.",
+      }).then(() => {}, () => {});
+      return {
+        ok: false,
+        error: "o banco não conseguiu vincular o arquivo ao dossiê e criar a tarefa de revisão.",
+      };
+    }
     const d = data as { client_document_id: string; revisar_peca_task_id: string; reviewer_user_id: string };
-    return { ok: true, result: d };
+    uploadedPath = null; // agora o Storage tem dono em client_documents
+    return { ok: true, result: { ...d, file_path: path } };
   } catch (e) {
-    return { ok: false, error: (e as Error)?.message ?? "erro ao salvar peça" };
+    console.error(`[salvar_peca] erro inesperado run=${run.id}: ${(e as Error)?.message ?? e}`);
+    if (uploadedPath) {
+      const committed = await findSavedPeca(admin, uploadedPath);
+      if (committed.result) {
+        uploadedPath = null;
+        return { ok: true, result: committed.result };
+      }
+      // Se nem a releitura é confiável, preservar é menos destrutivo: o path
+      // determinístico permite reconciliar/limpar no retry sem quebrar documento.
+      if (committed.error) {
+        console.error(
+          `[salvar_peca] estado pós-exceção incerto em ${uploadedPath}: ${committed.error}; ` +
+          "arquivo preservado para retry/reconciliação",
+        );
+        uploadedPath = null;
+        confeccaoTaskId = null;
+      } else {
+        await admin.storage.from("client-documents").remove([uploadedPath]).then(() => {}, () => {});
+      }
+    }
+    if (confeccaoTaskId) {
+      await userClient.rpc("update_user_task_status", {
+        p_task_id: confeccaoTaskId, p_new_status: "cancelled",
+        p_notes: "Arquivamento da peça falhou; tarefa cancelada automaticamente.",
+      }).then(() => {}, () => {});
+    }
+    return { ok: false, error: "ocorreu um erro interno ao materializar ou arquivar a peça." };
   }
 }
 
@@ -4806,18 +4967,79 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // caminho feliz — a validação única do N2 já cobriu qualidade + anti-alucinação
       // + alçada + citação. Reduz a latência da cadeia.
       const n3 = run.target_n3_id ? await loadAgent(admin, run.target_n3_id) : null;
-      const finalMeta = { kind: "final", chain: run.chain, agent_name: n3?.name ?? "Assistente" };
+      let finalChain = Array.isArray(run.chain) ? [...run.chain] : [];
       // Uso acumulado (model/tokens/duração) gravado na mensagem final.
       const u = (run.n3_usage as { model?: string; input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
       const usageCols = { model_used: u.model ?? null, input_tokens: u.input_tokens ?? null, output_tokens: u.output_tokens ?? null, duration_ms: u.duration_ms ?? null };
-      // Item 5 (06/08) — PEÇA ENTREGUE E NÃO GRAVADA. Run com blocos é redação
-      // segmentada (mesmo discriminador do caminho B). Se ela não passou por
-      // `salvar_peca`, a peça só existe nesta conversa: a resposta declara isso em
-      // vez de deixar o usuário acreditar que o sistema arquivou.
+
+      // Item 5 (06/08) — fecha o elo do pipeline principal:
+      // texto validado → DOCX → client-documents → salvar_peca → tarefa Revisar peça.
+      // Run com blocos é redação segmentada (mesmo discriminador do Caminho B).
       const ehPecaFinal = Array.isArray(run.blocks) && run.blocks.filter(Boolean).length > 0;
-      const notaPeca = notaPersistenciaDaPeca(ehPecaFinal, run.chain);
+      let persistenceError: string | null = null;
+      let persistenceSuccess: string | null = null;
+      if (ehPecaFinal) {
+        if (!n3) {
+          persistenceError = "o especialista responsável pela peça não foi encontrado";
+        } else if (!userToken) {
+          persistenceError = "a sessão autenticada expirou antes do arquivamento";
+        } else {
+          const target = await resolvePecaTarget(admin, run.session_id, run.user_id);
+          if (!target.clientId) {
+            persistenceError = "não foi possível identificar com segurança o cliente do dossiê";
+          } else {
+            const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+            const jwtClient = createClient(supabaseUrl, anonKey, {
+              global: { headers: { Authorization: `Bearer ${userToken}` } },
+            });
+            await insertStage(
+              admin, run.session_id, run.user_id,
+              "Materializando a peça em DOCX e enviando para revisão humana...",
+              "validating_n1", n3,
+            );
+            const saved = await handleSalvarPeca(
+              admin, jwtClient, run, n3,
+              {
+                client_id: target.clientId,
+                process_id: target.processId,
+                document_name: nomeDaPeca(run.draft || "", target.clientName),
+                document_type: "peca",
+                conteudo: run.draft || "",
+              },
+              { delegation_context: null },
+            );
+            if (saved.ok && saved.result) {
+              finalChain = [...finalChain, {
+                level: 3,
+                agent: n3.name,
+                action: "salvar_peca",
+                client_document_id: saved.result.client_document_id,
+                revisar_peca_task_id: saved.result.revisar_peca_task_id,
+                file_path: saved.result.file_path,
+                ...(saved.result.already_saved ? { idempotent_reuse: true } : {}),
+              }];
+              persistenceSuccess =
+                "✅ **Peça arquivada no dossiê em formato DOCX** e enviada para revisão humana em Tarefas.";
+              console.log(
+                `[peca] run=${runId} persistida doc=${saved.result.client_document_id} ` +
+                `revisao=${saved.result.revisar_peca_task_id} path=${saved.result.file_path}`,
+              );
+            } else {
+              persistenceError = saved.error ?? "falha não detalhada ao arquivar";
+            }
+          }
+        }
+      }
+      const notaPeca = persistenceSuccess ??
+        notaPersistenciaDaPeca(ehPecaFinal, finalChain, persistenceError);
       const conteudoFinal = notaPeca ? `${run.draft}\n\n---\n\n${notaPeca}` : run.draft;
-      if (notaPeca) console.log(`[peca] run=${runId} entregue SEM persistência (0 linhas em client_documents) — aviso anexado à resposta`);
+      if (ehPecaFinal && !persistenceSuccess) {
+        console.warn(
+          `[peca] run=${runId} entregue SEM persistência — ` +
+          `${persistenceError ?? "salvar_peca ausente no chain"}`,
+        );
+      }
+      const finalMeta = { kind: "final", chain: finalChain, agent_name: n3?.name ?? "Assistente" };
       if (run.stream_message_id) {
         // Já existe a linha (chamada única): vira a resposta FINAL (sem inserir duplicata).
         await admin.from("chat_messages")
@@ -4832,7 +5054,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         });
       }
       await admin.rpc("increment_session_counters", { p_session_id: run.session_id, p_tokens_in: 0, p_tokens_out: 0, p_cost: 0 }).then(() => {}, () => {});
-      await upd({ status: "done" });
+      await upd({ status: "done", chain: finalChain });
       // Resumo rolante (memória "eterna"): se a conversa passou da janela de N
       // mensagens, condensa as mais antigas em chat_sessions.summary. Em segundo
       // plano — não atrasa a resposta ao usuário. Fail-open.
