@@ -21,7 +21,7 @@ import { trackUiEvent } from "@/lib/uiTracking";
 import {
   Sparkles, Crown, Users, BarChart3, Network, Activity, User, LogOut,
   Bot, Clock, Settings, Upload, UserPlus, Coins, CalendarDays, Scale, FlaskConical,
-  ListTodo, LayoutGrid, ShieldCheck, PhoneCall, Gavel, ClipboardList,
+  ShieldCheck, PhoneCall, Gavel, ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMenuAccess } from "@/hooks/useMenuAccess";
@@ -1224,8 +1224,7 @@ export default function JurisCloudOS() {
     { id: "diligencias", label: "Diligências", icon: ClipboardList, color: ACCENT, action: () => navigate("/diligencias"), show: isSocioOuAdvogadoRole(workspace?.role_template?.code) || hasRole("admin") },
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
-    { id: "tarefas", label: "Tarefas", icon: ListTodo, color: ACCENT, action: () => navigate("/sistema/tarefas"), show: canSeeMenu("tarefas") },
-    { id: "kanban", label: "Kanban", icon: LayoutGrid, color: ACCENT, action: () => navigate("/sistema/kanban"), show: canSeeMenu("kanban") },
+    // Tarefas e Kanban ficam só na topbar (JurisTopBar) — remove duplicidade da sidebar.
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenu("administracao") },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenu("dashboard") },
     { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: canSeeMenu("dashboard_ia") },
