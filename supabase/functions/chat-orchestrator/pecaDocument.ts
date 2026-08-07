@@ -6,7 +6,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
-} from "npm:docx@9.7.1";
+} from "https://esm.sh/docx@9.7.1?target=denonext";
 
 export const PECA_DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
