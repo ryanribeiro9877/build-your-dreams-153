@@ -47,6 +47,13 @@ Deno.test("registry: delegate/revisão registradas e categorizadas", () => {
   assertEquals(isWriteTool("decidir_revisao_peca"), true);
 });
 
+Deno.test("salvar_peca só oferece tipos aceitos pelo CHECK de client_documents", () => {
+  const properties = (TOOLS.salvar_peca.function.parameters as {
+    properties: Record<string, { enum?: string[] }>;
+  }).properties;
+  assertEquals(properties.document_type.enum, ["minuta", "peticao_inicial"]);
+});
+
 /* ══ P2 (Cards 11/13/14/15) ═════════════════════════════════════════════════ */
 
 Deno.test("registry: as 11 tools do P2 estão registradas com parameters", () => {
