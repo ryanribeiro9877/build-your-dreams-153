@@ -72,7 +72,9 @@ jobs:
         run: deno check supabase/functions/attendance-summary/index.ts
 
       - name: Test chat-orchestrator (tools + intent classifier)
-        run: deno test supabase/functions/chat-orchestrator/
+        # readable-stream (dependência transitiva do gerador DOCX) consulta
+        # somente esta flag de ambiente durante a inicialização.
+        run: deno test --allow-env=READABLE_STREAM supabase/functions/chat-orchestrator/
 
       - name: Test _shared/ocr (extrator + registry + merge)
         run: deno test supabase/functions/_shared/ocr/
