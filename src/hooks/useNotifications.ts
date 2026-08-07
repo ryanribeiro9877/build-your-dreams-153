@@ -8,6 +8,7 @@ import {
   fetchUnreadCount,
   markAllNotificationsRead,
   markNotificationRead,
+  resolveNotificationRoute,
   type AppNotification,
 } from "@/lib/notifications";
 
@@ -133,11 +134,12 @@ export function useNotifications() {
         (payload) => {
           const n = payload.new as AppNotification;
           dispatch({ t: "insert", n });
+          const target = resolveNotificationRoute(n);
           toast(n.title, {
             description: n.body ?? undefined,
             duration: 6000,
-            action: n.route
-              ? { label: "Abrir", onClick: () => navigateRef.current(n.route as string) }
+            action: target
+              ? { label: "Abrir", onClick: () => navigateRef.current(target) }
               : undefined,
           });
         },
@@ -164,7 +166,8 @@ export function useNotifications() {
         /* o eco do Realtime / próxima carga reconcilia */
       }
     }
-    if (n.route) navigateRef.current(n.route);
+    const target = resolveNotificationRoute(n);
+    if (target) navigateRef.current(target);
   }, []);
 
   // Marca UMA como lida SEM navegar (ação de hover/teclado do item). Diferente de
