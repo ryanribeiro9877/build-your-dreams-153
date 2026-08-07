@@ -49,6 +49,29 @@ const db = supabase as unknown as LooseClient;
 const NOTIFICATION_COLS =
   "id,user_id,type,title,body,entity_type,entity_id,actor_user_id,route,read_at,created_at";
 
+/**
+ * Rotas gravadas no banco (trigger `trg_notify_task_assignment`) que NÃO existem
+ * no `App.tsx` e caíam na rota-coringa `*` → tela 404. O trigger persiste
+ * `route='/kanban'`, mas não há `/kanban`: a tarefa atribuída aparece na inbox
+ * pessoal (`/sistema/tarefas`, MyInbox). Normalizamos no cliente porque a origem
+ * é o banco (correção sem migration). MyInbox não seleciona por id, então o
+ * destino é a inbox — sem inventar rota/param que nenhuma tela consome.
+ */
+const LEGACY_ROUTE_MAP: Record<string, string> = {
+  "/kanban": "/sistema/tarefas",
+  "/tarefas": "/sistema/tarefas",
+};
+
+/**
+ * Destino REAL do deep-link de uma notificação. Retorna `null` quando não há rota
+ * (não navega). Função pura para ser testável sem React/Router.
+ */
+export function resolveNotificationRoute(n: Pick<AppNotification, "route">): string | null {
+  const raw = n.route?.trim();
+  if (!raw) return null;
+  return LEGACY_ROUTE_MAP[raw] ?? raw;
+}
+
 /** Últimas notificações do usuário (RLS já filtra por auth.uid()). */
 export async function fetchRecentNotifications(limit = 20): Promise<AppNotification[]> {
   const { data, error } = await db
