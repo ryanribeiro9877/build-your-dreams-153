@@ -205,7 +205,8 @@ const App = () => (
               {/* Card 11 — mesmo guard das execuções: a RLS de `diligencias` é
                   advogado/sócio/admin e a recepção leva 42501 (decisão do Rodrigo 4.4). */}
               <Route path="/diligencias" element={<JuridicoRoute><Diligencias /></JuridicoRoute>} />
-              <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+              {/* Hub Administração: menu + rota 1:1 via chave administracao (tech-only). */}
+              <Route path="/admin" element={<MenuRoute menuKey="administracao"><Admin /></MenuRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<MenuRoute menuKey="dashboard"><Dashboard /></MenuRoute>} />
               <Route path="/dashboard-ia" element={<MenuRoute menuKey="dashboard_ia"><DashboardIA /></MenuRoute>} />

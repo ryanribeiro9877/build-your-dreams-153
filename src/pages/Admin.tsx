@@ -1,8 +1,11 @@
 import { useEffect, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useMasterAdmin } from "@/hooks/useMasterAdmin";
+import { useMyWorkspace } from "@/hooks/useMyWorkspace";
+import { isTechRole } from "@/components/DashboardRoute";
 
 const pageBg = "#09090f";
 const cardBg = "#11111a";
@@ -12,21 +15,25 @@ const gold = "#c9a84c";
 
 export default function Admin() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
   const { canAccessAdmin } = usePermissions();
   const { isMaster, checking } = useMasterAdmin();
+  const { workspace, loading: wsLoading } = useMyWorkspace();
+  const isTech = isTechRole(workspace?.role_template?.code) || hasRole("tech");
+  const canOpen = canAccessAdmin || isMaster || isTech;
 
   useEffect(() => {
-    if (checking) return;
-    if (!canAccessAdmin && !isMaster) {
+    if (checking || wsLoading) return;
+    if (!canOpen) {
       navigate("/sistema", { replace: true });
     }
-  }, [checking, canAccessAdmin, isMaster, navigate]);
+  }, [checking, wsLoading, canOpen, navigate]);
 
-  if (checking) {
+  if (checking || wsLoading) {
     return <HexagonLoader variant="fullscreen" label="Carregando" />;
   }
 
-  if (!canAccessAdmin && !isMaster) {
+  if (!canOpen) {
     return null;
   }
 
@@ -69,7 +76,9 @@ export default function Admin() {
       </div>
 
       <p style={{ fontSize: 13, color: "#7a7a92", marginBottom: 20 }}>
-        Atalhos de gestão do escritório.
+        {isTech && !canAccessAdmin
+          ? "Atalhos técnicos do sistema."
+          : "Atalhos de gestão do escritório."}
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -84,8 +93,26 @@ export default function Admin() {
             <button type="button" onClick={() => navigate("/admin/ui")} style={btnBase}>
               Eventos de UI
             </button>
-            <button type="button" onClick={() => navigate("/tech/agentes")} style={btnBase}>
-              Agentes IA
+          </>
+        )}
+        {(canAccessAdmin || isTech) && (
+          <button type="button" onClick={() => navigate("/tech/agentes")} style={btnBase}>
+            Agentes IA
+          </button>
+        )}
+        {isTech && (
+          <>
+            <button type="button" onClick={() => navigate("/dashboard-ia")} style={btnBase}>
+              Dashboard IA
+            </button>
+            <button type="button" onClick={() => navigate("/tech/providers")} style={btnBase}>
+              Providers
+            </button>
+            <button type="button" onClick={() => navigate("/tech/crons")} style={btnBase}>
+              Crons
+            </button>
+            <button type="button" onClick={() => navigate("/tech/testes")} style={btnBase}>
+              Testes
             </button>
           </>
         )}
