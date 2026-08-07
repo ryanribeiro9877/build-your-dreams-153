@@ -1225,6 +1225,7 @@ export default function JurisCloudOS() {
     { id: "agenda", label: "Agenda", icon: CalendarDays, color: ACCENT, action: () => navigate("/sistema/agenda"), show: canSeeMenu("agenda") },
     { id: "audiencias", label: "Audiências", icon: Scale, color: ACCENT, action: () => navigate("/sistema/audiencias"), show: canSeeMenu("agenda") },
     // Tarefas e Kanban ficam só na topbar (JurisTopBar) — remove duplicidade da sidebar.
+    // Dashboard IA e Administração: exclusivos do tech (useMenuAccess TECH_ONLY_MENU_KEYS).
     { id: "admin", label: "Administração", icon: Crown, color: ACCENT_SOFT, action: () => navigate("/admin"), show: canSeeMenu("administracao") },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: ACCENT, action: () => navigate("/dashboard"), show: canSeeMenu("dashboard") },
     { id: "dashboard_ia", label: "Dashboard IA", icon: Sparkles, color: ACCENT, action: () => navigate("/dashboard-ia"), show: canSeeMenu("dashboard_ia") },

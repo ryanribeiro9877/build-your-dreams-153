@@ -6,7 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { isDashboardRole, isSocioRole, isTechRole, isRecepcaoRole } from "@/components/DashboardRoute";
 
 // ─── Admin chave-mestra: fonte ÚNICA de acesso a menu ────────────────────────
-// Regra: papel ADMIN (app_role) → vê todos os menus, sempre (curto-circuito).
+// Regra: papel ADMIN (app_role) → vê todos os menus (curto-circuito), EXCETO os
+// de TECH_ONLY_MENU_KEYS (Dashboard IA / Administração — exclusivos do tech).
 // Demais → default do papel atual + overrides de get_my_menu_overrides()
 // (grant adiciona, revoke remove; o override vence o default). Cacheado por sessão.
 // Este hook substitui os gates hardcoded espalhados (canAccessClients, ROLE_MAP,
@@ -41,6 +42,12 @@ export const MENU_KEY_LABELS: Record<MenuKey, string> = {
 // os gates de dados são plugados um a um, conforme a necessidade real).
 export const DATA_GATE_READY: ReadonlySet<string> = new Set<string>(["clientes"]);
 
+/** Menus exclusivos do acesso técnico — a chave-mestra admin NÃO os libera. */
+export const TECH_ONLY_MENU_KEYS: ReadonlySet<MenuKey> = new Set([
+  "dashboard_ia",
+  "administracao",
+]);
+
 interface MenuOverrideRow { menu_key: string; granted: boolean; }
 
 export interface MenuAccess {
@@ -54,7 +61,7 @@ export interface MenuAccess {
 
 export function useMenuAccess(): MenuAccess {
   const { user, userRoles, hasRole } = useAuth();
-  const { canSeeMenuItem, canAccessClients, canAccessAdmin } = usePermissions();
+  const { canSeeMenuItem, canAccessClients } = usePermissions();
   const { workspace } = useMyWorkspace();
   const code = workspace?.role_template?.code ?? null;
   const isAdmin = userRoles.includes("admin");
@@ -91,12 +98,18 @@ export function useMenuAccess(): MenuAccess {
     tarefas: isRecepcaoRole(code) || isSocioRole(code) || isAdv,
     kanban: isRecepcaoRole(code) || isSocioRole(code) || isAdv,
     kpis: canSeeMenuItem("eficiencia") && !hasRole("tech"),
-    dashboard_ia: isTechRole(code),
-    administracao: canSeeMenuItem("admin") && canAccessAdmin,
+    // Dashboard IA e Administração são exclusivos do tech (role_template ou app_role).
+    dashboard_ia: isTechRole(code) || hasRole("tech"),
+    administracao: isTechRole(code) || hasRole("tech"),
     configuracoes: true, // grupo sempre visível (Meus Tokens é universal)
   };
 
   const canSeeMenu = (key: MenuKey): boolean => {
+    // Tech-only: admin comum (sócio/chave-mestra) NÃO herda esses itens.
+    if (TECH_ONLY_MENU_KEYS.has(key)) {
+      const ov = overrides[key];
+      return ov !== undefined ? ov : defaults[key];
+    }
     if (isAdmin) return true; // curto-circuito da chave-mestra
     const ov = overrides[key];
     return ov !== undefined ? ov : defaults[key];
