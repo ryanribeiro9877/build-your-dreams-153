@@ -141,6 +141,7 @@ build-your-dreams-153/
 │   │   ├── useMyWorkspace.ts       ← V16: workspace personalizado (cargo + agentes próprios)
 │   │   └── useUserTasks.ts         ← V17: 5 hooks de tarefas humano→humano
 │   ├── lib/                        (10+)
+│   │   ├── domainLabels.ts         ← rótulos PT-BR de códigos do banco (document_type, client_origin) + humanizeSlug (fallback legível)
 │   │   ├── validateProviderKey.ts  · jurisaiShellTheme.ts · utils.ts
 │   │   ├── stripe.ts · tracking.ts · uiTracking.ts
 │   │   ├── edgeFunctionError.ts    ← V14-master: parser de erros de edge
@@ -548,6 +549,19 @@ Sete itens do briefing "pendências do Code após o reteste de 06/08". Em quatro
 
 ---
 
+### Gráficos — slug cru, rótulo sobreposto e cartão estourado (07/08)
+
+Quatro defeitos visuais reportados por screenshot, com causas distintas:
+
+- **Slug cru no eixo.** `DashboardOperacional` tinha um `DOC_TYPE_LABELS` local com **10** dos **38** valores do CHECK `client_documents_document_type_check`, e `labelOf` caía no próprio código. Novo módulo **`src/lib/domainLabels.ts`** com o mapa completo, `CLIENT_ORIGIN_LABELS` (inclui `planilha`, valor de importação em massa que não estava em `ORIGEM_OPTIONS`) e `humanizeSlug` como fallback — código novo no banco aparece legível, nunca cru. `src/components/clients/shared.tsx` passou a **re-exportar** o mesmo mapa (era um segundo mapa parcial, de 20 chaves) para não haver drift entre tela e gráfico.
+- **Rótulo de pizza sobreposto.** Rótulo externo ancorado por fatia empilhava todos os textos no mesmo ponto quando uma categoria domina (552 de 556). `PieSliceLabel` (dashboardKit) desenha o **percentual DENTRO do arco** e só acima de 6%; nome e contagem vão para a legenda via `pieLegendFormatter`.
+- **Eixo com mais barras que rótulos.** Altura fixa de 250px: o recharts esconde ticks de categoria que não cabem. `horizontalBarHeight(n)` dimensiona a altura pelo número de categorias e `interval={0}` força todo rótulo; `truncLabel` encurta no eixo mantendo o nome inteiro no tooltip.
+- **Cartão estourado no Analytics de UI.** `AdminUiEvents` aninhava `ResponsiveContainer` dentro do `ChartContainer` do shadcn, que já tem um — e a classe `aspect-video` do `ChartContainer` derivava a altura da LARGURA, ignorando o `h-72`/`h-80` do `CardContent` (num card largo, ~675px dentro de 288px), invadindo os cartões vizinhos. Removido o container aninhado e passado `aspect-auto h-full w-full min-w-0`.
+
+O mesmo par de defeitos (pizza + eixo) existia em `DashboardPrazos`, que compartilha o `dashboardKit`, e foi corrigido junto. **Validação:** `vite build`, `tsc` (só o erro pré-existente de `useMenuAccess.ts`) e 459 vitest.
+
+---
+
 ## 7. Gaps conhecidos / Backlog técnico
 
 ### Crítico (impede produção plena)
@@ -691,5 +705,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 07/agosto/2026 (7 pendências do reteste de 06/08 — tool `concluir_pendencia`, vocabulário Tarefas × Kanban, honestidade da peça e do anexo)
+**Última atualização**: 07/agosto/2026 (correção dos gráficos — `src/lib/domainLabels.ts`, rótulo de pizza, eixo de barras e cartão estourado no Analytics de UI)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.

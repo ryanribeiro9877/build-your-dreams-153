@@ -9,9 +9,11 @@ import { ptBR } from "date-fns/locale";
 import { HexagonLoader } from "@/components/HexagonLoader";
 import { useDashboardRpc } from "@/hooks/useDashboardRpc";
 import {
-  DASH_BG, tooltipStyle, PALETTE, fmtInt, labelOf,
+  DASH_BG, tooltipStyle, PALETTE, fmtInt, labelOf, truncLabel, horizontalBarHeight,
+  PieSliceLabel, pieLegendFormatter,
   DashboardHeader, KpiGrid, ChartCard, ScaffoldBanner,
 } from "@/components/dashboard/dashboardKit";
+import { CLIENT_ORIGIN_LABELS, DOCUMENT_TYPE_LABELS } from "@/lib/domainLabels";
 
 interface OperacionalMetrics {
   kpis: { clients_total: number; processes_total: number; docs_total: number; tasks_total: number; tasks_active: number; pendencias_open: number };
@@ -30,12 +32,7 @@ const TASK_STATUS_LABELS: Record<string, string> = {
 };
 const PRIORITY_LABELS: Record<string, string> = { critical: "Crítica", high: "Alta", medium: "Média", low: "Baixa" };
 const PRIORITY_COLORS: Record<string, string> = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", low: "#6b7280" };
-const ORIGIN_LABELS: Record<string, string> = { mock: "Mock", indicacao: "Indicação", marketing: "Marketing", organico: "Orgânico", _none: "Sem origem" };
-const DOC_TYPE_LABELS: Record<string, string> = {
-  procuracao: "Procuração", contrato_honorarios: "Contrato", termo_cooperado: "Termo cooperado",
-  declaracao_hipossuficiencia: "Decl. hipossuf.", rg: "RG", cpf: "CPF", comprovante: "Comprovante",
-  comprovante_residencia: "Comp. residência", minuta: "Minuta", peticao_inicial: "Petição inicial",
-};
+const PROCESS_STATUS_LABELS: Record<string, string> = { _none: "Sem status" };
 
 export default function DashboardOperacional() {
   const navigate = useNavigate();
@@ -50,15 +47,15 @@ export default function DashboardOperacional() {
     [data],
   );
   const clientsOrigin = useMemo(
-    () => (data?.clients_by_origin ?? []).map((s, i) => ({ name: labelOf(ORIGIN_LABELS, s.key), value: s.n, fill: PALETTE[i % PALETTE.length] })),
+    () => (data?.clients_by_origin ?? []).map((s, i) => ({ name: labelOf(CLIENT_ORIGIN_LABELS, s.key), value: s.n, fill: PALETTE[i % PALETTE.length] })),
     [data],
   );
   const docsType = useMemo(
-    () => (data?.docs_by_type ?? []).map((s) => ({ name: labelOf(DOC_TYPE_LABELS, s.key), count: s.n })),
+    () => (data?.docs_by_type ?? []).map((s) => ({ name: labelOf(DOCUMENT_TYPE_LABELS, s.key), count: s.n })),
     [data],
   );
   const procStatus = useMemo(
-    () => (data?.processes_by_status ?? []).map((s) => ({ name: s.key === "_none" ? "Sem status" : s.key, count: s.n })),
+    () => (data?.processes_by_status ?? []).map((s) => ({ name: labelOf(PROCESS_STATUS_LABELS, s.key), count: s.n })),
     [data],
   );
   const newClients = useMemo(
@@ -128,13 +125,13 @@ export default function DashboardOperacional() {
       <div style={{ height: 16 }} />
 
       {/* Row: Tarefas por status | Tarefas por prioridade */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", alignItems: "start", gap: 16, marginBottom: 16 }}>
         <ChartCard title="Tarefas por status" empty={tasksStatus.length === 0} hint="Sem tarefas ainda.">
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={tasksStatus} layout="vertical" margin={{ left: 30 }}>
+          <ResponsiveContainer width="100%" height={horizontalBarHeight(tasksStatus.length)}>
+            <BarChart data={tasksStatus} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={110} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} width={150} interval={0} tickFormatter={truncLabel} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Tarefas" radius={[0, 4, 4, 0]}>
                 {tasksStatus.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -146,36 +143,36 @@ export default function DashboardOperacional() {
         <ChartCard title="Tarefas por prioridade" empty={tasksPriority.length === 0} hint="Sem tarefas ainda.">
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={tasksPriority} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
+              <Pie data={tasksPriority} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} labelLine={false} label={<PieSliceLabel />}>
                 {tasksPriority.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} formatter={pieLegendFormatter} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
       </div>
 
       {/* Row: Clientes por origem | Documentos por tipo */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", alignItems: "start", gap: 16, marginBottom: 16 }}>
         <ChartCard title="Clientes por origem" empty={clientsOrigin.length === 0} hint="Sem clientes cadastrados. Acende com o primeiro cadastro real.">
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={clientsOrigin} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
+              <Pie data={clientsOrigin} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} labelLine={false} label={<PieSliceLabel />}>
                 {clientsOrigin.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} formatter={pieLegendFormatter} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
 
         <ChartCard title="Documentos por tipo" empty={docsType.length === 0} hint="Sem documentos. Acende quando anexarem/gerarem documentos.">
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={docsType} layout="vertical" margin={{ left: 30 }}>
+          <ResponsiveContainer width="100%" height={horizontalBarHeight(docsType.length)}>
+            <BarChart data={docsType} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={110} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} width={150} interval={0} tickFormatter={truncLabel} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Documentos" radius={[0, 4, 4, 0]}>
                 {docsType.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}

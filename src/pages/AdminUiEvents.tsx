@@ -14,9 +14,9 @@ import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
-  Bar, BarChart, CartesianGrid, Legend, Line, LineChart,
-  ResponsiveContainer, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Legend, Line, LineChart, XAxis, YAxis,
 } from "recharts";
+import { horizontalBarHeight, truncLabel } from "@/components/dashboard/dashboardKit";
 import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, ShieldCheck, Stethoscope, Clock, Download, Filter, Gauge, FileCheck2, GitCompareArrows, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { HexagonLoader } from "@/components/HexagonLoader";
@@ -1185,16 +1185,14 @@ export default function AdminUiEvents() {
             <CardTitle className="text-base">Totais por evento</CardTitle>
           </CardHeader>
           <CardContent className="h-72">
-            <ChartContainer config={{ total: { label: "Total", color: "hsl(var(--primary))" } }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={totalsByEvent}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <ChartContainer className="aspect-auto h-full w-full min-w-0" config={{ total: { label: "Total", color: "hsl(var(--primary))" } }}>
+              <BarChart data={totalsByEvent} margin={{ top: 8, right: 8, bottom: 24, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={56} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -1206,6 +1204,7 @@ export default function AdminUiEvents() {
           </CardHeader>
           <CardContent className="h-80">
             <ChartContainer
+              className="aspect-auto h-full w-full min-w-0"
               config={Object.fromEntries(
                 ALL_EVENTS.map((e, i) => [
                   e,
@@ -1213,25 +1212,23 @@ export default function AdminUiEvents() {
                 ])
               )}
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailySeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Legend />
-                  {ALL_EVENTS.map((e, i) => (
-                    <Line
-                      key={e}
-                      type="monotone"
-                      dataKey={e}
-                      stroke={`hsl(${(i * 47) % 360} 70% 55%)`}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+              <LineChart data={dailySeries} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} minTickGap={16} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {ALL_EVENTS.map((e, i) => (
+                  <Line
+                    key={e}
+                    type="monotone"
+                    dataKey={e}
+                    stroke={`hsl(${(i * 47) % 360} 70% 55%)`}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
+              </LineChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -1241,17 +1238,15 @@ export default function AdminUiEvents() {
           <CardHeader>
             <CardTitle className="text-base">Top alvos clicados/focados</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
-            <ChartContainer config={{ total: { label: "Interações", color: "hsl(var(--primary))" } }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topTargets} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="label" width={160} tick={{ fontSize: 11 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          <CardContent style={{ height: horizontalBarHeight(topTargets.length, 288) }}>
+            <ChartContainer className="aspect-auto h-full w-full min-w-0" config={{ total: { label: "Interações", color: "hsl(var(--primary))" } }}>
+              <BarChart data={topTargets} layout="vertical" margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="label" width={170} tick={{ fontSize: 10 }} interval={0} tickFormatter={truncLabel} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="total" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+              </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
