@@ -56,6 +56,9 @@ jobs:
           deno-version: v2.x
           cache: true
 
+      - name: Install Deno dependencies
+        run: deno ci
+
       - name: Type-check chat-orchestrator
         run: deno check supabase/functions/chat-orchestrator/index.ts
 
