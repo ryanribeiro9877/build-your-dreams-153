@@ -28,9 +28,12 @@ import {
   ufFromCep,
 } from "./mechanicalValidator.ts";
 import { type CepInfo, fmtCep, resolveCep } from "./cep.ts";
-import { normalizeDraft, buildTaskDraftPrompt, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
+import { normalizeDraft, buildTaskDraftPrompt, frasePreparoTarefa, localWallTimeToUtcISO, nowLocalWall, fillDraftGaps } from "./taskDraft.ts";
 import { reportError, flushSentry } from "./sentry.ts";
-import { toolsFor, isWriteTool, isDelegateTool, isKnownTool, READ_TOOL_NAMES, type ToolDef } from "./tools/registry.ts";
+import {
+  toolsFor, isWriteTool, isDelegateTool, isKnownTool, READ_TOOL_NAMES,
+  toolsPermitidasNoTurno, type ToolDef,
+} from "./tools/registry.ts";
 import { pickAgentForTool } from "./tools/pickAgent.ts";
 import { montarFiltroCampanha } from "./tools/campanhaFiltro.ts";
 import { runReadTool, runWriteTool, routeAsPendencia } from "./tools/handlers.ts";
@@ -42,7 +45,7 @@ import {
 import { decideActionRoute } from "./tools/rbac.ts";
 import { isCaseDocumentAttachment, isAudioAttachment } from "./caseDocFilter.ts";
 // A.2/A.3 (validação 03-04/08): notas do resultado + resumo do efeito real.
-import { montarMensagemSucesso, serializarResultadoLeitura } from "./resultadoDaAcao.ts";
+import { montarMensagemSucesso, notaPersistenciaDaPeca, serializarResultadoLeitura } from "./resultadoDaAcao.ts";
 import { traceToolsEnviadas, traceRespostaLlm, traceChamadaTool, novoTraceId, type TraceCtx } from "./trace.ts";
 // A.4 (validação 03-04/08): desambiguação de cliente ANTES do cartão.
 import {
@@ -61,6 +64,7 @@ import {
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isPecaExplicitRequest,
   type RouteObject, ACTION_OBJECT_RULES, normalizeRouteObject, isOndaAcaoRequest,
+  isMatrizImportRequest,
   isAceiteAtualizarProcesso, isRecusaAbrirOutro,
 } from "./intentClassifier.ts";
 
@@ -724,6 +728,23 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
     support: ["consultar_tarefas"],
     recusa: "", stage: "atualizando a tarefa", path: "objeto_tarefa_update",
   },
+  PENDENCIA_CONCLUIR: {
+    tool: "concluir_pendencia", gate: null,
+    support: ["consultar_tarefas", "consultar_cliente"],
+    recusa: "", stage: "dando baixa na pendência", path: "objeto_pendencia_concluir",
+    guidance:
+      "CONCLUIR PENDÊNCIA — regras deste turno: (1) localize a pendência com " +
+      "consultar_tarefas (filtre pelo cliente quando ele for citado) e escolha a que " +
+      "está ABERTA; NUNCA peça UUID. (2) Se houver mais de uma candidata, LISTE os " +
+      "títulos e PERGUNTE qual — concluir a pendência errada é irreversível pelo chat. " +
+      "(3) Se não existir pendência aberta que case com o pedido, diga isso e o que você " +
+      "consultou, sem chamar ferramenta. (4) AO RELATAR: repasse as `notas` da tool " +
+      "LITERALMENTE. Elas são lidas do estado gravado, não da intenção: podem dizer que a " +
+      "pendência foi DEVOLVIDA ao setor de origem (não encerrada), que foi para AGUARDANDO " +
+      "VALIDAÇÃO, ou que a baixa ficou pela metade. NUNCA afirme que encerrou se a nota " +
+      "disser o contrário. (5) A baixa aparece em TAREFAS — nunca mande o usuário conferir " +
+      "no Kanban, que é a esteira de casos distribuídos.",
+  },
   CLIENTE_UPDATE: {
     tool: "atualizar_cliente", gate: null,
     // Simétrico ao CREDENCIAL_GOV: se o composto for classificado como CLIENTE_UPDATE,
@@ -780,7 +801,7 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
       "LIGAÇÃO — informe o resultado em português (atendeu / não atendeu / número errado / " +
       "pediu retorno / recusou / caixa postal). Se o cliente pediu retorno, calcule " +
       "retornar_em em ISO a partir do que o usuário falou (\"amanhã às 10\") — é isso que cria " +
-      "a pendência de retorno no Kanban. Sem retornar_em, a pendência NÃO é criada: nesse " +
+      "a pendência de retorno em Tarefas. Sem retornar_em, a pendência NÃO é criada: nesse " +
       "caso diga isso ao usuário.",
   },
   KPI_LIGACOES: {
@@ -1017,10 +1038,21 @@ const ROUTE_OBJECT_ACTIONS: Partial<Record<RouteObject, RouteObjectAction>> = {
       "DOCUMENTOS DA TESE — isto é CONSULTA, não pedido de peça: NUNCA pergunte fatos, " +
       "valores, réu ou objeto para responder. Chame a tool com a tese que o usuário citou " +
       "(aceita apelido: RMC, SUSEP, fraude bancária) e, se ele nomeou um cliente, também com o " +
-      "nome — aí a resposta separa o que já está no dossiê do que falta. OBRIGATÓRIO: se o " +
-      "retorno trouxer `matriz_configurada` false ou o aviso de matriz não cadastrada, DIGA " +
-      "isso — a checagem usou só o documento âncora e NÃO garante o kit completo da tese. " +
-      "Apresentar a lista curta como se fosse tudo é o defeito que este aviso existe para " +
+      "nome — aí a resposta separa o que já está no dossiê do que falta. " +
+      "PERGUNTA DE CATÁLOGO (\"quais teses já têm matriz cadastrada?\", \"quais teses estão " +
+      "configuradas?\", \"quantas teses têm matriz?\"): chame a tool SEM NENHUM argumento — o " +
+      "retorno traz `matriz_por_tese`, com `configurada` true/false por tese. Responda " +
+      "separando as que TÊM matriz das que NÃO têm, com os nomes. Isto é leitura do catálogo: " +
+      "não é importar matriz e não exige administrador. " +
+      "ATENÇÃO AO CONTRATO DO RETORNO: `ok:false` NÃO quer dizer que a consulta falhou — " +
+      "quer dizer que a conferência ficou INCOMPLETA, e a lista da tese vem junto. Quem " +
+      "manda é `motivo_incompletude`: `cliente_nao_vinculado` = a matriz está cadastrada e a " +
+      "lista é boa, mas nenhum dossiê foi conferido (responda o que a tese exige e diga que, " +
+      "para saber o que já está anexado, precisa do nome do cliente); " +
+      "`matriz_da_tese_nao_cadastrada` = a lista NÃO é o kit completo, DIGA isso; " +
+      "`tese_nao_informada` = conferiu só o set do tipo de cliente; `null` = conferência " +
+      "completa. Só afirme que nada falta quando `pode_afirmar_suficiencia` for true. " +
+      "Apresentar lista parcial como se fosse tudo é o defeito que esses campos existem para " +
       "evitar. Se a tese não for encontrada, diga qual nome você tentou.",
   },
   AUDIENCIA_PREPARO: {
@@ -2817,6 +2849,17 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       if (args.novo_titulo) partes.push(`título → "${args.novo_titulo}"`);
       return `Atualizar ${alvo}: ${partes.join("; ") || "sem alterações"}.`;
     }
+    case "concluir_pendencia": {
+      const alvo = args.task_titulo ? `"${args.task_titulo}"` : "a pendência";
+      // O cartão é exibido ANTES de gravar e não sabe se a pendência veio de
+      // outro setor (aí ela é DEVOLVIDA, não encerrada) nem se o tipo exige
+      // validação. Promete condicionalmente; quem confirma o efeito é a nota do
+      // resultado, lida do estado gravado.
+      return `Dar baixa em ${alvo}${args.observacao ? ` — "${args.observacao}"` : ""}. `
+        + "Fecha status, estado da pendência e data de conclusão, com auditoria. "
+        + "Se ela tiver vindo de outro setor, é resolvida e DEVOLVIDA à origem; "
+        + "se o tipo exigir validação, vai para aguardando validação em vez de encerrar.";
+    }
     case "comentar_card":
       return `Comentar em ${args.task_titulo ? `"${args.task_titulo}"` : "o card"}: "${args.comentario}".`;
     case "atualizar_cliente": {
@@ -3000,7 +3043,7 @@ function humanSummary(tool: string, args: Record<string, unknown>): string {
       // Sem prazo NÃO nasce pendência: o cartão já diz que ninguém vai cobrar.
       const prazo = args.prazo
         ? ` Prazo ${args.prazo} — nasce a pendência que cobra a diligência.`
-        : " Sem prazo informado: NÃO nasce pendência de cobrança no Kanban.";
+        : " Sem prazo informado: NÃO nasce pendência de cobrança em Tarefas.";
       return `Registrar diligência (${t}) no processo ${proc}: "${args.descricao ?? ""}"${det.length ? ` — ${det.join(" · ")}` : ""}.${prazo}`;
     }
     case "cumprir_diligencia": {
@@ -3394,6 +3437,10 @@ PRINCÍPIO (leia primeiro): decida pelo OBJETO do pedido, NUNCA pelo verbo isola
 3B. DISTRIBUIR CASO/PROCESSO (objeto = CASO): se pede para DISTRIBUIR ou ENCAMINHAR um CASO, PROCESSO, AÇÃO ou número CNJ — a um Kanban/board por tipo de ação, a um ADVOGADO, a um setor, "ao sócio", "à recepção" ou a pessoa nomeada (ex.: "distribua o caso X ao sócio", "atribua ESSE PROCESSO à Ana", "encaminhe a AÇÃO Y ao previdenciário") → "Especialista Distribuição". EXIGE um objeto de CASO/PROCESSO/ação/número. NUNCA roteie para cá se o objeto for TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO — isso é a regra 3C. NUNCA encaminhe distribuição de caso ao Cadastro.
 3C. CRIAR TAREFA/PENDÊNCIA/LEMBRETE/REUNIÃO INTERNA (objeto = TAREFA): se pede para ATRIBUIR, CRIAR, ABRIR, MARCAR ou AGENDAR uma TAREFA, PENDÊNCIA, LEMBRETE ou REUNIÃO INTERNA entre colaboradores (SEM cliente) — ex.: "atribua uma tarefa a Kailane...", "abra uma pendência para o setor X", "crie um lembrete para amanhã", "marque uma reunião entre nós dois às 15h" → "Especialista Kanban de Pendências" (tool criar_pendencia; o campo tipo aceita "reuniao" para reunião interna). O objeto é uma TAREFA/PENDÊNCIA/REUNIÃO INTERNA — NÃO um caso/processo e NÃO um atendimento de cliente.
 3C-bis. MOVER/EDITAR/COMENTAR TAREFA EXISTENTE (objeto = TAREFA que já existe): se pede para MOVER, MUDAR STATUS/PRAZO/PRIORIDADE, RENOMEAR ou COMENTAR uma tarefa/pendência/card que JÁ existe — ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou" → "Especialista Kanban de Pendências" (tools atualizar_tarefa e comentar_card; resolva o card com consultar_tarefas ANTES). É EDITAR uma tarefa existente, NÃO criar uma nova (3C).
+3C-ter. CONCLUIR/DAR BAIXA EM TAREFA OU PENDÊNCIA (objeto = TAREFA que já existe, e o pedido é ENCERRÁ-LA): se o usuário diz que RESOLVEU, FEZ, TERMINOU ou quer CONCLUIR/dar baixa/fechar uma pendência ou tarefa — ex.: "já resolvi a pendência da procuração do Adalberto", "conclui essa tarefa", "a pendência do contrato está feita", "dá baixa nisso" → "Especialista Kanban de Pendências" (tool concluir_pendencia; resolva a pendência com consultar_tarefas ANTES). Vale para QUALQUER tipo, inclusive pendência genérica. NÃO use atualizar_tarefa para concluir: ela grava só o status e deixa a pendência viva na tela. É ENCERRAR uma tarefa, distinto de mover/editar prazo e prioridade (3C-bis) e de criar uma nova (3C).
+
+VOCABULÁRIO OBRIGATÓRIO — TAREFAS × KANBAN: pendência e tarefa moram na tela TAREFAS. O KANBAN é a esteira de CASO DISTRIBUÍDO (processo que entrou por distribuição), e NUNCA guarda pendência. Ao dizer ao usuário onde conferir uma pendência/tarefa que você criou, moveu ou concluiu, diga "em Tarefas" — mandar conferir "no card do cliente no Kanban" faz o usuário procurar onde o dado não está e já gerou alarme de perda de dado que não existia (3ª ocorrência em 06/08). Se o usuário pedir explicitamente "cria um card no Kanban" para algo que é tarefa/pendência, faça a coisa certa (criar em Tarefas) e DIGA a diferença em uma frase: "o Kanban recebe casos via distribuição; criei uma tarefa em Tarefas".
+
 3D. AGENDAR ATENDIMENTO DE CLIENTE (objeto = ATENDIMENTO): se pede para AGENDAR ou MARCAR um ATENDIMENTO, CONSULTA ou REUNIÃO COM CLIENTE (o cliente com um advogado, na Agenda) — ex.: "agende um atendimento do cliente João com a Dra Laura amanhã 14h", "marque uma consulta para o cliente X" → "Especialista Agenda de Atendimento" (tool agendar_atendimento). Diferente da reunião INTERNA da 3C (sem cliente) e da distribuição de caso da 3B.
 3D-bis. REAGENDAR/CANCELAR ATENDIMENTO EXISTENTE (objeto = atendimento que já existe): se pede para REAGENDAR/REMARCAR ou CANCELAR um atendimento/reunião de cliente que JÁ existe — ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina" → "Especialista Agenda de Atendimento" (tools reagendar_atendimento/cancelar_atendimento; resolva o atendimento com minha_agenda ANTES). Quando o usuário NÃO disser a data do atendimento a alterar, consulte minha_agenda com um intervalo FUTURO amplo (de=hoje, ate=hoje+60 dias) e use o PRÓXIMO atendimento daquele cliente — consultar só "hoje" faz parecer que não existe atendimento. Só pergunte qual é se houver mais de um candidato. É alterar um atendimento existente, NÃO criar um novo (3D).
 3E. CADASTRAR CLIENTE (objeto = o próprio CLIENTE): se o objeto do pedido é criar a FICHA de um cliente novo no sistema — ex.: "cadastre o cliente João Silva, CPF 123", "novo cliente Maria" → "Especialista Cadastro" (tool cadastrar_cliente). APENAS quando a coisa a cadastrar é o CLIENTE em si; NÃO confunda com "cadastrar/adicionar uma REUNIÃO na agenda" (3D) nem "cadastrar/abrir uma PENDÊNCIA/tarefa" (3C) — nesses o verbo "cadastrar/adicionar" rege outro objeto, não o cliente.
@@ -4394,10 +4441,12 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
         // (chain[0].tool, posto pelo roteamento por objeto), tiramos `delegate` da
         // mesa — senão o agente tentava "encaminhar" a ação em vez de executá-la, o
         // que gerava o cartão "Executar delegate".
+        // Item 2 de 06/08 (CARD FANTASMA): pelo mesmo caminho, turno classificado
+        // como CONSULTA não leva ESCRITA na mesa — era assim que uma pergunta
+        // ("quantas ligações fizemos hoje?") virava cartão propondo registrar de
+        // novo a ligação do turno anterior. Ver toolsPermitidasNoTurno.
         const objetoTool = (Array.isArray(run.chain) ? (run.chain[0] as { tool?: string } | undefined)?.tool : undefined);
-        const gatedSemRoteamento = objetoTool
-          ? gatedToolNames.filter((n: string) => !isDelegateTool(n))
-          : gatedToolNames;
+        const gatedSemRoteamento = toolsPermitidasNoTurno(gatedToolNames, objetoTool);
         const toolDefs = withTiposAcaoEnum(toolsFor(gatedSemRoteamento), await loadTiposAcao(admin));
         // Neste ramo o agente é o `n3`; o trace é do mesmo TURNO, então o trace_id
         // continua sendo o id da run — os spans deste passo e do N3 se amarram.
@@ -4761,16 +4810,24 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
       // Uso acumulado (model/tokens/duração) gravado na mensagem final.
       const u = (run.n3_usage as { model?: string; input_tokens?: number; output_tokens?: number; duration_ms?: number } | null) || {};
       const usageCols = { model_used: u.model ?? null, input_tokens: u.input_tokens ?? null, output_tokens: u.output_tokens ?? null, duration_ms: u.duration_ms ?? null };
+      // Item 5 (06/08) — PEÇA ENTREGUE E NÃO GRAVADA. Run com blocos é redação
+      // segmentada (mesmo discriminador do caminho B). Se ela não passou por
+      // `salvar_peca`, a peça só existe nesta conversa: a resposta declara isso em
+      // vez de deixar o usuário acreditar que o sistema arquivou.
+      const ehPecaFinal = Array.isArray(run.blocks) && run.blocks.filter(Boolean).length > 0;
+      const notaPeca = notaPersistenciaDaPeca(ehPecaFinal, run.chain);
+      const conteudoFinal = notaPeca ? `${run.draft}\n\n---\n\n${notaPeca}` : run.draft;
+      if (notaPeca) console.log(`[peca] run=${runId} entregue SEM persistência (0 linhas em client_documents) — aviso anexado à resposta`);
       if (run.stream_message_id) {
         // Já existe a linha (chamada única): vira a resposta FINAL (sem inserir duplicata).
         await admin.from("chat_messages")
-          .update({ content: run.draft, agent_id: run.target_n3_id, metadata: finalMeta, ...usageCols })
+          .update({ content: conteudoFinal, agent_id: run.target_n3_id, metadata: finalMeta, ...usageCols })
           .eq("id", run.stream_message_id);
       } else {
         const seq = await nextSeq(admin, run.session_id);
         await admin.from("chat_messages").insert({
           session_id: run.session_id, user_id: run.user_id, role: "assistant",
-          agent_id: run.target_n3_id, content: run.draft, sequence_number: seq,
+          agent_id: run.target_n3_id, content: conteudoFinal, sequence_number: seq,
           metadata: finalMeta, ...usageCols,
         });
       }
@@ -5184,6 +5241,19 @@ serve(async (req) => {
       routeObj = await classifyActionObject(admin, INTENT_CLASSIFIER_MODEL, body.message,
         { cadastro: hintCadastro, agenda: hintReuniaoAcao || hintAgendar, tarefa: hintTarefa, onda: hintOnda }, entryCtx);
       console.log(`[llm-first] session=${body.sessionId} hints{cad:${hintCadastro},ag:${hintReuniaoAcao || hintAgendar},tar:${hintTarefa},onda:${hintOnda}} → objeto=${routeObj} (msg="${body.message.slice(0, 50)}")`);
+      // GATE-ERRADO (item 4 de 06/08) — o classificador casava RADICAL, não intenção:
+      // "quais teses já têm matriz cadastrada?" é LEITURA e caía em MATRIZ_DOCUMENTOS.
+      // Como esse objeto não tem tool no registry, a resposta era a recusa de ESCRITA
+      // ("Só o administrador importa a matriz… Nada foi importado") — recusa aplicada à
+      // intenção errada e, pior, afirmando um fato falso sobre o sistema (a matriz TEM
+      // 47 linhas). Era regressão: em 05/08 a mesma frase listou 8 teses com matriz e 6
+      // sem. Sem verbo de importação, a matriz é consulta — e a consulta tem tool
+      // (`consultar_documentos_obrigatorios` sem argumentos devolve `matriz_por_tese`,
+      // que é exatamente a resposta certa a essa pergunta).
+      if (routeObj === "MATRIZ_DOCUMENTOS" && !isMatrizImportRequest(body.message)) {
+        console.log(`[objeto-onda] session=${body.sessionId} MATRIZ_DOCUMENTOS sem verbo de importação → rebaixado a DOCUMENTOS_OBRIGATORIOS (leitura)`);
+        routeObj = "DOCUMENTOS_OBRIGATORIOS";
+      }
     }
 
     // ─── CADASTRO-MODELO-A: cartão de cadastro (disparado quando o LLM classifica o
@@ -5454,7 +5524,7 @@ serve(async (req) => {
       const tarSeq = await nextSeq(admin, body.sessionId);
       await admin.from("chat_messages").insert({
         session_id: body.sessionId, user_id: userId, role: "assistant", agent_id: agent.id,
-        content: "Preparei um rascunho da tarefa. Revise, ajuste o que precisar e confirme:",
+        content: frasePreparoTarefa(body.message),
         sequence_number: tarSeq,
         metadata: {
           kind: "tarefa_confirm", intent: "ACAO_COM_TOOL", agent_name: agent.name,

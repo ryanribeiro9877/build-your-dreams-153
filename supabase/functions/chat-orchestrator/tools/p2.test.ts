@@ -3,7 +3,8 @@ import {
   avisoPrazoPassado, dataOuNull, intOuNull, mensagemMotivoP2,
   normalizarStatusDiligencia, normalizarStatusLembrete,
   notasApolices, notasApoliceRegistrada, notasCampanhaRenovacao,
-  notasDiligenciaCumprida, notasDiligenciaRegistrada, notasLembreteAudiencia,
+  notasDiligenciaCumprida, notasDiligenciaRegistrada, notasDocumentosObrigatorios,
+  notasLembreteAudiencia,
   notasPreparoAudiencia, notasProcuracaoRegistrada, notasProcuracoes,
   resumoDiligencias,
 } from "./p2.ts";
@@ -325,4 +326,74 @@ Deno.test("notasLembreteAudiencia: feito RELATA o indicador, não afirma o fecha
   // Não pode sair afirmação seca de fato consumado.
   assertEquals(/pendência do lembrete foi encerrada\./.test(texto), false);
   assertEquals(notas.filter((n) => /permanece aberta/.test(n)).length, 0);
+});
+
+/* ─── Conferência documental: ok:false que NÃO é falha ────────────────────── */
+
+// Payload verbatim de consultar_documentos_obrigatorios('RMC') sob contexto de
+// usuário, lido do banco em 07/08/2026. É o caso que virava "não consultei a
+// matriz": ok:false, `motivo` AUSENTE e a lista da tese presente e correta.
+const CONFERENCIA_SEM_CLIENTE = {
+  ok: false,
+  conferencia_completa: false,
+  motivo_incompletude: "cliente_nao_vinculado",
+  pode_afirmar_suficiencia: false,
+  tese: "Cartão consignado RMC/RCC",
+  cliente_vinculado: false,
+  eixo_tese_matriz: {
+    matriz_configurada: true,
+    exigidos: ["cpf", "comprovante_residencia", "hiscon", "hiscre", "sentenca_procedente"],
+    faltando: [],
+  },
+  faltando_total: [],
+  aviso: "A matriz da tese ESTÁ cadastrada e a lista acima é o que ela exige — mas sem cliente vinculado não há dossiê para conferir. Isto é falta de vínculo, não ausência de documento.",
+};
+
+Deno.test("documentos obrigatórios: sem cliente, a lista da tese é ENTREGUE (não é falha)", () => {
+  const notas = notasDocumentosObrigatorios(CONFERENCIA_SEM_CLIENTE);
+  const texto = notas.join(" | ");
+  // Tem de afirmar que a matriz está cadastrada e quantos documentos a tese exige.
+  assert(/matriz desta tese ESTÁ cadastrada/.test(texto), texto);
+  assert(/5 documento\(s\)/.test(texto), texto);
+  // E tem de dizer que NADA foi conferido contra dossiê — sem cliente não há dossiê.
+  assert(/NADA foi conferido contra dossiê/.test(texto), texto);
+  // O aviso autoritativo do banco é repassado.
+  assert(/falta de vínculo, não ausência de documento/.test(texto), texto);
+});
+
+Deno.test("documentos obrigatórios: matriz não cadastrada proíbe afirmar suficiência", () => {
+  const notas = notasDocumentosObrigatorios({
+    ok: false, conferencia_completa: false,
+    motivo_incompletude: "matriz_da_tese_nao_cadastrada",
+    eixo_tese_matriz: { matriz_configurada: false, exigidos: [] },
+    faltando_total: [],
+  });
+  const texto = notas.join(" | ");
+  assert(/NÃO está cadastrada/.test(texto), texto);
+  assert(/NÃO é o kit completo/.test(texto), texto);
+});
+
+Deno.test("documentos obrigatórios: sem tese, conferiu só o set do cliente", () => {
+  const notas = notasDocumentosObrigatorios({
+    ok: false, conferencia_completa: false, motivo_incompletude: "tese_nao_informada",
+    faltando_total: ["cpf"],
+  });
+  assert(/APENAS o set obrigatório do tipo de cliente/.test(notas.join(" | ")), notas.join(" | "));
+});
+
+Deno.test("documentos obrigatórios: conferência completa lista o que falta", () => {
+  const notas = notasDocumentosObrigatorios({
+    ok: false, conferencia_completa: true, motivo_incompletude: "incompleta",
+    faltando_total: ["hiscon", "hiscre"],
+  });
+  const texto = notas.join(" | ");
+  assert(/faltam 2 documento\(s\)/.test(texto), texto);
+  assert(/hiscon, hiscre/.test(texto), texto);
+});
+
+Deno.test("documentos obrigatórios: nada falta é dito como tal", () => {
+  const notas = notasDocumentosObrigatorios({
+    ok: true, conferencia_completa: true, motivo_incompletude: null, faltando_total: [],
+  });
+  assert(/nada falta no dossiê/.test(notas.join(" | ")), notas.join(" | "));
 });

@@ -204,7 +204,7 @@ export function resumoDiligencias(r: Record<string, unknown>): {
   const semVinculo = lista.filter((d) => d?.processo_vinculado === false).length;
   const notas: string[] = [];
   if (vencidas > 0) notas.push(`${vencidas} diligência(s) com prazo JÁ VENCIDO.`);
-  if (semPrazo > 0) notas.push(`${semPrazo} sem prazo cadastrado — essas não têm pendência cobrando no Kanban.`);
+  if (semPrazo > 0) notas.push(`${semPrazo} sem prazo cadastrado — essas não têm pendência cobrando em Tarefas.`);
   if (semVinculo > 0) notas.push(`${semVinculo} guardada(s) só pelo NÚMERO do processo (processo ainda não cadastrado) — vincular quando o processo for criado.`);
   return { vencidas, sem_prazo: semPrazo, sem_processo_vinculado: semVinculo, notas };
 }
@@ -218,7 +218,7 @@ export function notasDiligenciaRegistrada(r: Record<string, unknown>, prazo: unk
     notas.push("Processo ainda não cadastrado no sistema — diligência guardada pelo número. Vincular quando o processo for criado.");
   }
   if (r.pendencia_prazo_criada === false) {
-    notas.push("Sem prazo informado, então NÃO nasceu pendência no Kanban — nada vai cobrar esta diligência.");
+    notas.push("Sem prazo informado, então NÃO nasceu pendência em Tarefas — nada vai cobrar esta diligência.");
   }
   const av = avisoPrazoPassado(prazo, hoje);
   if (av) notas.push(av);
@@ -352,7 +352,8 @@ export function notasLembreteAudiencia(r: Record<string, unknown>): string[] {
   if (r.pendencia_encerrada === true) {
     notas.push("O indicador do banco diz que a pendência deste lembrete deve estar encerrada — "
       + "é um indicador DERIVADO do status, não a confirmação de que a tarefa foi fechada. "
-      + "Se ela ainda aparecer aberta no Kanban, feche por lá.");
+      + "Se ela ainda aparecer aberta em Tarefas, dê a baixa (pelo chat ou pelo botão "
+      + "Concluir da tela).");
   } else if (String(r.status ?? "") !== "nao_atendeu") {
     notas.push("Não havia pendência vinculada a este lembrete para encerrar.");
   }
@@ -374,5 +375,69 @@ export function notasCampanhaRenovacao(r: Record<string, unknown>): string[] {
     notas.push(String(r.aviso ?? `${semTel} de ${fila} clientes da fila estão SEM TELEFONE cadastrado — a fila é parcialmente inacionável.`));
   }
   if (fila > 0 && semTel === 0) notas.push(`${fila} cliente(s) na fila, todos com telefone cadastrado.`);
+  return notas;
+}
+
+/* ─── Conferência documental da tese ──────────────────────────────────────── */
+
+/**
+ * `ok:false` da conferência documental NÃO é falha de chamada.
+ *
+ * `verificar_documentos_obrigatorios` usa `ok` para dizer "nada falta" — devolve
+ * false sempre que sobra algo em aberto e, ainda assim, traz a lista que a tese
+ * exige e o motivo do recorte. Ler `ok` como "a chamada deu certo" descartava um
+ * payload bom: a pergunta mais natural ("o que preciso pedir na tese de RMC?")
+ * vinha sem cliente, caía em `cliente_nao_vinculado` e virava "não consultei a
+ * matriz". Os traces provam que não houve erro de banco (`erro_cru` NULO nas
+ * quatro ocorrências de 05-06/08).
+ *
+ * A nota sai de `motivo_incompletude` — o campo existe para não se interpretar
+ * prosa — e não do `aviso`. Cada razão tem nome próprio no banco.
+ */
+export function notasDocumentosObrigatorios(r: Record<string, unknown>): string[] {
+  const notas: string[] = [];
+  const motivo = String(r.motivo_incompletude ?? "");
+  const faltando = (Array.isArray(r.faltando_total) ? r.faltando_total : []).map(String);
+  const matriz = (r.eixo_tese_matriz ?? null) as Record<string, unknown> | null;
+  const exigidos = (Array.isArray(matriz?.exigidos) ? matriz?.exigidos : []).map(String);
+
+  switch (motivo) {
+    case "cliente_nao_vinculado":
+      // O caso comum e o que mais custou: a matriz ESTÁ cadastrada e a lista é
+      // boa. O que falta é vínculo, não documento — dizer "falta documento" aqui
+      // seria afirmar sobre um dossiê que não foi consultado.
+      notas.push(
+        `A matriz desta tese ESTÁ cadastrada: os ${exigidos.length} documento(s) listados em `
+        + "`eixo_tese_matriz.exigidos` são o que ela exige. Nenhum cliente foi informado, "
+        + "então NADA foi conferido contra dossiê — responda o que a tese pede e diga que, "
+        + "para saber o que já está anexado, é preciso nomear o cliente.",
+      );
+      break;
+    case "matriz_da_tese_nao_cadastrada":
+      notas.push(
+        "A matriz de documentos desta tese NÃO está cadastrada. A lista abaixo NÃO é o kit "
+        + "completo da tese — não afirme que ela basta nem que nada falta.",
+      );
+      break;
+    case "tese_nao_informada":
+      notas.push(
+        "Sem tese informada: a conferência olhou APENAS o set obrigatório do tipo de cliente. "
+        + "O que a tese exige NÃO entrou na conta — não afirme que o dossiê está completo.",
+      );
+      break;
+    case "incompleta":
+      notas.push(
+        faltando.length > 0
+          ? `Conferência completa (tese e cliente): faltam ${faltando.length} documento(s) — ${faltando.join(", ")}.`
+          : "Conferência completa (tese e cliente), mas o banco não detalhou o que falta.",
+      );
+      break;
+    default:
+      if (r.conferencia_completa === true) {
+        notas.push("Conferência completa (tese e cliente): nada falta no dossiê para esta tese.");
+      }
+  }
+  // Repassa o aviso do banco quando ele existe: é a fonte autoritativa do recorte.
+  if (r.aviso) notas.push(String(r.aviso));
   return notas;
 }

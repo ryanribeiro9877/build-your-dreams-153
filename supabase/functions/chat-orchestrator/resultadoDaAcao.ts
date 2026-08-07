@@ -173,6 +173,19 @@ export function resumoDoEfeito(tool: string, result: unknown): string | null {
       return `Diligência marcada como CUMPRIDA — ${partes.join(" · ")}.`;
     }
 
+    /* ── Item 6 de 06/08: baixa de pendência/tarefa ────────────────────────── */
+    case "concluir_pendencia": {
+      const qual = txt(r.titulo) ? `"${txt(r.titulo)}"` : (r.era_pendencia === true ? "a pendência" : "a tarefa");
+      // O ESTADO é o que o banco devolveu depois de gravar. As notas (montadas em
+      // tools/pendencia.ts) qualificam devolução, validação e meia-baixa; aqui só
+      // a cabeça da frase, e ela não afirma encerramento sem `completed`.
+      if (txt(r.status) !== "completed") {
+        return `Pedido de baixa em ${qual} enviado, mas ela NÃO ficou concluída — veja abaixo o que o banco registrou.`;
+      }
+      const estado = legivel(r.pendencia_estado);
+      return `${qual} concluída${estado ? ` (${estado})` : ""}.`;
+    }
+
     /* ── P2 · Card 13: lembrete de audiência ───────────────────────────────── */
     case "registrar_lembrete_audiencia":
       return `Lembrete da audiência registrado como ${legivel(r.status) || "informado"}.`;
@@ -233,7 +246,10 @@ export function resumoDoEfeito(tool: string, result: unknown): string | null {
     case "registrar_ligacao": {
       const quem = txt(r.cliente, "o cliente");
       const fu = bool(r.follow_up_criado);
-      const pend = fu === true ? " Pendência de retorno criada no Kanban."
+      // Item 7.2 de 06/08: pendência nasce em TAREFAS. Esta frase é a que o
+      // reteste pegou mandando o usuário conferir no Kanban — que é a esteira de
+      // caso distribuído e não guarda pendência nenhuma.
+      const pend = fu === true ? " Pendência de retorno criada em Tarefas."
         : fu === false ? " Sem data de retorno, então NÃO nasceu pendência de retorno." : "";
       return `Ligação para ${quem} registrada: ${legivel(r.resultado) || "resultado informado"}.${pend}`;
     }
@@ -367,4 +383,36 @@ export function montarMensagemSucesso(
   const corpo = notas.length ? `${cabeca}\n\n${notas.map((n) => `• ${n}`).join("\n")}` : cabeca;
   const sufixo = textoLimpo(opts.sufixo ?? null);
   return sufixo ? `${corpo}\n\n${sufixo}` : corpo;
+}
+
+/* ─── A peça entregue e não arquivada ──────────────────────────────────────── */
+
+/**
+ * Nota de persistência da PEÇA: entregou o texto, mas gravou em algum lugar?
+ *
+ * Estado medido em 06/08: o caminho de redação segmentada devolve a peça na
+ * conversa e NÃO grava linha nenhuma — zero documentos com `document_type='peca'`
+ * em `client_documents`. A gravação (`salvar_peca`) só existe no ramo multi-hop,
+ * que depende de `MULTIHOP_DELEGATION_ENABLED` (default off) e de
+ * `CHAT_TOOLS_ENABLED` (default off). Resultado: a aba fica vazia para sempre e a
+ * peça vive só enquanto a conversa rolar.
+ *
+ * Enquanto a persistência não alcançar este caminho, a resposta tem de DIZER que
+ * não arquivou. Entregar o texto em silêncio é a mesma família do órfão de
+ * storage: o usuário acredita que o sistema guardou. Esta função não conserta a
+ * gravação — ela impede a crença falsa, que é o dano imediato.
+ *
+ * `chain` é o `orchestration_runs.chain`: quando a peça FOI gravada, ele traz um
+ * passo com `action: "salvar_peca"`, e aí nada é avisado.
+ */
+export function notaPersistenciaDaPeca(ehPeca: boolean, chain: unknown): string | null {
+  if (!ehPeca) return null;
+  const passos = Array.isArray(chain) ? chain : [];
+  const gravou = passos.some((p) => (p as { action?: unknown } | null)?.action === "salvar_peca");
+  if (gravou) return null;
+  return "⚠️ **Esta peça não foi arquivada no dossiê** — ela existe apenas nesta conversa. "
+    + "O arquivamento automático em Documentos do cliente não está ativo neste fluxo, "
+    + "então a aba de documentos NÃO vai mostrá-la. Copie o texto para onde ele precisa "
+    + "ficar, ou anexe-o pela ficha do cliente: se esta conversa se perder, a peça se "
+    + "perde com ela.";
 }

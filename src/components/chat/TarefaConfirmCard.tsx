@@ -120,7 +120,10 @@ export function TarefaConfirmCard({
         priority: priority ?? "medium",
       });
       setCreated(true);
-      toast.success("Tarefa criada.");
+      // Item 7.2: dizer ONDE ela ficou. Tarefa mora em Tarefas; o Kanban é a
+      // esteira de caso distribuído e mandar conferir lá faz o usuário procurar
+      // onde o dado não está.
+      toast.success("Tarefa criada em Tarefas.");
     } catch (e) {
       // [FIX-EXPEDIENTE] Backstop do banco: prazo fora do expediente → mantém o cartão
       // aberto, sinaliza inline e NÃO cria. Distingue pela hint/mensagem do PostgrestError.
@@ -139,7 +142,7 @@ export function TarefaConfirmCard({
   if (created) {
     return (
       <div className="action-card--done">
-        <Check size={15} style={{ color: "#FACC15" }} /> Tarefa criada.
+        <Check size={15} style={{ color: "#FACC15" }} /> Tarefa criada — veja em Tarefas.
       </div>
     );
   }

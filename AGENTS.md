@@ -530,11 +530,29 @@ Dois detalhes pequenos, sem tabela nova e **sem tocar em `pix_key`/`pix_key_enc`
 
 ---
 
+### Reteste 06/08 — 7 pendências do briefing do backend (aplicado 07/08)
+
+Sete itens do briefing "pendências do Code após o reteste de 06/08". Em quatro deles a **causa medida no banco divergiu do diagnóstico do briefing** — a correção seguiu a causa, não o texto.
+
+- **Item 1 — órfãos de storage.** Briefing dizia "chat sobe e não cria linha nenhuma (738 órfãos, 0 registros)". Medido: `chat_attachments` tem registros e, nas datas recentes, objeto e linha casam — os órfãos são **legado de jun/início de jul, anteriores ao pipeline do V24**. O caminho que AINDA cria órfão é o insert falhar depois do upload: `src/lib/ingestChatAttachments.ts` ganhou **remoção compensatória** (apaga o objeto quando a linha não nasce) e loga `[chat-attachments] ÓRFÃO` se a própria remoção falhar. **Não** implementamos a "Fase 1" de recusar o upload: isso quebraria o Canal A do V24 (anexo do caso que o N3 lê), que funciona.
+- **Item 2 — card fantasma pós-confirmação.** Briefing atribuía ao classificador ("re-classifica consulta como ação"). Os traces dizem o contrário: o roteador acertou (`KPI_LIGACOES`, estágio "somando as ligações") e **5 segundos depois o N3 propôs `registrar_ligacao`** — quem contaminou foi o **executor**, que recebeu a tool de escrita na mesa e o histórico da ligação anterior. Fix: `toolsPermitidasNoTurno` em `tools/registry.ts` — turno classificado como LEITURA não leva ferramenta de escrita à mesa (o filtro só REMOVE tool, nunca concede).
+- **Item 3 — `consultar_documentos_obrigatorios` "morre com 42501".** Medido: `erro_cru` **nulo**, nenhum 42501, nenhum admin client. A RPC devolvia `ok:false` **com `motivo_incompletude`** — conferência INCOMPLETA, não chamada recusada — e o handler tratava as duas como falha, jogando fora payload válido. Fix em `tools/handlers.ts` + `notasDocumentosObrigatorios` em `tools/p2.ts`: cada valor de `motivo_incompletude` vira nota determinística (o front não interpreta prosa, como pedido).
+- **Item 4 — "cadastrada" casando com "cadastrar".** `isMatrizImportRequest` em `intentClassifier.ts`: `MATRIZ_DOCUMENTOS` (escrita) exige **verbo de importação**; sem ele o objeto é **rebaixado a `DOCUMENTOS_OBRIGATORIOS`** (leitura). Pergunta de leitura não colhe mais recusa de escrita.
+- **Item 5 — peça não persiste.** A causa é estrutural: o pipeline principal (`validating_n1`) só grava o texto em `chat_messages`; `salvar_peca` vive na delegação multi-hop, **desligada por padrão**. Persistir de verdade é obra maior; o que entrou agora é a **honestidade**: `notaPersistenciaDaPeca` (`resultadoDaAcao.ts`) anexa à resposta o aviso de que a peça **não foi arquivada** e existe só naquela conversa. **Gap segue aberto** (ver seção 7).
+- **Item 6 — concluir pendência genérica pelo chat.** Tool nova **`concluir_pendencia`** (registry + handler + objeto `PENDENCIA_CONCLUIR` + regra 3C-ter), com lógica pura em **`supabase/functions/chat-orchestrator/tools/pendencia.ts`** (+ `.test.ts`). Migration `20260807120000_tool_concluir_pendencia.sql` registra no `tool_catalog` e concede a 41 agentes (inclui os 8 "Meu Assistente"). **Divergência deliberada do briefing:** ele pediu `_fechar_pendencia()`, que **não confere permissão nenhuma** (helper interno, prefixo `_`) — exposta a uma tool, qualquer usuário fecharia pendência alheia por id. Usamos **`resolver_pendencia`** (mesmos três campos + auditoria + devolução ao setor de origem, **com** o guard `pode_operar_pendencia`); tarefa que não é pendência vai pelo mesmo `update_user_task_status` do botão da tela. **Achado extra:** `atualizar_tarefa(status='concluída')` gravava só `status` — nem `pendencia_estado`, nem `completed_at` (a meia-baixa de 05/08, latente; 0 linhas corrompidas medidas). O handler agora **desvia** o pedido de conclusão para o caminho completo. As notas são lidas do estado **posterior** à gravação: devolução, aguardando-validação e meia-baixa são declaradas em vez de "pronto!".
+- **Item 7 — vocabulário Kanban × Tarefas.** Medido: **271 pendências, 0 em board de Kanban** (card só entra por `kanban_add_task_to_board`; há 1 no sistema). Logo "pendência no Kanban" era falso em toda parte: corrigido no chat (`resultadoDaAcao.ts`, `tools/p2.ts`, guidances e descrições de tool) **e nas telas** (diligências, campanhas), para chat e tela não se contradizerem. Item 7.1: `frasePreparoTarefa` (`taskDraft.ts`) — quem pede "card no Kanban" agora é avisado da troca ("o Kanban recebe casos por distribuição; preparei uma tarefa, que vai nascer em Tarefas").
+
+**Validação:** 314 testes Deno (edges) + 459 vitest + `vite build` + `tsc`. O único erro de TS é pré-existente (`useMenuAccess.ts`, `types.ts` desatualizado — gap da seção 7).
+
+---
+
 ## 7. Gaps conhecidos / Backlog técnico
 
 ### Crítico (impede produção plena)
-- **2 erros TS pré-existentes** em `src/components/__tests__/JurisCloudOS.responsive.test.tsx` — imports `screen`/`fireEvent` mal mockados. Débito anterior, ignorar.
-- **types.ts do Supabase** desatualizado após V14 (usa `as "agents"` / `as never` pra contornar). Regenerado após V21 mas pode precisar de ajuste manual nos casts.
+- **Peça gerada não é arquivada em `client_documents`** (item 5 de 06/08). O pipeline principal (`validating_n1`) grava o texto só em `chat_messages`; `salvar_peca` está na delegação multi-hop, desligada por padrão (`MULTIHOP_DELEGATION_ENABLED`). Hoje a resposta **declara** que não arquivou (`notaPersistenciaDaPeca`) — o arquivamento em si continua a fazer. É a funcionalidade central do escritório sem saída persistida.
+- **892 arquivos órfãos legados** em `chat-attachments` (jun–jul, anteriores ao V24) e `client-documents`, ~502 MB de PII sem vínculo nem retenção. O caminho que criava órfão novo foi fechado (remoção compensatória), mas o **passivo não foi tocado** — decisão do Ryan entre vincular, arquivar ou descartar; o backend ofereceu montar o inventário.
+- **2 erros TS pré-existentes** em `src/components/__tests__/JurisCloudOS.responsive.test.tsx` — imports `screen`/`fireEvent` mal mockados. Débito anterior, ignorar. (O suite inteiro também é **flaky por timeout** sob carga: os mesmos arquivos passam isolados.)
+- **types.ts do Supabase** desatualizado após V14 (usa `as "agents"` / `as never` pra contornar). Regenerado após V21 mas pode precisar de ajuste manual nos casts. Sintoma atual: `useMenuAccess.ts` acusa `get_my_menu_overrides` fora do union de RPCs no `tsc`.
 
 ### Médio
 - **Sem tool-use** no chat-orchestrator. É o resto da Onda 3.
@@ -542,6 +560,9 @@ Dois detalhes pequenos, sem tabela nova e **sem tocar em `pix_key`/`pix_key_enc`
 - **API key em plaintext** em `llm_provider_configs.api_key`. RLS protege, mas migrar pra Vault (pgsodium) em V20+.
 - **Coluna `agents.color` órfã** após V11 (UI usa getHierarchyColor).
 - **19 DEPARTMENTS hardcoded** ainda em JurisCloudOS.tsx — viraram fallback na V16, podem ser removidos quando todos os usuários ativos tiverem `role_template_id` setado.
+
+### Médio (continuação)
+- **`update_user_task_status` não fecha `pendencia_estado`** — é o que o botão `✔ Concluir` da tela usa. Em pendência, concluir pela TELA deixa `pendencia_estado='aberta'` (a tela deveria chamar `resolver_pendencia`). O CHAT já vai pelo caminho certo desde o item 6; a tela não. Medido em 07/08: 0 linhas corrompidas, risco latente.
 
 ### Pequeno
 - **Upload real de arquivos não implementado** (WelcomeScreen abre picker mas só anexa nome como texto)
@@ -669,5 +690,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 17/julho/2026 (hospedagem consolidada no Cloudflare Pages — `advjurisai.com.br`)
+**Última atualização**: 07/agosto/2026 (7 pendências do reteste de 06/08 — tool `concluir_pendencia`, vocabulário Tarefas × Kanban, honestidade da peça e do anexo)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.

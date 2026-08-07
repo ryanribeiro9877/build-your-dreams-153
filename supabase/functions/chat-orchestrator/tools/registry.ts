@@ -40,6 +40,39 @@ export function isDelegateTool(name: string): boolean {
   return ROUTING_TOOLS.has(name);
 }
 
+export function isReadTool(name: string): boolean {
+  return READ_TOOLS.has(name);
+}
+
+/**
+ * Quais ferramentas ficam na mesa NESTE turno, dado o objeto já classificado.
+ *
+ * CARD FANTASMA (item 2 de 06/08, 4 ocorrências). Sequência que reproduzia:
+ * registrar uma ligação, confirmar, e então PERGUNTAR "quantas ligações fizemos
+ * hoje?" — vinha um cartão novo propondo registrar a MESMA ligação, com o texto
+ * levemente diferente ("Ligação realizada em 06/08/2026; não atendeu"), porque o
+ * modelo remontava os argumentos a partir do histórico.
+ *
+ * O diagnóstico corrente era "o classificador re-classifica a consulta como ação".
+ * Os dados do banco dizem o contrário: às 19:28:49 o objeto saiu CERTO
+ * (`KPI_LIGACOES` → tool `kpi_ligacoes`, estágio "somando as ligações") e cinco
+ * segundos depois o especialista propôs `registrar_ligacao`. Quem contaminou não
+ * foi o roteador — foi o EXECUTOR, que recebeu a tool de escrita na mesa e o
+ * histórico da ligação anterior no contexto.
+ *
+ * Regra: quando o turno já foi classificado como CONSULTA, escrita não fica na
+ * mesa. Uma pergunta não pode produzir um cartão de gravação. O filtro só REMOVE
+ * ferramenta — nunca acrescenta — então nenhum caminho ganha permissão nova.
+ */
+export function toolsPermitidasNoTurno(gated: string[], objetoTool?: string | null): string[] {
+  if (!objetoTool) return gated;
+  // Objeto decidido: roteamento sai da mesa (senão o agente tenta "encaminhar" a
+  // ação em vez de executá-la, e o cartão vira "Executar delegate").
+  const semRoteamento = gated.filter((n) => !isDelegateTool(n));
+  if (!isReadTool(objetoTool)) return semRoteamento;
+  return semRoteamento.filter((n) => !isWriteTool(n));
+}
+
 const str = (description: string) => ({ type: "string", description });
 
 export const TOOLS: Record<string, ToolDef> = {
@@ -219,7 +252,7 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   atualizar_tarefa: { type: "function", function: {
     name: "atualizar_tarefa",
-    description: "Move ou edita um card/tarefa do Kanban que JÁ existe (status, prazo, prioridade ou título). Resolva o card ANTES com consultar_tarefas e passe task_id. NÃO cria tarefa nova (criar é criar_pendencia).",
+    description: "Move ou edita uma tarefa/pendência que JÁ existe, na tela Tarefas (prazo, prioridade, título ou status intermediário). Resolva a tarefa ANTES com consultar_tarefas e passe task_id. NÃO cria tarefa nova (criar é criar_pendencia) e NÃO serve para CONCLUIR: para dar baixa use concluir_pendencia, porque esta tool grava só o status e deixaria a pendência viva na tela.",
     parameters: { type: "object", properties: {
       task_id: str("id do card (obtido via consultar_tarefas)"),
       task_titulo: str("título do card — apenas para exibição na confirmação"),
@@ -229,9 +262,18 @@ export const TOOLS: Record<string, ToolDef> = {
       novo_titulo: str("novo título do card (renomear)"),
     }, required: ["task_id"] },
   }},
+  concluir_pendencia: { type: "function", function: {
+    name: "concluir_pendencia",
+    description: "Dá BAIXA em uma pendência ou tarefa que já existe — o equivalente ao botão \"✔ Concluir\" da tela, com observação. Use quando disserem que resolveram/fizeram/terminaram a pendência (\"já resolvi a pendência da procuração do Adalberto\", \"conclui essa tarefa\", \"a pendência do contrato está feita\"). Vale para QUALQUER tipo, inclusive pendência genérica. Resolva a pendência ANTES com consultar_tarefas e passe o task_id; NUNCA peça UUID ao usuário. ATENÇÃO ao relatar: se a pendência veio de OUTRO setor, ela é resolvida e DEVOLVIDA à origem (não encerra na sua fila), e se o tipo exigir validação ela vai para AGUARDANDO VALIDAÇÃO em vez de concluir — a tool devolve em `notas` o que de fato ficou gravado; repasse essas notas em vez de afirmar que encerrou. NÃO use para mudar prazo/prioridade/título (isso é atualizar_tarefa).",
+    parameters: { type: "object", properties: {
+      task_id: str("id da pendência/tarefa (obtido via consultar_tarefas; nunca peça ao usuário)."),
+      task_titulo: str("título da pendência — apenas para exibição no cartão de confirmação."),
+      observacao: str("como foi resolvida, em uma frase (vai para as notas e para a auditoria da pendência)."),
+    }, required: ["task_id"] },
+  }},
   comentar_card: { type: "function", function: {
     name: "comentar_card",
-    description: "Adiciona um comentário a um card/tarefa do Kanban. Resolva o card ANTES com consultar_tarefas e passe task_id.",
+    description: "Adiciona um comentário a uma tarefa/pendência da tela Tarefas. Resolva a tarefa ANTES com consultar_tarefas e passe task_id.",
     parameters: { type: "object", properties: {
       task_id: str("id do card (obtido via consultar_tarefas)"),
       task_titulo: str("título do card — apenas para exibição na confirmação"),
@@ -398,7 +440,7 @@ export const TOOLS: Record<string, ToolDef> = {
   }},
   registrar_ligacao: { type: "function", function: {
     name: "registrar_ligacao",
-    description: "Registra o RESULTADO de uma ligação para um cliente. Use em \"liguei para a dona Maria, não atendeu\", \"falei com o Sr. João, pediu retorno amanhã às 10\", \"número errado\". Se o resultado for pedido de retorno, informe `retornar_em` que o sistema cria sozinho a pendência \"Retornar ligação\" no Kanban.",
+    description: "Registra o RESULTADO de uma ligação para um cliente. Use em \"liguei para a dona Maria, não atendeu\", \"falei com o Sr. João, pediu retorno amanhã às 10\", \"número errado\". Se o resultado for pedido de retorno, informe `retornar_em` que o sistema cria sozinho a pendência \"Retornar ligação\" em Tarefas (pendência mora em Tarefas, nunca no Kanban).",
     parameters: { type: "object", properties: {
       resultado: str("Como terminou a ligação, em português: atendeu / não atendeu / número errado / pediu retorno / recusou / caixa postal."),
       cliente_nome: str("Nome do cliente como o usuário falou (\"a dona Maria\" → Maria). Se houver mais de um, os candidatos voltam para você perguntar."),
@@ -632,7 +674,7 @@ export const TOOLS: Record<string, ToolDef> = {
      Protocolo NÃO é obrigatório (decisão de 30/07): a tool nunca o exige. */
   registrar_diligencia: { type: "function", function: {
     name: "registrar_diligencia",
-    description: "Registra uma DILIGÊNCIA a ser feita num processo: balcão virtual, colocar concluso para análise, diligenciar expedição de alvará, juntar petição, carta precatória. Use em \"faz um balcão virtual no processo X pedindo agilidade na análise, prazo 24/07\", \"coloca concluso o processo Y\", \"precisa diligenciar o alvará do processo Z\". Se você informar `prazo`, nasce sozinha a pendência no Kanban que cobra a diligência — SEM prazo nada cobra, e você deve dizer isso ao usuário. Se o processo ainda não estiver cadastrado, a diligência é guardada pelo NÚMERO e a tool avisa: repasse esse aviso.",
+    description: "Registra uma DILIGÊNCIA a ser feita num processo: balcão virtual, colocar concluso para análise, diligenciar expedição de alvará, juntar petição, carta precatória. Use em \"faz um balcão virtual no processo X pedindo agilidade na análise, prazo 24/07\", \"coloca concluso o processo Y\", \"precisa diligenciar o alvará do processo Z\". Se você informar `prazo`, nasce sozinha a pendência em Tarefas que cobra a diligência — SEM prazo nada cobra, e você deve dizer isso ao usuário. Se o processo ainda não estiver cadastrado, a diligência é guardada pelo NÚMERO e a tool avisa: repasse esse aviso.",
     parameters: { type: "object", properties: {
       descricao: str("O que precisa ser feito, em uma frase (ex.: \"balcão virtual pedindo agilidade na análise\")."),
       tipo: { type: "string", enum: ["balcao_virtual", "concluso_analise", "expedicao_alvara", "peticao", "carta_precatoria", "outro"], description: "Natureza da diligência. Default balcao_virtual." },

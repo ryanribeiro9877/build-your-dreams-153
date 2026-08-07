@@ -329,7 +329,7 @@ export function isPecaExplicitRequest(message: string): boolean {
 export type RouteObject =
   | "CADASTRO" | "AGENDA_CLIENTE" | "TAREFA_INTERNA"
   | "PROCESSO_CREATE" | "PROCESSO_UPDATE" | "KIT_DOCUMENTAL" | "RESUMO_DIA"
-  | "PROTOCOLO" | "TAREFA_UPDATE" | "CLIENTE_UPDATE" | "AGENDA_CONSULTA"
+  | "PROTOCOLO" | "TAREFA_UPDATE" | "PENDENCIA_CONCLUIR" | "CLIENTE_UPDATE" | "AGENDA_CONSULTA"
   | "AGENDA_UPDATE" | "AUDIENCIA" | "PERMISSAO_MENU" | "CREDENCIAL_GOV"
   // Motor 1 (Cards 3/4/5): segmentação bancária → campanha → ligação → KPI.
   | "RELACAO_BANCARIA" | "CAMPANHA" | "LIGACAO" | "KPI_LIGACOES" | "AUDIO_AUTORIZACAO"
@@ -363,7 +363,8 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "KIT_DOCUMENTAL": o objeto são os DOCUMENTOS PADRÃO de um cliente já cadastrado (procuração, contrato de honorários, declaração de hipossuficiência, ficha cadastral) — gerar/emitir/preparar/refazer. Ex.: "gera os documentos do cliente X", "emite o kit da Maria", "prepara a procuração e o contrato do Adalberto". ATENÇÃO CRÍTICA: "gerar/emitir os DOCUMENTOS de um cliente" é SEMPRE KIT_DOCUMENTAL — NUNCA redação de peça. Só é peça (OUTRO) quando pedem para REDIGIR/ELABORAR uma peça processual sob medida (petição inicial, contestação, recurso, réplica, parecer, manifestação).
 - "RESUMO_DIA": o objeto é o RESUMO/PANORAMA do próprio dia, da semana ou da própria carga de trabalho do usuário (tarefas, prazos, agenda, pendências). Ex.: "me dá o resumo do meu dia", "como está meu dia?", "o que eu tenho pra hoje?", "minha situação hoje", "o que está pendente pra mim hoje", "como está minha semana", "minhas pendências e compromissos de hoje". ATENÇÃO CRÍTICA: é um pedido de DADO operacional, NUNCA conversa/small talk — e continua sendo RESUMO_DIA mesmo com tom coloquial ou saudação embutida ("bom dia! me dá o resumo do meu dia"). Só é conversa quando NÃO se pede nada sobre o trabalho ("bom dia, tudo bem?").
 - "PROTOCOLO": o objeto é o PROTOCOLO de uma peça — registrar que protocolou/deu entrada, ou concluir a tarefa de protocolo. Ex.: "protocola a peça do cliente X", "protocola a inicial do Adalberto", "já protocolei a peça da Maria", "conclui o protocolo do Adalberto", "dá entrada na peça do cliente Y". ATENÇÃO CRÍTICA: a palavra "peça" AQUI é o objeto que será PROTOCOLADO — não é pedido de redação. Se o verbo é PROTOCOLAR / DAR ENTRADA / JÁ PROTOCOLEI, é sempre PROTOCOLO, mesmo que a frase contenha "peça", "petição", "inicial" ou "contestação". PROTOCOLAR ≠ REDIGIR: só é peça (OUTRO) quando pedem para ESCREVER/ELABORAR o texto.
-- "TAREFA_UPDATE": o objeto é uma TAREFA/PENDÊNCIA/CARD que JÁ existe: mover, mudar status/prazo/prioridade, renomear ou COMENTAR. Ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou". Distinto de CRIAR uma nova (TAREFA_INTERNA).
+- "TAREFA_UPDATE": o objeto é uma TAREFA/PENDÊNCIA/CARD que JÁ existe: mover, mudar prazo/prioridade/status intermediário, renomear ou COMENTAR — SEM encerrar. Ex.: "passa a pendência da procuração pra em andamento", "muda o prazo da tarefa do contrato pra sexta", "comenta no card do Adalberto que o cliente confirmou". Distinto de CRIAR uma nova (TAREFA_INTERNA) e de DAR BAIXA/concluir (PENDENCIA_CONCLUIR) — se o pedido é encerrar a tarefa, é PENDENCIA_CONCLUIR, nunca aqui.
+- "PENDENCIA_CONCLUIR": o objeto é uma PENDÊNCIA/TAREFA que já existe e o pedido é ENCERRÁ-LA — o usuário diz que RESOLVEU, FEZ, TERMINOU, ou pede para CONCLUIR/dar baixa/fechar. Ex.: "já resolvi a pendência da procuração do Adalberto", "conclui essa tarefa", "a pendência do contrato está feita", "dá baixa nessa pendência", "essa tarefa já foi feita, fecha ela". Distinto de TAREFA_UPDATE, que é MOVER/editar prazo, prioridade ou título sem encerrar: aqui o pedido é a BAIXA. Distinto de TAREFA_INTERNA, que é CRIAR uma nova.
 - "CLIENTE_UPDATE": o objeto é CORRIGIR/ATUALIZAR um dado de cadastro de cliente que já existe (telefone, e-mail, endereço, nascimento, status). Ex.: "o telefone da Marina mudou, é 71 9...", "corrige o endereço do Adalberto". Distinto de criar a ficha (CADASTRO).
 - "AGENDA_CONSULTA": o objeto é CONSULTAR a agenda/compromissos (sem alterar nada). Ex.: "o que tenho na agenda amanhã?", "quais meus atendimentos de hoje?", "minha agenda da semana".
 - "AGENDA_UPDATE": o objeto é REAGENDAR/REMARCAR ou CANCELAR um atendimento de cliente que JÁ existe. Ex.: "reagenda o atendimento do Adalberto para sexta 9h", "cancela o atendimento da Marina".
@@ -398,8 +399,8 @@ Responda SOMENTE em JSON: {"objeto":"<CATEGORIA>"} com UMA destas categorias:
 - "PROCURACAO_CONSULTA": o objeto é a LISTA de procurações e seus vencimentos. Ex.: "quais procurações vencem esse mês?", "a procuração da dona Fulana está vigente?", "quem está com procuração vencida?", "quais procurações não têm PDF no dossiê?". É leitura.
 - "CAMPANHA_PROCURACAO": o objeto é a CAMPANHA de ligação para RENOVAR PROCURAÇÃO — montar a fila de quem tem procuração vencendo. Ex.: "monta a campanha de renovação de procuração", "quero ligar para todos que têm procuração vencendo esse mês", "cria a fila de renovação de procuração dos próximos 60 dias". É a campanha ESPECÍFICA de procuração (fila montada pelo vencimento), distinta da campanha por filtro bancário/cadastral (CAMPANHA).
 - "EXTRATO_DECISAO": o objeto é a DECISÃO sobre um LANÇAMENTO da análise de extrato — confirmar ou rejeitar um desconto/lançamento que o sistema listou. Ex.: "confirma esse lançamento do extrato", "rejeita o desconto de 43,90 da análise", "esses lançamentos do extrato estão certos, confirma". É decidir sobre item de extrato JÁ analisado — não é registrar vínculo bancário (RELACAO_BANCARIA) nem apólice (APOLICE_REGISTRAR).
-- "MATRIZ_DOCUMENTOS": o objeto é a MATRIZ DE DOCUMENTOS das teses (a tabela que diz quais documentos cada tipo de ação exige) — importar/substituir esse de-para em lote. Ex.: "importa a matriz de documentos das teses", "sobe a lista de documentos por tese", "substitui a matriz documental". É configuração do catálogo — não é pedir documentos de um cliente (OUTRO) nem gerar o kit (KIT_DOCUMENTAL).
-- "DOCUMENTOS_OBRIGATORIOS": o objeto é a LISTA DE DOCUMENTOS que uma tese exige — o que pedir ao cliente, o que falta no dossiê. Ex.: "o que preciso pedir pro cliente na tese de RMC?", "o que falta de documento do Fulano?", "quais documentos a tese de fraude bancária exige?", "que papelada preciso pra SUSEP?". ATENÇÃO CRÍTICA: isto NÃO é pedido de peça. Perguntar o que pedir ao cliente é CONSULTA à matriz documental — não responda pedindo fatos, valores, réu ou objeto da peça. É o erro medido em 04/08: "o que preciso pedir pro cliente na tese de RMC?" virou questionário de petição.
+- "MATRIZ_DOCUMENTOS": o objeto é a MATRIZ DE DOCUMENTOS das teses e o pedido é ESCREVER nela — importar/substituir/subir esse de-para em lote. Ex.: "importa a matriz de documentos das teses", "sobe a lista de documentos por tese", "substitui a matriz documental". EXIGE VERBO DE IMPORTAÇÃO no pedido. ATENÇÃO CRÍTICA: PERGUNTAR sobre a matriz NÃO é importá-la. "quais teses já têm matriz de documentos cadastrada?", "quais teses estão configuradas?", "quantas teses têm matriz?" são LEITURA e vão para DOCUMENTOS_OBRIGATORIOS — o particípio ("cadastrada", "configurada", "atualizada") descreve a matriz que JÁ EXISTE, não um pedido de carregá-la. Classificar essas perguntas aqui produz uma recusa de escrita para quem só queria consultar, e foi o defeito medido em 06/08.
+- "DOCUMENTOS_OBRIGATORIOS": o objeto é a LISTA DE DOCUMENTOS que uma tese exige — o que pedir ao cliente, o que falta no dossiê, ou QUAIS TESES JÁ TÊM MATRIZ cadastrada. Ex.: "o que preciso pedir pro cliente na tese de RMC?", "o que falta de documento do Fulano?", "quais documentos a tese de fraude bancária exige?", "que papelada preciso pra SUSEP?", "quais teses já têm matriz de documentos cadastrada?", "quais teses ainda não têm matriz?". ATENÇÃO CRÍTICA: isto NÃO é pedido de peça. Perguntar o que pedir ao cliente é CONSULTA à matriz documental — não responda pedindo fatos, valores, réu ou objeto da peça. É o erro medido em 04/08: "o que preciso pedir pro cliente na tese de RMC?" virou questionário de petição.
 - "OUTRO": qualquer outra coisa — REDIGIR peça/documento jurídico sob medida ("redija a contestação", "elabore a inicial"), DISTRIBUIR um caso a um advogado/setor, consulta a dados fora dos casos acima, conversa, ou quando você não tiver certeza. Na dúvida, responda OUTRO. NÃO use OUTRO só porque a frase menciona "peça"/"petição": veja o VERBO — protocolar → PROTOCOLO; gerar documentos do cliente → KIT_DOCUMENTAL; redigir → OUTRO.
 
 Separe também os pares do P2: a diligência junto ao juízo (DILIGENCIA_*) · o preparo e o lembrete da audiência (AUDIENCIA_PREPARO/LEMBRETE_AUDIENCIA) · a apólice de seguro (APOLICE_*) · a procuração assinada e sua renovação (PROCURACAO_*/CAMPANHA_PROCURACAO).
@@ -623,6 +624,49 @@ const EXTRATO_DECISAO_RE =
   /(?<![\wÀ-ÿ])((confirm[\wÀ-ÿ]*|rejeit[\wÀ-ÿ]*|recus[\wÀ-ÿ]*|valid[\wÀ-ÿ]*|aprov[\wÀ-ÿ]*)[\s\S]{0,60}?(lan[çc]amento[\wÀ-ÿ]*|an[áa]lise do extrato|descontos? do extrato)|(lan[çc]amento[\wÀ-ÿ]*|an[áa]lise do extrato)[\s\S]{0,60}?(confirm[\wÀ-ÿ]*|rejeit[\wÀ-ÿ]*|recus[\wÀ-ÿ]*))(?![\wÀ-ÿ])/i;
 const MATRIZ_DOCUMENTOS_RE =
   /(?<![\wÀ-ÿ])matriz(?![\wÀ-ÿ])[\s\S]{0,40}?(?<![\wÀ-ÿ])(documento[\wÀ-ÿ]*|documental|tese[\wÀ-ÿ]*)(?![\wÀ-ÿ])/i;
+
+// Verbos de IMPORTAÇÃO da matriz — o que separa escrita de leitura.
+//
+// POR QUE em forma EXPLÍCITA e não com cauda `[\wÀ-ÿ]*`: a cauda casaria o
+// PARTICÍPIO, e é justamente aí que estava o defeito de 06/08. "quais teses já têm
+// matriz CADASTRADA?" é pergunta de ESTADO e caía na recusa de ESCRITA ("Só o
+// administrador importa a matriz… Nada foi importado") só porque compartilha o
+// radical de "cadastrar". Por isso as formas de particípio (-ada/-ado/-ida/-idas)
+// ficam DE FORA: elas descrevem a matriz que já existe, não o pedido de importá-la.
+const MATRIZ_IMPORT_VERBO_RE = new RegExp(
+  "(?<![\\wÀ-ÿ])(?:"
+  + "importa|importar|importe|importei|importou|importamos|"
+  + "sobe|subir|suba|subo|"
+  + "carrega|carregar|carregue|"
+  + "substitui|substituir|substitua|"
+  + "troca|trocar|troque|"
+  + "popula|popular|popule|"
+  + "alimenta|alimentar|alimente|"
+  + "insere|inserir|insira|"
+  + "refaz|refazer|refa[çc]a|"
+  + "recria|recriar|recrie|"
+  + "cadastra|cadastrar|cadastre|"
+  + "atualiza|atualizar|atualize|"
+  + "sincroniza|sincronizar|sincronize|"
+  + "configura|configurar|configure"
+  + ")(?![\\wÀ-ÿ])",
+  "i",
+);
+
+/**
+ * A frase pede para IMPORTAR/SUBSTITUIR a matriz documental (escrita), ou só
+ * PERGUNTA sobre ela (leitura)?
+ *
+ * O objeto MATRIZ_DOCUMENTOS não tem tool no chat: quem cai nele ouve a recusa de
+ * escrita e encerra o turno. Aplicá-lo a uma pergunta de leitura recusa a intenção
+ * errada E afirma um fato falso ("Nada foi importado" quando a matriz tem 47
+ * linhas). Sem verbo de importação, matriz é CONSULTA.
+ */
+export function isMatrizImportRequest(message: string): boolean {
+  const m = (message || "").trim();
+  if (!m) return false;
+  return MATRIZ_IMPORT_VERBO_RE.test(m);
+}
 
 // Card 12 / J-06 — "o que preciso pedir pro cliente". Sem este hint o classificador
 // de objeto não é chamado e a frase cai no fluxo de PEÇA (medido em 04/08). Exige um

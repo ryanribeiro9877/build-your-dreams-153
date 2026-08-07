@@ -643,7 +643,7 @@ function AcoesGov({ item, onFeito }: { item: FilaGovItem; onFeito: () => void })
       <button className="cli-btn sm ghost" disabled={busy} onClick={() => setModo("")}>Cancelar</button>
       {modo === "status" && status === "invalido" && (
         <div style={{ flexBasis: "100%", fontSize: 12, color: "var(--cli-muted)", fontWeight: 600 }}>
-          Marcar como inválido abre a pendência de recuperação de senha no Kanban.
+          Marcar como inválido abre a pendência de recuperação de senha em Tarefas.
         </div>
       )}
     </div>

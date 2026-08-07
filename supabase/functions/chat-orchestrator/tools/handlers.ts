@@ -12,10 +12,14 @@ import {
   dataOuNull, intOuNull, mensagemMotivoP2,
   normalizarStatusDiligencia, normalizarStatusLembrete,
   notasApolices, notasApoliceRegistrada, notasCampanhaRenovacao,
-  notasDiligenciaCumprida, notasDiligenciaRegistrada, notasLembreteAudiencia,
+  notasDiligenciaCumprida, notasDiligenciaRegistrada, notasDocumentosObrigatorios,
+  notasLembreteAudiencia,
   notasPreparoAudiencia, notasProcuracaoRegistrada, notasProcuracoes,
   resumoDiligencias,
 } from "./p2.ts";
+import {
+  motivoParaNaoConcluir, notasConclusao, statusPedeConclusao, type TarefaAlvo,
+} from "./pendencia.ts";
 
 // READ — recebe um SupabaseClient (client) e o user_id para escopar.
 // IMPORTANTE (Correção A): para consultar_cliente o `client` DEVE carregar a
@@ -118,7 +122,11 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
       return data ?? [];
     }
     case "consultar_tarefas": {
-      let qb = client.from("user_tasks").select("id, title, status, priority, deadline_at, assignee_user_id, client_id");
+      // is_pendencia/pendencia_* entram no retorno porque sem eles o agente não
+      // consegue escolher o que concluir: pendência genérica é indistinguível de
+      // tarefa comum, e `pendencia_estado` é o que diz se a baixa já ocorreu.
+      let qb = client.from("user_tasks")
+        .select("id, title, status, priority, deadline_at, assignee_user_id, client_id, is_pendencia, pendencia_tipo, pendencia_estado");
       if (args.client_id) qb = qb.eq("client_id", String(args.client_id));
       if (args.assignee_user_id) qb = qb.eq("assignee_user_id", String(args.assignee_user_id));
       if (args.status) qb = qb.eq("status", String(args.status));
@@ -186,7 +194,20 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
           : { erro: error.message, __erro_cru: erroCru(error) };
       }
       const r = (data ?? {}) as Record<string, unknown>;
-      if (r.ok === false) {
+      // `ok` AQUI significa "nada falta no dossiê" — NÃO "a chamada deu certo".
+      // A conferência devolve ok:false toda vez que sobra algo em aberto (sem
+      // cliente vinculado, matriz da tese não cadastrada, documento faltando) e
+      // MESMO ASSIM traz a lista que a tese exige. Tratar isso como falha jogava
+      // o payload inteiro no lixo e respondia "não consultei a matriz": era o
+      // defeito de 05-06/08, com `erro_cru` NULO nos traces (nenhum erro de
+      // banco, nenhum 42501 — a RPC respondeu certo e o handler desistiu).
+      //
+      // O discriminador é estrutural: a conferência sempre traz
+      // `conferencia_completa`/`motivo_incompletude`; as recusas da RPC
+      // (tese_nao_encontrada, ambiguo_cliente, cliente_nao_encontrado,
+      // sem_cliente_e_sem_tese) vêm com `motivo` e sem esses campos.
+      const temConferencia = "conferencia_completa" in r || "motivo_incompletude" in r;
+      if (r.ok === false && !temConferencia) {
         // `tese_nao_encontrada` é o caso comum: apelido que ainda não foi cadastrado
         // em tipo_acao_apelidos. A mensagem tem de mandar o usuário para o lugar
         // certo em vez de dizer só "não encontrei".
@@ -195,7 +216,9 @@ export async function runReadTool(client: SupabaseClient, _userId: string, name:
         }
         return { erro: erroClienteRpc(r, "não consultei a matriz") };
       }
-      return r;
+      // `notas` na FRENTE: o retorno é truncado antes de voltar ao modelo, e é a
+      // nota que impede afirmar suficiência sobre uma conferência parcial.
+      return temConferencia ? { notas: notasDocumentosObrigatorios(r), ...r } : r;
     }
     case "consultar_reclamacoes": {
       const rpcArgs: Record<string, unknown> = {};
@@ -452,6 +475,84 @@ async function resolverClientePorNome(
 }
 
 
+/** Colunas que a conclusão precisa ler antes e depois de gravar. */
+const COLS_TAREFA_ALVO = "title, status, is_pendencia, pendencia_estado, origem_departamento, departamento_atual";
+
+/**
+ * Dá baixa numa pendência/tarefa pelo caminho que fecha TODOS os campos, e
+ * relata o que de fato ficou gravado. Usada por `concluir_pendencia` e pelo
+ * desvio de `atualizar_tarefa` (ver tools/pendencia.ts para o porquê de cada
+ * RPC — em resumo: pendência vai por `resolver_pendencia`, tarefa comum pelo
+ * mesmo `update_user_task_status` que o botão da tela usa, e nunca por
+ * `atualizar_tarefa`, que grava só o status).
+ *
+ * A leitura posterior é o que separa "prometi" de "cumpri": se o banco não
+ * fechou (validação obrigatória, devolução ao setor de origem, meia-baixa), as
+ * notas dizem isso em vez de a resposta afirmar que encerrou.
+ */
+async function concluirTarefaOuPendencia(
+  userClient: SupabaseClient, taskId: string, observacao?: unknown,
+): Promise<{ ok: boolean; result?: unknown; error?: string; erroCru?: string | null }> {
+  const id = String(taskId ?? "").trim();
+  if (!id) {
+    return { ok: false, error: "não sei qual pendência concluir — localize-a com consultar_tarefas (nada foi concluído)." };
+  }
+  const obs = String(observacao ?? "").trim() || null;
+
+  // Leitura sob o JWT: se a RLS esconde a tarefa, ela "não existe" para este
+  // usuário — e a mensagem é a mesma de inexistente, sem revelar tarefa alheia.
+  const { data: antesRow, error: leituraErr } = await userClient
+    .from("user_tasks").select(COLS_TAREFA_ALVO).eq("id", id).maybeSingle();
+  if (leituraErr) {
+    return { ok: false, error: `não consegui ler a pendência (${leituraErr.message}) — nada foi concluído.`, erroCru: erroCru(leituraErr) };
+  }
+  const antes = (antesRow ?? null) as TarefaAlvo | null;
+  const impedimento = motivoParaNaoConcluir(antes);
+  if (impedimento) return { ok: false, error: impedimento };
+
+  const ehPendencia = antes!.is_pendencia === true;
+  if (ehPendencia) {
+    // resolver_pendencia: guard pode_operar_pendencia + status + pendencia_estado
+    // + completed_at + auditoria, e devolve ao setor de origem quando é o caso.
+    const { error } = await userClient.rpc("resolver_pendencia", { p_id: id, p_resolucao: obs });
+    if (error) {
+      return {
+        ok: false,
+        error: erroEscritaRpc(error, "concluir esta pendência é de quem a recebeu, de quem a abriu ou da liderança", "a pendência NÃO foi concluída"),
+        erroCru: erroCru(error),
+      };
+    }
+  } else {
+    // Mesmo caminho do botão "✔ Concluir" da tela (inclui o desvio para
+    // aguardando validação quando o tipo da tarefa exige validador).
+    const { error } = await userClient.rpc("update_user_task_status", {
+      p_task_id: id, p_new_status: "completed", p_notes: obs,
+    });
+    if (error) {
+      return {
+        ok: false,
+        error: erroEscritaRpc(error, "concluir é de quem recebeu ou de quem atribuiu a tarefa", "a tarefa NÃO foi concluída"),
+        erroCru: erroCru(error),
+      };
+    }
+  }
+
+  const { data: depoisRow } = await userClient
+    .from("user_tasks").select(COLS_TAREFA_ALVO).eq("id", id).maybeSingle();
+  const depois = (depoisRow ?? null) as TarefaAlvo | null;
+  return {
+    ok: true,
+    result: {
+      notas: notasConclusao(antes!, depois),
+      titulo: antes!.title ?? null,
+      era_pendencia: ehPendencia,
+      status: depois?.status ?? null,
+      pendencia_estado: depois?.pendencia_estado ?? null,
+      observacao: obs,
+    },
+  };
+}
+
 function sanitizeStorageName(name: string): string {
   const s = (name || "arquivo")
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -652,7 +753,30 @@ export async function runWriteTool(userClient: SupabaseClient, _userId: string, 
         }
         return { ok: true, result: { document_id: docId, document_type: docType, document_name: a.file_name } };
       }
+      case "concluir_pendencia":
+        return await concluirTarefaOuPendencia(userClient, String(args.task_id ?? ""), args.observacao);
+
       case "atualizar_tarefa": {
+        // CONCLUSÃO NÃO PASSA POR AQUI. A RPC atualizar_tarefa grava SÓ `status`:
+        // pedir "concluída" por ela deixava `pendencia_estado` e `completed_at`
+        // intactos — a meia-baixa que mantém a pendência viva na tela (bug de
+        // 05/08). O pedido de conclusão é desviado para o caminho completo; os
+        // outros campos, se vieram na mesma frase, são aplicados antes.
+        const pedeConclusao = statusPedeConclusao(args.status);
+        if (pedeConclusao) {
+          const outros = args.prazo || args.prioridade || args.novo_titulo;
+          if (outros) {
+            const { error } = await userClient.rpc("atualizar_tarefa", {
+              p_task_id: args.task_id,
+              p_status: null,
+              p_prazo: args.prazo ?? null,
+              p_prioridade: args.prioridade ?? null,
+              p_titulo: args.novo_titulo ?? null,
+            });
+            if (error) return { ok: false, error: error.message, erroCru: erroCru(error) };
+          }
+          return await concluirTarefaOuPendencia(userClient, String(args.task_id ?? ""), args.observacao);
+        }
         // Gate = kanban_can_edit_task dentro da RPC (o chat não pode mais que a tela).
         // task_titulo é só display do card; não vai à RPC.
         const { data, error } = await userClient.rpc("atualizar_tarefa", {

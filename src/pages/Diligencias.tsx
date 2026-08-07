@@ -200,7 +200,7 @@ export default function Diligencias() {
             <TabLoading />
           ) : rows.length === 0 ? (
             <EmptyState icon="✎" title="Nenhuma diligência registrada"
-              hint="A base está vazia — nada foi importado da planilha ainda. Clique em “Nova diligência”, informe o número do processo e o que precisa ser feito; ou peça pelo chat: “registrar diligência de balcão virtual no processo … com prazo …”. Com prazo, nasce também a pendência no Kanban." />
+              hint="A base está vazia — nada foi importado da planilha ainda. Clique em “Nova diligência”, informe o número do processo e o que precisa ser feito; ou peça pelo chat: “registrar diligência de balcão virtual no processo … com prazo …”. Com prazo, nasce também a pendência em Tarefas." />
           ) : filtradas.length === 0 ? (
             <EmptyState icon="∅" title="Nenhuma diligência com estes filtros"
               hint={`${rows.length} carregada(s), nenhuma passa em: ${ativos.join(" · ")}. Use “Limpar” para ver todas.`} />
