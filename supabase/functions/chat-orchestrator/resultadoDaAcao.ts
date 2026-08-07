@@ -390,28 +390,26 @@ export function montarMensagemSucesso(
 /**
  * Nota de persistência da PEÇA: entregou o texto, mas gravou em algum lugar?
  *
- * Estado medido em 06/08: o caminho de redação segmentada devolve a peça na
- * conversa e NÃO grava linha nenhuma — zero documentos com `document_type='peca'`
- * em `client_documents`. A gravação (`salvar_peca`) só existe no ramo multi-hop,
- * que depende de `MULTIHOP_DELEGATION_ENABLED` (default off) e de
- * `CHAT_TOOLS_ENABLED` (default off). Resultado: a aba fica vazia para sempre e a
- * peça vive só enquanto a conversa rolar.
- *
- * Enquanto a persistência não alcançar este caminho, a resposta tem de DIZER que
- * não arquivou. Entregar o texto em silêncio é a mesma família do órfão de
- * storage: o usuário acredita que o sistema guardou. Esta função não conserta a
- * gravação — ela impede a crença falsa, que é o dano imediato.
+ * Desde 07/08 o caminho principal materializa DOCX e chama `salvar_peca`. A nota
+ * continua sendo o fallback obrigatório: cliente não resolvido, sessão expirada,
+ * upload/RPC recusada ou qualquer falha de compensação não podem virar sucesso
+ * silencioso. Entregar o texto sem declarar que não arquivou é a mesma família do
+ * órfão de storage: o usuário acredita que o sistema guardou.
  *
  * `chain` é o `orchestration_runs.chain`: quando a peça FOI gravada, ele traz um
  * passo com `action: "salvar_peca"`, e aí nada é avisado.
  */
-export function notaPersistenciaDaPeca(ehPeca: boolean, chain: unknown): string | null {
+export function notaPersistenciaDaPeca(
+  ehPeca: boolean, chain: unknown, motivo?: string | null,
+): string | null {
   if (!ehPeca) return null;
   const passos = Array.isArray(chain) ? chain : [];
   const gravou = passos.some((p) => (p as { action?: unknown } | null)?.action === "salvar_peca");
   if (gravou) return null;
+  const detalhe = String(motivo ?? "").trim();
   return "⚠️ **Esta peça não foi arquivada no dossiê** — ela existe apenas nesta conversa. "
-    + "O arquivamento automático em Documentos do cliente não está ativo neste fluxo, "
+    + (detalhe ? `Motivo: ${detalhe}. ` : "")
+    + "O arquivamento automático não foi concluído, "
     + "então a aba de documentos NÃO vai mostrá-la. Copie o texto para onde ele precisa "
     + "ficar, ou anexe-o pela ficha do cliente: se esta conversa se perder, a peça se "
     + "perde com ela.";

@@ -147,6 +147,7 @@
         "npm:class-variance-authority@~0.7.1",
         "npm:clsx@^2.1.1",
         "npm:date-fns@^3.6.0",
+        "npm:docx@^9.7.1",
         "npm:eslint-plugin-react-hooks@^5.2.0",
         "npm:eslint-plugin-react-refresh@~0.4.20",
         "npm:eslint@^9.32.0",

@@ -314,6 +314,15 @@ Deno.test("peça COM salvar_peca no chain: nada é avisado", () => {
   assertEquals(nota, null);
 });
 
+Deno.test("falha ao persistir a peça expõe o motivo operacional sem fingir sucesso", () => {
+  const nota = notaPersistenciaDaPeca(
+    true, [], "não foi possível identificar com segurança o cliente do dossiê",
+  );
+  assert(nota);
+  assert(/Motivo: não foi possível identificar/.test(nota), nota);
+  assert(/não foi arquivada/i.test(nota), nota);
+});
+
 // Resposta que não é peça (consulta, ação, "olá") nunca recebe o aviso.
 Deno.test("resposta que não é peça não recebe aviso de arquivamento", () => {
   assertEquals(notaPersistenciaDaPeca(false, []), null);
