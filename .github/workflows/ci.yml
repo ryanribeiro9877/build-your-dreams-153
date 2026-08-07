@@ -56,8 +56,11 @@ jobs:
           deno-version: v2.x
           cache: true
 
-      - name: Install Deno dependencies
-        run: deno ci
+      # Deno 2 lê o package.json do monorepo durante o type-check (inclusive
+      # @types/node). O lock Deno legado não espelha todo o package-lock, então
+      # `deno ci` falha por drift; npm ci materializa exatamente o lock canônico.
+      - name: Install Node type dependencies for Deno
+        run: npm ci --ignore-scripts
 
       - name: Type-check chat-orchestrator
         run: deno check supabase/functions/chat-orchestrator/index.ts
