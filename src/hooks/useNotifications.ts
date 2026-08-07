@@ -167,6 +167,17 @@ export function useNotifications() {
     if (n.route) navigateRef.current(n.route);
   }, []);
 
+  // Marca UMA como lida SEM navegar (ação de hover/teclado do item). Diferente de
+  // `openNotification`, que também faz o deep-link pelo `route`.
+  const markRead = useCallback(async (id: string) => {
+    dispatch({ t: "markRead", id });
+    try {
+      await markNotificationRead(id);
+    } catch {
+      /* o eco do Realtime / próxima carga reconcilia */
+    }
+  }, []);
+
   const markAllRead = useCallback(async () => {
     dispatch({ t: "markAll" });
     try {
@@ -176,5 +187,5 @@ export function useNotifications() {
     }
   }, []);
 
-  return { items: state.items, unread: state.unread, openNotification, markAllRead };
+  return { items: state.items, unread: state.unread, openNotification, markRead, markAllRead };
 }
