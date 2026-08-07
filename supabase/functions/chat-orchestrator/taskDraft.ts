@@ -219,6 +219,26 @@ export function extractClientQuery(message: string): string | null {
 }
 
 /**
+ * Frase que apresenta o cartão de tarefa, dizendo ONDE ela vai nascer.
+ *
+ * Item 7.1 de 06/08 (4.9): quem pede "cria um card no Kanban" recebia a coisa
+ * CERTA (uma tarefa em Tarefas) sem ser avisado da troca — e depois ia procurar
+ * no Kanban, que é a esteira de CASO distribuído e não guarda tarefa. O sistema
+ * não errava a ação; errava o silêncio. Correção de uma frase, como pedido.
+ */
+export function frasePreparoTarefa(message: string): string {
+  // O dois-pontos fica no FIM: o cartão editável é renderizado logo abaixo.
+  const pediuKanban = /(?<![\wÀ-ÿ])kanban(?![\wÀ-ÿ])/i.test(message || "");
+  if (!pediuKanban) {
+    return "Preparei um rascunho da tarefa — ela vai nascer em Tarefas. "
+      + "Revise, ajuste o que precisar e confirme:";
+  }
+  return "Você pediu um card no Kanban, mas o Kanban recebe CASOS por distribuição de "
+    + "processo, não tarefas. Então preparei uma tarefa, que é onde isso mora — ela vai "
+    + "nascer em Tarefas. Revise, ajuste o que precisar e confirme:";
+}
+
+/**
  * Completa o rascunho do LLM com os extratores determinísticos. O LLM tem
  * PRIORIDADE — só preenchemos o que veio null (nunca sobrescrevemos).
  */

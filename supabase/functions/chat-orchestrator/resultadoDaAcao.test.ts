@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
-  CHAVES_DE_NOTA, extrairNotasDoResultado, montarMensagemSucesso, resumoDoEfeito,
+  CHAVES_DE_NOTA, extrairNotasDoResultado, montarMensagemSucesso,
+  notaPersistenciaDaPeca, resumoDoEfeito,
   serializarResultadoLeitura,
 } from "./resultadoDaAcao.ts";
 
@@ -259,4 +260,69 @@ Deno.test("serializarResultadoLeitura preserva o payload normal", () => {
   const out = serializarResultadoLeitura({ clientes: [{ id: "c1", nome: "Fulano" }], total: 1 });
   assert(out.includes("Fulano"));
   assert(out.includes('"total":1'));
+});
+
+/* ─── Item 6: baixa de pendência/tarefa ────────────────────────────────────── */
+
+Deno.test("pendência concluída: a frase nomeia a pendência e o estado gravado", () => {
+  const msg = montarMensagemSucesso("concluir_pendencia", {
+    titulo: "Conferir procuração", era_pendencia: true,
+    status: "completed", pendencia_estado: "resolvida",
+    notas: ["Pendência marcada como resolvida — sai da fila de pendências abertas."],
+  });
+  assert(/"Conferir procuração" concluída \(resolvida\)/.test(msg), msg);
+  assert(/sai da fila/.test(msg), msg);
+});
+
+// O caso que o item 6 existe para impedir: o banco não fechou e a resposta
+// afirmava sucesso. A cabeça da frase tem de negar o encerramento.
+Deno.test("baixa que o banco NÃO concluiu não vira frase de sucesso", () => {
+  const msg = montarMensagemSucesso("concluir_pendencia", {
+    titulo: "Validar cadastro", era_pendencia: false, status: "awaiting_validation",
+    notas: ["ATENÇÃO: esta tarefa NÃO ficou concluída — o tipo dela exige validação."],
+  });
+  assert(/NÃO ficou concluída/.test(msg), msg);
+  assert(!msg.startsWith("\"Validar cadastro\" concluída"), msg);
+});
+
+Deno.test("pendência devolvida ao setor de origem aparece na frase", () => {
+  const msg = montarMensagemSucesso("concluir_pendencia", {
+    titulo: "Juntar RG", era_pendencia: true, status: "completed", pendencia_estado: "devolvida",
+  });
+  assert(/devolvida/.test(msg), msg);
+});
+
+/* ─── Item 5: a peça entregue e não arquivada ──────────────────────────────── */
+
+Deno.test("peça sem salvar_peca no chain: a resposta DIZ que não arquivou", () => {
+  const nota = notaPersistenciaDaPeca(true, [
+    { level: 0, agent: "Meu Assistente" },
+    { level: 3, agent: "Especialista Confecção Consumidor", blocks: 6 },
+  ]);
+  assert(nota !== null);
+  assert(/não foi arquivada no dossiê/i.test(nota!), nota!);
+  // Precisa dizer o que fazer, não só que falhou.
+  assert(/ficha do cliente|Copie o texto/i.test(nota!), nota!);
+  // E não pode prometer que a aba vai mostrar.
+  assert(/NÃO vai mostrá-la/.test(nota!), nota!);
+});
+
+Deno.test("peça COM salvar_peca no chain: nada é avisado", () => {
+  const nota = notaPersistenciaDaPeca(true, [
+    { level: 3, agent: "Executor", action: "salvar_peca" },
+  ]);
+  assertEquals(nota, null);
+});
+
+// Resposta que não é peça (consulta, ação, "olá") nunca recebe o aviso.
+Deno.test("resposta que não é peça não recebe aviso de arquivamento", () => {
+  assertEquals(notaPersistenciaDaPeca(false, []), null);
+  assertEquals(notaPersistenciaDaPeca(false, [{ action: "read" }]), null);
+});
+
+Deno.test("chain ausente ou malformado não quebra o aviso", () => {
+  assert(notaPersistenciaDaPeca(true, null) !== null);
+  assert(notaPersistenciaDaPeca(true, undefined) !== null);
+  assert(notaPersistenciaDaPeca(true, "lixo") !== null);
+  assert(notaPersistenciaDaPeca(true, [null, 42]) !== null);
 });

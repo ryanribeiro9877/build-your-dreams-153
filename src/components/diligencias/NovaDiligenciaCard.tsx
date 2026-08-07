@@ -67,7 +67,7 @@ export default function NovaDiligenciaCard({ varas, aberto, onToggle, onCriada }
         <div style={{ flex: 1, minWidth: 200 }}>
           <div className="cli-sec-title" style={{ margin: 0 }}>Nova diligência</div>
           <div style={{ fontSize: 12.5, color: "var(--cli-muted)", fontWeight: 600 }}>
-            Com prazo, abre pendência no Kanban. Sem prazo, só entra nesta lista.
+            Com prazo, abre pendência em Tarefas. Sem prazo, só entra nesta lista.
           </div>
         </div>
         <button className="cli-btn" onClick={onToggle}>+ Nova diligência</button>
@@ -132,7 +132,7 @@ export default function NovaDiligenciaCard({ varas, aberto, onToggle, onCriada }
       <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginTop: 12, display: "grid", gap: 4 }}>
         <span>
           {f.prazo
-            ? `Com prazo ${formatDateBR(f.prazo)}, o banco abre uma pendência no Kanban.`
+            ? `Com prazo ${formatDateBR(f.prazo)}, o banco abre uma pendência em Tarefas.`
             : "SEM prazo nenhuma pendência é criada — a diligência só aparece nesta tela."}
         </span>
         <span>

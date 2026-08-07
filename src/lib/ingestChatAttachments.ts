@@ -188,7 +188,25 @@ export async function ingestChatAttachments(
       .select("id")
       .single();
 
-    if (insErr || !inserted) { result.failedUpload.push(file.name); continue; }
+    if (insErr || !inserted) {
+      // ÓRFÃO DE STORAGE (item 1 de 06/08). O binário JÁ subiu ao bucket duas
+      // linhas acima. Sem esta compensação, a falha do insert deixava o arquivo
+      // no bucket para sempre — sem sessão, sem dono e sem retenção — enquanto o
+      // usuário lia "não subiu". É o pior dos três estados: o documento existe,
+      // ninguém acha, e ninguém sabe que está lá.
+      //
+      // Remover o que acabamos de subir é o que torna a mensagem verdadeira: ou
+      // o anexo existe COM registro, ou não existe. Se a própria remoção falhar,
+      // registramos o caminho no console — aí sim é órfão, mas rastreável.
+      await supabase.storage.from("chat-attachments").remove([path]).then(
+        ({ error }) => {
+          if (error) console.error(`[chat-attachments] ÓRFÃO em ${path}: insert falhou e a remoção também (${error.message})`);
+        },
+        (e) => console.error(`[chat-attachments] ÓRFÃO em ${path}: insert falhou e a remoção lançou`, e),
+      );
+      result.failedUpload.push(file.name);
+      continue;
+    }
     result.uploaded++;
 
     // A.8 — ÁUDIO: pipeline de TRANSCRIÇÃO (edge transcribe-audio), o mesmo que o

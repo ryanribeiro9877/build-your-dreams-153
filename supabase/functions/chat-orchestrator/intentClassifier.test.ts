@@ -5,6 +5,7 @@ import {
   isCollectionContinuation, isCadastroClienteRequest, isTarefaChatRequest,
   isDocChecklistRequest, isPecaExplicitRequest, normalizeRouteObject,
   isOndaAcaoRequest, isAceiteAtualizarProcesso, isRecusaAbrirOutro,
+  isMatrizImportRequest,
 } from "./intentClassifier.ts";
 
 // ─── LLM-first: parsing do classificador de objeto ───────────────────────────
@@ -649,6 +650,36 @@ Deno.test("isOndaAcaoRequest: decisão de lançamento de extrato aciona", () => 
 Deno.test("isOndaAcaoRequest: matriz de documentos aciona", () => {
   assertEquals(isOndaAcaoRequest("importa a matriz de documentos das teses"), true);
   assertEquals(isOndaAcaoRequest("substitui a matriz documental"), true);
+});
+
+/* ── GATE-ERRADO: "cadastrada" (estado) × "cadastrar" (pedido) ───────────────── */
+
+// A frase VERBATIM de 06/08 (16:07 e 16:12, reproduzida 2×), lida de chat_messages.
+// Ela é LEITURA e recebeu a recusa de ESCRITA porque o classificador casou o radical
+// de "cadastrar". O particípio é o discriminador: descreve a matriz que já existe.
+Deno.test("matriz: pergunta de ESTADO não é pedido de importação", () => {
+  assertEquals(isMatrizImportRequest("quais teses já têm matriz de documentos cadastrada?"), false);
+  assertEquals(isMatrizImportRequest("quais teses já têm matriz cadastrada?"), false);
+  assertEquals(isMatrizImportRequest("quais teses estão configuradas?"), false);
+  assertEquals(isMatrizImportRequest("a matriz da tese de RMC está atualizada?"), false);
+  assertEquals(isMatrizImportRequest("quantas teses têm matriz?"), false);
+  assertEquals(isMatrizImportRequest("quais teses ainda não têm matriz cadastrada?"), false);
+});
+
+Deno.test("matriz: pedido REAL de importação continua sendo escrita", () => {
+  assertEquals(isMatrizImportRequest("importa a matriz de documentos das teses"), true);
+  assertEquals(isMatrizImportRequest("substitui a matriz documental"), true);
+  assertEquals(isMatrizImportRequest("sobe a lista de documentos por tese"), true);
+  assertEquals(isMatrizImportRequest("cadastrar a matriz de documentos da tese de RMC"), true);
+  assertEquals(isMatrizImportRequest("cadastre a matriz documental"), true);
+  assertEquals(isMatrizImportRequest("atualiza a matriz de documentos"), true);
+  assertEquals(isMatrizImportRequest("carrega a matriz das teses"), true);
+});
+
+// "importante" não pode acionar por prefixo, e frase vazia não decide nada.
+Deno.test("matriz: sem falso positivo por prefixo de palavra", () => {
+  assertEquals(isMatrizImportRequest("é importante saber quais teses têm matriz"), false);
+  assertEquals(isMatrizImportRequest(""), false);
 });
 
 // O gatilho do extrato NÃO pode roubar as frases de vínculo bancário do Card 3:

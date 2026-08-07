@@ -133,7 +133,7 @@ export default function CumprirDiligenciaModal({ d, onFechar, onCumprida }: {
               value={rediligenciarEm} onChange={e => setRediligenciarEm(e.target.value)} />
             <div style={{ fontSize: 12, color: "var(--cli-muted)", fontWeight: 600, marginTop: 6 }}>
               {rediligenciarEm
-                ? `Cria uma NOVA diligência (mesmo processo, vara, tipo e descrição) com prazo ${formatDateBR(rediligenciarEm)}, ligada a esta como rediligência, e abre a pendência no Kanban.`
+                ? `Cria uma NOVA diligência (mesmo processo, vara, tipo e descrição) com prazo ${formatDateBR(rediligenciarEm)}, ligada a esta como rediligência, e abre a pendência em Tarefas.`
                 : "Em branco, nada é reagendado: a diligência só é encerrada."}
             </div>
           </div>

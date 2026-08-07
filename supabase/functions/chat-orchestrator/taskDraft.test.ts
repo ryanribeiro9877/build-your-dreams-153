@@ -1,8 +1,34 @@
-import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
-  normalizeDraft, localWallTimeToUtcISO,
+  normalizeDraft, frasePreparoTarefa, localWallTimeToUtcISO,
   parseRelativeDeadline, extractPendenciaTitle, extractClientQuery, fillDraftGaps,
 } from "./taskDraft.ts";
+
+// ─── Item 7.1 de 06/08 (4.9): a troca Kanban → Tarefas tem de ser DITA ────────
+
+Deno.test("quem pede card no Kanban é avisado de que a tarefa vai para Tarefas", () => {
+  for (const m of [
+    "cria um card no Kanban para conferir a procuração",
+    "abre um card no kanban pra Kailane",
+    "coloca isso no KANBAN",
+  ]) {
+    const f = frasePreparoTarefa(m);
+    assert(/Kanban recebe CASOS por distribuição/.test(f), f);
+    assert(/nascer em Tarefas/.test(f), f);
+  }
+});
+
+Deno.test("pedido normal de tarefa só diz onde ela nasce, sem aula sobre Kanban", () => {
+  const f = frasePreparoTarefa("abre uma pendência de procuração pro cliente Adalberto");
+  assert(/nascer em Tarefas/.test(f), f);
+  assert(!/Kanban/.test(f), f);
+  assert(/Revise, ajuste o que precisar e confirme:$/.test(f), f);
+});
+
+Deno.test("a palavra Kanban só conta inteira (não casa dentro de outra palavra)", () => {
+  assert(!/Kanban recebe/.test(frasePreparoTarefa("cria uma tarefa sobre o kanbanzinho")));
+  assert(!/Kanban recebe/.test(frasePreparoTarefa("")));
+});
 
 // ─── TAREFA-CHAT (card 4.1): normalizeDraft nunca inventa (aberto = null) ─────
 Deno.test("normalizeDraft: preenche o que veio e deixa o resto null", () => {

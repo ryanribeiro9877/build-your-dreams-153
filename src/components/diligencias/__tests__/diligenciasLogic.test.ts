@@ -224,7 +224,7 @@ describe("avisos do retorno", () => {
     const av = avisosRegistrar({ ok: true, aviso: "Processo ainda não cadastrado no sistema — diligência guardada pelo número. Vincular quando o processo for criado.", pendencia_prazo_criada: true });
     expect(av[0]).toMatch(/ainda não cadastrado/);
     expect(av[1]).toMatch(/MAIS DE UM processo/);
-    expect(av[2]).toBe("Pendência de prazo criada no Kanban.");
+    expect(av[2]).toBe("Pendência de prazo criada em Tarefas.");
   });
   it("registrar: sem prazo, avisa que nenhuma pendência nasceu", () => {
     const av = avisosRegistrar({ ok: true, pendencia_prazo_criada: false });

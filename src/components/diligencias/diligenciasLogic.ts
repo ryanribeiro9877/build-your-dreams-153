@@ -403,11 +403,11 @@ export function avisosCumprir(data: RpcRetorno | null, tinhaPendencia: boolean):
   }
   if (tinhaPendencia) {
     out.push(data.pendencia_fechada
-      ? "A pendência desta diligência foi fechada no Kanban."
+      ? "A pendência desta diligência foi fechada em Tarefas."
       : "A pendência ligada a esta diligência NÃO foi fechada (já estava concluída ou cancelada).");
   }
   if (data.rediligencia_id) {
-    out.push(`Rediligência criada com prazo ${formatDateBR(data.rediligenciar_em ?? null)}, ligada a esta, com pendência nova no Kanban.`);
+    out.push(`Rediligência criada com prazo ${formatDateBR(data.rediligenciar_em ?? null)}, ligada a esta, com pendência nova em Tarefas.`);
   }
   return out;
 }
@@ -437,9 +437,12 @@ export function avisosRegistrar(
     out.push(data.aviso);
     out.push("Isso também acontece quando o número casa com MAIS DE UM processo cadastrado — o banco só vincula quando casa com exatamente um.");
   }
+  // Pendência mora em TAREFAS: nenhuma das 271 pendências do sistema está num
+  // board de Kanban (medido em 07/08), porque card só entra em board por
+  // kanban_add_task_to_board. Kanban é a esteira de CASO distribuído.
   out.push(data.pendencia_prazo_criada
-    ? "Pendência de prazo criada no Kanban."
-    : "Sem prazo informado: NENHUMA pendência foi criada no Kanban — a diligência só vai aparecer nesta tela.");
+    ? "Pendência de prazo criada em Tarefas."
+    : "Sem prazo informado: NENHUMA pendência foi criada em Tarefas — a diligência só vai aparecer nesta tela.");
   const ref = hoje ?? new Date().toLocaleDateString("en-CA");
   if (prazoInformado && /^\d{4}-\d{2}-\d{2}$/.test(prazoInformado) && prazoInformado < ref) {
     out.push(`O prazo informado (${prazoInformado}) já passou: a pendência nasce VENCIDA. O banco aceita sem reclamar — confira se a data está certa.`);
