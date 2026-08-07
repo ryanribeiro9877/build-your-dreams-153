@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type React from "react";
 import { useNavigate } from "react-router-dom";
+import { DOCUMENT_TYPE_LABELS } from "@/lib/domainLabels";
 
 /* ============================================================
    Clientes — módulo compartilhado (layout 3.1)
@@ -215,19 +216,9 @@ export function formValuesFromClient(c: ClientFull): ClientFormValues {
 
 export const STATES = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
-export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  rg: "RG", cpf: "CPF", comprovante: "Comprovante",
-  comprovante_residencia: "Comprovante de Residência",
-  extrato_conta: "Extrato Bancário", extrato_ir: "Extrato de Imposto de Renda",
-  extrato_inss: "Extrato INSS", cnis: "CNIS", procuracao: "Procuração",
-  contrato: "Contrato", termo_cooperado: "Termo de Cooperado",
-  certidao: "Certidão", outro: "Outro",
-  contracheque: "Contracheque", negativa_inss: "Negativa INSS",
-  negativa_plano: "Negativa do plano", comprovante_reajuste: "Comprovante de reajuste",
-  documento_fiscal: "Documento fiscal",
-  audio_atendimento: "Áudio do atendimento",
-  resumo_atendimento: "Resumo do atendimento",
-};
+// Fonte única em src/lib/domainLabels.ts — os dashboards leem o MESMO mapa, para
+// que um tipo novo no CHECK não fique legível numa tela e cru na outra.
+export { DOCUMENT_TYPE_LABELS };
 
 // Tipos oferecidos no upload da aba Documentos (vocabulário canônico do card 3.6).
 // O CHECK client_documents_document_type_check no banco já aceita TODOS estes

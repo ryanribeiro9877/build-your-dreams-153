@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { humanizeSlug } from "@/lib/domainLabels";
 
 /**
  * Kit visual compartilhado pelos dashboards operacional e de prazos (9.2).
@@ -21,8 +22,56 @@ export const PALETTE = ["#c9a84c", "#8b5cf6", "#06b6d4", "#f59e0b", "#14b8a6", "
 
 export const fmtInt = (n: number) => (n ?? 0).toLocaleString("pt-BR");
 
-/** Rótulo amigável a partir de uma tabela de tradução, com fallback à própria key. */
-export const labelOf = (map: Record<string, string>, key: string) => map[key] ?? key;
+/** Rótulo amigável a partir de uma tabela de tradução. O fallback humaniza o
+ *  código para que um valor novo no banco nunca apareça como slug cru. */
+export const labelOf = (map: Record<string, string>, key: string) => map[key] ?? humanizeSlug(key);
+
+/** Encurta o rótulo do eixo mantendo o valor original no tooltip. */
+export const truncLabel = (s: string, max = 22) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+
+/**
+ * Altura de barra horizontal proporcional ao número de categorias: com altura
+ * fixa o eixo passa a pular rótulos (recharts esconde ticks que não cabem) e
+ * sobram barras sem legenda.
+ */
+export const horizontalBarHeight = (categories: number, min = 250) =>
+  Math.max(min, categories * 28 + 40);
+
+const RAD = Math.PI / 180;
+/** Abaixo disto o rótulo não cabe dentro da fatia e vira ruído sobreposto. */
+const PIE_LABEL_MIN_PERCENT = 0.06;
+
+/**
+ * Rótulo de fatia ancorado DENTRO do arco e só para fatias com área suficiente.
+ * Séries dominadas por uma categoria empilhavam todos os rótulos externos no
+ * mesmo ponto, ilegíveis; nome e contagem seguem na legenda/tooltip.
+ */
+export function PieSliceLabel(props: {
+  cx?: number; cy?: number; midAngle?: number;
+  innerRadius?: number; outerRadius?: number; percent?: number;
+}) {
+  const { cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, percent = 0 } = props;
+  if (percent < PIE_LABEL_MIN_PERCENT) return null;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.62;
+  return (
+    <text
+      x={cx + r * Math.cos(-midAngle * RAD)}
+      y={cy + r * Math.sin(-midAngle * RAD)}
+      fill="#09090f"
+      textAnchor="middle"
+      dominantBaseline="central"
+      style={{ fontSize: 11, fontWeight: 700 }}
+    >
+      {`${Math.round(percent * 100)}%`}
+    </text>
+  );
+}
+
+/** Legenda de pizza com a contagem, já que o rótulo da fatia mostra só o %. */
+export const pieLegendFormatter = (value: unknown, entry: unknown): ReactNode => {
+  const n = (entry as { payload?: { value?: number } } | undefined)?.payload?.value;
+  return typeof n === "number" ? `${String(value)} — ${fmtInt(n)}` : String(value);
+};
 
 export function DashboardHeader({ title, subtitle, onBack }: { title: string; subtitle: string; onBack?: () => void }) {
   const navigate = useNavigate();

@@ -9,6 +9,7 @@ import { HexagonLoader } from "@/components/HexagonLoader";
 import { useDashboardRpc } from "@/hooks/useDashboardRpc";
 import {
   DASH_BG, cardStyle, titleStyle, tooltipStyle, PALETTE, fmtInt, labelOf,
+  truncLabel, horizontalBarHeight, PieSliceLabel, pieLegendFormatter,
   DashboardHeader, KpiGrid, ChartCard, EmptyState, ScaffoldBanner,
 } from "@/components/dashboard/dashboardKit";
 
@@ -43,7 +44,7 @@ export default function DashboardPrazos() {
     [data],
   );
   const criticidade = useMemo(
-    () => (data?.criticidade_by_estado ?? []).map((s) => ({ name: s.key === "_none" ? "Sem estado" : s.key, count: s.n })),
+    () => (data?.criticidade_by_estado ?? []).map((s) => ({ name: labelOf({ _none: "Sem estado" }, s.key), count: s.n })),
     [data],
   );
 
@@ -105,25 +106,25 @@ export default function DashboardPrazos() {
       <div style={{ height: 16 }} />
 
       {/* Row: Audiências por status | Criticidade kanban */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", alignItems: "start", gap: 16, marginBottom: 16 }}>
         <ChartCard title="Audiências por status" empty={audienciaStatus.length === 0} hint="Sem audiências registradas (módulo 8.3). Acende quando a primeira for agendada.">
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={audienciaStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label={({ name, value }) => `${name}: ${value}`}>
+              <Pie data={audienciaStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} labelLine={false} label={<PieSliceLabel />}>
                 {audienciaStatus.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} formatter={pieLegendFormatter} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
 
         <ChartCard title="Criticidade no Kanban por estado" empty={criticidade.length === 0} hint="Sem cards com criticidade (7.3). Acende conforme cards entrarem em colunas com prazo.">
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={criticidade} layout="vertical" margin={{ left: 20 }}>
+          <ResponsiveContainer width="100%" height={horizontalBarHeight(criticidade.length)}>
+            <BarChart data={criticidade} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #1e1e2e)" />
               <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "var(--text3, #888)" }} width={100} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--text3, #888)" }} width={150} interval={0} tickFormatter={truncLabel} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e5e7eb" }} cursor={{ fill: "rgba(201,168,76,0.08)" }} />
               <Bar dataKey="count" name="Cards" radius={[0, 4, 4, 0]}>
                 {criticidade.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
