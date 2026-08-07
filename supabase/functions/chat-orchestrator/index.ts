@@ -3663,9 +3663,14 @@ async function handleSalvarPeca(
   try {
     const clientId = String(args.client_id ?? frame.delegation_context?.client_id ?? "");
     const processId = (args.process_id as string) ?? frame.delegation_context?.process_id ?? null;
-    const conteudo = String(args.conteudo ?? "");
+    const conteudo = stripChecklists(String(args.conteudo ?? ""));
     const documentName = String(args.document_name ?? "Peça jurídica").slice(0, 200);
-    const documentType = String(args.document_type ?? "peca");
+    // `client_documents` não aceita "peca"; enquanto aguarda revisão humana,
+    // o artefato é uma minuta (tipo exibido na aba Peças).
+    const requestedDocumentType = String(args.document_type ?? "minuta");
+    const documentType = requestedDocumentType === "peticao_inicial"
+      ? "peticao_inicial"
+      : "minuta";
     if (!clientId) return { ok: false, error: "salvar_peca: client_id ausente (resolva o cliente antes)." };
     if (!conteudo.trim()) return { ok: false, error: "salvar_peca: conteúdo vazio." };
 
@@ -3683,10 +3688,6 @@ async function handleSalvarPeca(
     }
     if (existing.result) return { ok: true, result: existing.result };
 
-    // Limpa somente um objeto sem dono deixado por tentativa anterior desta MESMA
-    // run. Nunca remove objeto que tenha linha em client_documents (checado acima).
-    await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
-
     // 1) materializa DOCX editável e grava no Storage.
     const docx = await materializarPecaDocx(conteudo);
     const { error: upErr } = await admin.storage.from("client-documents")
@@ -3699,12 +3700,15 @@ async function handleSalvarPeca(
     }
     uploadedPath = path;
 
-    // 2) task de confecção (para a devolução reabrir algo)
+    // 2) task de confecção (para a devolução reabrir algo). Nem todo redator
+    // possui `can_assign`; a própria RPC aceita este vínculo nulo, portanto a
+    // indisponibilidade da task não pode impedir o arquivamento/revisão da peça.
     confeccaoTaskId = await ensureConfeccaoTask(userClient, run, clientId);
     if (!confeccaoTaskId) {
-      await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
-      uploadedPath = null;
-      return { ok: false, error: "não consegui criar a tarefa de confecção vinculada; a peça não foi arquivada." };
+      console.warn(
+        `[salvar_peca] run=${run.id} seguirá sem tarefa de confecção vinculada; ` +
+        "a revisão humana continua obrigatória",
+      );
     }
 
     // 3) RPC salvar_peca sob o JWT do usuário (created_by/assigner corretos)
@@ -3737,10 +3741,12 @@ async function handleSalvarPeca(
       }
       await admin.storage.from("client-documents").remove([path]).then(() => {}, () => {});
       uploadedPath = null;
-      await userClient.rpc("update_user_task_status", {
-        p_task_id: confeccaoTaskId, p_new_status: "cancelled",
-        p_notes: "Arquivamento da peça falhou; tarefa cancelada automaticamente.",
-      }).then(() => {}, () => {});
+      if (confeccaoTaskId) {
+        await userClient.rpc("update_user_task_status", {
+          p_task_id: confeccaoTaskId, p_new_status: "cancelled",
+          p_notes: "Arquivamento da peça falhou; tarefa cancelada automaticamente.",
+        }).then(() => {}, () => {});
+      }
       return {
         ok: false,
         error: "o banco não conseguiu vincular o arquivo ao dossiê e criar a tarefa de revisão.",
@@ -5003,7 +5009,7 @@ async function processStep(admin: SupabaseClient, runId: string, supabaseUrl: st
                 client_id: target.clientId,
                 process_id: target.processId,
                 document_name: nomeDaPeca(run.draft || "", target.clientName),
-                document_type: "peca",
+                document_type: "minuta",
                 conteudo: run.draft || "",
               },
               { delegation_context: null },

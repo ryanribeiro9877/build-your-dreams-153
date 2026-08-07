@@ -237,7 +237,11 @@ export const TOOLS: Record<string, ToolDef> = {
       client_id: str("id do cliente (resolvido via consultar_cliente)"),
       process_id: str("id do processo (opcional)"),
       document_name: str("nome da peça (ex.: 'Contestação — Fulano x Banco')"),
-      document_type: str("tipo do documento (default 'peca')"),
+      document_type: {
+        type: "string",
+        enum: ["minuta", "peticao_inicial"],
+        description: "tipo aceito pelo dossiê; use 'minuta' por padrão ou 'peticao_inicial' quando inequívoco",
+      },
       conteudo: str("TEXTO INTEGRAL da peça em markdown"),
     }, required: ["client_id", "document_name", "conteudo"] },
   }},
