@@ -10,8 +10,9 @@ import { resolveNotificationRoute } from "./notifications";
 
 describe("resolveNotificationRoute", () => {
   it("normaliza a rota legada /kanban do trigger para a inbox real", () => {
-    // O trigger trg_notify_task_assignment grava route='/kanban', que não existe
-    // no App.tsx e caía em NotFound. Deve apontar para /sistema/tarefas (MyInbox).
+    // Antes da migration fix_notification_routes_kanban_agenda, o trigger
+    // trg_notify_task_assignment gravava '/kanban' (inexistente no App.tsx →
+    // NotFound). Origem já corrigida; este mapa é defesa em profundidade.
     expect(resolveNotificationRoute({ route: "/kanban" })).toBe("/sistema/tarefas");
   });
 
@@ -19,8 +20,13 @@ describe("resolveNotificationRoute", () => {
     expect(resolveNotificationRoute({ route: "/tarefas" })).toBe("/sistema/tarefas");
   });
 
+  it("normaliza /agenda legado (supervisor_check_atendimentos) para /sistema/agenda", () => {
+    expect(resolveNotificationRoute({ route: "/agenda" })).toBe("/sistema/agenda");
+  });
+
   it("preserva uma rota já válida do App.tsx", () => {
     expect(resolveNotificationRoute({ route: "/sistema/tarefas" })).toBe("/sistema/tarefas");
+    expect(resolveNotificationRoute({ route: "/sistema/agenda" })).toBe("/sistema/agenda");
     expect(resolveNotificationRoute({ route: "/sistema/equipe" })).toBe("/sistema/equipe");
   });
 
