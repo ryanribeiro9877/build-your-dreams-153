@@ -146,6 +146,8 @@ build-your-dreams-153/
 │   │   ├── stripe.ts · tracking.ts · uiTracking.ts
 │   │   ├── edgeFunctionError.ts    ← V14-master: parser de erros de edge
 │   │   ├── passwordPolicy.ts       ← V14-master: validador de senha forte
+│   │   ├── notifications.ts        ← sino in-app (public.notifications) + resolveNotificationRoute
+│   │   ├── notifications.test.ts   ← normalização de rotas legadas do deep-link
 │   │   └── platformPresenceChannel.ts ← V14-master: canal Realtime
 │   ├── types/jurisai.ts            ← tipos V14 + V16 + V17
 │   ├── config/roleVisibility.ts    ← visibility legada (será depreciada)
@@ -197,11 +199,14 @@ build-your-dreams-153/
 - `profiles`, `user_roles`
 - `token_balances`, `token_transactions`
 - `landing_events`, `ui_events`, `user_ui_preferences`
-- `bottleneck_notifications`
+- `bottleneck_notifications` — avisos de gargalo/histórico admin (`/admin/notificacoes`); **não** alimenta o sino do header
 
 **V7 (Onda 2)**:
 - `model_pricing` · `llm_provider_configs` · `chat_sessions` · `chat_messages`
 - Novas colunas em `agents`: `provider`, `model`, `temperature`, `top_p`, `max_tokens`, `memory_enabled`, `history_limit`, `allow_fallbacks`, `system_prompt`
+
+**Sino in-app (header)**:
+- `notifications` — fonte real do `NotificationBell` / `useNotifications` (migração `add_notifications_system`). Deep-link em `route`; RPCs `mark_notification_read` / `mark_all_notifications_read` / `get_unread_notifications_count`. Produção via `create_notification` (service_role) + gatilho `trg_notify_task_assignment` e `supervisor_check_atendimentos`.
 
 **V14 (modelo Bacellar)**:
 - `role_templates` (10 cargos) · `agent_templates` (~75 agentes seedados) · `role_agent_matrix`
@@ -562,6 +567,19 @@ O mesmo par de defeitos (pizza + eixo) existia em `DashboardPrazos`, que compart
 
 ---
 
+### Sino de notificações — origem no banco (08/08)
+
+Causa raiz do 404 ao clicar no sino: produtores gravavam rotas inexistentes no `App.tsx`.
+
+- Migration `20260808001232_fix_notification_routes_kanban_agenda.sql`:
+  - `trg_notify_task_assignment`: `route` `/kanban` → `/sistema/tarefas` (MyInbox)
+  - `supervisor_check_atendimentos`: `route` `/agenda` → `/sistema/agenda` (**achado** além do diagnóstico inicial do `/kanban`; 1 linha `atendimento_incompleto`)
+  - Backfill idempotente de **9 linhas** legadas (8× `/kanban` + 1× `/agenda`; `/tarefas` incluído no `WHERE` por segurança, 0 ocorrências medidas)
+- Cliente: `resolveNotificationRoute` permanece como defesa em profundidade (`src/lib/notifications.ts` + `notifications.test.ts`). PR #110 tinha só o paliativo no cliente; esta migration fecha a origem.
+- Fonte do sino: `public.notifications` (não `bottleneck_notifications`).
+
+---
+
 ## 7. Gaps conhecidos / Backlog técnico
 
 ### Crítico (impede produção plena)
@@ -705,5 +723,5 @@ supabase gen types typescript --project-id <id> --schema public > src/integratio
 
 ---
 
-**Última atualização**: 07/agosto/2026 (correção dos gráficos — `src/lib/domainLabels.ts`, rótulo de pizza, eixo de barras e cartão estourado no Analytics de UI)
+**Última atualização**: 08/agosto/2026 (origem das rotas do sino: migration `fix_notification_routes_kanban_agenda`; AGENTS clarifica `notifications` vs `bottleneck_notifications`)
 **Mantido por**: o próprio Claude que está editando o projeto. Atualize as seções 6 (histórico) e 7 (gaps) sempre que mudar algo arquitetural.

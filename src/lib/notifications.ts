@@ -50,16 +50,16 @@ const NOTIFICATION_COLS =
   "id,user_id,type,title,body,entity_type,entity_id,actor_user_id,route,read_at,created_at";
 
 /**
- * Rotas gravadas no banco (trigger `trg_notify_task_assignment`) que NÃO existem
- * no `App.tsx` e caíam na rota-coringa `*` → tela 404. O trigger persiste
- * `route='/kanban'`, mas não há `/kanban`: a tarefa atribuída aparece na inbox
- * pessoal (`/sistema/tarefas`, MyInbox). Normalizamos no cliente porque a origem
- * é o banco (correção sem migration). MyInbox não seleciona por id, então o
- * destino é a inbox — sem inventar rota/param que nenhuma tela consome.
+ * Rede de segurança (defense-in-depth): a origem no banco já foi corrigida
+ * (migration `fix_notification_routes_kanban_agenda` — gatilhos gravam
+ * `/sistema/tarefas` e `/sistema/agenda`). Este mapa ainda normaliza rotas
+ * legadas se algum produtor antigo, base sem a migration ou linha pré-backfill
+ * voltar a aparecer. MyInbox não seleciona por id → destino = inbox.
  */
 const LEGACY_ROUTE_MAP: Record<string, string> = {
   "/kanban": "/sistema/tarefas",
   "/tarefas": "/sistema/tarefas",
+  "/agenda": "/sistema/agenda",
 };
 
 /**
