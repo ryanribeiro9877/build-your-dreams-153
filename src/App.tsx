@@ -6,6 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { HexagonLoader } from "@/components/HexagonLoader";
+import { safeInternalPath } from "@/lib/safeRoute";
 import { PlatformPresenceSync } from "@/components/PlatformPresenceSync";
 import { RequireActivation } from "@/components/RequireActivation";
 import { AdminRoute } from "@/components/AdminRoute";
@@ -56,8 +57,12 @@ function ChunkReloadRestore() {
     try { target = sessionStorage.getItem(CHUNK_RELOAD_TO_KEY); } catch { /* noop */ }
     if (!target) return;
     try { sessionStorage.removeItem(CHUNK_RELOAD_TO_KEY); } catch { /* noop */ }
+    // O valor veio do sessionStorage: sanear antes de navegar, senão um path
+    // como `//evil.com` vira redirecionamento para fora do domínio.
+    const destino = safeInternalPath(target);
+    if (!destino) return;
     const current = window.location.pathname + window.location.search;
-    if (target !== current) navigate(target, { replace: true });
+    if (destino !== current) navigate(destino, { replace: true });
   }, [navigate]);
   return null;
 }

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { safeInternalPath } from "@/lib/safeRoute";
 
 /**
  * Notificação in-app (sino do header). Espelha `public.notifications`
@@ -69,7 +70,9 @@ const LEGACY_ROUTE_MAP: Record<string, string> = {
 export function resolveNotificationRoute(n: Pick<AppNotification, "route">): string | null {
   const raw = n.route?.trim();
   if (!raw) return null;
-  return LEGACY_ROUTE_MAP[raw] ?? raw;
+  // `route` vem do BANCO. Um valor como `//evil.com` viraria navegação para fora
+  // do domínio (open redirect); o saneador nega antes de chegar no navigate().
+  return safeInternalPath(LEGACY_ROUTE_MAP[raw] ?? raw);
 }
 
 /** Últimas notificações do usuário (RLS já filtra por auth.uid()). */
