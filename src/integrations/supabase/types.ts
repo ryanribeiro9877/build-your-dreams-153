@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -12,8 +12,45 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
+      _stage_motor3: {
+        Row: {
+          payload: Json
+        }
+        Insert: {
+          payload: Json
+        }
+        Update: {
+          payload?: Json
+        }
+        Relationships: []
+      }
       agent_actions: {
         Row: {
           agent_id: string | null
@@ -823,6 +860,356 @@ export type Database = {
           },
         ]
       }
+      ai_generations: {
+        Row: {
+          agent_id: string | null
+          cached_input_tokens: number
+          cost_usd: number | null
+          created_at: string
+          error_type: string | null
+          finish_reason: string | null
+          id: string
+          input_price_per_mtok: number | null
+          input_tokens: number
+          is_tech_test: boolean
+          latency_ms: number | null
+          model: string | null
+          model_id_resolved: string | null
+          output_price_per_mtok: number | null
+          output_tokens: number
+          provider: string | null
+          reasoning_tokens: number
+          run_id: string | null
+          session_id: string | null
+          source: string
+          stage: string | null
+          status: string
+          ttft_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          cached_input_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          error_type?: string | null
+          finish_reason?: string | null
+          id?: string
+          input_price_per_mtok?: number | null
+          input_tokens?: number
+          is_tech_test?: boolean
+          latency_ms?: number | null
+          model?: string | null
+          model_id_resolved?: string | null
+          output_price_per_mtok?: number | null
+          output_tokens?: number
+          provider?: string | null
+          reasoning_tokens?: number
+          run_id?: string | null
+          session_id?: string | null
+          source?: string
+          stage?: string | null
+          status?: string
+          ttft_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          cached_input_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          error_type?: string | null
+          finish_reason?: string | null
+          id?: string
+          input_price_per_mtok?: number | null
+          input_tokens?: number
+          is_tech_test?: boolean
+          latency_ms?: number | null
+          model?: string | null
+          model_id_resolved?: string | null
+          output_price_per_mtok?: number | null
+          output_tokens?: number
+          provider?: string | null
+          reasoning_tokens?: number
+          run_id?: string | null
+          session_id?: string | null
+          source?: string
+          stage?: string | null
+          status?: string
+          ttft_ms?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      apolices_seguro: {
+        Row: {
+          cancelada_em: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_test: boolean | null
+          notes: string | null
+          numero_apolice: string | null
+          numero_processo_susep: string | null
+          origem_desconto: string | null
+          premio_periodicidade: string | null
+          premio_valor: number | null
+          process_id: string | null
+          produto: string | null
+          reconhecida: boolean | null
+          restituicao_valor: number | null
+          seguradora: string
+          updated_at: string
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
+        }
+        Insert: {
+          cancelada_em?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          numero_apolice?: string | null
+          numero_processo_susep?: string | null
+          origem_desconto?: string | null
+          premio_periodicidade?: string | null
+          premio_valor?: number | null
+          process_id?: string | null
+          produto?: string | null
+          reconhecida?: boolean | null
+          restituicao_valor?: number | null
+          seguradora: string
+          updated_at?: string
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Update: {
+          cancelada_em?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          numero_apolice?: string | null
+          numero_processo_susep?: string | null
+          origem_desconto?: string | null
+          premio_periodicidade?: string | null
+          premio_valor?: number | null
+          process_id?: string | null
+          produto?: string | null
+          reconhecida?: boolean | null
+          restituicao_valor?: number | null
+          seguradora?: string
+          updated_at?: string
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apolices_seguro_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apolices_seguro_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apolices_seguro_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      area_advogado_responsavel: {
+        Row: {
+          area: Database["public"]["Enums"]["legal_area"]
+          responsible_user_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          area: Database["public"]["Enums"]["legal_area"]
+          responsible_user_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["legal_area"]
+          responsible_user_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      audiencia_lembretes: {
+        Row: {
+          audiencia_id: string
+          canal: string
+          created_at: string
+          data_prevista: string
+          feito_em: string | null
+          feito_por: string | null
+          id: string
+          observacao: string | null
+          pendencia_task_id: string | null
+          status: string
+        }
+        Insert: {
+          audiencia_id: string
+          canal?: string
+          created_at?: string
+          data_prevista: string
+          feito_em?: string | null
+          feito_por?: string | null
+          id?: string
+          observacao?: string | null
+          pendencia_task_id?: string | null
+          status?: string
+        }
+        Update: {
+          audiencia_id?: string
+          canal?: string
+          created_at?: string
+          data_prevista?: string
+          feito_em?: string | null
+          feito_por?: string | null
+          id?: string
+          observacao?: string | null
+          pendencia_task_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audiencia_lembretes_audiencia_id_fkey"
+            columns: ["audiencia_id"]
+            isOneToOne: false
+            referencedRelation: "audiencias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audiencia_lembretes_pendencia_task_id_fkey"
+            columns: ["pendencia_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audiencias: {
+        Row: {
+          advogado_nome: string | null
+          advogado_user_id: string | null
+          client_id: string | null
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          data_captura: string | null
+          data_hora: string
+          docs: Json
+          google_calendar_id: string | null
+          google_event_id: string | null
+          google_sync_status: string | null
+          id: string
+          is_test: boolean
+          last_synced_at: string | null
+          link_local: string | null
+          observacoes: string | null
+          origem: string
+          parte_contraria: string | null
+          process_id: string | null
+          process_number: string | null
+          status: Database["public"]["Enums"]["audiencia_status"]
+          tipo_acao: string | null
+          updated_at: string
+        }
+        Insert: {
+          advogado_nome?: string | null
+          advogado_user_id?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_captura?: string | null
+          data_hora: string
+          docs?: Json
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          google_sync_status?: string | null
+          id?: string
+          is_test?: boolean
+          last_synced_at?: string | null
+          link_local?: string | null
+          observacoes?: string | null
+          origem?: string
+          parte_contraria?: string | null
+          process_id?: string | null
+          process_number?: string | null
+          status?: Database["public"]["Enums"]["audiencia_status"]
+          tipo_acao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          advogado_nome?: string | null
+          advogado_user_id?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_captura?: string | null
+          data_hora?: string
+          docs?: Json
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          google_sync_status?: string | null
+          id?: string
+          is_test?: boolean
+          last_synced_at?: string | null
+          link_local?: string | null
+          observacoes?: string | null
+          origem?: string
+          parte_contraria?: string | null
+          process_id?: string | null
+          process_number?: string | null
+          status?: Database["public"]["Enums"]["audiencia_status"]
+          tipo_acao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audiencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audiencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audiencias_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bottleneck_notifications: {
         Row: {
           agent_name: string | null
@@ -859,42 +1246,124 @@ export type Database = {
         }
         Relationships: []
       }
-      captacao_canais: {
+      business_hours_config: {
         Row: {
-          code: string
-          created_at: string
-          default_assignee_role_code: string | null
-          description: string | null
-          display_name: string
-          id: string
-          is_active: boolean
-          metadata: Json
-          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
+          close_time: string
+          id: boolean
+          max_parallel: number
+          open_time: string
+          slot_minutes: number
+          timezone: string
           updated_at: string
+          updated_by: string | null
+          windows: Json
+          workdays: number[]
         }
         Insert: {
-          code: string
-          created_at?: string
-          default_assignee_role_code?: string | null
-          description?: string | null
-          display_name: string
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          tipo: Database["public"]["Enums"]["captacao_canal_tipo"]
+          close_time?: string
+          id?: boolean
+          max_parallel?: number
+          open_time?: string
+          slot_minutes?: number
+          timezone?: string
           updated_at?: string
+          updated_by?: string | null
+          windows?: Json
+          workdays?: number[]
         }
         Update: {
-          code?: string
-          created_at?: string
-          default_assignee_role_code?: string | null
-          description?: string | null
-          display_name?: string
-          id?: string
-          is_active?: boolean
-          metadata?: Json
-          tipo?: Database["public"]["Enums"]["captacao_canal_tipo"]
+          close_time?: string
+          id?: boolean
+          max_parallel?: number
+          open_time?: string
+          slot_minutes?: number
+          timezone?: string
           updated_at?: string
+          updated_by?: string | null
+          windows?: Json
+          workdays?: number[]
+        }
+        Relationships: []
+      }
+      campanha_itens: {
+        Row: {
+          campanha_id: string
+          client_id: string
+          id: string
+          observacao: string | null
+          status: string
+          tentativas: number
+          ultima_tentativa: string | null
+        }
+        Insert: {
+          campanha_id: string
+          client_id: string
+          id?: string
+          observacao?: string | null
+          status?: string
+          tentativas?: number
+          ultima_tentativa?: string | null
+        }
+        Update: {
+          campanha_id?: string
+          client_id?: string
+          id?: string
+          observacao?: string | null
+          status?: string
+          tentativas?: number
+          ultima_tentativa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanha_itens_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanha_itens_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanha_itens_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campanhas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          filtro: Json
+          id: string
+          nome: string
+          objetivo: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          filtro?: Json
+          id?: string
+          nome: string
+          objetivo: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          filtro?: Json
+          id?: string
+          nome?: string
+          objetivo?: string
+          status?: string
         }
         Relationships: []
       }
@@ -908,6 +1377,9 @@ export type Database = {
           is_active: boolean
           message_id: string | null
           mime_type: string | null
+          ocr_confidence: number | null
+          ocr_engine: string | null
+          ocr_fields: Json | null
           session_id: string | null
           storage_path: string
           summary: string | null
@@ -923,6 +1395,9 @@ export type Database = {
           is_active?: boolean
           message_id?: string | null
           mime_type?: string | null
+          ocr_confidence?: number | null
+          ocr_engine?: string | null
+          ocr_fields?: Json | null
           session_id?: string | null
           storage_path: string
           summary?: string | null
@@ -938,6 +1413,9 @@ export type Database = {
           is_active?: boolean
           message_id?: string | null
           mime_type?: string | null
+          ocr_confidence?: number | null
+          ocr_engine?: string | null
+          ocr_fields?: Json | null
           session_id?: string | null
           storage_path?: string
           summary?: string | null
@@ -1038,11 +1516,13 @@ export type Database = {
       }
       chat_sessions: {
         Row: {
+          acting_as_user_id: string | null
           client_id: string | null
           closed_at: string | null
           created_at: string | null
           entry_agent_id: string | null
           id: string
+          is_tech_test: boolean
           last_message_at: string | null
           message_count: number | null
           metadata: Json | null
@@ -1056,11 +1536,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          acting_as_user_id?: string | null
           client_id?: string | null
           closed_at?: string | null
           created_at?: string | null
           entry_agent_id?: string | null
           id?: string
+          is_tech_test?: boolean
           last_message_at?: string | null
           message_count?: number | null
           metadata?: Json | null
@@ -1074,11 +1556,13 @@ export type Database = {
           user_id: string
         }
         Update: {
+          acting_as_user_id?: string | null
           client_id?: string | null
           closed_at?: string | null
           created_at?: string | null
           entry_agent_id?: string | null
           id?: string
+          is_tech_test?: boolean
           last_message_at?: string | null
           message_count?: number | null
           metadata?: Json | null
@@ -1100,6 +1584,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chat_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "chat_sessions_entry_agent_id_fkey"
             columns: ["entry_agent_id"]
             isOneToOne: false
@@ -1111,6 +1602,66 @@ export type Database = {
             columns: ["entry_agent_id"]
             isOneToOne: false
             referencedRelation: "agents_with_owner_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_bank_relations: {
+        Row: {
+          banco: string
+          client_id: string
+          contrato_em_posse: boolean
+          created_at: string
+          created_by: string | null
+          extrato_ano: number | null
+          extrato_em_posse: boolean
+          id: string
+          notes: string | null
+          reconhece: boolean | null
+          tipo_relacao: string
+          updated_at: string
+        }
+        Insert: {
+          banco: string
+          client_id: string
+          contrato_em_posse?: boolean
+          created_at?: string
+          created_by?: string | null
+          extrato_ano?: number | null
+          extrato_em_posse?: boolean
+          id?: string
+          notes?: string | null
+          reconhece?: boolean | null
+          tipo_relacao: string
+          updated_at?: string
+        }
+        Update: {
+          banco?: string
+          client_id?: string
+          contrato_em_posse?: boolean
+          created_at?: string
+          created_by?: string | null
+          extrato_ano?: number | null
+          extrato_em_posse?: boolean
+          id?: string
+          notes?: string | null
+          reconhece?: boolean | null
+          tipo_relacao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_bank_relations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_bank_relations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
             referencedColumns: ["id"]
           },
         ]
@@ -1163,10 +1714,12 @@ export type Database = {
           file_path: string
           file_size: number | null
           id: string
+          is_test: boolean
           mime_type: string | null
           notes: string | null
           origem: string | null
           status: string
+          task_id: string | null
           uploaded_by: string
           validated_at: string | null
           validated_by: string | null
@@ -1180,10 +1733,12 @@ export type Database = {
           file_path: string
           file_size?: number | null
           id?: string
+          is_test?: boolean
           mime_type?: string | null
           notes?: string | null
           origem?: string | null
           status?: string
+          task_id?: string | null
           uploaded_by: string
           validated_at?: string | null
           validated_by?: string | null
@@ -1197,10 +1752,12 @@ export type Database = {
           file_path?: string
           file_size?: number | null
           id?: string
+          is_test?: boolean
           mime_type?: string | null
           notes?: string | null
           origem?: string | null
           status?: string
+          task_id?: string | null
           uploaded_by?: string
           validated_at?: string | null
           validated_by?: string | null
@@ -1213,6 +1770,152 @@ export type Database = {
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "client_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_documents_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_gov_credentials: {
+        Row: {
+          client_id: string
+          codigo_2fa_temporario: string | null
+          consentimento_em: string | null
+          consentimento_registrado: boolean
+          consentimento_versao: string | null
+          created_at: string
+          created_by: string | null
+          gov_senha_enc: string | null
+          gov_usuario_enc: string | null
+          id: string
+          status_acesso: string | null
+          tem_2fa: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          codigo_2fa_temporario?: string | null
+          consentimento_em?: string | null
+          consentimento_registrado?: boolean
+          consentimento_versao?: string | null
+          created_at?: string
+          created_by?: string | null
+          gov_senha_enc?: string | null
+          gov_usuario_enc?: string | null
+          id?: string
+          status_acesso?: string | null
+          tem_2fa?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          codigo_2fa_temporario?: string | null
+          consentimento_em?: string | null
+          consentimento_registrado?: boolean
+          consentimento_versao?: string | null
+          created_at?: string
+          created_by?: string | null
+          gov_senha_enc?: string | null
+          gov_usuario_enc?: string | null
+          id?: string
+          status_acesso?: string | null
+          tem_2fa?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_gov_credentials_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_gov_credentials_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_saved_filters: {
+        Row: {
+          created_at: string
+          filter: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filter?: Json
+          id?: string
+          name: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          filter?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      client_update_log: {
+        Row: {
+          changed_by: string
+          changes: Json
+          client_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          changed_by: string
+          changes: Json
+          client_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          changed_by?: string
+          changes?: Json
+          client_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_update_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_update_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clients: {
@@ -1220,16 +1923,23 @@ export type Database = {
           address: string | null
           address_complement: string | null
           address_number: string | null
+          banco_beneficio: string | null
           bank_account: string | null
+          bank_account_enc: string | null
           bank_account_type: string | null
           bank_agency: string | null
+          bank_agency_enc: string | null
           bank_name: string | null
           birth_date: string | null
           city: string | null
           client_origin: string | null
           cnpj: string | null
+          cnpj_bidx: string | null
+          cnpj_enc: string | null
           country: string | null
           cpf: string | null
+          cpf_bidx: string | null
+          cpf_enc: string | null
           created_at: string
           created_by: string
           email: string | null
@@ -1241,8 +1951,12 @@ export type Database = {
           gov_br_profile: string | null
           id: string
           ie: string | null
+          ie_enc: string | null
           im: string | null
+          im_enc: string | null
+          is_test: boolean
           legal_rep_cpf: string | null
+          legal_rep_cpf_enc: string | null
           legal_rep_name: string | null
           marital_status: string | null
           mother_name: string | null
@@ -1253,17 +1967,28 @@ export type Database = {
           notes: string | null
           phone: string | null
           phone_commercial: string | null
+          phone_commercial_is_whatsapp: boolean
           phone_home: string | null
+          phone_home_is_whatsapp: boolean
+          phone_is_whatsapp: boolean
           pis_nit: string | null
+          pis_nit_enc: string | null
           pix_key: string | null
+          pix_key_enc: string | null
           pix_key_type: string | null
           profession: string | null
           responsible_lawyer_id: string | null
           rg: string | null
+          rg_enc: string | null
           rg_issuer: string | null
           rg_uf: string | null
           state: string | null
           status: string
+          status_atendimento: string | null
+          status_comercial: string | null
+          status_documental: string | null
+          status_juridico: string | null
+          status_processo: string | null
           tipo_pessoa: string
           updated_at: string
           zip_code: string | null
@@ -1272,16 +1997,23 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          banco_beneficio?: string | null
           bank_account?: string | null
+          bank_account_enc?: string | null
           bank_account_type?: string | null
           bank_agency?: string | null
+          bank_agency_enc?: string | null
           bank_name?: string | null
           birth_date?: string | null
           city?: string | null
           client_origin?: string | null
           cnpj?: string | null
+          cnpj_bidx?: string | null
+          cnpj_enc?: string | null
           country?: string | null
           cpf?: string | null
+          cpf_bidx?: string | null
+          cpf_enc?: string | null
           created_at?: string
           created_by: string
           email?: string | null
@@ -1293,8 +2025,12 @@ export type Database = {
           gov_br_profile?: string | null
           id?: string
           ie?: string | null
+          ie_enc?: string | null
           im?: string | null
+          im_enc?: string | null
+          is_test?: boolean
           legal_rep_cpf?: string | null
+          legal_rep_cpf_enc?: string | null
           legal_rep_name?: string | null
           marital_status?: string | null
           mother_name?: string | null
@@ -1305,17 +2041,28 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           phone_commercial?: string | null
+          phone_commercial_is_whatsapp?: boolean
           phone_home?: string | null
+          phone_home_is_whatsapp?: boolean
+          phone_is_whatsapp?: boolean
           pis_nit?: string | null
+          pis_nit_enc?: string | null
           pix_key?: string | null
+          pix_key_enc?: string | null
           pix_key_type?: string | null
           profession?: string | null
           responsible_lawyer_id?: string | null
           rg?: string | null
+          rg_enc?: string | null
           rg_issuer?: string | null
           rg_uf?: string | null
           state?: string | null
           status?: string
+          status_atendimento?: string | null
+          status_comercial?: string | null
+          status_documental?: string | null
+          status_juridico?: string | null
+          status_processo?: string | null
           tipo_pessoa?: string
           updated_at?: string
           zip_code?: string | null
@@ -1324,16 +2071,23 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          banco_beneficio?: string | null
           bank_account?: string | null
+          bank_account_enc?: string | null
           bank_account_type?: string | null
           bank_agency?: string | null
+          bank_agency_enc?: string | null
           bank_name?: string | null
           birth_date?: string | null
           city?: string | null
           client_origin?: string | null
           cnpj?: string | null
+          cnpj_bidx?: string | null
+          cnpj_enc?: string | null
           country?: string | null
           cpf?: string | null
+          cpf_bidx?: string | null
+          cpf_enc?: string | null
           created_at?: string
           created_by?: string
           email?: string | null
@@ -1345,8 +2099,12 @@ export type Database = {
           gov_br_profile?: string | null
           id?: string
           ie?: string | null
+          ie_enc?: string | null
           im?: string | null
+          im_enc?: string | null
+          is_test?: boolean
           legal_rep_cpf?: string | null
+          legal_rep_cpf_enc?: string | null
           legal_rep_name?: string | null
           marital_status?: string | null
           mother_name?: string | null
@@ -1357,17 +2115,28 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           phone_commercial?: string | null
+          phone_commercial_is_whatsapp?: boolean
           phone_home?: string | null
+          phone_home_is_whatsapp?: boolean
+          phone_is_whatsapp?: boolean
           pis_nit?: string | null
+          pis_nit_enc?: string | null
           pix_key?: string | null
+          pix_key_enc?: string | null
           pix_key_type?: string | null
           profession?: string | null
           responsible_lawyer_id?: string | null
           rg?: string | null
+          rg_enc?: string | null
           rg_issuer?: string | null
           rg_uf?: string | null
           state?: string | null
           status?: string
+          status_atendimento?: string | null
+          status_comercial?: string | null
+          status_documental?: string | null
+          status_juridico?: string | null
+          status_processo?: string | null
           tipo_pessoa?: string
           updated_at?: string
           zip_code?: string | null
@@ -1419,6 +2188,51 @@ export type Database = {
         }
         Relationships: []
       }
+      data_review_log: {
+        Row: {
+          campo: string
+          client_id: string | null
+          criado_em: string
+          id: string
+          motivo: string
+          valor_novo: string | null
+          valor_original: string | null
+        }
+        Insert: {
+          campo: string
+          client_id?: string | null
+          criado_em?: string
+          id?: string
+          motivo: string
+          valor_novo?: string | null
+          valor_original?: string | null
+        }
+        Update: {
+          campo?: string
+          client_id?: string | null
+          criado_em?: string
+          id?: string
+          motivo?: string
+          valor_novo?: string | null
+          valor_original?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_review_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_review_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           color: string
@@ -1451,6 +2265,114 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      diligencias: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          cumprida_em: string | null
+          descricao: string
+          diligencia_origem_id: string | null
+          id: string
+          is_test: boolean | null
+          notes: string | null
+          pendencia_task_id: string | null
+          prazo: string | null
+          process_id: string | null
+          process_numero_texto: string | null
+          protocolo: string | null
+          responsavel_nome: string | null
+          responsavel_user_id: string | null
+          resultado: string | null
+          status: string
+          tipo: string
+          updated_at: string
+          vara: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cumprida_em?: string | null
+          descricao: string
+          diligencia_origem_id?: string | null
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          pendencia_task_id?: string | null
+          prazo?: string | null
+          process_id?: string | null
+          process_numero_texto?: string | null
+          protocolo?: string | null
+          responsavel_nome?: string | null
+          responsavel_user_id?: string | null
+          resultado?: string | null
+          status?: string
+          tipo: string
+          updated_at?: string
+          vara?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cumprida_em?: string | null
+          descricao?: string
+          diligencia_origem_id?: string | null
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          pendencia_task_id?: string | null
+          prazo?: string | null
+          process_id?: string | null
+          process_numero_texto?: string | null
+          protocolo?: string | null
+          responsavel_nome?: string | null
+          responsavel_user_id?: string | null
+          resultado?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diligencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diligencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diligencias_diligencia_origem_id_fkey"
+            columns: ["diligencia_origem_id"]
+            isOneToOne: false
+            referencedRelation: "diligencias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diligencias_pendencia_task_id_fkey"
+            columns: ["pendencia_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diligencias_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       document_library: {
         Row: {
@@ -1599,6 +2521,106 @@ export type Database = {
           },
         ]
       }
+      execucao_eventos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          execucao_id: string
+          fase_de: string | null
+          fase_para: string
+          id: string
+          observacao: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          execucao_id: string
+          fase_de?: string | null
+          fase_para: string
+          id?: string
+          observacao?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          execucao_id?: string
+          fase_de?: string | null
+          fase_para?: string
+          id?: string
+          observacao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "execucao_eventos_execucao_id_fkey"
+            columns: ["execucao_id"]
+            isOneToOne: false
+            referencedRelation: "execucoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      execucoes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          fase: string
+          id: string
+          is_test: boolean | null
+          notes: string | null
+          process_id: string
+          proxima_revisao: string | null
+          responsavel_nome: string | null
+          responsavel_user_id: string | null
+          reu_nome: string | null
+          reu_tipo: string | null
+          revisao_intervalo_dias: number | null
+          updated_at: string
+          valor_execucao: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          fase?: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          process_id: string
+          proxima_revisao?: string | null
+          responsavel_nome?: string | null
+          responsavel_user_id?: string | null
+          reu_nome?: string | null
+          reu_tipo?: string | null
+          revisao_intervalo_dias?: number | null
+          updated_at?: string
+          valor_execucao?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          fase?: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          process_id?: string
+          proxima_revisao?: string | null
+          responsavel_nome?: string | null
+          responsavel_user_id?: string | null
+          reu_nome?: string | null
+          reu_tipo?: string | null
+          revisao_intervalo_dias?: number | null
+          updated_at?: string
+          valor_execucao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "execucoes_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: true
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_collaborators: {
         Row: {
           created_at: string
@@ -1642,6 +2664,320 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      extrato_analises: {
+        Row: {
+          banco: string
+          client_document_id: string | null
+          client_id: string
+          created_at: string
+          criado_por: string | null
+          custo_usd: number | null
+          erro_mensagem: string | null
+          id: string
+          is_test: boolean | null
+          modelo: string | null
+          notes: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          revisado_em: string | null
+          revisado_por: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          banco: string
+          client_document_id?: string | null
+          client_id: string
+          created_at?: string
+          criado_por?: string | null
+          custo_usd?: number | null
+          erro_mensagem?: string | null
+          id?: string
+          is_test?: boolean | null
+          modelo?: string | null
+          notes?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          banco?: string
+          client_document_id?: string | null
+          client_id?: string
+          created_at?: string
+          criado_por?: string | null
+          custo_usd?: number | null
+          erro_mensagem?: string | null
+          id?: string
+          is_test?: boolean | null
+          modelo?: string | null
+          notes?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extrato_analises_client_document_id_fkey"
+            columns: ["client_document_id"]
+            isOneToOne: false
+            referencedRelation: "client_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_analises_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_analises_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extrato_categoria_tese: {
+        Row: {
+          categoria: string
+          observacao: string | null
+          rotulo_planilha: string
+          tipo_acao_id: string | null
+        }
+        Insert: {
+          categoria: string
+          observacao?: string | null
+          rotulo_planilha: string
+          tipo_acao_id?: string | null
+        }
+        Update: {
+          categoria?: string
+          observacao?: string | null
+          rotulo_planilha?: string
+          tipo_acao_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extrato_categoria_tese_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extrato_gabarito: {
+        Row: {
+          banco: string
+          categoria: string
+          client_id: string | null
+          client_name: string
+          client_name_fold: string
+          created_at: string
+          detalhe: string | null
+          fonte: string | null
+          id: string
+          marcado: boolean
+          trouxe_extrato: boolean | null
+        }
+        Insert: {
+          banco?: string
+          categoria: string
+          client_id?: string | null
+          client_name: string
+          client_name_fold: string
+          created_at?: string
+          detalhe?: string | null
+          fonte?: string | null
+          id?: string
+          marcado: boolean
+          trouxe_extrato?: boolean | null
+        }
+        Update: {
+          banco?: string
+          categoria?: string
+          client_id?: string | null
+          client_name?: string
+          client_name_fold?: string
+          created_at?: string
+          detalhe?: string | null
+          fonte?: string | null
+          id?: string
+          marcado?: boolean
+          trouxe_extrato?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extrato_gabarito_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_gabarito_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extrato_lancamentos: {
+        Row: {
+          analise_id: string
+          categoria: string
+          confianca: number | null
+          created_at: string
+          data_lancamento: string | null
+          decidido_em: string | null
+          decidido_por: string | null
+          decisao: string
+          descricao_original: string
+          id: string
+          justificativa: string | null
+          observacao: string | null
+          valor: number | null
+        }
+        Insert: {
+          analise_id: string
+          categoria: string
+          confianca?: number | null
+          created_at?: string
+          data_lancamento?: string | null
+          decidido_em?: string | null
+          decidido_por?: string | null
+          decisao?: string
+          descricao_original: string
+          id?: string
+          justificativa?: string | null
+          observacao?: string | null
+          valor?: number | null
+        }
+        Update: {
+          analise_id?: string
+          categoria?: string
+          confianca?: number | null
+          created_at?: string
+          data_lancamento?: string | null
+          decidido_em?: string | null
+          decidido_por?: string | null
+          decisao?: string
+          descricao_original?: string
+          id?: string
+          justificativa?: string | null
+          observacao?: string | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extrato_lancamentos_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "extrato_analises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feriados_forenses: {
+        Row: {
+          abrangencia: string
+          confirmado: boolean
+          created_at: string
+          data: string
+          descricao: string
+          fonte: string | null
+          tipo: string
+        }
+        Insert: {
+          abrangencia: string
+          confirmado?: boolean
+          created_at?: string
+          data: string
+          descricao: string
+          fonte?: string | null
+          tipo?: string
+        }
+        Update: {
+          abrangencia?: string
+          confirmado?: boolean
+          created_at?: string
+          data?: string
+          descricao?: string
+          fonte?: string | null
+          tipo?: string
+        }
+        Relationships: []
+      }
+      google_calendar_config: {
+        Row: {
+          account_email: string | null
+          calendar_id: string | null
+          id: boolean
+          updated_at: string
+          vault_secret_id: string | null
+        }
+        Insert: {
+          account_email?: string | null
+          calendar_id?: string | null
+          id?: boolean
+          updated_at?: string
+          vault_secret_id?: string | null
+        }
+        Update: {
+          account_email?: string | null
+          calendar_id?: string | null
+          id?: boolean
+          updated_at?: string
+          vault_secret_id?: string | null
+        }
+        Relationships: []
+      }
+      gov_credential_access_log: {
+        Row: {
+          accessed_at: string
+          accessed_by: string
+          client_id: string
+          id: string
+        }
+        Insert: {
+          accessed_at?: string
+          accessed_by: string
+          client_id: string
+          id?: string
+        }
+        Update: {
+          accessed_at?: string
+          accessed_by?: string
+          client_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      holidays: {
+        Row: {
+          day: string
+          label: string
+        }
+        Insert: {
+          day: string
+          label?: string
+        }
+        Update: {
+          day?: string
+          label?: string
+        }
+        Relationships: []
       }
       integration_api_audit_log: {
         Row: {
@@ -1776,6 +3112,44 @@ export type Database = {
           },
         ]
       }
+      kanban_board_config: {
+        Row: {
+          board_id: string
+          created_at: string
+          criticidade: Json
+          id: string
+          prazo_dias: number | null
+          responsavel_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          criticidade?: Json
+          id?: string
+          prazo_dias?: number | null
+          responsavel_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          criticidade?: Json
+          id?: string
+          prazo_dias?: number | null
+          responsavel_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_board_config_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: true
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kanban_board_favorites: {
         Row: {
           board_id: string
@@ -1844,6 +3218,7 @@ export type Database = {
           owner_user_id: string
           simplified_cards: boolean
           sort_order: number
+          tipo_acao_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1855,6 +3230,7 @@ export type Database = {
           owner_user_id: string
           simplified_cards?: boolean
           sort_order?: number
+          tipo_acao_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1866,9 +3242,18 @@ export type Database = {
           owner_user_id?: string
           simplified_cards?: boolean
           sort_order?: number
+          tipo_acao_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kanban_boards_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kanban_card_placements: {
         Row: {
@@ -2047,65 +3432,54 @@ export type Database = {
         }
         Relationships: []
       }
-      leads: {
+      ligacoes: {
         Row: {
-          assigned_to: string | null
-          campanha: string | null
-          canal_id: string | null
+          campanha_id: string | null
+          client_id: string
           created_at: string
-          created_by: string | null
-          email: string | null
-          full_name: string
           id: string
-          metadata: Json
-          notes: string | null
-          phone: string | null
-          status: Database["public"]["Enums"]["lead_status"]
-          updated_at: string
+          observacao: string | null
+          operador_user_id: string
+          resultado: string
         }
         Insert: {
-          assigned_to?: string | null
-          campanha?: string | null
-          canal_id?: string | null
+          campanha_id?: string | null
+          client_id: string
           created_at?: string
-          created_by?: string | null
-          email?: string | null
-          full_name: string
           id?: string
-          metadata?: Json
-          notes?: string | null
-          phone?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
-          updated_at?: string
+          observacao?: string | null
+          operador_user_id: string
+          resultado: string
         }
         Update: {
-          assigned_to?: string | null
-          campanha?: string | null
-          canal_id?: string | null
+          campanha_id?: string | null
+          client_id?: string
           created_at?: string
-          created_by?: string | null
-          email?: string | null
-          full_name?: string
           id?: string
-          metadata?: Json
-          notes?: string | null
-          phone?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
-          updated_at?: string
+          observacao?: string | null
+          operador_user_id?: string
+          resultado?: string
         }
         Relationships: [
           {
-            foreignKeyName: "leads_assigned_to_fkey"
-            columns: ["assigned_to"]
+            foreignKeyName: "ligacoes_campanha_id_fkey"
+            columns: ["campanha_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
+            referencedRelation: "campanhas"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_canal_id_fkey"
-            columns: ["canal_id"]
+            foreignKeyName: "ligacoes_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "captacao_canais"
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ligacoes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
             referencedColumns: ["id"]
           },
         ]
@@ -2206,6 +3580,131 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_audit_log: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          field: string
+          id: string
+          meeting_id: string
+          new_value: string | null
+          old_value: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          field: string
+          id?: string
+          meeting_id: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          field?: string
+          id?: string
+          meeting_id?: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_audit_log_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetings: {
+        Row: {
+          client_id: string | null
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          end_time: string | null
+          google_calendar_id: string | null
+          google_event_id: string | null
+          google_sync_status: string | null
+          id: string
+          last_synced_at: string | null
+          lawyer_user_id: string | null
+          notes: string | null
+          phone: string | null
+          receptionist_user_id: string | null
+          reminder_sent_at: string | null
+          scheduled_date: string
+          start_time: string
+          status: Database["public"]["Enums"]["meeting_status"]
+          summary: string | null
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          google_sync_status?: string | null
+          id?: string
+          last_synced_at?: string | null
+          lawyer_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          receptionist_user_id?: string | null
+          reminder_sent_at?: string | null
+          scheduled_date: string
+          start_time: string
+          status?: Database["public"]["Enums"]["meeting_status"]
+          summary?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          google_sync_status?: string | null
+          id?: string
+          last_synced_at?: string | null
+          lawyer_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          receptionist_user_id?: string | null
+          reminder_sent_at?: string | null
+          scheduled_date?: string
+          start_time?: string
+          status?: Database["public"]["Enums"]["meeting_status"]
+          summary?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       model_pricing: {
         Row: {
           context_window: number
@@ -2266,24 +3765,70 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          actor_user_id: string | null
+          body: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          read_at: string | null
+          route: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          body?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          route?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          body?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          route?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       orchestration_runs: {
         Row: {
           acao_tipo: string | null
           block_index: number
           blocks: Json
+          cancel_requested: boolean
           chain: Json
           created_at: string
+          delegation_stack: Json | null
           draft: string | null
           entry_agent_id: string | null
           error: string | null
           feedback: string | null
           fixed_facts: string | null
           id: string
+          intent_category: string | null
           iterations: number
           mech_report: Json | null
           n3_usage: Json | null
           original_message: string
           pending_actions: Json | null
+          route_path: string | null
           session_id: string
           status: string
           stream_message_id: string | null
@@ -2297,19 +3842,23 @@ export type Database = {
           acao_tipo?: string | null
           block_index?: number
           blocks?: Json
+          cancel_requested?: boolean
           chain?: Json
           created_at?: string
+          delegation_stack?: Json | null
           draft?: string | null
           entry_agent_id?: string | null
           error?: string | null
           feedback?: string | null
           fixed_facts?: string | null
           id?: string
+          intent_category?: string | null
           iterations?: number
           mech_report?: Json | null
           n3_usage?: Json | null
           original_message: string
           pending_actions?: Json | null
+          route_path?: string | null
           session_id: string
           status?: string
           stream_message_id?: string | null
@@ -2323,19 +3872,23 @@ export type Database = {
           acao_tipo?: string | null
           block_index?: number
           blocks?: Json
+          cancel_requested?: boolean
           chain?: Json
           created_at?: string
+          delegation_stack?: Json | null
           draft?: string | null
           entry_agent_id?: string | null
           error?: string | null
           feedback?: string | null
           fixed_facts?: string | null
           id?: string
+          intent_category?: string | null
           iterations?: number
           mech_report?: Json | null
           n3_usage?: Json | null
           original_message?: string
           pending_actions?: Json | null
+          route_path?: string | null
           session_id?: string
           status?: string
           stream_message_id?: string | null
@@ -2364,50 +3917,173 @@ export type Database = {
       }
       processes: {
         Row: {
+          client_id: string | null
           client_name: string
           created_at: string
           department_id: string | null
           description: string | null
           id: string
+          is_test: boolean
           next_hearing_date: string | null
-          process_number: string
+          process_number: string | null
           responsible_lawyer: string | null
+          responsible_lawyer_user_id: string | null
           status: string
+          tipo_acao_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          client_id?: string | null
           client_name: string
           created_at?: string
           department_id?: string | null
           description?: string | null
           id?: string
+          is_test?: boolean
           next_hearing_date?: string | null
-          process_number: string
+          process_number?: string | null
           responsible_lawyer?: string | null
+          responsible_lawyer_user_id?: string | null
           status?: string
+          tipo_acao_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          client_id?: string | null
           client_name?: string
           created_at?: string
           department_id?: string | null
           description?: string | null
           id?: string
+          is_test?: boolean
           next_hearing_date?: string | null
-          process_number?: string
+          process_number?: string | null
           responsible_lawyer?: string | null
+          responsible_lawyer_user_id?: string | null
           status?: string
+          tipo_acao_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "processes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "processes_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processes_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procuracoes: {
+        Row: {
+          client_document_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          data_assinatura: string
+          id: string
+          is_test: boolean | null
+          notes: string | null
+          pendencia_task_id: string | null
+          status: string
+          substituida_por_id: string | null
+          tipo: string
+          updated_at: string
+          validade_ate: string
+          validade_meses: number
+        }
+        Insert: {
+          client_document_id?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          data_assinatura: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          pendencia_task_id?: string | null
+          status?: string
+          substituida_por_id?: string | null
+          tipo?: string
+          updated_at?: string
+          validade_ate: string
+          validade_meses?: number
+        }
+        Update: {
+          client_document_id?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_assinatura?: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          pendencia_task_id?: string | null
+          status?: string
+          substituida_por_id?: string | null
+          tipo?: string
+          updated_at?: string
+          validade_ate?: string
+          validade_meses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procuracoes_client_document_id_fkey"
+            columns: ["client_document_id"]
+            isOneToOne: false
+            referencedRelation: "client_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procuracoes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procuracoes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procuracoes_pendencia_task_id_fkey"
+            columns: ["pendencia_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procuracoes_substituida_por_id_fkey"
+            columns: ["substituida_por_id"]
+            isOneToOne: false
+            referencedRelation: "procuracoes"
             referencedColumns: ["id"]
           },
         ]
@@ -2470,6 +4146,187 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      provider_budgets: {
+        Row: {
+          budget_start: string
+          budget_usd: number
+          notes: string | null
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          budget_start?: string
+          budget_usd: number
+          notes?: string | null
+          provider: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          budget_start?: string
+          budget_usd?: number
+          notes?: string | null
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      provider_credit_snapshots: {
+        Row: {
+          credits_remaining: number | null
+          credits_total: number | null
+          credits_used: number | null
+          currency: string | null
+          error_msg: string | null
+          fetched_at: string
+          id: string
+          kind: string
+          provider: string
+          raw: Json | null
+          status: string
+        }
+        Insert: {
+          credits_remaining?: number | null
+          credits_total?: number | null
+          credits_used?: number | null
+          currency?: string | null
+          error_msg?: string | null
+          fetched_at?: string
+          id?: string
+          kind?: string
+          provider: string
+          raw?: Json | null
+          status?: string
+        }
+        Update: {
+          credits_remaining?: number | null
+          credits_total?: number | null
+          credits_used?: number | null
+          currency?: string | null
+          error_msg?: string | null
+          fetched_at?: string
+          id?: string
+          kind?: string
+          provider?: string
+          raw?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
+      reclamacoes_administrativas: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          data_reclamacao: string
+          desfecho: string
+          id: string
+          is_test: boolean | null
+          notes: string | null
+          orgao: string
+          orgao_descricao: string | null
+          prazo_fatal: string | null
+          prazo_resposta: string | null
+          process_id: string | null
+          protocolo: string | null
+          resposta_em: string | null
+          resposta_texto: string | null
+          tese: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          data_reclamacao?: string
+          desfecho?: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          orgao: string
+          orgao_descricao?: string | null
+          prazo_fatal?: string | null
+          prazo_resposta?: string | null
+          process_id?: string | null
+          protocolo?: string | null
+          resposta_em?: string | null
+          resposta_texto?: string | null
+          tese?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_reclamacao?: string
+          desfecho?: string
+          id?: string
+          is_test?: boolean | null
+          notes?: string | null
+          orgao?: string
+          orgao_descricao?: string | null
+          prazo_fatal?: string | null
+          prazo_resposta?: string | null
+          process_id?: string | null
+          protocolo?: string | null
+          resposta_em?: string | null
+          resposta_texto?: string | null
+          tese?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reclamacoes_administrativas_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reclamacoes_administrativas_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reclamacoes_administrativas_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      required_document_sets: {
+        Row: {
+          created_at: string
+          document_type: string
+          id: string
+          required: boolean
+          set_code: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          id?: string
+          required?: boolean
+          set_code: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          id?: string
+          required?: boolean
+          set_code?: string
+          sort_order?: number
+        }
+        Relationships: []
       }
       role_agent_matrix: {
         Row: {
@@ -2671,6 +4528,68 @@ export type Database = {
           reu_pattern?: string
         }
         Relationships: []
+      }
+      sistema_flags: {
+        Row: {
+          ativo: boolean
+          chave: string
+          descricao: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          chave: string
+          descricao?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          chave?: string
+          descricao?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      task_approval_log: {
+        Row: {
+          aceite: boolean
+          created_at: string
+          decided_by: string
+          decisao: string
+          id: string
+          observacoes: string | null
+          user_task_id: string
+        }
+        Insert: {
+          aceite?: boolean
+          created_at?: string
+          decided_by: string
+          decisao: string
+          id?: string
+          observacoes?: string | null
+          user_task_id: string
+        }
+        Update: {
+          aceite?: boolean
+          created_at?: string
+          decided_by?: string
+          decisao?: string
+          id?: string
+          observacoes?: string | null
+          user_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_approval_log_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: false
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       task_attachments: {
         Row: {
@@ -2985,6 +4904,161 @@ export type Database = {
           },
         ]
       }
+      tipo_acao_ancora_docs: {
+        Row: {
+          document_types: string[]
+          observacao: string | null
+          tipo_acao_id: string
+          updated_at: string
+        }
+        Insert: {
+          document_types: string[]
+          observacao?: string | null
+          tipo_acao_id: string
+          updated_at?: string
+        }
+        Update: {
+          document_types?: string[]
+          observacao?: string | null
+          tipo_acao_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipo_acao_ancora_docs_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: true
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tipo_acao_apelidos: {
+        Row: {
+          apelido_fold: string
+          apelido_original: string
+          created_at: string
+          fonte: string | null
+          tipo_acao_id: string
+        }
+        Insert: {
+          apelido_fold: string
+          apelido_original: string
+          created_at?: string
+          fonte?: string | null
+          tipo_acao_id: string
+        }
+        Update: {
+          apelido_fold?: string
+          apelido_original?: string
+          created_at?: string
+          fonte?: string | null
+          tipo_acao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipo_acao_apelidos_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tipo_acao_documentos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          document_type: string
+          fonte: string | null
+          id: string
+          obrigatoriedade: string
+          observacao: string | null
+          ordem: number | null
+          tipo_acao_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document_type: string
+          fonte?: string | null
+          id?: string
+          obrigatoriedade?: string
+          observacao?: string | null
+          ordem?: number | null
+          tipo_acao_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document_type?: string
+          fonte?: string | null
+          id?: string
+          obrigatoriedade?: string
+          observacao?: string | null
+          ordem?: number | null
+          tipo_acao_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipo_acao_documentos_tipo_acao_id_fkey"
+            columns: ["tipo_acao_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_acao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tipos_acao: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          code: string
+          created_at: string
+          default_task_type_id: string | null
+          exige_procuracao_vigente: boolean
+          exige_reclamacao_previa: boolean
+          id: string
+          nome: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          code: string
+          created_at?: string
+          default_task_type_id?: string | null
+          exige_procuracao_vigente?: boolean
+          exige_reclamacao_previa?: boolean
+          id?: string
+          nome: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          code?: string
+          created_at?: string
+          default_task_type_id?: string | null
+          exige_procuracao_vigente?: boolean
+          exige_reclamacao_previa?: boolean
+          id?: string
+          nome?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipos_acao_default_task_type_id_fkey"
+            columns: ["default_task_type_id"]
+            isOneToOne: false
+            referencedRelation: "task_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       token_balances: {
         Row: {
           balance: number
@@ -3150,6 +5224,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_menu_permissions: {
+        Row: {
+          granted: boolean
+          granted_by: string | null
+          menu_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          granted: boolean
+          granted_by?: string | null
+          menu_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          granted?: boolean
+          granted_by?: string | null
+          menu_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_presence_heartbeat: {
+        Row: {
+          last_seen_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -3225,6 +5338,7 @@ export type Database = {
           external_kanban_ref: string | null
           id: string
           is_pendencia: boolean
+          is_test: boolean
           notes: string | null
           origem_departamento: Database["public"]["Enums"]["org_stage"] | null
           origem_user_id: string | null
@@ -3259,6 +5373,7 @@ export type Database = {
           external_kanban_ref?: string | null
           id?: string
           is_pendencia?: boolean
+          is_test?: boolean
           notes?: string | null
           origem_departamento?: Database["public"]["Enums"]["org_stage"] | null
           origem_user_id?: string | null
@@ -3293,6 +5408,7 @@ export type Database = {
           external_kanban_ref?: string | null
           id?: string
           is_pendencia?: boolean
+          is_test?: boolean
           notes?: string | null
           origem_departamento?: Database["public"]["Enums"]["org_stage"] | null
           origem_user_id?: string | null
@@ -3322,6 +5438,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
             referencedColumns: ["id"]
           },
           {
@@ -3459,127 +5582,276 @@ export type Database = {
           },
         ]
       }
-      leads_funnel: {
+      clients_decrypted: {
         Row: {
-          campanha: string | null
-          canal_code: string | null
-          canal_display_name: string | null
-          canal_id: string | null
-          status: Database["public"]["Enums"]["lead_status"] | null
-          total: number | null
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          bank_account: string | null
+          bank_account_type: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          birth_date: string | null
+          city: string | null
+          client_origin: string | null
+          cnpj: string | null
+          country: string | null
+          cpf: string | null
+          cpf_bidx: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          fantasy_name: string | null
+          father_name: string | null
+          foundation_date: string | null
+          full_name: string | null
+          gender: string | null
+          gov_br_profile: string | null
+          id: string | null
+          ie: string | null
+          im: string | null
+          legal_rep_cpf: string | null
+          legal_rep_name: string | null
+          marital_status: string | null
+          mother_name: string | null
+          nationality: string | null
+          natural_city: string | null
+          natural_uf: string | null
+          neighborhood: string | null
+          notes: string | null
+          phone: string | null
+          phone_commercial: string | null
+          phone_commercial_is_whatsapp: boolean | null
+          phone_home: string | null
+          phone_home_is_whatsapp: boolean | null
+          phone_is_whatsapp: boolean | null
+          pis_nit: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          profession: string | null
+          responsible_lawyer_id: string | null
+          rg: string | null
+          rg_issuer: string | null
+          rg_uf: string | null
+          state: string | null
+          status: string | null
+          status_atendimento: string | null
+          status_comercial: string | null
+          status_documental: string | null
+          status_juridico: string | null
+          status_processo: string | null
+          tipo_pessoa: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          bank_account?: never
+          bank_account_type?: string | null
+          bank_agency?: never
+          bank_name?: string | null
+          birth_date?: string | null
+          city?: string | null
+          client_origin?: string | null
+          cnpj?: never
+          country?: string | null
+          cpf?: never
+          cpf_bidx?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          fantasy_name?: string | null
+          father_name?: string | null
+          foundation_date?: string | null
+          full_name?: string | null
+          gender?: string | null
+          gov_br_profile?: string | null
+          id?: string | null
+          ie?: never
+          im?: never
+          legal_rep_cpf?: never
+          legal_rep_name?: string | null
+          marital_status?: string | null
+          mother_name?: string | null
+          nationality?: string | null
+          natural_city?: string | null
+          natural_uf?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_commercial?: string | null
+          phone_commercial_is_whatsapp?: boolean | null
+          phone_home?: string | null
+          phone_home_is_whatsapp?: boolean | null
+          phone_is_whatsapp?: boolean | null
+          pis_nit?: never
+          pix_key?: never
+          pix_key_type?: string | null
+          profession?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: never
+          rg_issuer?: string | null
+          rg_uf?: string | null
+          state?: string | null
+          status?: string | null
+          status_atendimento?: string | null
+          status_comercial?: string | null
+          status_documental?: string | null
+          status_juridico?: string | null
+          status_processo?: string | null
+          tipo_pessoa?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          bank_account?: never
+          bank_account_type?: string | null
+          bank_agency?: never
+          bank_name?: string | null
+          birth_date?: string | null
+          city?: string | null
+          client_origin?: string | null
+          cnpj?: never
+          country?: string | null
+          cpf?: never
+          cpf_bidx?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          fantasy_name?: string | null
+          father_name?: string | null
+          foundation_date?: string | null
+          full_name?: string | null
+          gender?: string | null
+          gov_br_profile?: string | null
+          id?: string | null
+          ie?: never
+          im?: never
+          legal_rep_cpf?: never
+          legal_rep_name?: string | null
+          marital_status?: string | null
+          mother_name?: string | null
+          nationality?: string | null
+          natural_city?: string | null
+          natural_uf?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_commercial?: string | null
+          phone_commercial_is_whatsapp?: boolean | null
+          phone_home?: string | null
+          phone_home_is_whatsapp?: boolean | null
+          phone_is_whatsapp?: boolean | null
+          pis_nit?: never
+          pix_key?: never
+          pix_key_type?: string | null
+          profession?: string | null
+          responsible_lawyer_id?: string | null
+          rg?: never
+          rg_issuer?: string | null
+          rg_uf?: string | null
+          state?: string | null
+          status?: string | null
+          status_atendimento?: string | null
+          status_comercial?: string | null
+          status_documental?: string | null
+          status_juridico?: string | null
+          status_processo?: string | null
+          tipo_pessoa?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      kanban_card_criticidade: {
+        Row: {
+          board_id: string | null
+          client_id: string | null
+          entrou_em: string | null
+          estado: string | null
+          prazo_dias: number | null
+          process_id: string | null
+          responsavel_user_id: string | null
+          ultimo_movimento: string | null
+          user_task_id: string | null
+          vence_em: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "leads_canal_id_fkey"
-            columns: ["canal_id"]
+            foreignKeyName: "kanban_card_placements_board_id_fkey"
+            columns: ["board_id"]
             isOneToOne: false
-            referencedRelation: "captacao_canais"
+            referencedRelation: "kanban_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_card_placements_user_task_id_fkey"
+            columns: ["user_task_id"]
+            isOneToOne: true
+            referencedRelation: "user_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_decrypted"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
             referencedColumns: ["id"]
           },
         ]
       }
-      meetings: {
-        Row: {
-          id: string
-          client_id: string | null
-          client_name: string | null
-          phone: string | null
-          scheduled_date: string
-          start_time: string
-          end_time: string | null
-          type: string | null
-          lawyer_user_id: string | null
-          receptionist_user_id: string | null
-          summary: string | null
-          status: Database["public"]["Enums"]["meeting_status"]
-          notes: string | null
-          google_event_id: string | null
-          google_calendar_id: string | null
-          google_sync_status: string | null
-          last_synced_at: string | null
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          client_id?: string | null
-          client_name?: string | null
-          phone?: string | null
-          scheduled_date: string
-          start_time: string
-          end_time?: string | null
-          type?: string | null
-          lawyer_user_id?: string | null
-          receptionist_user_id?: string | null
-          summary?: string | null
-          status?: Database["public"]["Enums"]["meeting_status"]
-          notes?: string | null
-          google_event_id?: string | null
-          google_calendar_id?: string | null
-          google_sync_status?: string | null
-          last_synced_at?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          client_id?: string | null
-          client_name?: string | null
-          phone?: string | null
-          scheduled_date?: string
-          start_time?: string
-          end_time?: string | null
-          type?: string | null
-          lawyer_user_id?: string | null
-          receptionist_user_id?: string | null
-          summary?: string | null
-          status?: Database["public"]["Enums"]["meeting_status"]
-          notes?: string | null
-          google_event_id?: string | null
-          google_calendar_id?: string | null
-          google_sync_status?: string | null
-          last_synced_at?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      meeting_audit_log: {
-        Row: {
-          id: string
-          meeting_id: string
-          actor_user_id: string | null
-          field: string
-          old_value: string | null
-          new_value: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          meeting_id: string
-          actor_user_id?: string | null
-          field: string
-          old_value?: string | null
-          new_value?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          meeting_id?: string
-          actor_user_id?: string | null
-          field?: string
-          old_value?: string | null
-          new_value?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
     }
     Functions: {
+      _ator_sistema: { Args: never; Returns: string }
+      _avisar_falta_documental: {
+        Args: {
+          p_assignee: string
+          p_assigner: string
+          p_client_id: string
+          p_process_id: string
+          p_processo_num: string
+          p_tipo_acao_id: string
+        }
+        Returns: Json
+      }
+      _document_types_permitidos: { Args: never; Returns: string[] }
+      _fechar_pendencia: {
+        Args: { p_motivo: string; p_task_id: string }
+        Returns: boolean
+      }
+      _prazo_fim_do_dia: { Args: { p_data: string }; Returns: string }
+      _resolver_processo: {
+        Args: { p_process_id: string; p_processo_numero: string }
+        Returns: string
+      }
       activate_own_profile: { Args: never; Returns: undefined }
+      add_business_days: {
+        Args: { p_days: number; p_start: string }
+        Returns: string
+      }
+      add_task_comment: {
+        Args: { p_body: string; p_task_id: string }
+        Returns: Json
+      }
       add_tokens: {
         Args: {
           p_amount: number
@@ -3590,9 +5862,115 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_clear_user_menu: {
+        Args: { p_menu_key: string; p_user_id: string }
+        Returns: undefined
+      }
+      admin_cron_create: {
+        Args: { p_command: string; p_name: string; p_schedule: string }
+        Returns: number
+      }
+      admin_cron_delete: { Args: { p_jobid: number }; Returns: boolean }
+      admin_cron_list: {
+        Args: never
+        Returns: {
+          active: boolean
+          command: string
+          jobid: number
+          jobname: string
+          last_message: string
+          last_run: string
+          last_status: string
+          schedule: string
+        }[]
+      }
+      admin_cron_toggle: {
+        Args: { p_active: boolean; p_jobid: number }
+        Returns: undefined
+      }
+      admin_list_menu_permissions: {
+        Args: never
+        Returns: {
+          email: string
+          granted: boolean
+          granted_by: string
+          granted_by_name: string
+          menu_key: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      admin_set_user_menu: {
+        Args: { p_granted: boolean; p_menu_key: string; p_user_id: string }
+        Returns: undefined
+      }
       advance_user_task: {
         Args: { p_next_task_type_id?: string; p_task_id: string }
         Returns: Json
+      }
+      agendar_conversao_gov: {
+        Args: {
+          p_ate?: string
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_observacao?: string
+        }
+        Returns: Json
+      }
+      agent_consultar_cliente: {
+        Args: { p_busca: string }
+        Returns: {
+          cpf: string
+          full_name: string
+          id: string
+          status: string
+        }[]
+      }
+      agent_consultar_processo: {
+        Args: { p_busca: string }
+        Returns: {
+          client_id: string
+          client_name: string
+          id: string
+          process_number: string
+          responsible_lawyer_user_id: string
+          status: string
+          tipo_acao_code: string
+          tipo_acao_id: string
+          tipo_acao_nome: string
+        }[]
+      }
+      agent_consultar_usuario: {
+        Args: { p_busca: string }
+        Returns: {
+          app_roles: string[]
+          cargo: string
+          email: string
+          name: string
+          user_id: string
+        }[]
+      }
+      anexar_audio_autorizacao: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_file_path: string
+          p_nome_arquivo?: string
+          p_process_id?: string
+          p_transcricao?: string
+        }
+        Returns: Json
+      }
+      aniversariantes_do_dia: {
+        Args: never
+        Returns: {
+          client_id: string
+          data_nascimento: string
+          idade: number
+          is_whatsapp: boolean
+          nome: string
+          telefone: string
+        }[]
       }
       answer_inter_assistant_request: {
         Args: {
@@ -3630,6 +6008,69 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_ocr_client_fields: {
+        Args: { p_client_id: string; p_fields: Json }
+        Returns: number
+      }
+      attach_client_document: {
+        Args: {
+          p_client_id: string
+          p_document_name: string
+          p_document_type: string
+          p_file_path: string
+          p_file_size: number
+          p_mime_type: string
+        }
+        Returns: string
+      }
+      atualizar_apolice: {
+        Args: {
+          p_apolice_id: string
+          p_cancelada_em?: string
+          p_observacao?: string
+          p_reconhecida?: boolean
+          p_restituicao_valor?: number
+        }
+        Returns: Json
+      }
+      atualizar_cliente: {
+        Args: { p_client_id: string; p_fields: Json }
+        Returns: Json
+      }
+      atualizar_fase_execucao: {
+        Args: {
+          p_fase: string
+          p_observacao?: string
+          p_process_id?: string
+          p_processo_numero?: string
+        }
+        Returns: Json
+      }
+      atualizar_processo: {
+        Args: { p_fields: Json; p_process_id: string }
+        Returns: Json
+      }
+      atualizar_status_credencial_gov: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_observacao?: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      atualizar_tarefa: {
+        Args: {
+          p_prazo?: string
+          p_prioridade?: string
+          p_status?: string
+          p_task_id: string
+          p_titulo?: string
+        }
+        Returns: Json
+      }
+      audiencia_datetime_aviso: { Args: { p_ts: string }; Returns: string }
+      audiencias_can_manage: { Args: never; Returns: boolean }
       calculate_llm_cost: {
         Args: {
           p_input_tokens: number
@@ -3638,6 +6079,133 @@ export type Database = {
           p_provider: string
         }
         Returns: number
+      }
+      can_view_clients: { Args: never; Returns: boolean }
+      cancelar_atendimento: {
+        Args: { p_id: string; p_motivo?: string }
+        Returns: Json
+      }
+      claim_user_task: { Args: { p_task_id: string }; Returns: string }
+      client_cooperado_checklist: {
+        Args: { p_client_id: string }
+        Returns: {
+          document_type: string
+          required: boolean
+          sort_order: number
+          status: string
+        }[]
+      }
+      client_delete_saved_filter: { Args: { p_id: string }; Returns: undefined }
+      client_document_checklist: {
+        Args: { p_client_id: string; p_set_code: string }
+        Returns: {
+          document_type: string
+          required: boolean
+          sort_order: number
+          status: string
+        }[]
+      }
+      client_has_meeting_history: {
+        Args: { p_client_id: string }
+        Returns: boolean
+      }
+      client_required_set: { Args: { p_client_id: string }; Returns: string }
+      client_save_filter: {
+        Args: { p_filter: Json; p_name: string }
+        Returns: {
+          created_at: string
+          filter: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_saved_filters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      client_timeline: {
+        Args: { p_client_id: string }
+        Returns: {
+          event_at: string
+          event_type: string
+          extra: Json
+          ref_id: string
+          title: string
+        }[]
+      }
+      comparar_analise_com_gabarito: {
+        Args: { p_banco?: string }
+        Returns: Json
+      }
+      consultar_analise_extrato: {
+        Args: {
+          p_analise_id?: string
+          p_client_id?: string
+          p_cliente_nome?: string
+        }
+        Returns: Json
+      }
+      consultar_apolices: {
+        Args: {
+          p_apenas_nao_reconhecidas?: boolean
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_seguradora?: string
+        }
+        Returns: Json
+      }
+      consultar_audiencias: {
+        Args: {
+          p_ate: string
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_de: string
+          p_processo?: string
+        }
+        Returns: Json
+      }
+      consultar_diligencias: {
+        Args: {
+          p_processo_numero?: string
+          p_status?: string
+          p_vara?: string
+          p_vencendo_ate?: string
+        }
+        Returns: Json
+      }
+      consultar_documentos_obrigatorios: {
+        Args: { p_client_id?: string; p_cliente_nome?: string; p_tese?: string }
+        Returns: Json
+      }
+      consultar_execucoes: {
+        Args: {
+          p_fase?: string
+          p_processo_numero?: string
+          p_responsavel?: string
+        }
+        Returns: Json
+      }
+      consultar_feriados_pendentes_confirmacao: { Args: never; Returns: Json }
+      consultar_procuracoes: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_incluir_historico?: boolean
+          p_vencendo_em_dias?: number
+        }
+        Returns: Json
+      }
+      consultar_reclamacoes: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_vencendo_ate?: string
+        }
+        Returns: Json
       }
       consume_tokens: {
         Args: { p_amount: number; p_description?: string; p_user_id: string }
@@ -3652,6 +6220,45 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_audiencia: {
+        Args: {
+          p_advogado_user_id?: string
+          p_client_id: string
+          p_data_hora: string
+          p_docs?: Json
+          p_link_local?: string
+          p_observacoes?: string
+          p_parte_contraria?: string
+          p_process_id: string
+          p_tipo_acao?: string
+        }
+        Returns: string
+      }
+      create_chat_task: {
+        Args: {
+          p_assignee_user_id?: string
+          p_client_id?: string
+          p_deadline_at?: string
+          p_description?: string
+          p_priority?: Database["public"]["Enums"]["task_priority"]
+          p_title: string
+        }
+        Returns: string
+      }
+      create_department_task: {
+        Args: {
+          p_area?: Database["public"]["Enums"]["legal_area"]
+          p_client_id?: string
+          p_deadline_at?: string
+          p_description?: string
+          p_payload?: Json
+          p_priority?: Database["public"]["Enums"]["task_priority"]
+          p_process_id?: string
+          p_task_type_id: string
+          p_title: string
+        }
+        Returns: string
+      }
       create_inter_assistant_request: {
         Args: {
           p_expires_in_hours?: number
@@ -3664,18 +6271,32 @@ export type Database = {
       }
       create_meeting: {
         Args: {
+          p_client_id?: string
+          p_client_name?: string
+          p_end_time?: string
+          p_lawyer_user_id?: string
+          p_notes?: string
+          p_phone?: string
+          p_receptionist_user_id?: string
           p_scheduled_date: string
           p_start_time: string
-          p_client_id?: string | null
-          p_client_name?: string | null
-          p_phone?: string | null
-          p_end_time?: string | null
-          p_type?: string | null
-          p_lawyer_user_id?: string | null
-          p_receptionist_user_id?: string | null
-          p_summary?: string | null
-          p_notes?: string | null
           p_status?: Database["public"]["Enums"]["meeting_status"]
+          p_summary?: string
+          p_type?: string
+        }
+        Returns: string
+      }
+      create_meeting_task: { Args: { p_meeting_id: string }; Returns: string }
+      create_notification: {
+        Args: {
+          p_actor_user_id?: string
+          p_body?: string
+          p_entity_id?: string
+          p_entity_type?: string
+          p_route?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
         }
         Returns: string
       }
@@ -3695,6 +6316,21 @@ export type Database = {
         }
         Returns: string
       }
+      criar_audiencia: {
+        Args: {
+          p_data: string
+          p_hora: string
+          p_local?: string
+          p_notes?: string
+          p_process_id: string
+          p_tipo: string
+        }
+        Returns: Json
+      }
+      criar_campanha: {
+        Args: { p_filtro?: Json; p_nome: string; p_objetivo: string }
+        Returns: Json
+      }
       criar_pendencia: {
         Args: {
           p_cliente_id?: string
@@ -3708,16 +6344,87 @@ export type Database = {
         }
         Returns: string
       }
-      create_meeting_task: {
-        Args: { p_meeting_id: string }
+      criar_processo: {
+        Args: {
+          p_client_id: string
+          p_notes?: string
+          p_numero?: string
+          p_reu?: string
+          p_tipo_acao?: string
+        }
+        Returns: Json
+      }
+      criar_tarefa_protocolo: {
+        Args: { p_process_id: string; p_revisao_task_id?: string }
         Returns: string
       }
-      delete_meeting: {
-        Args: { p_id: string }
-        Returns: undefined
+      criar_tarefa_revisao: {
+        Args: {
+          p_client_document_id?: string
+          p_confeccao_task_id?: string
+          p_process_id: string
+        }
+        Returns: string
       }
+      cumprir_diligencia: {
+        Args: {
+          p_diligencia_id: string
+          p_protocolo?: string
+          p_rediligenciar_em?: string
+          p_resultado?: string
+        }
+        Returns: Json
+      }
+      dashboard_ia_cost: { Args: never; Returns: Json }
+      dashboard_ia_metrics: { Args: never; Returns: Json }
+      dashboard_ia_usage_by_user: { Args: never; Returns: Json }
+      dashboard_operacional_metrics: {
+        Args: { p_include_test?: boolean }
+        Returns: Json
+      }
+      dashboard_prazos_metrics: {
+        Args: { p_include_test?: boolean }
+        Returns: Json
+      }
+      dashboard_provider_credits: { Args: never; Returns: Json }
+      dashboard_tarefas_metrics: {
+        Args: { p_include_test?: boolean }
+        Returns: Json
+      }
+      decidir_lancamento_extrato: {
+        Args: {
+          p_decisao: string
+          p_lancamento_id: string
+          p_observacao?: string
+        }
+        Returns: Json
+      }
+      decidir_revisao_peca: {
+        Args: {
+          p_aceite?: boolean
+          p_decisao: string
+          p_observacoes?: string
+          p_task_id: string
+        }
+        Returns: Database["public"]["Enums"]["user_task_status"]
+      }
+      definir_tipo_acao_processo: {
+        Args: { p_process_id: string; p_tipo_acao_id: string }
+        Returns: string
+      }
+      delete_meeting: { Args: { p_id: string }; Returns: undefined }
       delete_task_attachment: {
         Args: { p_attachment_id: string }
+        Returns: string
+      }
+      distribuir_caso: {
+        Args: {
+          p_process_id: string
+          p_responsible_lawyer_user_id?: string
+          p_task_type_id?: string
+          p_tipo_acao_id?: string
+          p_title?: string
+        }
         Returns: string
       }
       enqueue_email_notification: {
@@ -3732,10 +6439,24 @@ export type Database = {
         }
         Returns: string
       }
+      enqueue_task_chat_alert: {
+        Args: {
+          p_alert_kind?: string
+          p_message: string
+          p_recipient_user_id: string
+          p_task_id: string
+        }
+        Returns: string
+      }
+      enviar_alerta_supervisor: {
+        Args: { p_content: string; p_user_id: string }
+        Returns: string
+      }
       fail_stale_orchestration_runs: {
-        Args: { p_max_age?: string }
+        Args: { p_max_age?: string; p_max_total_age?: string }
         Returns: number
       }
+      fila_credenciais_gov: { Args: { p_estado: string }; Returns: Json }
       find_users_missing_agents: {
         Args: never
         Returns: {
@@ -3762,6 +6483,12 @@ export type Database = {
         }
         Returns: undefined
       }
+      gerar_campanha_renovacao_procuracao: {
+        Args: { p_janela_dias?: number; p_nome?: string }
+        Returns: Json
+      }
+      gerar_pendencias_lembrete_audiencia: { Args: never; Returns: Json }
+      gerar_pendencias_revisao_execucao: { Args: never; Returns: Json }
       get_active_provider_for_user: {
         Args: { p_provider: string; p_user_id: string }
         Returns: {
@@ -3781,6 +6508,17 @@ export type Database = {
           tool_name: string
           tool_schema: Json
         }[]
+      }
+      get_available_slots: {
+        Args: { p_date: string }
+        Returns: {
+          slot: string
+        }[]
+      }
+      get_business_hours: { Args: never; Returns: Json }
+      get_client_priority_phone: {
+        Args: { p_client_id: string }
+        Returns: string
       }
       get_delegation_targets: {
         Args: { p_from_agent_id: string }
@@ -3803,6 +6541,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_google_calendar_credentials: { Args: never; Returns: Json }
       get_inbox_count: {
         Args: never
         Returns: {
@@ -3882,23 +6621,34 @@ export type Database = {
           name: string
         }[]
       }
-      get_available_slots: {
-        Args: { p_date: string }
-        Returns: {
-          slot: string
-        }[]
-      }
       get_meeting_audit: {
         Args: { p_meeting_id: string }
         Returns: {
-          id: string
-          actor_user_id: string | null
-          actor_name: string | null
-          field: string
-          old_value: string | null
-          new_value: string | null
+          actor_name: string
+          actor_user_id: string
           created_at: string
+          field: string
+          id: string
+          new_value: string
+          old_value: string
         }[]
+      }
+      get_my_client_saved_filters: {
+        Args: never
+        Returns: {
+          created_at: string
+          filter: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_saved_filters"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_my_inbox: {
         Args: { p_include_completed?: boolean }
@@ -3956,6 +6706,13 @@ export type Database = {
           to_user_role_label: string
         }[]
       }
+      get_my_menu_overrides: {
+        Args: never
+        Returns: {
+          granted: boolean
+          menu_key: string
+        }[]
+      }
       get_my_saved_filters: {
         Args: never
         Returns: {
@@ -3985,6 +6742,10 @@ export type Database = {
         }[]
       }
       get_my_workspace: { Args: never; Returns: Json }
+      get_or_create_supervisor_alert_session: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
       get_provider_key_decrypted: {
         Args: { p_provider: string; p_user_id: string }
         Returns: {
@@ -3995,6 +6756,7 @@ export type Database = {
           monthly_spent_usd: number
         }[]
       }
+      get_revisao_peca_context: { Args: { p_task_id: string }; Returns: Json }
       get_sector_workload: {
         Args: { p_target_role_code: string }
         Returns: {
@@ -4004,6 +6766,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_supervisor_agent_id: { Args: never; Returns: string }
       get_task_attachments: {
         Args: { p_task_id: string }
         Returns: {
@@ -4101,6 +6864,7 @@ export type Database = {
           title: string
         }[]
       }
+      get_unread_notifications_count: { Args: never; Returns: number }
       get_user_task_detail: { Args: { p_task_id: string }; Returns: Json }
       get_validation_count: { Args: never; Returns: number }
       get_workflow_templates: {
@@ -4111,6 +6875,12 @@ export type Database = {
           step_count: number
         }[]
       }
+      gov_decrypt: { Args: { p_cipher: string }; Returns: string }
+      gov_encrypt: { Args: { p_plain: string }; Returns: string }
+      has_menu_grant: {
+        Args: { _menu_key: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -4118,6 +6888,29 @@ export type Database = {
         }
         Returns: boolean
       }
+      heartbeat_ping: { Args: never; Returns: undefined }
+      importar_audiencias_planilha: {
+        Args: { p_dry_run?: boolean; p_lote: Json; p_offsets?: number[] }
+        Returns: Json
+      }
+      importar_clientes_planilha: { Args: { p_lote: Json }; Returns: Json }
+      importar_gabarito_extrato: {
+        Args: { p_banco?: string; p_lote: Json }
+        Returns: Json
+      }
+      importar_matriz_documentos: {
+        Args: { p_lote: Json; p_substituir?: boolean }
+        Returns: Json
+      }
+      importar_processos_execucoes_planilha: {
+        Args: { p_dry_run?: boolean; p_lote: Json; p_user_id?: string }
+        Returns: Json
+      }
+      importar_processos_posicional: {
+        Args: { p_dry_run?: boolean; p_lote: Json; p_user_id?: string }
+        Returns: Json
+      }
+      importar_telefones_planilha: { Args: { p_lote: Json }; Returns: Json }
       increment_provider_spend: {
         Args: { p_config_id: string; p_cost: number }
         Returns: undefined
@@ -4131,13 +6924,35 @@ export type Database = {
         }
         Returns: undefined
       }
+      iniciar_execucao: {
+        Args: {
+          p_fase?: string
+          p_observacao?: string
+          p_process_id?: string
+          p_processo_numero?: string
+          p_responsavel_nome?: string
+          p_reu_nome?: string
+          p_reu_tipo?: string
+          p_valor?: number
+        }
+        Returns: Json
+      }
       integration_list_rpcs: { Args: never; Returns: string[] }
       integration_list_tables: { Args: never; Returns: string[] }
+      is_business_datetime: { Args: { p_ts: string }; Returns: boolean }
+      is_cliente_cooperado: { Args: { p_client_id: string }; Returns: boolean }
       is_master_admin: { Args: { _user_id: string }; Returns: boolean }
       is_own_profile_active: { Args: never; Returns: boolean }
+      is_recepcao: { Args: never; Returns: boolean }
       is_recepcao_or_socio: { Args: never; Returns: boolean }
       is_role_eligible_for_task: {
         Args: { p_role_template_id: string; p_task_type_id: string }
+        Returns: boolean
+      }
+      is_socio: { Args: never; Returns: boolean }
+      is_socio_or_advogado: { Args: never; Returns: boolean }
+      is_user_online: {
+        Args: { p_threshold_minutes?: number; p_user_id: string }
         Returns: boolean
       }
       kanban_add_checklist_item: {
@@ -4252,6 +7067,42 @@ export type Database = {
         }
         Returns: undefined
       }
+      kpi_ligacoes: { Args: { p_ate?: string; p_de?: string }; Returns: Json }
+      list_assignable_users: {
+        Args: never
+        Returns: {
+          name: string
+          role_label: string
+          user_id: string
+        }[]
+      }
+      list_client_processes: {
+        Args: { p_client_id: string; p_client_name: string }
+        Returns: {
+          description: string
+          id: string
+          process_number: string
+        }[]
+      }
+      list_meeting_lawyers: {
+        Args: never
+        Returns: {
+          name: string
+          role_label: string
+          user_id: string
+        }[]
+      }
+      list_task_comments: {
+        Args: { p_task_id: string }
+        Returns: {
+          author_name: string
+          author_user_id: string
+          body: string
+          created_at: string
+          id: string
+        }[]
+      }
+      list_testable_sectors: { Args: never; Returns: Json }
       list_users_for_inter_assistant: {
         Args: never
         Returns: {
@@ -4261,6 +7112,26 @@ export type Database = {
           user_id: string
         }[]
       }
+      listar_descartaveis_chat_attachments: {
+        Args: never
+        Returns: {
+          created_at: string
+          etag: string
+          name: string
+          sz: number
+        }[]
+      }
+      listar_duplicatas_chat_attachments: {
+        Args: never
+        Returns: {
+          created_at: string
+          etag: string
+          name: string
+          sz: number
+        }[]
+      }
+      mark_all_notifications_read: { Args: never; Returns: number }
+      mark_notification_read: { Args: { p_id: string }; Returns: undefined }
       mcp_delete_server: { Args: { p_id: string }; Returns: undefined }
       mcp_register_server: {
         Args: {
@@ -4281,12 +7152,38 @@ export type Database = {
         Args: { p_config: Json; p_id: string }
         Returns: undefined
       }
+      meeting_slot_is_valid: {
+        Args: { p_date: string; p_start: string }
+        Returns: boolean
+      }
+      meetings_can_access: { Args: never; Returns: boolean }
+      meetings_can_create: { Args: never; Returns: boolean }
+      minha_agenda: { Args: { p_ate?: string; p_de?: string }; Returns: Json }
+      normalizar_banco: { Args: { p_texto: string }; Returns: string }
+      notificar_pendencias_data_fatal: {
+        Args: { p_dias_aviso?: number }
+        Returns: number
+      }
+      notificar_reunioes_proximas: { Args: never; Returns: number }
+      notificar_tarefas_no_horario: { Args: never; Returns: number }
+      pii_bidx: { Args: { p_input: string }; Returns: string }
+      pii_decrypt: { Args: { p_cipher: string }; Returns: string }
+      pii_encrypt: { Args: { p_plain: string }; Returns: string }
       pode_operar_pendencia: {
         Args: {
           _task: Database["public"]["Tables"]["user_tasks"]["Row"]
           _user_id: string
         }
         Returns: boolean
+      }
+      preparar_audiencia: { Args: { p_audiencia_id: string }; Returns: Json }
+      processar_procuracoes_vencendo: {
+        Args: { p_janela_dias?: number }
+        Returns: Json
+      }
+      processar_verificacao_pos_atendimento: {
+        Args: { p_task_id: string }
+        Returns: Json
       }
       provision_user_agents: {
         Args: { p_user_id: string }
@@ -4296,6 +7193,14 @@ export type Database = {
           template_code: string
           was_created: boolean
         }[]
+      }
+      reagendar_atendimento: {
+        Args: { p_id: string; p_nova_data: string; p_nova_hora: string }
+        Returns: Json
+      }
+      reavaliar_falta_documental: {
+        Args: { p_client_id: string }
+        Returns: Json
       }
       record_provider_spend: {
         Args: {
@@ -4344,6 +7249,176 @@ export type Database = {
         }
         Returns: string
       }
+      registrar_analise_extrato: {
+        Args: {
+          p_banco: string
+          p_client_document_id?: string
+          p_client_id: string
+          p_custo_usd?: number
+          p_modelo?: string
+          p_periodo_fim?: string
+          p_periodo_inicio?: string
+        }
+        Returns: Json
+      }
+      registrar_apolice: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_numero_apolice?: string
+          p_numero_processo_susep?: string
+          p_observacao?: string
+          p_origem_desconto?: string
+          p_premio_periodicidade?: string
+          p_premio_valor?: number
+          p_produto?: string
+          p_reconhecida?: boolean
+          p_seguradora: string
+          p_vigencia_inicio?: string
+        }
+        Returns: Json
+      }
+      registrar_credencial_gov: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_nivel?: string
+          p_senha: string
+          p_status_acesso?: string
+          p_tem_2fa?: boolean
+          p_usuario?: string
+        }
+        Returns: Json
+      }
+      registrar_desfecho_chat: {
+        Args: {
+          p_client_cpf_masked?: string
+          p_client_id?: string
+          p_client_name?: string
+          p_kind?: string
+          p_session_id: string
+          p_summary: string
+        }
+        Returns: string
+      }
+      registrar_diligencia: {
+        Args: {
+          p_descricao: string
+          p_observacao?: string
+          p_prazo?: string
+          p_process_id?: string
+          p_processo_numero?: string
+          p_responsavel_nome?: string
+          p_tipo?: string
+          p_vara?: string
+        }
+        Returns: Json
+      }
+      registrar_evento_processual: {
+        Args: {
+          p_data_evento?: string
+          p_evento: string
+          p_observacao?: string
+          p_process_id?: string
+          p_processo_numero?: string
+        }
+        Returns: Json
+      }
+      registrar_lancamento_extrato: {
+        Args: {
+          p_analise_id: string
+          p_categoria: string
+          p_confianca?: number
+          p_data?: string
+          p_descricao: string
+          p_justificativa?: string
+          p_valor?: number
+        }
+        Returns: Json
+      }
+      registrar_lembrete_audiencia: {
+        Args: {
+          p_lembrete_id: string
+          p_observacao?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      registrar_ligacao: {
+        Args: {
+          p_campanha_id?: string
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_observacao?: string
+          p_resultado: string
+          p_retornar_em?: string
+        }
+        Returns: Json
+      }
+      registrar_procuracao: {
+        Args: {
+          p_client_document_id?: string
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_data_assinatura: string
+          p_observacao?: string
+          p_tipo?: string
+          p_validade_meses?: number
+        }
+        Returns: Json
+      }
+      registrar_protocolo: {
+        Args: { p_observacao?: string; p_task_id: string }
+        Returns: Json
+      }
+      registrar_reclamacao: {
+        Args: {
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_data_reclamacao?: string
+          p_observacao?: string
+          p_orgao: string
+          p_prazo_fatal?: string
+          p_prazo_resposta?: string
+          p_process_id?: string
+          p_protocolo?: string
+          p_tese?: string
+        }
+        Returns: Json
+      }
+      registrar_relacao_bancaria: {
+        Args: {
+          p_banco?: string
+          p_banco_beneficio?: string
+          p_client_id?: string
+          p_cliente_nome?: string
+          p_contrato_em_posse?: boolean
+          p_extrato_ano?: number
+          p_extrato_em_posse?: boolean
+          p_notes?: string
+          p_reconhece?: boolean
+          p_tipo_relacao?: string
+        }
+        Returns: Json
+      }
+      registrar_resposta_reclamacao: {
+        Args: {
+          p_desfecho: string
+          p_reclamacao_id: string
+          p_resposta_em?: string
+          p_resposta_texto?: string
+        }
+        Returns: Json
+      }
+      remarcar_revisao_execucao: {
+        Args: {
+          p_dias: number
+          p_intervalo_recorrente?: number
+          p_process_id?: string
+          p_processo_numero?: string
+        }
+        Returns: Json
+      }
       reprovision_all_missing: {
         Args: never
         Returns: {
@@ -4353,8 +7428,170 @@ export type Database = {
           user_id: string
         }[]
       }
+      reschedule_user_task: {
+        Args: {
+          p_justificativa: string
+          p_new_deadline: string
+          p_task_id: string
+        }
+        Returns: string
+      }
+      resolve_model_price: {
+        Args: { p_model: string }
+        Returns: {
+          input_price: number
+          model_id: string
+          output_price: number
+        }[]
+      }
       resolver_pendencia: {
         Args: { p_id: string; p_resolucao?: string }
+        Returns: string
+      }
+      resolver_tese: { Args: { p_termo: string }; Returns: Json }
+      resolver_tipo_acao: { Args: { p_termo: string }; Returns: Json }
+      resumo_do_dia: { Args: never; Returns: Json }
+      reveal_gov_credential: {
+        Args: { p_client_id: string }
+        Returns: {
+          gov_senha: string
+          gov_usuario: string
+        }[]
+      }
+      reverificar_atendimentos_cliente: {
+        Args: { p_client_id: string }
+        Returns: undefined
+      }
+      safe_jsonb: { Args: { p: string }; Returns: Json }
+      salvar_peca: {
+        Args: {
+          p_client_id: string
+          p_confeccao_task_id?: string
+          p_document_name: string
+          p_document_type?: string
+          p_file_path: string
+          p_mime_type?: string
+          p_process_id?: string
+          p_reviewer_user_id?: string
+        }
+        Returns: Json
+      }
+      save_client: { Args: { p_data: Json; p_id: string }; Returns: string }
+      save_gov_credential: {
+        Args: {
+          p_client_id: string
+          p_consentimento?: boolean
+          p_consentimento_versao?: string
+          p_senha?: string
+          p_status_acesso?: string
+          p_tem_2fa?: boolean
+          p_usuario?: string
+        }
+        Returns: string
+      }
+      search_clients: {
+        Args: { p_filtros?: Json }
+        Returns: {
+          city: string
+          client_origin: string
+          created_at: string
+          full_name: string
+          gov_br_profile: string
+          id: string
+          state: string
+          status: string
+        }[]
+      }
+      search_clients_by_cpf: {
+        Args: { cpf_input: string }
+        Returns: {
+          address: string | null
+          address_complement: string | null
+          address_number: string | null
+          bank_account: string | null
+          bank_account_type: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          birth_date: string | null
+          city: string | null
+          client_origin: string | null
+          cnpj: string | null
+          country: string | null
+          cpf: string | null
+          cpf_bidx: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          fantasy_name: string | null
+          father_name: string | null
+          foundation_date: string | null
+          full_name: string | null
+          gender: string | null
+          gov_br_profile: string | null
+          id: string | null
+          ie: string | null
+          im: string | null
+          legal_rep_cpf: string | null
+          legal_rep_name: string | null
+          marital_status: string | null
+          mother_name: string | null
+          nationality: string | null
+          natural_city: string | null
+          natural_uf: string | null
+          neighborhood: string | null
+          notes: string | null
+          phone: string | null
+          phone_commercial: string | null
+          phone_commercial_is_whatsapp: boolean | null
+          phone_home: string | null
+          phone_home_is_whatsapp: boolean | null
+          phone_is_whatsapp: boolean | null
+          pis_nit: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          profession: string | null
+          responsible_lawyer_id: string | null
+          rg: string | null
+          rg_issuer: string | null
+          rg_uf: string | null
+          state: string | null
+          status: string | null
+          status_atendimento: string | null
+          status_comercial: string | null
+          status_documental: string | null
+          status_juridico: string | null
+          status_processo: string | null
+          tipo_pessoa: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "clients_decrypted"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      set_agent_tools: {
+        Args: { p_agent_id: string; p_tool_codes: string[] }
+        Returns: undefined
+      }
+      set_business_hours: { Args: { p_config: Json }; Returns: Json }
+      set_provider_budget: {
+        Args: {
+          p_budget_usd: number
+          p_notes?: string
+          p_provider: string
+          p_start?: string
+        }
+        Returns: undefined
+      }
+      set_sistema_flag: {
+        Args: { p_ativo: boolean; p_chave: string }
+        Returns: Json
+      }
+      somar_dias_uteis: {
+        Args: { p_dias: number; p_inicio: string }
         Returns: string
       }
       start_agent_trace: {
@@ -4380,6 +7617,8 @@ export type Database = {
         }
         Returns: string
       }
+      sugerir_execucao_pos_prazo: { Args: never; Returns: Json }
+      supervisor_check_atendimentos: { Args: never; Returns: number }
       transferir_pendencia: {
         Args: {
           p_departamento_destino?: Database["public"]["Enums"]["org_stage"]
@@ -4388,21 +7627,38 @@ export type Database = {
         }
         Returns: string
       }
+      trigger_send_email_notifications: { Args: never; Returns: number }
+      trigger_sync_provider_credits: { Args: never; Returns: number }
+      txt_fold: { Args: { p: string }; Returns: string }
+      update_audiencia: {
+        Args: {
+          p_advogado_user_id?: string
+          p_data_hora?: string
+          p_docs?: Json
+          p_id: string
+          p_link_local?: string
+          p_observacoes?: string
+          p_parte_contraria?: string
+          p_status?: Database["public"]["Enums"]["audiencia_status"]
+          p_tipo_acao?: string
+        }
+        Returns: undefined
+      }
       update_meeting: {
         Args: {
+          p_client_id: string
+          p_client_name: string
+          p_end_time: string
           p_id: string
+          p_lawyer_user_id: string
+          p_notes: string
+          p_phone: string
+          p_receptionist_user_id: string
           p_scheduled_date: string
           p_start_time: string
-          p_end_time: string | null
-          p_type: string | null
-          p_lawyer_user_id: string | null
-          p_receptionist_user_id: string | null
-          p_client_id: string | null
-          p_client_name: string | null
-          p_phone: string | null
-          p_summary: string | null
-          p_notes: string | null
           p_status: Database["public"]["Enums"]["meeting_status"]
+          p_summary: string
+          p_type: string
         }
         Returns: undefined
       }
@@ -4426,6 +7682,27 @@ export type Database = {
       validate_user_task: {
         Args: { p_approve: boolean; p_notes?: string; p_task_id: string }
         Returns: Database["public"]["Enums"]["user_task_status"]
+      }
+      verificar_ancora_24_1: {
+        Args: { p_process_id: string; p_tipo_acao_id?: string }
+        Returns: {
+          faltando: string[]
+          ok: boolean
+        }[]
+      }
+      verificar_documentos_obrigatorios: {
+        Args: {
+          p_client_id?: string
+          p_process_id?: string
+          p_tipo_acao_id?: string
+        }
+        Returns: Json
+      }
+      verificar_gate_protocolo: { Args: { p_task_id: string }; Returns: Json }
+      verificar_pos_atendimento: { Args: { p_task_id: string }; Returns: Json }
+      verificar_processo_duplicado: {
+        Args: { p_client_id: string; p_reu?: string; p_tipo_acao_id?: string }
+        Returns: Json
       }
     }
     Enums: {
@@ -4453,12 +7730,12 @@ export type Database = {
         | "calculator"
         | "compliance"
         | "tech"
-      captacao_canal_tipo:
-        | "cooperativa"
-        | "ressaque"
-        | "indicacao"
-        | "site"
-        | "outro"
+      audiencia_status:
+        | "marcada"
+        | "confirmada"
+        | "realizada"
+        | "redesignada"
+        | "cancelada"
       coverage_status: "scheduled" | "active" | "finished" | "cancelled"
       email_notification_status:
         | "pending"
@@ -4473,25 +7750,13 @@ export type Database = {
         | "task_rejected"
         | "inter_assistant_received"
         | "inter_assistant_answered"
+        | "pos_atendimento_incompleto"
       inter_assistant_status:
         | "pending"
         | "in_progress"
         | "answered"
         | "denied"
         | "expired"
-      lead_status:
-        | "novo"
-        | "em_contato"
-        | "qualificado"
-        | "convertido"
-        | "perdido"
-      meeting_status:
-        | "scheduled"
-        | "confirmed"
-        | "rescheduled"
-        | "canceled"
-        | "no_show"
-        | "done"
       legal_area:
         | "bancario"
         | "familia"
@@ -4500,6 +7765,13 @@ export type Database = {
         | "civil"
         | "previdenciario"
         | "tributario"
+      meeting_status:
+        | "scheduled"
+        | "confirmed"
+        | "rescheduled"
+        | "canceled"
+        | "no_show"
+        | "done"
       org_stage:
         | "atendimento"
         | "confeccao"
@@ -4691,6 +7963,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       agent_role: [
@@ -4719,12 +7994,12 @@ export const Constants = {
         "compliance",
         "tech",
       ],
-      captacao_canal_tipo: [
-        "cooperativa",
-        "ressaque",
-        "indicacao",
-        "site",
-        "outro",
+      audiencia_status: [
+        "marcada",
+        "confirmada",
+        "realizada",
+        "redesignada",
+        "cancelada",
       ],
       coverage_status: ["scheduled", "active", "finished", "cancelled"],
       email_notification_status: [
@@ -4741,6 +8016,7 @@ export const Constants = {
         "task_rejected",
         "inter_assistant_received",
         "inter_assistant_answered",
+        "pos_atendimento_incompleto",
       ],
       inter_assistant_status: [
         "pending",
@@ -4749,7 +8025,6 @@ export const Constants = {
         "denied",
         "expired",
       ],
-      lead_status: ["novo", "em_contato", "qualificado", "convertido", "perdido"],
       legal_area: [
         "bancario",
         "familia",
@@ -4758,6 +8033,14 @@ export const Constants = {
         "civil",
         "previdenciario",
         "tributario",
+      ],
+      meeting_status: [
+        "scheduled",
+        "confirmed",
+        "rescheduled",
+        "canceled",
+        "no_show",
+        "done",
       ],
       org_stage: [
         "atendimento",
