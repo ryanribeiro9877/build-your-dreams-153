@@ -15,10 +15,9 @@ import { DOCUMENT_TYPE_LABELS } from "@/lib/domainLabels";
    que exibe; PII (CPF/RG/filiação/financeiro) é lida pela view
    decifrada `clients_decrypted`, nunca pelas colunas cifradas.  */
 
-// Listagem: colunas mínimas — sem PII financeira/filiação/documento
-// no payload da lista (R-2 minimização). Busca por CPF é exata via RPC.
-export const CLIENT_LIST_COLUMNS =
-  "id, full_name, status, tipo_pessoa, city, state, created_at";
+// A listagem NÃO seleciona colunas aqui: ela passou a usar a RPC
+// `search_clients`, que faz a projeção mínima do lado do banco (R-2
+// minimização). A antiga CLIENT_LIST_COLUMNS foi removida por estar órfã.
 
 // Detalhe/Edição: projeção completa dos campos DO CADASTRO (§4 — todo
 // campo cadastrado aparece em alguma aba). Lida de `clients_decrypted`.

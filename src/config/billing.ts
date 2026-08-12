@@ -6,5 +6,3 @@
 // flag para `true` quando for monetizar.
 export const BILLING_ENABLED = false;
 
-// Rótulo exibido no lugar do saldo numérico quando a cobrança está desligada.
-export const UNLIMITED_LABEL = "∞";

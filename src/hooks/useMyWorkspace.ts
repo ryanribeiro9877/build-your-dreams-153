@@ -85,29 +85,6 @@ export function useMyWorkspace() {
   };
 }
 
-/**
- * Helper: agrupa agentes do workspace por stage (para sidebar dinâmica).
- * Mantém o "Meu Assistente" (assistant_root) sempre no topo, fora de grupo.
- */
-export function groupAgentsByStage(
-  agents: WorkspaceAgent[],
-): { root: WorkspaceAgent | null; stages: Array<{ stage: OrgStage; agents: WorkspaceAgent[] }> } {
-  const root = agents.find((a) => a.role === "ceo" || a.role === "assistant_root") ?? null;
-  const grouped = new Map<OrgStage, WorkspaceAgent[]>();
-  for (const a of agents) {
-    if (a === root) continue;
-    if (!a.template_stage) continue;
-    const list = grouped.get(a.template_stage) ?? [];
-    list.push(a);
-    grouped.set(a.template_stage, list);
-  }
-  const stages = Array.from(grouped.entries()).map(([stage, agentsInStage]) => ({
-    stage,
-    agents: agentsInStage,
-  }));
-  return { root, stages };
-}
-
 /** Label PT-BR pra cada stage (sidebar e topbar) */
 export const STAGE_LABELS: Record<OrgStage, string> = {
   atendimento: "Atendimento",

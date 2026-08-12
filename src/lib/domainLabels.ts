@@ -80,5 +80,3 @@ export const CLIENT_ORIGIN_LABELS: Record<string, string> = {
   outro: "Outro",
 };
 
-export const labelForDocumentType = (key: string) => DOCUMENT_TYPE_LABELS[key] ?? humanizeSlug(key);
-export const labelForClientOrigin = (key: string) => CLIENT_ORIGIN_LABELS[key] ?? humanizeSlug(key);

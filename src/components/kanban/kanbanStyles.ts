@@ -2,7 +2,7 @@
 // ao KanbanBoard.tsx original — não usa CSS variables porque a página é standalone
 // (fora do shell juris-cloud) e precisa ser autossuficiente.
 import type React from "react";
-import type { TaskPriority, UserTaskStatus, TaskSituacao } from "@/types/jurisai";
+import type { TaskPriority, UserTaskStatus } from "@/types/jurisai";
 
 // ─── Paleta ────────────────────────────────────────────────────────────────
 export const COLORS = {
@@ -26,15 +26,6 @@ export const PRIORITY_COLORS: Record<TaskPriority, string> = {
   high: "#f59e0b",
   medium: "#3b82f6",
   low: "#6b7280",
-};
-
-// Cores de destaque por situação (usadas em chips/headers quando útil).
-export const SITUACAO_COLORS: Record<TaskSituacao, string> = {
-  pendente: "#7a7a92",
-  em_execucao: "#3b82f6",
-  concluida_sucesso: "#2dd4a0",
-  concluida_sem_sucesso: "#f59e0b",
-  cancelado: "#ef4444",
 };
 
 // Cores das etiquetas de origem do card.

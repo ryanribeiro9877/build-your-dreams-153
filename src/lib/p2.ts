@@ -47,9 +47,6 @@ export const LEMBRETE_STATUS_META: Record<string, { label: string; cls: string; 
   nao_atendeu: { label: "Não atendeu", cls: "d", encerra: false },
   cancelado: { label: "Cancelado", cls: "n", encerra: true },
 };
-/** Escolhíveis ao registrar (o `pendente` é o estado inicial, não uma decisão). */
-export const LEMBRETE_ACAO_OPTIONS = ["feito", "nao_atendeu", "cancelado"]
-  .map(value => ({ value, label: LEMBRETE_STATUS_META[value].label }));
 
 /* ─── Card 14: apólices SUSEP ─────────────────────────────────────────────── */
 

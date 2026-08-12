@@ -15,14 +15,3 @@ export const USER_TASK_STATUS_LABELS: Record<UserTaskStatus, string> = {
   cancelled: "Cancelada",
 };
 
-/**
- * Ordem das "filas" no painel lateral — apenas status de trabalho aberto.
- * `draft`, `completed` e `cancelled` ficam de fora (o inbox já exclui concluídas).
- */
-export const OPEN_QUEUE_STATUSES: UserTaskStatus[] = [
-  "assigned",
-  "in_progress",
-  "awaiting_external",
-  "awaiting_validation",
-  "blocked",
-];

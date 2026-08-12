@@ -2,7 +2,6 @@ import {
   Sparkles, Crown, Brain, RefreshCw, Building2, Megaphone, Palette,
   Scale, HardHat, Coins, ClipboardList, Calculator, Landmark, Eye,
   DollarSign, CreditCard, Settings, Shield, Heart,
-  Briefcase, Target, Microscope, Zap, Radio, CheckCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Agent, AgentRole } from "./types";
@@ -15,11 +14,6 @@ export const DEPT_ICONS: Record<string, LucideIcon> = {
   calculos: Calculator, audiencias: Landmark, monitoramento: Eye,
   financeiro: DollarSign, cobrancas: CreditCard, tech: Settings,
   compliance: Shield, familia: Heart,
-};
-
-export const ROLE_ICONS: Record<string, LucideIcon> = {
-  ceo: Crown, director: Briefcase, orchestrator: Target, manager: ClipboardList,
-  specialist: Microscope, reviewer: CheckCircle, executor: Zap, monitor: Radio,
 };
 
 // ── Accent colors ──
@@ -104,12 +98,6 @@ export const AGENTS_FALLBACK: Agent[] = [
   { id: 406, name: "Monitor de KPIs Global", status: "active", color: "#ff6b6b", role: "monitor", permissions: ["read","monitor"], department: ["eficiencia","*"], canOrchestrate: false, maxConcurrentTasks: 50, currentTasks: 35, reportsTo: 400 },
 ];
 
-export const ALL_COMMANDS = [
-  "Gerar petição inicial", "Ver prazos fatais", "Resumir caso", "Avisar cliente",
-  "Abrir fila de revisão", "Relatório do dia", "Ver gargalos", "Painel financeiro",
-  "Gerenciar usuários", "Ver organograma", "Auditoria geral", "Status orquestração",
-];
-
 // ── Token cost per command type ──
 export const TOKEN_COST: Record<string, { cost: number; label: string }> = {
   "Gerar petição inicial": { cost: 10, label: "Geração de petição" },
@@ -136,17 +124,6 @@ export function getTokenCost(message: string): { cost: number; label: string } {
 // ── Utility functions ──
 export function getAgentsForDepartment(agents: Agent[], deptId: string): Agent[] {
   return agents.filter(a => a.department.includes("*") || a.department.includes(deptId));
-}
-export function getAgentLoad(agent: Agent): number {
-  return Math.round((agent.currentTasks / agent.maxConcurrentTasks) * 100);
-}
-export function getAgentsByRole(agents: Agent[], role: AgentRole): Agent[] {
-  return agents.filter(a => a.role === role);
-}
-export function getTotalCapacity(agents: Agent[]) {
-  const used = agents.reduce((s, a) => s + a.currentTasks, 0);
-  const total = agents.reduce((s, a) => s + a.maxConcurrentTasks, 0);
-  return { used, total, percentage: total > 0 ? Math.round((used / total) * 100) : 0 };
 }
 export function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -185,11 +162,6 @@ export function formatInsufficientBalanceMessage(cost: number, label: string): s
   const custo = cost === 1 ? "**1 token**" : `**${cost} tokens**`;
   return `Saldo insuficiente para continuar.\n\nEste comando custa ${custo} (${label}). Recarregue seus tokens para seguir.`;
 }
-
-export const roleLabelsMap: Record<string, string> = {
-  ceo: "CEO", director: "Diretor", orchestrator: "Orquestrador", manager: "Gerente",
-  specialist: "Especialista", reviewer: "Revisor", executor: "Executor", monitor: "Monitor",
-};
 
 export function hashCode(str: string): number {
   let h = 0;

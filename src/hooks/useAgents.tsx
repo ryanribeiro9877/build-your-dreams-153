@@ -121,22 +121,6 @@ export function useAgents() {
 }
 
 // Helpers analogos aos antigos.
-export function agentsForDepartment(agents: AgentRecord[], deptName: string): AgentRecord[] {
-  if (deptName === "assistente") return agents;
-  return agents.filter(a => a.departmentName === deptName || a.departmentName === "diretoria");
-}
-
-export function agentLoad(a: AgentRecord): number {
-  if (a.maxConcurrentTasks <= 0) return 0;
-  return Math.round((a.currentTasks / a.maxConcurrentTasks) * 100);
-}
-
-export function totalCapacity(agents: AgentRecord[]) {
-  const used = agents.reduce((s, a) => s + a.currentTasks, 0);
-  const total = agents.reduce((s, a) => s + a.maxConcurrentTasks, 0);
-  return { used, total, percentage: total > 0 ? Math.round((used / total) * 100) : 0 };
-}
-
 export function initials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
