@@ -45,3 +45,7 @@ supabase/.temp/
 *.xlsx
 *.xls
 CARD1-erros-importacao.json
+
+# Raio-X do projeto (dossie de transferencia): contem mapa de fragilidades
+# do sistema. Fica FORA do repositorio publico, por decisao de 19/09/2026.
+raio-x-jurisai/
